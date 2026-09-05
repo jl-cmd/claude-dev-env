@@ -25,16 +25,43 @@ const RETIRED_SKILL_DIRECTORIES = [
     'post-audit-findings',
     'pr-consistency-audit',
     'bdd-protocol',
+    'hitl',
+    'autoconverge',
+    'pr-cleanup',
+    'pr-name-by-capability',
+    'pr-plain-language-cleanup',
+    'pr-refinement',
+    'pr-shared-extraction',
+    'pr-small-cl',
+    'pr-title-description',
+    'prototype',
+    'rebase',
+    'review-router',
+    'review-tier',
+    'run-claude-dev-env',
+    'session-log',
+    'session-tidy',
+    'source-command-sr-loop',
+    'update',
 ];
 const PERSONAL_SKILL_DIRECTORIES = ['credit-card-picker', 'midjourney-sref'];
-const SHIPPED_SKILL_DIRECTORY = 'autoconverge';
+const SHIPPED_SKILL_DIRECTORY = 'e-code-review';
 const PRUNED_BACKUP_DIRECTORY_NAME = '.claude-dev-env-pruned';
 const SKIP_PRUNE_NOTICE_MARKER = 'Skipping retired-skill and stale-file prune';
 const STALE_SKILL_FILE_RELATIVE_SEGMENTS = ['scripts', 'retired_module.py'];
 const RUNTIME_ARTIFACT_RELATIVE_SEGMENTS = ['scripts', '__pycache__', 'helper.cpython-312.pyc'];
 const SCOPED_GROUP_SKILL_DIRECTORY = 'orchestrator';
-const CORE_REVIEW_GUIDE_SKILL_DIRECTORIES = [
-    'pr-small-cl',
+const CORE_SKILL_DIRECTORIES = [
+    'orchestrator',
+    'orchestrator-refresh',
+    'team-advisor',
+    'grok-spawn',
+    'everything-search',
+    'test-runner',
+    'privacy-hygiene',
+    'issue-tracker',
+    'task-build',
+    'eli5',
 ];
 const PRIOR_RUN_BACKUP_DIRECTORY_NAMES = [
     '2020-01-01T00-00-00-000Z',
@@ -693,25 +720,33 @@ test('a scoped --only install leaves retired skills in place because prune runs 
     }
 });
 
-test('a full reinstall keeps autoconverge because the package ships it again', () => {
+test('a full reinstall keeps the skill-builder stub and archives its obsolete support files', () => {
     const sandbox = createSandbox();
     try {
-        plantSkillDirectory(sandbox.skillsDirectory, 'autoconverge', true);
-        writeFileSync(join(sandbox.skillsDirectory, 'autoconverge', 'SKILL.md'), 'stale seeded copy\n');
+        const skillName = 'skill-builder';
+        plantSkillDirectory(sandbox.skillsDirectory, skillName, true);
+        const stubPath = join(sandbox.skillsDirectory, skillName, 'SKILL.md');
+        const obsoleteReferencePath = join(sandbox.skillsDirectory, skillName, 'references', 'retired.md');
+        writeFileWithParents(obsoleteReferencePath, 'obsolete skill-builder guidance\n');
+        writeFileSync(sandbox.manifestPath, JSON.stringify({
+            package: 'claude-dev-env',
+            version: '0.0.0',
+            installedAt: new Date().toISOString(),
+            files: [stubPath, obsoleteReferencePath],
+            skills: [skillName],
+        }, null, 2) + '\n');
 
         const installerOutput = runInstaller(sandbox.homeDirectory, []);
 
+        assert.equal(installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER), false);
+        assert.equal(existsSync(stubPath), true, 'the requested stub stays installed');
+        assert.match(readFileSync(stubPath, 'utf8'), /TODO: Rework to follow pstack philosophy\./);
+        assert.ok(readManifest(sandbox.manifestPath).skills.includes(skillName));
+        assert.equal(existsSync(obsoleteReferencePath), false);
         assert.equal(
-            installerOutput.includes(SKIP_PRUNE_NOTICE_MARKER),
-            false,
-            'the full install runs the prune rather than skipping it',
-        );
-        const restoredSkillPath = join(sandbox.skillsDirectory, 'autoconverge', 'SKILL.md');
-        assert.equal(existsSync(restoredSkillPath), true, 'autoconverge survives and is reinstalled');
-        assert.notEqual(
-            readFileSync(restoredSkillPath, 'utf8'),
-            'stale seeded copy\n',
-            'the shipped autoconverge overwrites the stale seeded copy',
+            prunedSkillBackupContains(sandbox.claudeDirectory, join(skillName, 'references', 'retired.md')),
+            true,
+            'old implementation files move to the recovery backup while the stub stays',
         );
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
@@ -739,19 +774,23 @@ test('a scoped --only install records the skill names it installed', () => {
     }
 });
 
-test('a scoped core install ships the canonical review guide skills', () => {
+test('a fresh scoped core install ships active skills and omits retired skills', () => {
     const sandbox = createSandbox();
     try {
         runInstaller(sandbox.homeDirectory, ['--only', 'core']);
 
-        const missingGuideSkillNames = CORE_REVIEW_GUIDE_SKILL_DIRECTORIES.filter(
+        const missingSkillNames = CORE_SKILL_DIRECTORIES.filter(
             eachSkillName => !existsSync(join(sandbox.skillsDirectory, eachSkillName, 'SKILL.md')),
         );
-        assert.deepEqual(missingGuideSkillNames, []);
+        assert.deepEqual(missingSkillNames, []);
 
         const recordedSkillNames = new Set(readManifest(sandbox.manifestPath).skills);
-        for (const eachSkillName of CORE_REVIEW_GUIDE_SKILL_DIRECTORIES) {
+        for (const eachSkillName of CORE_SKILL_DIRECTORIES) {
             assert.equal(recordedSkillNames.has(eachSkillName), true);
+        }
+        for (const eachSkillName of RETIRED_SKILL_DIRECTORIES) {
+            assert.equal(existsSync(join(sandbox.skillsDirectory, eachSkillName)), false);
+            assert.equal(recordedSkillNames.has(eachSkillName), false);
         }
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
