@@ -28,7 +28,7 @@ def collect_env_var_documentation_findings(
         all_tracked_paths: Repository-relative tracked paths.
 
     Returns:
-        Findings for documentation rows whose code reference has drifted.
+        Findings for table rows whose code file does not read the variable.
     """
     drift_module = load_hooks_module(ENV_VAR_DRIFT_MODULE_NAME)
     drift_constants = load_hooks_module(ENV_VAR_DRIFT_CONSTANTS_MODULE_NAME)
@@ -56,11 +56,11 @@ def find_documentation_findings_for_path(
     Args:
         repository_root: Git repository root.
         relative_path: Repository-relative documentation path.
-        drift_module: Existing documentation detector module.
-        drift_constants: Existing detector constants module.
+        drift_module: Documentation drift detector module.
+        drift_constants: Documentation drift constants module.
 
     Returns:
-        Findings for drifted documentation rows.
+        Findings for table rows whose code file does not read the variable.
     """
     if not drift_module.is_markdown_file(relative_path):
         return []
