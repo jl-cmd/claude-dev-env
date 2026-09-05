@@ -11,6 +11,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from advisor_scripts_constants.advisor_route_constants import (
+    ADVISOR_FALLBACK_RESULT,
+    ADVISOR_FALLBACK_TIER,
+    ADVISOR_MODEL_TIER,
+    ALL_ADVISOR_GUIDANCE_SIGNALS,
+    CODEX_BIND_SUCCESS_TOKEN,
+)
 from advisor_scripts_constants.astra_advisor_constants import (
     ASTRA_FALLBACK_KIND_BROKEN,
     ASTRA_FALLBACK_KIND_DECLINED,
@@ -26,13 +33,6 @@ from advisor_scripts_constants.astra_advisor_constants import (
     USAGE_PROBE_PACKAGE_DIRECTORY_NAME,
     USAGE_PROBE_SCRIPTS_DIRECTORY_NAME,
     USAGE_PROBE_SHARED_DIRECTORY_NAME,
-)
-from advisor_scripts_constants.advisor_route_constants import (
-    ADVISOR_FALLBACK_RESULT,
-    ADVISOR_FALLBACK_TIER,
-    ADVISOR_MODEL_TIER,
-    CODEX_BIND_SUCCESS_TOKEN,
-    ALL_ADVISOR_GUIDANCE_SIGNALS,
 )
 
 
@@ -69,6 +69,16 @@ def reply_fallback(
     is_astra_enabled: bool,
     fallback_kind: str | None = ASTRA_FALLBACK_KIND_BROKEN,
 ) -> CodexAstraAdvisorReply:
+    """Build a typed fallback reply.
+
+    Args:
+        reason: Explanation for the fallback.
+        is_astra_enabled: Whether the Astra route was enabled.
+        fallback_kind: Classification of the fallback.
+
+    Returns:
+        The fallback advisor reply.
+    """
     return CodexAstraAdvisorReply(
         None,
         None,
@@ -101,7 +111,14 @@ def _reply_success(
 
 
 def resolve_usage_probe_path(home_directory: Path) -> Path:
-    """Return the installed Codex usage-probe path."""
+    """Return the installed Codex usage-probe path.
+
+    Args:
+        home_directory: Home directory for the installed path.
+
+    Returns:
+        The usage probe path.
+    """
     return (
         home_directory
         / CLAUDE_CONFIG_DIRECTORY_NAME
@@ -169,7 +186,15 @@ def run_astra_preflight(
     probe_path: Path,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> AstraPreflight:
-    """Run the usage probe and evaluate Astra eligibility."""
+    """Run the usage probe and evaluate Astra eligibility.
+
+    Args:
+        probe_path: Path to the installed usage probe.
+        process_runner: Callable that executes the probe.
+
+    Returns:
+        The meter decision and fallback metadata.
+    """
     try:
         completed = _run_probe(probe_path, process_runner)
         return _preflight_from_probe(probe_path, completed)
@@ -217,16 +242,19 @@ def parse_codex_jsonl_reply(
     is_astra_enabled: bool,
     fallback_kind: str | None = ASTRA_FALLBACK_KIND_BROKEN,
 ) -> CodexAstraAdvisorReply:
-    """Parse Codex JSONL into a typed Astra advisor reply."""
-    session_id: str | None = None
-    guidance: str | None = None
+    """Parse Codex JSONL into a typed Astra advisor reply.
+
+    Args:
+        jsonl_text: JSONL emitted by Codex.
+        existing_session_id: Existing session expected on resume.
+        is_astra_enabled: Whether this route had Astra enabled.
+        fallback_kind: Classification for fallback replies.
+
+    Returns:
+        A successful advisor reply or typed fallback.
+    """
     try:
-        for each_line in jsonl_text.splitlines():
-            if not each_line.strip():
-                continue
-            discovered_session_id, discovered_guidance = _parse_event_line(each_line)
-            session_id = discovered_session_id or session_id
-            guidance = discovered_guidance or guidance
+        session_id, guidance = _collect_reply_parts(jsonl_text)
     except (TypeError, json.JSONDecodeError):
         return reply_fallback(ASTRA_MALFORMED_JSONL_REASON, is_astra_enabled, fallback_kind)
     if session_id is None or (existing_session_id is not None and session_id != existing_session_id):
@@ -237,3 +265,14 @@ def parse_codex_jsonl_reply(
     if signal is None:
         return reply_fallback(ASTRA_INVALID_SIGNAL_REASON, is_astra_enabled, fallback_kind)
     return _reply_success(session_id, guidance, signal)
+
+
+def _collect_reply_parts(jsonl_text: str) -> tuple[str | None, str | None]:
+    session_id: str | None = None
+    guidance: str | None = None
+    for each_line in jsonl_text.splitlines():
+        if each_line.strip():
+            discovered_session_id, discovered_guidance = _parse_event_line(each_line)
+            session_id = discovered_session_id or session_id
+            guidance = discovered_guidance or guidance
+    return session_id, guidance

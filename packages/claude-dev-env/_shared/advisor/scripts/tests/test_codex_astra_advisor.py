@@ -1,12 +1,13 @@
 """Behavioral tests for the executable Codex Astra advisor path."""
-import io
 import importlib.util
+import io
 import json
 import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+
 import pytest
 
 _ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -211,6 +212,10 @@ def test_missing_codex_returns_broken_fallback(monkeypatch: pytest.MonkeyPatch) 
     )
     assert reply.is_fallback
     assert reply.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_BROKEN
+
+
+def test_advisor_reexports_broken_fallback_kind() -> None:
+    assert astra_advisor.ASTRA_FALLBACK_KIND_BROKEN == "broken"
 
 
 def test_resume_uses_existing_session() -> None:

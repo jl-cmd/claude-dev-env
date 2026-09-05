@@ -14,17 +14,15 @@ from pathlib import Path
 
 _scripts_directory = Path(__file__).resolve().parent
 _config_directory = _scripts_directory / "config"
+sys.path[:0] = [str(_scripts_directory), str(_config_directory)]
 
-
-def _add_import_directory(import_directory: Path) -> None:
-    import_directory_text = str(import_directory)
-    if import_directory_text not in sys.path:
-        sys.path.insert(0, import_directory_text)
-
-
-for each_import_directory in (_scripts_directory, _config_directory):
-    _add_import_directory(each_import_directory)
-
+from advisor_scripts_constants.advisor_route_constants import (
+    ADVISOR_CODEX_MODEL_ID,
+    ADVISOR_EFFORT_DEFAULT,
+    ADVISOR_EFFORT_ENV_VAR,
+    ALL_ADVISOR_EFFORT_LEVELS,
+    SPAWN_OUTCOME_KEY,
+)
 from advisor_scripts_constants.astra_advisor_constants import (
     ADVISOR_CODEX_EXECUTABLE_ENV_VAR,
     ALL_ASTRA_TRUTHY_VALUES,
@@ -37,18 +35,10 @@ from advisor_scripts_constants.astra_advisor_constants import (
     ASTRA_EXECUTABLE_NOT_FOUND_REASON,
     ASTRA_FALLBACK_KIND_BROKEN,
     ASTRA_FALLBACK_KIND_DECLINED,
-    ASTRA_INVALID_SIGNAL_REASON,
-    ASTRA_MALFORMED_JSONL_REASON,
-    ASTRA_MISSING_SESSION_REASON,
-    ASTRA_PREFLIGHT_FAILURE_REASON,
-    ASTRA_PROBE_TIMEOUT_REASON,
-    ASTRA_REPLY_FAILURE_REASON,
     ASTRA_SESSION_ID_METAVAR,
-    ASTRA_USAGE_PROBE_TIMEOUT_SECONDS,
-    CLAUDE_CONFIG_DIRECTORY_NAME,
     CODEX_CONFIG_FLAG,
-    CODEX_EXECUTABLE,
     CODEX_EXEC_SUBCOMMAND,
+    CODEX_EXECUTABLE,
     CODEX_JSON_FLAG,
     CODEX_MODEL_FLAG,
     CODEX_PROMPT_FROM_STDIN,
@@ -56,22 +46,6 @@ from advisor_scripts_constants.astra_advisor_constants import (
     CODEX_REASONING_CONFIG_TEMPLATE,
     CODEX_RESUME_SUBCOMMAND,
     CODEX_SANDBOX_FLAG,
-    USAGE_PROBE_FILENAME,
-    USAGE_PROBE_PACKAGE_DIRECTORY_NAME,
-    USAGE_PROBE_SCRIPTS_DIRECTORY_NAME,
-    USAGE_PROBE_SHARED_DIRECTORY_NAME,
-)
-from advisor_scripts_constants.advisor_route_constants import (
-    ADVISOR_CODEX_MODEL_ID,
-    ADVISOR_EFFORT_DEFAULT,
-    ADVISOR_EFFORT_ENV_VAR,
-    ADVISOR_FALLBACK_RESULT,
-    ADVISOR_FALLBACK_TIER,
-    ADVISOR_MODEL_TIER,
-    ALL_ADVISOR_EFFORT_LEVELS,
-    ALL_ADVISOR_GUIDANCE_SIGNALS,
-    CODEX_BIND_SUCCESS_TOKEN,
-    SPAWN_OUTCOME_KEY,
 )
 from codex_astra_support import (
     AstraPreflight,
@@ -223,7 +197,11 @@ def run_codex_astra_advisor(
         return reply_fallback("Astra advisor flag is disabled", False, ASTRA_FALLBACK_KIND_DECLINED)
     executable = resolve_codex_executable(setting_by_name)
     if executable is None:
-        return reply_fallback(ASTRA_EXECUTABLE_NOT_FOUND_REASON, True)
+        return reply_fallback(
+            ASTRA_EXECUTABLE_NOT_FOUND_REASON,
+            True,
+            ASTRA_FALLBACK_KIND_BROKEN,
+        )
     resolved_preflight = _resolve_preflight(preflight, probe_path, process_runner)
     if not resolved_preflight.eligible:
         return reply_fallback(resolved_preflight.reason, True, resolved_preflight.fallback_kind)
