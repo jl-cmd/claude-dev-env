@@ -36,6 +36,11 @@ import {
     PYTHON_PROBE_TIMEOUT_MILLISECONDS,
 } from './install-constants.mjs';
 import {
+    PSTACK_PLUGIN_DIRECTORY_NAME,
+    PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH,
+    refreshPstackPluginManifest,
+} from '../scripts/refresh_pstack_plugin_skills.mjs';
+import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
     isAllowedInstallDestination,
@@ -427,6 +432,26 @@ export function runCursorRuleSync(pythonCommand, scriptPath, claudeRoot, cursorR
         ],
         { stdio: 'inherit' },
     );
+}
+
+/**
+ * Refresh the pstack plugin manifest Claude Code reads, when this home has one.
+ *
+ * Claude Code loads a skills-directory folder as a plugin when it holds
+ * `.claude-plugin/plugin.json`, and namespaces its skills as `pstack:how`.
+ * Without the manifest, a folder of skill folders loads nothing.
+ *
+ * @param {string} [skillsRoot] The skills root to read. Defaults to the root
+ *   this run installs into.
+ * @returns {string|null} The manifest path when this run wrote it, else null.
+ */
+export function refreshInstalledPstackPluginManifest(
+    skillsRoot = join(CLAUDE_HOME, MANAGED_SKILLS_DIRECTORY_NAME),
+) {
+    const pluginRoot = join(skillsRoot, PSTACK_PLUGIN_DIRECTORY_NAME);
+    const outcome = refreshPstackPluginManifest(pluginRoot);
+    if (!outcome.didWrite) return null;
+    return join(pluginRoot, PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH);
 }
 
 function seedCodexPstackPreferences() {
@@ -2320,6 +2345,9 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     }
     summary.skills = { created: skillsCreated, updated: skillsUpdated, pruned: 0, paths: skillPaths };
     allInstalledFiles.push(...skillPaths);
+    const pstackManifestPath = refreshInstalledPstackPluginManifest();
+    if (pstackManifestPath) allInstalledFiles.push(pstackManifestPath);
+    summary.pstackPlugin = { manifestPath: pstackManifestPath };
     syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
     throwIfFault(FAULT_PHASES.AFTER_FILE_STAGING);
     throwIfFault(FAULT_PHASES.BEFORE_DURABLE_PROMOTION);

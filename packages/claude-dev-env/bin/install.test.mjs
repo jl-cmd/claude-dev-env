@@ -43,6 +43,7 @@ import {
     retiredManagedHookRelativePaths,
     pruneRetiredHookEntriesFromSettings,
     retainNewestRunBackupOnly,
+    refreshInstalledPstackPluginManifest,
 } from './install.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 import {
@@ -2539,5 +2540,41 @@ test('pruneStaleInstalledFiles leaves the run backup root standing when the rena
         );
     } finally {
         rmSync(sandbox.root, { recursive: true, force: true });
+    }
+});
+
+test('the pstack step writes a manifest for a skills root that carries pstack', () => {
+    const skillsRoot = mkdtempSync(join(tmpdir(), 'cdev-pstack-step-'));
+    try {
+        const skillDirectory = join(skillsRoot, 'pstack', 'how');
+        mkdirSync(skillDirectory, { recursive: true });
+        writeFileSync(join(skillDirectory, 'SKILL.md'), '---\nname: how\n---\n');
+
+        const manifestPath = refreshInstalledPstackPluginManifest(skillsRoot);
+
+        assert.equal(
+            manifestPath,
+            join(skillsRoot, 'pstack', '.claude-plugin', 'plugin.json'),
+            'the step reports the manifest it wrote so the run records the path',
+        );
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        assert.deepEqual(manifest.skills, ['./how']);
+        assert.equal(
+            refreshInstalledPstackPluginManifest(skillsRoot),
+            null,
+            'a second run writes nothing and reports no path',
+        );
+    } finally {
+        rmSync(skillsRoot, { recursive: true, force: true });
+    }
+});
+
+test('the pstack step reports no path for a skills root without pstack', () => {
+    const skillsRoot = mkdtempSync(join(tmpdir(), 'cdev-pstack-absent-'));
+    try {
+        assert.equal(refreshInstalledPstackPluginManifest(skillsRoot), null);
+        assert.equal(existsSync(join(skillsRoot, 'pstack')), false);
+    } finally {
+        rmSync(skillsRoot, { recursive: true, force: true });
     }
 });
