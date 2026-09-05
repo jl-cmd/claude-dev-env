@@ -106,6 +106,7 @@ class DocumentSet:
     repository_root: Path
     deleted_paths: tuple[PurePosixPath, ...] = ()
     renamed_paths: tuple[tuple[PurePosixPath, PurePosixPath], ...] = ()
+    base_revision: str | None = None
 
 
 @dataclass(frozen=True)

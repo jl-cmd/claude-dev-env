@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 from policy_lint import adapters
 from policy_lint.config.constants import INCOMPLETE_EXIT_CODE
-from policy_lint.engine import lint
+from policy_lint.engine import _runtime_document_set, lint
 from policy_lint.model import (
     ContentOrigin,
     Diagnostic,
@@ -309,7 +309,11 @@ def test_state_description_diagnostics_maps_and_scopes_phrases(
     lint_report = _lint_documents(
         tmp_path,
         (source_document,),
-        (_changed_document_rule("state-description", adapters.state_description_diagnostics),),
+        (
+            _changed_document_rule(
+                "state-description", adapters.state_description_diagnostics
+            ),
+        ),
     )
     assert len(lint_report.diagnostics) == 1
     assert lint_report.diagnostics[0].location is not None
@@ -351,8 +355,12 @@ def test_failed_adapter_rolls_back_continues_and_exits_incomplete(
         _source_document("pkg/second.py"),
     )
     all_rules = (
-        _changed_document_rule("flaky", lambda document, _root: _flaky_diagnostics(document)),
-        _changed_document_rule("stable", lambda document, _root: _stable_diagnostics(document)),
+        _changed_document_rule(
+            "flaky", lambda document, _root: _flaky_diagnostics(document)
+        ),
+        _changed_document_rule(
+            "stable", lambda document, _root: _stable_diagnostics(document)
+        ),
     )
     lint_report = _lint_documents(repository_root, all_documents, all_rules)
     assert lint_report.failed_rules == ("flaky",)
@@ -379,3 +387,16 @@ def test_process_interrupt_is_not_swallowed(tmp_path: Path) -> None:
             (_source_document("pkg/mod.py"),),
             (_changed_document_rule("interrupt", interrupt_diagnostics),),
         )
+
+
+def test_runtime_document_set_keeps_base_revision_for_base_selection(
+    tmp_path: Path,
+) -> None:
+    document_set = DocumentSet(
+        (_source_document("pkg/mod.py"),),
+        SelectionKind.BASE,
+        tmp_path,
+        base_revision="abc123def",
+    )
+    runtime_document_set = _runtime_document_set(document_set)
+    assert runtime_document_set.base_revision == "abc123def"

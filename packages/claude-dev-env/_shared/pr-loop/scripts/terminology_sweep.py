@@ -32,6 +32,7 @@ from pr_loop_shared_constants.terminology_sweep_constants import (
     ALL_COMMON_ENGLISH_COMPOUND_TAIL_WORDS,
     ALL_DIFF_FILE_PATH_STRIP_PREFIXES,
     ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND,
+    ALL_GIT_DIFF_UNIFIED_ZERO_COMMAND,
     ALL_GIT_GREP_BASE_TREE_COMMAND_PREFIX,
     ALL_PROSE_STOPWORD_TOKENS,
     ALL_STRING_ESCAPE_SEQUENCES,
@@ -622,21 +623,23 @@ def _identifier_names_on_added_code_lines(diff_text: str) -> frozenset[str]:
 
 
 def _base_tree_names(
-    repository_root: Path, all_names: frozenset[str]
+    repository_root: Path,
+    all_names: frozenset[str],
+    tree_revision: str,
 ) -> frozenset[str]:
-    """Return the names the repository's base tree already contains.
+    """Return the names the comparison tree already contains.
 
-    Each name is looked up as a whole word in the base revision's tree. A
-    repository with no commits yet, or a lookup that git cannot run, reports
-    the name as absent, so the sweep then treats it as newly introduced.
-    That is the behaviour the sweep has with no base-tree check at all.
+    Each name is looked up as a whole word in ``tree_revision``. A repository
+    with no commits yet, or a lookup that git cannot run, reports the name as
+    absent, so the sweep treats it as newly introduced.
 
     Args:
         repository_root: The repository root the lookups run in.
         all_names: The identifier names to look up.
+        tree_revision: The revision whose tree is searched.
 
     Returns:
-        The subset of names present in the base tree.
+        The subset of names present in that tree.
     """
     all_present_names: set[str] = set()
     for each_name in sorted(all_names):
@@ -645,7 +648,7 @@ def _base_tree_names(
                 [
                     *ALL_GIT_GREP_BASE_TREE_COMMAND_PREFIX,
                     each_name,
-                    GIT_BASE_TREE_REVISION,
+                    tree_revision,
                 ],
                 cwd=str(repository_root),
                 capture_output=True,
@@ -695,14 +698,16 @@ def _raise_for_git_failure(
 
 
 def _strict_base_tree_names(
-    repository_root: Path, all_names: frozenset[str]
+    repository_root: Path,
+    all_names: frozenset[str],
+    tree_revision: str,
 ) -> frozenset[str]:
     all_present_names: set[str] = set()
     for each_name in sorted(all_names):
         all_arguments = (
             *ALL_GIT_GREP_BASE_TREE_COMMAND_PREFIX,
             each_name,
-            GIT_BASE_TREE_REVISION,
+            tree_revision,
         )
         grep_process = _run_strict_git(repository_root, all_arguments)
         if grep_process.returncode == 0:
@@ -728,14 +733,53 @@ def strict_staged_terminology_findings(repository_root: Path) -> list[str]:
         RuntimeError: Git could not read the staged diff or look up an
             identifier in HEAD.
     """
-    diff_process = _run_strict_git(
-        repository_root, ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND
+    return _strict_terminology_findings(
+        repository_root,
+        ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND,
+        GIT_BASE_TREE_REVISION,
     )
+
+
+def strict_base_terminology_findings(
+    repository_root: Path, base_revision: str
+) -> list[str]:
+    """Return near-miss findings for worktree changes against a base revision.
+
+    Args:
+        repository_root: The repository root the worktree diff is read from.
+        base_revision: The tree that worktree changes are compared against.
+
+    Returns:
+        One finding string per near-miss term on an added prose line.
+
+    Raises:
+        RuntimeError: Git could not read the committed diff or look up an
+            identifier in the comparison tree.
+    """
+    all_arguments = (
+        *ALL_GIT_DIFF_UNIFIED_ZERO_COMMAND,
+        base_revision,
+    )
+    return _strict_terminology_findings(
+        repository_root,
+        all_arguments,
+        base_revision,
+    )
+
+
+def _strict_terminology_findings(
+    repository_root: Path,
+    all_diff_arguments: Sequence[str],
+    tree_revision: str,
+) -> list[str]:
+    diff_process = _run_strict_git(repository_root, all_diff_arguments)
     _raise_for_git_failure(diff_process, GIT_DIFF_OPERATION)
     all_added_names = _identifier_names_on_added_code_lines(diff_process.stdout)
     preexisting_tuples = frozenset(
         _identifier_token_tuple(each_name)
-        for each_name in _strict_base_tree_names(repository_root, all_added_names)
+        for each_name in _strict_base_tree_names(
+            repository_root, all_added_names, tree_revision
+        )
     )
     return _find_terminology_near_misses(diff_process.stdout, preexisting_tuples)
 
@@ -743,16 +787,15 @@ def strict_staged_terminology_findings(repository_root: Path) -> list[str]:
 def staged_terminology_findings(repository_root: Path) -> list[str]:
     """Return terminology near-miss findings for a repository's staged diff.
 
-    An identifier the base tree already names is not one the staged diff
-    introduces, so no prose is flagged against it. Only genuinely new
-    identifiers are swept.
+    An identifier already present in HEAD is not treated as introduced, so
+    prose is not flagged against it.
 
     Args:
         repository_root: The repository root the staged diff is read from.
 
     Returns:
-        One finding string per near-miss term on a staged added prose line, or
-        an empty list when the staged diff is empty or git cannot be run.
+        One finding string per near-miss term on a staged prose line, or an
+        empty list when the staged diff is empty or git cannot be run.
     """
     diff_process = subprocess.run(
         list(ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND),
@@ -770,7 +813,9 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
     all_added_names = _identifier_names_on_added_code_lines(diff_process.stdout)
     preexisting_tuples = frozenset(
         _identifier_token_tuple(each_name)
-        for each_name in _base_tree_names(repository_root, all_added_names)
+        for each_name in _base_tree_names(
+            repository_root, all_added_names, GIT_BASE_TREE_REVISION
+        )
     )
     return _find_terminology_near_misses(diff_process.stdout, preexisting_tuples)
 
