@@ -1,7 +1,4 @@
-"""Directory names for the installed shared tree.
-
-Every caller of shared_tree_paths uses these names.
-"""
+"""Directory names for the installed shared tree."""
 
 from __future__ import annotations
 

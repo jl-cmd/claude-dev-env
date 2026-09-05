@@ -2,9 +2,9 @@
 """Run staged policy lint, then the existing staged CODE_RULES gate.
 
 Git invokes this module through the installed native pre-commit shim. Policy
-lint reads the Git index, including GIT_INDEX_FILE when Git supplies an alternate
-index. It runs locally in every repository that uses the managed native hook.
-The existing gate still covers checks whose replacement coverage is unproven.
+lint reads the Git index, including GIT_INDEX_FILE when Git supplies an
+alternate index. The existing gate still covers checks whose replacement
+coverage is unproven.
 
 A missing linter, launch failure, or timeout is an infrastructure failure.
 Linter diagnostics and failed-rule statuses reach Git.
@@ -35,11 +35,7 @@ from git_hooks_constants.staged_policy_lint import (
 
 
 def resolve_policy_lint_script_path() -> Path:
-    """Resolve the linter shipped beside this source or installed hooks tree.
-
-    Returns:
-        The policy-linter entry point in the same package or managed home.
-    """
+    """Return the policy-linter entry point in this package or managed home."""
     package_root = Path(__file__).resolve().parents[POLICY_LINT_PACKAGE_PARENT_INDEX]
     return package_root / POLICY_LINT_SCRIPT_RELATIVE_PATH
 

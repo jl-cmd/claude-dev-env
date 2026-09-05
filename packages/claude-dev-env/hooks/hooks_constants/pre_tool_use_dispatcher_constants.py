@@ -1,10 +1,9 @@
 """Constants for the PreToolUse dispatcher that hosts Write/Edit/MultiEdit hooks.
 
-The roster retains action-boundary checks, repository checks, and checks whose
-local replacement scope remains unresolved. File-policy rules with a staged
-replacement run through cde lint in the native pre-commit owner. Their detector
-modules remain available to that linter. Bash cleanup protection has its own
-roster and remains active.
+The roster keeps action-boundary checks, repository checks, and checks without
+a proven local replacement. File-policy rules with a staged replacement run
+through cde lint in native pre-commit. Their detectors stay importable for that
+linter. Bash cleanup protection uses its own roster.
 """
 
 from __future__ import annotations
@@ -69,19 +68,18 @@ STATE_DESCRIPTION_BLOCKER_MODULE_NAME = "state_description_blocker"
 
 @dataclass(frozen=True)
 class HostedHookEntry:
-    """A single hosted hook with its applicable-tools constraint and blocking flag.
+    """One hosted hook, the tools it applies to, and whether a crash blocks.
 
     Attributes:
         script_relative_path: Hook path relative to the hooks/ directory.
         applicable_tool_names: Tool names this hook applies to. The dispatcher
             skips the hook when the payload's tool is not in this set.
-        is_blocking: True when a crash surfaces a blocking signal; False when the
+        is_blocking: True when a crash is a blocking signal. False when the
             hook is advisory and a crash stays silent.
-        native_module_name: The importable module name whose evaluate function
-            the dispatcher calls in-process for this hook, or None when the hook
-            runs via runpy under __main__. The named module exposes a function
-            named `evaluate` taking the payload dict and returning a deny-reason
-            string or None.
+        native_module_name: Importable module whose evaluate function the
+            dispatcher calls in-process, or None when the hook runs via runpy
+            under __main__. evaluate takes the payload dict and returns a
+            deny-reason string or None.
     """
 
     script_relative_path: str
