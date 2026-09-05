@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Run staged policy lint, then preserve the existing staged CODE_RULES gate.
+"""Run staged policy lint, then the existing staged CODE_RULES gate.
 
 Git invokes this module through the installed native pre-commit shim. Policy
 lint reads the Git index, including GIT_INDEX_FILE when Git supplies an alternate
-index. It runs locally for every repository using the managed native hook;
-GitHub Actions are not required. The existing gate remains for checks whose
-replacement coverage has not been established.
+index. It runs locally in every repository that uses the managed native hook.
+The existing gate still covers checks whose replacement coverage is unproven.
 
-A missing linter, launch failure, or timeout is an infrastructure failure rather
-than a clean result. Linter diagnostics and failed-rule statuses reach Git.
+A missing linter, launch failure, or timeout is an infrastructure failure.
+Linter diagnostics and failed-rule statuses reach Git.
 """
 
 from __future__ import annotations
@@ -46,7 +45,7 @@ def resolve_policy_lint_script_path() -> Path:
 
 
 def run_staged_policy_lint() -> int:
-    """Run the actual staged linter with Git's environment and working directory.
+    """Run the staged linter with Git's environment and working directory.
 
     Returns:
         The linter status, or the infrastructure status when it cannot run.
@@ -88,7 +87,7 @@ def invoke_gate(gate_script_path: Path) -> int:
 
 
 def main() -> int:
-    """Run local staged policy lint before the retained native commit checks.
+    """Run local staged policy lint before the existing native commit checks.
 
     Returns:
         The first failing check's status, or zero when the checks pass.

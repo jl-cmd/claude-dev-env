@@ -6,7 +6,7 @@
   "main_rechecked_at": "f5a984af48df0eb0f87f5211d4e92421c38df91b",
   "intervening_changes": [".release-please-manifest.json", "packages/claude-dev-env/CHANGELOG.md", "packages/claude-dev-env/package.json"],
   "python_automation_commit": "92718eb60ac83da27934f86f07081e7e3a39ac85",
-  "scope": "GitHub source audit plus isolated Linux fixtures; not a Windows deployment or live hook audit",
+  "scope": "GitHub source audit plus isolated Linux fixtures. Not a Windows deployment or live hook audit",
   "live_installation_inspected": false,
   "live_configuration_changed": false,
   "installed_script_hashes_verified": false,
@@ -19,7 +19,7 @@
     "commit": "38151d21ff3ee80b6cf3cf24601b6174041035e2",
     "path": ".audit/hook-linter-audit/report.html",
     "git_blob_sha": "896c3750385670f90965fd313eb0474a1c6acd88",
-    "retention": "Exact original bytes remain in the existing Git object; no live backup is claimed"
+    "retention": "Exact original bytes remain in the existing Git object. No live backup is claimed"
   },
   "unavailable_at_implementation_commit": [
     ".audit/hook-linter-conversion/tasks.md",
@@ -77,7 +77,7 @@
   "pr_command_fixtures": {
     "python": "3.13.5",
     "platform": "Linux",
-    "boundary": "Exact source PR command with real lint subprocess and fake gh publication process; no network or credentials accessed",
+    "boundary": "Exact source PR command with real lint subprocess and fake gh publication process. No network or credentials accessed",
     "temporary_fixture_removed": true,
     "parent_environment_unchanged": true,
     "total": 9,
@@ -98,14 +98,14 @@
     "node": "v22.16.0",
     "source_path": "packages/claude-dev-env/bin/install.mjs",
     "source_blob": "d7f539eeeb44c2d4c8812306d70f4b3ac74a0c35",
-    "scope": "Narrow in-memory reproduction of transcribed mergeHooksIntoSettings body with helper stand-ins, not a full installer test",
+    "scope": "Narrow in-memory reproduction of transcribed mergeHooksIntoSettings body with helper stand-ins. Not a full installer test",
     "shared_validator_retained": false,
     "dispatcher_retained": true,
     "foreign_hook_retained": true,
     "unrelated_permissions_unchanged": true,
     "repeated_merge_same_result": true,
     "assertions_passed": 5,
-    "interpretation": "Confirms a source-level gap; does not approve removal"
+    "interpretation": "Confirms a source-level gap. Does not approve removal"
   },
   "not_exercised": [
     "Live Claude, Codex, alternate-profile and project registrations",

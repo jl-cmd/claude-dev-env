@@ -1,4 +1,4 @@
-"""Configuration for the native pre-commit policy-lint invocation."""
+"""Constants for the native pre-commit policy-lint step."""
 
 POLICY_LINT_PACKAGE_PARENT_INDEX = 2
 POLICY_LINT_SCRIPT_RELATIVE_PATH = "scripts/cde_lint.py"
