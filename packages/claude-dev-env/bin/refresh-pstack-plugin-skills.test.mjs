@@ -176,6 +176,29 @@ test('running the file through a directory link still reports what it did', () =
     });
 });
 
+test('with no folder argument it follows CLAUDE_CONFIG_DIR', () => {
+    withTemporaryHome((homeDirectory) => {
+        const claudeConfigDirectory = join(homeDirectory, 'profile', '.claude');
+        const pluginRoot = join(claudeConfigDirectory, 'skills', 'pstack');
+        mkdirSync(join(pluginRoot, 'how'), { recursive: true });
+        writeFileSync(join(pluginRoot, 'how', 'SKILL.md'), '---\n');
+        const modulePath = join(
+            dirname(dirname(fileURLToPath(import.meta.url))),
+            'scripts',
+            'refresh_pstack_plugin_skills.mjs',
+        );
+
+        const output = execFileSync('node', [modulePath], {
+            encoding: 'utf8',
+            env: { ...process.env, CLAUDE_CONFIG_DIR: claudeConfigDirectory },
+        });
+
+        assert.match(output, /Updated\. 1 skills listed\./);
+        const manifestPath = join(pluginRoot, PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH);
+        assert.deepEqual(JSON.parse(readFileSync(manifestPath, 'utf8')).skills, ['./how']);
+    });
+});
+
 test('refuses a folder that holds no skills', () => {
     withTemporaryHome((homeDirectory) => {
         const pluginRoot = buildPluginRoot(homeDirectory, [], null);

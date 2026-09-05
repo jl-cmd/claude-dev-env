@@ -34,6 +34,7 @@ export const PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH = join('.claude-plugin', 'plug
 export const SKILL_MANIFEST_FILE_NAME = 'SKILL.md';
 export const SKILL_PATH_PREFIX = './';
 
+const CLAUDE_HOME_DIRECTORY_NAME = '.claude';
 const MANIFEST_SKILLS_KEY = 'skills';
 const MANIFEST_INDENT_SPACES = 2;
 const FILE_ENCODING = 'utf8';
@@ -143,9 +144,22 @@ export function pstackPluginRootFor(claudeHome) {
     return join(claudeHome, 'skills', PSTACK_PLUGIN_DIRECTORY_NAME);
 }
 
+/**
+ * Resolve the Claude home this run reads when no folder argument is given.
+ *
+ * A named profile sets `CLAUDE_CONFIG_DIR`, and the installer writes into that
+ * root, so the command-line form reads the same variable.
+ *
+ * @param {Record<string, string|undefined>} environment The process environment.
+ * @returns {string} The Claude home directory holding `skills`.
+ */
+export function claudeHomeFrom(environment) {
+    return environment.CLAUDE_CONFIG_DIR || join(homedir(), CLAUDE_HOME_DIRECTORY_NAME);
+}
+
 function main() {
     const explicitRoot = process.argv[2];
-    const pluginRoot = explicitRoot || pstackPluginRootFor(join(homedir(), '.claude'));
+    const pluginRoot = explicitRoot || pstackPluginRootFor(claudeHomeFrom(process.env));
     const outcome = refreshPstackPluginManifest(pluginRoot);
     if (!outcome.didWrite && outcome.reason) {
         console.log(`No manifest written: ${outcome.reason}.`);
