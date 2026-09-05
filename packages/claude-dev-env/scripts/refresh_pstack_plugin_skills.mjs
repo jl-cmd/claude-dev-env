@@ -41,9 +41,8 @@ const FILE_ENCODING = 'utf8';
 const HIDDEN_NAME_PREFIX = '.';
 
 /**
- * The manifest fields a first write seeds, taken from the published pstack
- * plugin. A manifest the user already has keeps its own values: the refresher
- * owns the skills list alone.
+ * Fields a first write seeds from the published pstack plugin. An existing
+ * manifest keeps its own values. This refresher changes only the skills list.
  */
 const SEEDED_MANIFEST_FIELDS = Object.freeze({
     $schema: 'https://anthropic.com/claude-code/plugin.schema.json',
@@ -90,14 +89,15 @@ function readManifestSkillPaths(manifestPath) {
 /**
  * Rewrite a pstack plugin manifest's skills list to match its folder.
  *
- * The manifest is written only when the list changes, so a second call on an
- * unchanged folder leaves the file byte for byte as it was. A manifest that is
- * already present keeps every field but the skills list.
+ * Writes only when the list changes. A second call on an unchanged folder
+ * leaves the file byte for byte. An existing manifest keeps every field but
+ * the skills list.
  *
  * @param {string} pluginRoot Plugin folder holding the skill sub-folders.
  * @returns {{didWrite: boolean, reason: string, previousSkillPaths: string[],
- *   currentSkillPaths: string[]}} What the call found and whether it wrote.
- *   `reason` names why a call declined to write, and is empty otherwise.
+ *   currentSkillPaths: string[]}} Whether this call wrote, and the paths
+ *   before and after. `reason` names a skip, and is empty on a write or an
+ *   unchanged list.
  */
 export function refreshPstackPluginManifest(pluginRoot) {
     const declined = { didWrite: false, previousSkillPaths: [], currentSkillPaths: [] };
@@ -135,7 +135,7 @@ export function refreshPstackPluginManifest(pluginRoot) {
 }
 
 /**
- * Resolve the pstack plugin folder a Claude home publishes.
+ * Return the pstack plugin folder under a Claude home.
  *
  * @param {string} claudeHome The Claude home directory holding `skills`.
  * @returns {string} The pstack plugin folder path, present or not.
@@ -145,10 +145,10 @@ export function pstackPluginRootFor(claudeHome) {
 }
 
 /**
- * Resolve the Claude home this run reads when no folder argument is given.
+ * Return the Claude home used when no folder argument is given.
  *
- * A named profile sets `CLAUDE_CONFIG_DIR`, and the installer writes into that
- * root, so the command-line form reads the same variable.
+ * A named profile sets `CLAUDE_CONFIG_DIR`. The installer writes into that
+ * root. The command-line form reads the same variable.
  *
  * @param {Record<string, string|undefined>} environment The process environment.
  * @returns {string} The Claude home directory holding `skills`.
@@ -179,11 +179,11 @@ function main() {
 }
 
 /**
- * Report whether this module is the file node was asked to run.
+ * Return whether node ran this module as its entry point.
  *
- * A home that reaches the script through a directory link gives node an
- * invoked path that differs from this module's own path, so both sides resolve
- * to their real location before the comparison.
+ * A directory link to this script gives node an invoked path that differs from
+ * this module's own path. Both sides resolve to their real location before
+ * the comparison.
  *
  * @param {string|undefined} invokedPath The path node reports as `argv[1]`.
  * @returns {boolean} True when node ran this module as its entry point.
