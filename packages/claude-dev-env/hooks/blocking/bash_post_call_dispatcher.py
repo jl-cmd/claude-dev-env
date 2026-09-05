@@ -1,30 +1,24 @@
 #!/usr/bin/env python3
-"""PostToolUse dispatcher that hosts the Bash hook chain running after a call.
+"""PostToolUse dispatcher for the Bash and PowerShell hook chain after a call.
 
-Named ``bash_post_call_dispatcher`` rather than the more obvious
-``bash_post_tool_use_dispatcher``: ``bin/install.test.mjs`` counts every
-PostToolUse command whose text contains the literal substring
-``post_tool_use_dispatcher.py`` and asserts exactly one match, against the
-unrelated Write/Edit dispatcher in ``validation/post_tool_use_dispatcher.py``.
-That check carries no basename anchor (its PreToolUse sibling does), so a
-correctly-named Bash-side sibling here would read as a second match of an
-unrelated dispatcher. This name carries the same meaning without the
-collision, and needs no change to that shared, out-of-scope test file.
+The name is ``bash_post_call_dispatcher.py``. ``bin/install.test.mjs``
+counts the substring ``post_tool_use_dispatcher.py`` on PostToolUse
+commands and expects one match (``validation/post_tool_use_dispatcher.py``).
+The check has no basename anchor. A Bash sibling with that substring
+would fail the install test.
 
-Reads the tool payload from stdin once, selects the hosted hooks applicable to
-the payload's tool name, and runs each one in-process via the shared
-hosted-hook runner. A hosted PostToolUse hook here carries no permission
-decision -- it is an observer, not a gate -- so this dispatcher runs the whole
-roster unconditionally and never blocks. The one thing it forwards is context:
-a hosted hook may print a ``hookSpecificOutput.additionalContext`` string (the
-PR done reminder does), and the dispatcher joins every such string into one
-PostToolUse payload. A hook that prints nothing adds nothing.
+Reads the tool payload from stdin once, selects hosted hooks for the
+payload's tool name, and runs each in-process. A hosted hook here is an
+observer. The dispatcher runs the whole roster and never blocks. It
+forwards ``hookSpecificOutput.additionalContext`` strings into one
+PostToolUse payload, joined by a blank line. A hook that prints nothing
+adds nothing.
 
-A single hosted hook crash fails open: ``run_hook_capturing_output`` isolates
-it, so it contributes nothing and does not stop the remaining hosted hooks.
+A hosted hook crash fails open. ``run_hook_capturing_output`` isolates it.
+The rest of the roster still runs.
 
-One interpreter start here serves the whole roster: every hosted hook's
-imports load once into this process rather than once per hook.
+One interpreter start serves the roster. Each hosted hook's imports load
+once into this process.
 """
 
 from __future__ import annotations
@@ -84,10 +78,9 @@ def additional_context_from_hook_output(captured_stdout: str) -> str | None:
 def dispatch(payload_text: str, tool_name: str) -> None:
     """Run every hosted hook applicable to tool_name, then forward their context.
 
-    Each hosted hook's crash is isolated by ``run_hook_capturing_output``, so
-    one hook failing never stops a later one in the same roster. Every
-    additionalContext string the hooks printed is joined into one PostToolUse
-    payload on stdout; when no hook printed one, nothing is written.
+    ``run_hook_capturing_output`` isolates each crash, so one failure does not
+    stop a later hook. Printed additionalContext strings join into one
+    PostToolUse payload. When none were printed, stdout stays empty.
     """
     all_additional_context: list[str] = []
     for each_entry in select_applicable_entries(tool_name):
@@ -109,7 +102,7 @@ def dispatch(payload_text: str, tool_name: str) -> None:
 
 
 def main() -> None:
-    """Read stdin once and dispatch the Bash PostToolUse hosted-hook roster."""
+    """Read stdin once and dispatch the PostToolUse hosted-hook roster."""
     run_dispatcher_main(dispatch)
 
 

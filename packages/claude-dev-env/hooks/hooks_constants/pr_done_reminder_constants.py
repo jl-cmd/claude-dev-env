@@ -1,8 +1,8 @@
 """Constants for the PR done-checklist context reminder.
 
-The reminder is a PostToolUse observer on Bash. It never blocks. After a
-successful ``git push`` or ``gh pr create`` it probes the branch's pull request
-through ``gh`` and adds one loud checklist to the agent's context.
+The reminder is a PostToolUse observer on Bash and PowerShell. It never
+blocks. After a successful ``git push`` or ``gh pr create`` it probes the
+branch's pull request through ``gh`` and adds one checklist to context.
 """
 
 from __future__ import annotations

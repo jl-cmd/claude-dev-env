@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """PostToolUse context reminder: the PR done checklist after a push.
 
-This hook never blocks. It watches every Bash call finish and, after a
-successful ``git push`` or ``gh pr create``, probes the branch's pull request
-through ``gh pr view`` and adds one loud checklist to the agent's context::
+This hook never blocks. After a successful ``git push`` or ``gh pr create``
+on Bash or PowerShell, it probes the branch's pull request through
+``gh pr view`` and adds one checklist to the agent's context::
 
     === PR DONE CHECKLIST (context reminder, never a block) ===
     PR #42  https://github.com/acme/widgets/pull/42
@@ -15,14 +15,12 @@ through ``gh pr view`` and adds one loud checklist to the agent's context::
     Re-check:    gh pr view 42 --json mergeable,mergeStateStatus,statusCheckRollup,labels
     A PR is done only when every line above is clean.
 
-Why a reminder and not a gate: agents keep working. The rule "a PR is done
-only when GitHub reports it mergeable and CI is clean" arrives as live state
-at the exact moment the agent just pushed, so no instruction file has to be
-remembered. A block would stall the run; this only informs it.
+At the push, the agent gets live mergeable state and CI counts from GitHub.
+The hook writes context only.
 
-Quiet branches: a non-Bash tool, a command that is not a push or a PR
-creation, a push whose harness-reported exit status is non-zero, or a ``gh``
-failure other than "no pull requests found" each emit nothing.
+It writes nothing for a tool other than Bash or PowerShell, a command that
+is not a push or a PR creation, a push whose harness-reported exit status
+is non-zero, or a ``gh`` failure other than "no pull requests found".
 
 Hosted by ``blocking/bash_post_call_dispatcher.py``, which forwards the
 ``hookSpecificOutput.additionalContext`` this hook prints.
@@ -104,10 +102,10 @@ def _segment_program_and_arguments(all_segment_tokens: list[str]) -> tuple[str, 
 def _git_subcommand(all_arguments: list[str]) -> str | None:
     """Return git's subcommand after its global options.
 
-    ``git -C <path> push`` and ``git -c <key=value> push`` carry an option
-    value before the subcommand; ``--git-dir=<path>`` carries none. The first
-    token left after those is the subcommand, so ``git stash push`` yields
-    ``stash`` and ``git log --grep push`` yields ``log``.
+    ``git -C <path> push`` and ``git -c <key=value> push`` take a value token
+    before the subcommand. ``--git-dir=<path>`` has no separate value token.
+    The first remaining token is the subcommand, so ``git stash push`` is
+    ``stash`` and ``git log --grep push`` is ``log``.
     """
     should_skip_next_token = False
     for each_argument in all_arguments:
@@ -139,9 +137,9 @@ def _is_gh_pr_create(program_name: str, all_arguments: list[str]) -> bool:
 def _powershell_inner_commands(all_command_tokens: list[str]) -> list[str]:
     """Return the script texts every ``pwsh -Command "..."`` wrapper runs.
 
-    Read from the raw shlex tokens, before segment splitting: the quoted
-    script is one token here, and splitting it on ``;`` first would cut a
-    ``git add -A; git push`` script in half.
+    Read the raw shlex tokens before segment splitting. The quoted script is
+    one token. Splitting on ``;`` first would cut a ``git add -A; git push``
+    script in half.
     """
     all_inner_commands: list[str] = []
     has_seen_powershell_program = False
@@ -156,13 +154,12 @@ def _powershell_inner_commands(all_command_tokens: list[str]) -> list[str]:
 
 
 def command_triggers_reminder(command: str) -> bool:
-    """Return True when any segment of the command is a git push or a gh pr create.
+    """Return True when any segment is a git push or a gh pr create.
 
-    A ``pwsh -Command "..."`` wrapper is unwrapped and its inner text scanned
-    the same way, since the shell rule routes Bash-tool commands through pwsh.
+    Unwraps ``pwsh -Command "..."`` and scans the inner text the same way.
 
     Args:
-        command: The Bash command text the agent ran.
+        command: The command text the agent ran.
     """
     all_command_tokens = _command_tokens(command)
     for each_inner_command in _powershell_inner_commands(all_command_tokens):
@@ -184,7 +181,7 @@ def _harness_reported_failure(tool_response: object) -> bool:
 def _check_outcome(all_check_fields: dict[str, object]) -> str:
     """Return failing, pending, or passing for one statusCheckRollup entry.
 
-    A CheckRun entry carries ``status`` and ``conclusion``; a StatusContext
+    A CheckRun entry carries ``status`` and ``conclusion``. A StatusContext
     entry carries ``state``. Both shapes appear in the same rollup list.
     """
     state_text = str(all_check_fields.get(STATUS_CONTEXT_STATE_KEY) or "").upper()
@@ -318,8 +315,7 @@ def _emit_context(context_text: str) -> None:
 def main() -> None:
     """Add the PR done checklist to context after a successful push or PR creation.
 
-    Reads the PostToolUse payload from stdin. Every quiet branch returns with
-    no output, so this hook can never alter or block a tool call.
+    Reads the PostToolUse payload from stdin. Quiet branches write nothing.
     """
     hook_payload = read_hook_input_dictionary_from_stdin()
     if (

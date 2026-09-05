@@ -1,10 +1,9 @@
-"""Constants for the Bash PostToolUse dispatcher.
+"""Constants for the Bash and PowerShell PostToolUse dispatcher.
 
-Holds the ordered hosted-hook roster this dispatcher runs after a Bash call
-finishes. Reuses ``BashHostedHookEntry`` and the Bash-only tool-name set from
-``bash_pre_tool_use_dispatcher_constants`` -- the entry shape and the tool-name
-membership question are identical on the PostToolUse side, so this module adds
-no second copy of either.
+Holds the ordered hosted-hook roster this dispatcher runs after a call.
+Reuses ``BashHostedHookEntry`` and the tool-name sets from
+``bash_pre_tool_use_dispatcher_constants``. The entry shape and tool-name
+membership match the PreToolUse side, so this module does not copy either.
 """
 
 from __future__ import annotations
