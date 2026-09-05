@@ -1,5 +1,18 @@
 # Changelog
 
+## [4.2.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v4.1.0...claude-dev-env-v4.2.0) (2026-09-05)
+
+
+### Features
+
+* **search:** make project token expansion explicit ([398a480](https://github.com/jl-cmd/claude-dev-env/commit/398a4803e15851e8c837a450ad7fc1b1e693bd95))
+* **search:** replace the es.exe path rewriter hook with a command ([9f71536](https://github.com/jl-cmd/claude-dev-env/commit/9f71536c3f048428baae2b1cd2e4fb93228be4b0))
+
+
+### Bug Fixes
+
+* **ci:** use present-state wording in search docs ([2938c9c](https://github.com/jl-cmd/claude-dev-env/commit/2938c9c400b7359ea7e52bc288b0e62f535fa4f4))
+
 ## [4.1.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v4.0.0...claude-dev-env-v4.1.0) (2026-09-05)
 
 
