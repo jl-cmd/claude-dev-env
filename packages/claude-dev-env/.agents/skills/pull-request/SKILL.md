@@ -26,29 +26,27 @@ description: >-
 ## Principle
 
 Publish one GitHub pull request action from validated local files and a
-process-local author value. Keep the parent environment unchanged. Validate
-local inputs before author lookup or network access, run the action once, and
-read back the remote pull request state.
+process-local author value. Keep the parent environment unchanged.
 
 ## When this applies
 
 Use this skill for one pull request action:
 
-- Create a pull request, including a draft pull request.
+- Create a draft pull request.
 - Edit a pull request title or body.
 - Add a pull request comment.
 - Submit a pull request review.
 - Recover one selected legacy author record before the action.
 
-Keep issue creation, issue edits, and issue comments with `issue-tracker`.
-Keep review convergence with `pr-cleanup` or `autoconverge`. Keep commits with
+Send issue create, edit, and comment work to `issue-tracker`. Send review
+convergence to `pr-cleanup` or `autoconverge`. Send commits to
 `source-command-commit`.
 
 Require one repository and one action target. Stop before author lookup or
 network work when the repository, pull request, action, author, or required
 local file is missing or ambiguous.
 
-Use these exact refusal responses when another owner applies:
+Use these exact refusal responses when the request belongs to another skill:
 
 - Issue action: `Use issue-tracker for this GitHub issue action.`
 - Commit or push: `Use source-command-commit for this commit or push.`
@@ -79,10 +77,10 @@ current process environment.
 | `pr-description-writer` | Before create or a full body rewrite | A reviewed title and body file | Stop the create or rewrite and report that authoring is required |
 | `pr-title-description` | Optional title and body review | Review findings for the writer's output | Continue with the required writer output |
 | `privacy-hygiene` | Before any durable GitHub post | A clean body and repository privacy sweep | Stop before publication and report the missing gate |
-| `issue-tracker` | Issue create, edit, or comment requests | Issue state and issue URLs | Route the request there; do not duplicate its workflow |
-| `pr-cleanup` | Placement, naming, sizing, or cleanup convergence | Cleanup findings or a focused PR boundary | Route the request there; do not perform convergence here |
-| `autoconverge` | Autonomous PR review and fix loops | A converged draft or ready-state decision | Route the request there; do not run a review loop here |
-| `source-command-commit` | Commit or push requests | A verified commit or pushed branch | Route the request there; do not create commits here |
+| `issue-tracker` | Issue create, edit, or comment requests | Issue state and issue URLs | Route the request there. |
+| `pr-cleanup` | Placement, naming, sizing, or cleanup convergence | Cleanup findings or a focused PR boundary | Route the request there. |
+| `autoconverge` | Autonomous PR review and fix loops | A converged draft or ready-state decision | Route the request there. |
+| `source-command-commit` | Commit or push requests | A verified commit or pushed branch | Route the request there. |
 
 ## Task seeding
 
@@ -113,7 +111,7 @@ Run `_shared/pr-loop/scripts/durable_post_lint.py` with the matching action and
 title or body file. Use `pr-create`, `pr-edit`, `pr-comment`, or `pr-review`.
 The linter owns the action-specific body, title, and volatile-path rules.
 
-Exit code `0` permits the next gate. Any non-zero exit stops the action. Fix
+Exit code `0` continues to the next gate. Any non-zero exit stops the action. Fix
 the named local input and rerun the linter. Do not look up the author or make a
 network call while validation fails.
 
@@ -159,7 +157,7 @@ without exposing author values.
 
 Stop before network work when authoring, local validation, privacy, or author
 selection fails. A failed action preserves its body and any recovery record.
-Report the safe error and the next required input. A successful action ends
+Report the generic error and the next required input. A successful action ends
 only after remote readback proves the requested state.
 
 ## Examples
@@ -194,7 +192,7 @@ The recovery command restores the named account and deletes only that record.
 | `SKILL.md` | Hub for pull request publication, validation, author selection, recovery, and readback |
 | `reference/publication-tasks.md` | Ordered tasks for every publication gate |
 | `scripts/pull_request.py` | Command for author selection and create, edit, comment, and review actions |
-| `scripts/github_pr_command_constants/` | Constants for pull request actions, recovery, exit codes, and safe messages |
+| `scripts/github_pr_command_constants/` | Constants for pull request actions, recovery, exit codes, and generic messages |
 | `scripts/test_pull_request.py` | Tests for `pull_request.py` |
 | `scripts/recover_legacy_author.py` | Command for one selected legacy author record |
 | `scripts/test_github_pr_command_constants.py` | Tests for the command and recovery constants |

@@ -18,8 +18,9 @@ Low. GitHub writes, credential selection, post validation, and legacy account re
 - `pr-description-writer`: invoke before pull request creation or a full description rewrite. It produces the required title and body file without a spawn marker.
 - `pr-title-description`: use only when another title and body review helps the writer.
 - `privacy-hygiene`: invoke before the GitHub post. It produces a clean body and staged repository sweep.
-- `issue-tracker`: keep separate. It owns issue create, edit, and comment actions and calls the shared body linter.
-- `pr-cleanup`, `autoconverge`, and `source-command-commit`: keep separate. They own review convergence and commits, not pull request publication.
+- `issue-tracker`: owns issue create, edit, and comment actions and calls the shared body linter.
+- `pr-cleanup` and `autoconverge`: own review convergence.
+- `source-command-commit`: owns commits.
 - `gh_artifact_upload.py`: reuse through the artifact guidance. It owns permanent binary artifact URLs.
 - Split decision: one pull-request leaf skill plus one shared body linter used by existing pull request, issue, and GitHub tool workflows.
 - Missing sub-skills: none. The existing issue skill receives a linter call without a new issue workflow.
@@ -28,7 +29,7 @@ Low. GitHub writes, credential selection, post validation, and legacy account re
 
 - Capability stem: validated GitHub pull request create, edit, comment, and review actions.
 - Trigger phrases: create PR, open pull request, edit PR, update PR body, comment on PR, review PR, publish draft PR, use scoped GitHub author.
-- Near-miss exclusions: issue filing stays with `issue-tracker`; commit creation stays with `source-command-commit`.
+- Leave issue filing to `issue-tracker`. Leave commit creation to `source-command-commit`.
 - Draft description:
 
 ```yaml
@@ -83,7 +84,7 @@ description: >-
 - Each policy belongs beside the GitHub action that consumes it.
 - Shared body checks need an action enum because descriptions, comments, reviews, and issues have different required structure.
 - Process-local environment values remove global account restore and cleanup phases.
-- Legacy recovery stays explicit because multiple records do not define one safe final account.
+- Legacy recovery stays explicit because multiple records do not define one final account.
 
 ## Initial gotcha candidates
 

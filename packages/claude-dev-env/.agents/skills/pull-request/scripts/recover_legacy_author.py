@@ -36,7 +36,7 @@ VerifiedRecord = tuple[str, FileFingerprint]
 
 
 class LegacyRecordRejected(ValueError):
-    """Report an unsafe or invalid legacy state record."""
+    """Report an invalid legacy state record."""
 
 
 class LegacyRecordActive(ValueError):

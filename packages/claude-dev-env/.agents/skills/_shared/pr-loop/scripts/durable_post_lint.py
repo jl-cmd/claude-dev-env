@@ -52,7 +52,7 @@ class DurablePostInputError(OSError):
 
 @dataclass(frozen=True)
 class DurablePostFinding:
-    """One safe GitHub post content diagnostic."""
+    """One GitHub post content finding."""
 
     code: str
     message: str
@@ -192,10 +192,10 @@ def lint_durable_post(
         body_text: Decoded body text when the action accepts a body.
 
     Returns:
-        Safe content findings in stable rule order.
+        Content findings in stable rule order.
 
     Raises:
-        DurablePostUsageError: The action and supplied fields do not form a request.
+        DurablePostUsageError: The action and supplied fields are not a valid request.
     """
     _validate_request_shape(action, title, body_text)
     return (*_title_findings(title), *_body_findings(action, body_text))

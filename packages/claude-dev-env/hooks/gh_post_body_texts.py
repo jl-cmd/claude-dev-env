@@ -166,7 +166,7 @@ def extract_gh_post_body_texts_for_privacy_gate(
         working_directory: Base directory for relative body-file paths.
 
     Returns:
-        Body texts and no error, or no texts and a safe rejection message.
+        Body texts and no error, or no texts and a rejection message without body text.
     """
     logical_line = get_logical_first_line(command)
     if not logical_line:

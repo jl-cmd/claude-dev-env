@@ -1,23 +1,18 @@
 #!/usr/bin/env python3
 """PreToolUse hook: block writes, durable posts, and commits that carry PII.
 
-Surfaces guarded:
+::
 
-- Write / Edit / MultiEdit — new content about to land on disk
-- Bash / PowerShell ``gh`` post subcommands and GitHub MCP post tools — durable
-  bodies
-- Bash / PowerShell ``git commit`` (including ``git.exe`` and flag forms) —
-  staged file contents about to become history. Commit message bodies are out
-  of scope; only staged blob text is scanned.
+    Write/Edit/MultiEdit  -> scan new disk content
+    gh post / GitHub MCP  -> scan durable bodies
+    git commit            -> scan staged blob text, not the commit message
 
-Payload and post-body scanning live in ``pii_payload_scan``; git-commit command
-detection lives in ``pii_commit_command``; both re-export through this entry
-module so the hooks.json wiring and every importer resolve unchanged.
-
-A repository named in ``CLAUDE_PII_EXEMPT_REPOS`` or the ``pii_exempt_repositories``
-list in ``~/.claude/local-identity.json`` skips the staged-commit scan; a
-repository without a readable origin remote is never exempt. Exact values listed
-under ``pii_allowlisted_values`` for a repository's origin slug may pass the
+``pii_payload_scan`` and ``pii_commit_command`` re-export through this
+entry module so hooks.json wiring and importers stay unchanged.
+``CLAUDE_PII_EXEMPT_REPOS`` or ``pii_exempt_repositories`` in
+``~/.claude/local-identity.json`` skip the staged-commit scan. A repo
+without a readable origin remote is never exempt.
+``pii_allowlisted_values`` for a repository origin slug may pass
 Write/Edit and staged-commit scans in that repository only.
 """
 
@@ -217,9 +212,9 @@ def _scan_staged_path(
 def evaluate_staged_commit(repository_root: Path) -> str | None:
     """Return a deny reason when staged content carries PII or is unscannable.
 
-    Fail-closed: git list/show failures and unscannable blobs deny the commit
-    rather than treating unread content as clean. A value in the repository's
-    PII allowlist is dropped from the findings, so its commits may carry it.
+    Git list or show failures and unscannable blobs deny the commit. A value
+    in the repository's PII allowlist is dropped from the findings, so its
+    commits may carry it.
 
     Args:
         repository_root: Repository whose index is about to be committed.
@@ -243,9 +238,9 @@ def evaluate_staged_commit(repository_root: Path) -> str | None:
 def _evaluate_commit_staged_content(bash_command: str, working_directory: str | None) -> str | None:
     """Scan the staged content of the repository the commit command targets.
 
-    Resolves the repository from the command's ``-C``/``cd`` path, falling back
-    to the session working directory only when the command names none, so a
-    removed cwd never blocks a commit that targets a valid repo.
+    Resolves the repository from the command's ``-C`` or ``cd`` path. Falls
+    back to the session working directory only when the command names none. A
+    removed cwd does not block a commit that targets a valid repo.
 
     Args:
         bash_command: The Bash or PowerShell tool command string.

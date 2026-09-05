@@ -2,9 +2,8 @@
 
 ## When this applies
 
-Use this rule for any GitHub post that remains on the server. This includes an
-issue, pull request, comment, or review created through `gh` or a GitHub MCP
-post tool.
+Use this rule for a GitHub issue, pull request, comment, or review created
+through `gh` or a GitHub MCP post tool.
 
 ## Rule
 
