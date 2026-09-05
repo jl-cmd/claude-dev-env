@@ -47,6 +47,7 @@ from pr_loop_shared_constants.terminology_sweep_constants import (
     DIFF_OLD_FILE_HEADER_PREFIX,
     DIFF_REMOVED_LINE_PREFIX,
     GIT_BASE_TREE_REVISION,
+    GIT_INDEX_ENVIRONMENT_VARIABLE,
     GIT_DECODE_ERRORS,
     GIT_DIFF_OPERATION,
     GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
@@ -581,21 +582,21 @@ def sweep_diff(
 
 
 def repository_environment() -> dict[str, str]:
-    """Return the process environment with every GIT_ variable removed.
+    """Return the environment with repository overrides removed and the index retained.
 
     The sweep and the commit gate name their repository through an explicit
     root argument. An inherited GIT_DIR or GIT_WORK_TREE would override
     that root and point git at a different repository, so each spawned
-    subprocess runs with a scrubbed environment.
+    subprocess runs with a scrubbed environment. The active GIT_INDEX_FILE
+    remains part of the staged-input contract for partial commits.
 
     Returns:
-        A copy of ``os.environ`` without any variable whose name starts
-        with ``GIT_``.
+        A copy of ``os.environ`` without Git overrides other than the active index.
     """
     return {
         each_key: each_setting
         for each_key, each_setting in os.environ.items()
-        if not each_key.startswith("GIT_")
+        if not each_key.startswith("GIT_") or each_key == GIT_INDEX_ENVIRONMENT_VARIABLE
     }
 
 

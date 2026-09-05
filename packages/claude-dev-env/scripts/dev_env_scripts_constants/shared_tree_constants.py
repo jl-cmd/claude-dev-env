@@ -15,3 +15,6 @@ SCRIPTS_DIRECTORY_NAME: str = "scripts"
 PROCESS_TREE_DIRECTORY_NAME: str = "process-tree"
 
 PROCESS_TREE_KILL_MODULE_FILENAME: str = "process_tree_kill.py"
+
+AGENTS_DIRECTORY_SUFFIX: str = ".agents"
+DEFAULT_MANAGED_ROOT_NAME: str = ".claude"

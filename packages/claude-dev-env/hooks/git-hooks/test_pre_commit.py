@@ -251,8 +251,11 @@ def _git(repository_root: Path, *all_arguments: str) -> str:
 
 
 @pytest.fixture()
-def repository_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def repository_root(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch,
+) -> Path:
     """Create a repository with private Git configuration and no inherited hooks."""
+    tmp_path = tmp_path_factory.mktemp("policy-fixture")
     home_directory = tmp_path / "home"
     home_directory.mkdir()
     monkeypatch.setenv("HOME", str(home_directory))
@@ -316,14 +319,42 @@ def test_real_staged_linter_catches_each_replaced_rule(
     assert rule_id in {each["rule_id"] for each in all_diagnostics}, report
 
 
+def _stage_valid_pair(repository_root: Path, relative_path: str) -> None:
+    source_path = Path(relative_path)
+    clean_content = {
+        ".py": (
+            "def is_ready() -> bool:\n"
+            '    """Report readiness.\n\n'
+            "    Returns:\n        True for the fixture.\n"
+            '    """\n'
+            "    return True\n"
+        ),
+        ".js": "export const isEnabled = true;\n",
+        ".md": "# Config\n\nThe API uses port 8080.\n",
+    }[source_path.suffix]
+    _stage(repository_root, relative_path, clean_content)
+    paired_name = (
+        f"test_{source_path.stem}.py"
+        if source_path.suffix == ".py"
+        else f"{source_path.stem}.test{source_path.suffix}"
+    )
+    paired_content = (
+        f"from {source_path.stem} import is_ready\n\n"
+        "def test_is_ready() -> None:\n    assert is_ready()\n"
+        if source_path.suffix == ".py"
+        else ""
+    )
+    _stage(repository_root, (source_path.parent / paired_name).as_posix(), paired_content)
+
+
 @pytest.mark.parametrize(("rule_id", "relative_path", "content"), ALL_RULE_FIXTURES)
-def test_empty_valid_content_passes_the_real_local_commit_linter(
+def test_valid_paired_content_passes_the_real_local_commit_linter(
     repository_root: Path,
     rule_id: str,
     relative_path: str,
     content: str,
 ) -> None:
-    _stage(repository_root, relative_path, "")
+    _stage_valid_pair(repository_root, relative_path)
     assert pre_commit.run_staged_policy_lint() == 0
 
 

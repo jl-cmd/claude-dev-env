@@ -11,7 +11,9 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from dev_env_scripts_constants.shared_tree_constants import (
+    AGENTS_DIRECTORY_SUFFIX,
     CLAUDE_CONFIG_DIR_ENV_VAR,
+    DEFAULT_MANAGED_ROOT_NAME,
     PROCESS_TREE_DIRECTORY_NAME,
     PROCESS_TREE_KILL_MODULE_FILENAME,
     SCRIPTS_DIRECTORY_NAME,
@@ -29,6 +31,29 @@ def _shared_scripts_directory(from_root: Path, shared_subpackage_name: str) -> P
     )
 
 
+def _linked_managed_root(module_path: Path, anchor_depth: int) -> Path | None:
+    """Resolve the managed root whose scripts pointer targets this installed tree.
+
+    Args:
+        module_path: The module path inside the managed scripts tree.
+        anchor_depth: Parent index of the package or agents root.
+
+    Returns:
+        The paired Claude root when its scripts pointer resolves to this tree.
+    """
+    package_root = module_path.resolve().parents[anchor_depth]
+    if not package_root.name.endswith(AGENTS_DIRECTORY_SUFFIX):
+        return None
+    managed_name = package_root.name.removesuffix(AGENTS_DIRECTORY_SUFFIX) or DEFAULT_MANAGED_ROOT_NAME
+    managed_root = package_root.parent / managed_name
+    linked_scripts = managed_root / SCRIPTS_DIRECTORY_NAME
+    if not linked_scripts.is_dir():
+        return None
+    if linked_scripts.resolve() != package_root / SCRIPTS_DIRECTORY_NAME:
+        return None
+    return managed_root
+
+
 def resolve_shared_scripts_directory(
     module_file: str | Path,
     all_environment: Mapping[str, str],
@@ -44,8 +69,8 @@ def resolve_shared_scripts_directory(
         ok:   an un-resolved parent keeps the link side, where _shared sits
         flag: a resolved parent walks the link and misses _shared entirely
 
-    Tries the un-resolved parent first, then the configured managed root,
-    then the resolved parent. When none holds the marker, returns the
+    Tries the un-resolved parent first, then a verified installed scripts
+    pointer, then the configured managed root and the resolved parent. When none holds the marker, returns the
     un-resolved candidate, so an import failure names a readable path.
 
     Args:
@@ -63,6 +88,9 @@ def resolve_shared_scripts_directory(
         module_path.absolute().parents[anchor_depth], shared_subpackage_name
     )
     all_candidates = [un_resolved_candidate]
+    linked_root = _linked_managed_root(module_path, anchor_depth)
+    if linked_root is not None:
+        all_candidates.append(_shared_scripts_directory(linked_root, shared_subpackage_name))
     configured_root_text = all_environment.get(CLAUDE_CONFIG_DIR_ENV_VAR, "").strip()
     if configured_root_text:
         all_candidates.append(

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 from pathlib import Path
 from types import ModuleType
+
+from shared_tree_paths import resolve_shared_scripts_directory
 
 from . import adapter_configuration, adapter_detectors, adapter_pairing, adapter_support
 from .config import constants
@@ -24,10 +27,10 @@ def _hooks_module(module_name: str) -> ModuleType:
 
 
 def _pr_loop_script_module(module_name: str) -> ModuleType:
-    package_directory = Path(__file__).resolve().parent.parent.parent
-    scripts_directory = str(
-        package_directory.joinpath(*constants.ALL_PR_LOOP_SCRIPTS_PATH_SEGMENTS)
-    )
+    scripts_directory = str(resolve_shared_scripts_directory(
+        __file__, os.environ, constants.PR_LOOP_DIRECTORY_NAME,
+        f"{module_name}{constants.PYTHON_SUFFIX}", constants.SHARED_ROOT_PARENT_INDEX
+    ))
     if scripts_directory not in sys.path:
         sys.path.insert(0, scripts_directory)
     return importlib.import_module(module_name)

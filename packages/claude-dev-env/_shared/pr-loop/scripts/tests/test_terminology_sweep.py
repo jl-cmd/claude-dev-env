@@ -428,7 +428,7 @@ def test_skips_string_literal_fragments_in_test_files() -> None:
     assert "test_quota.py:2" in findings[0]
 
 
-def test_repository_environment_strips_every_git_variable(
+def test_repository_environment_strips_repository_overrides(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("GIT_DIR", "hostile-git-dir")
@@ -583,3 +583,16 @@ def test_flags_near_miss_when_second_leading_token_is_plural_variant() -> None:
     findings = sweep_diff(diff)
     assert len(findings) == 1
     assert "retry policies limit" in findings[0]
+
+
+def test_terminology_retains_only_the_active_index_git_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index_path = tmp_path / "index"
+    monkeypatch.setenv("GIT_INDEX_FILE", str(index_path))
+    monkeypatch.setenv("GIT_DIR", "foreign-repository")
+    monkeypatch.setenv("GIT_WORK_TREE", "foreign-worktree")
+    actual = sweep_module.repository_environment()
+    assert actual["GIT_INDEX_FILE"] == str(index_path)
+    assert "GIT_DIR" not in actual
+    assert "GIT_WORK_TREE" not in actual

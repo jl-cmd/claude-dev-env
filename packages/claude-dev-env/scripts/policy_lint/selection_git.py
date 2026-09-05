@@ -10,6 +10,7 @@ from .config.constants import (
     ALL_MISSING_BLOB_ERROR_FRAGMENTS,
     ALL_UNBORN_HEAD_ERROR_FRAGMENTS,
     GIT_ENVIRONMENT_VARIABLE_PREFIX,
+    GIT_INDEX_ENVIRONMENT_VARIABLE,
     GIT_EXECUTABLE,
     NUL_BYTE,
     UTF8_ENCODING,
@@ -105,6 +106,7 @@ def _git_subprocess_environment() -> dict[str, str]:
         each_name: each_environment_text
         for each_name, each_environment_text in os.environ.items()
         if not each_name.upper().startswith(git_prefix)
+        or each_name.upper() == GIT_INDEX_ENVIRONMENT_VARIABLE
     }
 
 

@@ -39,7 +39,7 @@ jobs:
       - name: Verify selective reinstall
         run: node --test packages/claude-dev-env/bin/install.policy-lint.test.mjs
       - name: Verify local Git and linter behavior
-        run: python -m pytest packages/claude-dev-env/hooks/git-hooks/test_pre_commit.py packages/claude-dev-env/hooks/git-hooks/test_native_policy_commit.py -q --junitxml=hook-proof-results.xml
+        run: python -m pytest packages/claude-dev-env/hooks/git-hooks/test_pre_commit.py packages/claude-dev-env/hooks/git-hooks/test_native_policy_commit.py packages/claude-dev-env/hooks/git-hooks/test_installed_policy_lint.py packages/claude-dev-env/scripts/test_shared_tree_paths.py -q --junitxml=hook-proof-results.xml
       - name: Retain reproducible fixture evidence
         if: always()
         uses: actions/upload-artifact@v4

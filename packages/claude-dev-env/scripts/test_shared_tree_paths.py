@@ -171,3 +171,36 @@ def test_generalized_resolver_serves_a_deeper_anchor(tmp_path: Path) -> None:
         3,
     )
     assert resolved_scripts_directory == expected_scripts_directory
+
+
+@pytest.mark.parametrize("managed_name", (".claude", "profile-a"))
+def test_resolved_agents_scripts_find_the_verified_managed_root(
+    tmp_path: Path, managed_name: str,
+) -> None:
+    agents_name = ".agents" if managed_name == ".claude" else f"{managed_name}.agents"
+    agents_root = tmp_path / agents_name
+    scripts_directory = agents_root / "scripts"
+    scripts_directory.mkdir(parents=True)
+    module_file = scripts_directory / "runner.py"
+    module_file.write_text("", encoding="utf-8")
+    managed_root = tmp_path / managed_name
+    managed_root.mkdir()
+    _create_directory_link(from_link=managed_root / "scripts", to_target=scripts_directory)
+    expected = _write_process_tree_kill_stub(managed_root)
+    resolved_directory = shared_tree_paths.resolve_shared_process_tree_scripts_directory(module_file, {})
+    assert resolved_directory == expected
+
+
+def test_neighboring_managed_root_cannot_supply_a_foreign_shared_tree(tmp_path: Path) -> None:
+    agents_root = tmp_path / ".agents"
+    scripts_directory = agents_root / "scripts"
+    scripts_directory.mkdir(parents=True)
+    module_file = scripts_directory / "runner.py"
+    module_file.write_text("", encoding="utf-8")
+    managed_root = tmp_path / ".claude"
+    foreign_scripts = managed_root / "scripts"
+    foreign_scripts.mkdir(parents=True)
+    _write_process_tree_kill_stub(managed_root)
+    resolved_directory = shared_tree_paths.resolve_shared_process_tree_scripts_directory(module_file, {})
+    expected = agents_root / "_shared" / "process-tree" / "scripts"
+    assert resolved_directory == expected
