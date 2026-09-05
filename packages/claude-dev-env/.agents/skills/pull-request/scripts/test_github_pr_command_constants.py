@@ -34,6 +34,15 @@ def test_account_boundary_constants_are_safe_and_stable() -> None:
     assert constants.ACCOUNT_LOOKUP_EMPTY_MESSAGE.endswith("returned no value\n")
 
 
+def test_durable_post_linter_location_uses_managed_root() -> None:
+    assert constants.CONFIG_DIR_OVERRIDE_ENVIRONMENT_KEY == "CLAUDE_CONFIG_DIR"
+    assert constants.DEFAULT_MANAGED_ROOT_DIRECTORY_NAME == ".claude"
+    assert constants.ALL_DURABLE_POST_LINTER_RELATIVE_PATH_PARTS == (
+        "scripts",
+        "durable_post_lint.py",
+    )
+
+
 def test_legacy_recovery_constants_define_one_record_boundary() -> None:
     assert constants.ALL_GH_AUTH_SWITCH_COMMAND_HEAD == (
         "gh",
