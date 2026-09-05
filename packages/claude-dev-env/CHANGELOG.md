@@ -1,5 +1,21 @@
 # Changelog
 
+## [4.3.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v4.2.0...claude-dev-env-v4.3.0) (2026-09-05)
+
+
+### Features
+
+* **pull-request:** move publication gates into command ([690232c](https://github.com/jl-cmd/claude-dev-env/commit/690232c8064690203e70f49969912fafed270798))
+* **pull-request:** move publication gates into command ([14a711d](https://github.com/jl-cmd/claude-dev-env/commit/14a711d22eede3640ac7b98000cab782eaf59045))
+* **test:** add test-runner command for Django and Playwright checks ([38151d2](https://github.com/jl-cmd/claude-dev-env/commit/38151d21ff3ee80b6cf3cf24601b6174041035e2))
+* **test:** make local preflight explicit ([fcb1ff7](https://github.com/jl-cmd/claude-dev-env/commit/fcb1ff741077415a47b0ad3ef867bc06569069cf))
+
+
+### Bug Fixes
+
+* **pull-request:** make constants test imports independent ([e9cd3cd](https://github.com/jl-cmd/claude-dev-env/commit/e9cd3cdb3579af3a2701d5b067d775c26040e771))
+* **test:** resolve skill inventory conflict with main ([cc8051e](https://github.com/jl-cmd/claude-dev-env/commit/cc8051ecbff579950a1051b11db66698b352e6cf))
+
 ## [4.2.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v4.1.0...claude-dev-env-v4.2.0) (2026-09-05)
 
 
