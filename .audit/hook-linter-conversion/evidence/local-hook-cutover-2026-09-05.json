@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-05",
+  "repository": "jl-cmd/claude-dev-env",
+  "pull_request": 1296,
+  "scope": "Executable source cleanup and actual disposable installations; not Jon's workstation deployment",
+  "source_backup": {
+    "branch": "backup/hook-linter-before-cutover-20260905",
+    "commit": "7a5c63208b1d22f8219c36363b4b3bf11aa852fa",
+    "coverage": "Exact pre-cleanup tracked configuration, scripts and report"
+  },
+  "live_workstation_modified": false,
+  "live_workstation_backup": null,
+  "python_automation_local_configuration_verified": false,
+  "python_automation_ci_used_as_enforcement": false,
+  "existing_tracked_ledger": ".audit/hook-linter-audit/decisions.tsv",
+  "unseen_local_conversion_ledger_modified": false,
+  "replacement_invocation": {
+    "owner": "packages/claude-dev-env/hooks/git-hooks/pre_commit.py",
+    "command": "Python from native hook -> scripts/cde_lint.py --staged",
+    "time": "Before native Git commit; independent of GitHub Actions",
+    "requires": "Effective managed native pre-commit registration in each repository",
+    "input": "Git index including the invoking GIT_INDEX_FILE",
+    "timeout_seconds": 240,
+    "nonzero_status_propagated": true,
+    "legacy_gate_retained_after_clean_lint": true
+  },
+  "retired_write_registrations": [
+    {"hook": "blocking/code_rules_enforcer.py", "rule": "code-rules", "codex_materializer_unchanged": true},
+    {"hook": "blocking/tdd_enforcer.py", "rule": "test-pairing"},
+    {"hook": "blocking/windows_rmtree_blocker.py", "rule": "rmtree-safety", "bash_route_retained": true},
+    {"hook": "blocking/state_description_blocker.py", "rule": "state-description"},
+    {"hook": "blocking/subprocess_budget_completeness.py", "rule": "subprocess-budget"},
+    {"hook": "blocking/hook_prose_detector_consistency.py", "rule": "hook-prose-consistency"},
+    {"hook": "blocking/workflow_substitution_slot_blocker.py", "rule": "workflow-substitution"}
+  ],
+  "reinstall": {
+    "actual_installer_runs_per_fixture_home": 2,
+    "legacy_direct_registrations_pruned": true,
+    "foreign_hooks_and_permissions_preserved": true,
+    "shared_detector_bytes_verified_by_sha256": true,
+    "fixture_original_settings_backup": "<isolated-home>/before-cutover/settings.json",
+    "fixture_backup_byte_parity_verified": true,
+    "node_reinstall_tests_passed": 3
+  },
+  "verification_checkpoints": [
+    {"kind": "focused local Python suite", "passed": 171, "failures": 0, "skipped": 0, "platform": "Linux", "python": "3.13.5", "phase": "Before final full-suite regression repairs"},
+    {"kind": "cross-platform actual installation and commit proof", "source_commit": "0dabb64ed8bf4f75a8ea328f3122956569a534f5", "run_id": 33976992114, "linux_job": 101335332288, "windows_job": 101335332181, "both_jobs_conclusion": "success", "windows_junit_passed": 48, "windows_junit_failures": 0, "windows_junit_skipped": 0, "windows_artifact_id": 9972618907},
+    {"kind": "full-suite regression repair rerun", "passed": 48, "failures": 0, "platform": "Linux", "covers": "Retained legacy gate isolation, updated native-owner fixtures, retired-dispatcher expectations and terminology tests"},
+    {"kind": "commit-boundary test length refactor", "passed": 2, "failures": 0, "platform": "Linux"}
+  ],
+  "counting_note": "Checkpoint suites overlap; do not add their test counts. Current full CI status must be read from the PR head.",
+  "remaining_blockers_report": ".audit/hook-linter-audit/report.html",
+  "live_completion_requires": [
+    "Read effective Claude, Codex, profiles, project settings and nested installed dispatchers",
+    "Read Git config origins and every repository/worktree override",
+    "Back up exact live affected configuration and scripts before mutation",
+    "Verify installed replacement parity and Python Automation's local invocation",
+    "Apply only coverage-proven live removals and read back after reinstall",
+    "Append results to the original local conversion ledger without overwriting unseen state"
+  ]
+}

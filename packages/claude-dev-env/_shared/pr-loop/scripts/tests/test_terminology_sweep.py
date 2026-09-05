@@ -592,7 +592,8 @@ def test_terminology_retains_only_the_active_index_git_override(
     monkeypatch.setenv("GIT_INDEX_FILE", str(index_path))
     monkeypatch.setenv("GIT_DIR", "foreign-repository")
     monkeypatch.setenv("GIT_WORK_TREE", "foreign-worktree")
-    actual = sweep_module.repository_environment()
+    actual = sweep_module.staged_repository_environment()
+    assert "GIT_INDEX_FILE" not in sweep_module.repository_environment()
     assert actual["GIT_INDEX_FILE"] == str(index_path)
     assert "GIT_DIR" not in actual
     assert "GIT_WORK_TREE" not in actual

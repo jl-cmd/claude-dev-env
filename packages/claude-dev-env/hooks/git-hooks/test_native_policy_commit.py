@@ -41,23 +41,20 @@ def test_valid_commit_passes_the_installed_native_hook(installed_native_hook: Pa
     assert _git(installed_native_hook, "rev-parse", "HEAD") != before
 
 
-def test_retired_write_check_allows_edit_but_local_commit_catches_violation(
-    installed_native_hook: Path,
-) -> None:
-    relative_path = "docs/config.md"
-    content = "Previously set via env var.\n"
+def _assert_write_proceeds(repository_root: Path, relative_path: str, content: str) -> None:
+    """Exercise the actual dispatcher before attempting the staged commit."""
     hooks_root = Path(pre_commit.__file__).resolve().parent.parent
     payload = {
         "tool_name": "Write",
-        "cwd": str(installed_native_hook),
+        "cwd": str(repository_root),
         "tool_input": {
-            "file_path": str(installed_native_hook / relative_path),
+            "file_path": str(repository_root / relative_path),
             "content": content,
         },
     }
     edit_result = subprocess.run(
         [sys.executable, str(hooks_root / "blocking/pre_tool_use_dispatcher.py")],
-        cwd=installed_native_hook,
+        cwd=repository_root,
         input=json.dumps(payload),
         capture_output=True,
         text=True,
@@ -67,6 +64,14 @@ def test_retired_write_check_allows_edit_but_local_commit_catches_violation(
     assert edit_result.returncode == 0, edit_result.stderr
     edit_output = json.loads(edit_result.stdout or "{}")
     assert edit_output.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+
+
+def test_retired_write_check_allows_edit_but_local_commit_catches_violation(
+    installed_native_hook: Path,
+) -> None:
+    relative_path = "docs/config.md"
+    content = "Previously set via env var.\n"
+    _assert_write_proceeds(installed_native_hook, relative_path, content)
     before = _git(installed_native_hook, "rev-parse", "HEAD")
     _stage(installed_native_hook, relative_path, content)
     commit_result = subprocess.run(

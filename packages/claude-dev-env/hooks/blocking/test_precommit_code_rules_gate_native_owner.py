@@ -10,7 +10,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 import json
-import shutil
 import stat
 import subprocess
 import sys
@@ -21,12 +20,20 @@ import pytest
 HOOKS_ROOT = Path(__file__).resolve().parent.parent
 BLOCKING_ROOT = HOOKS_ROOT / "blocking"
 GIT_HOOKS_ROOT = HOOKS_ROOT / "git-hooks"
-PRE_COMMIT_SOURCE_PATH = GIT_HOOKS_ROOT / "pre_commit.py"
-GATE_UTILS_SOURCE_PATH = GIT_HOOKS_ROOT / "gate_utils.py"
-GIT_HOOKS_CONSTANTS_SOURCE_PATH = GIT_HOOKS_ROOT / "git_hooks_constants"
 DISPATCHER_SOURCE_PATH = BLOCKING_ROOT / "bash_pre_tool_use_dispatcher.py"
 GIT_COMMAND_TIMEOUT_SECONDS = 60
-CLEAN_MODULE_SOURCE = "def add_one(number: int) -> int:\n    return number + 1\n"
+CLEAN_MODULE_SOURCE = (
+    "def add_one(number: int) -> int:\n"
+    '    """Increase the number.\n\n'
+    "    Args:\n        number: The input number.\n\n"
+    "    Returns:\n        The next number.\n"
+    '    """\n'
+    "    return number + 1\n"
+)
+PAIRED_TEST_SOURCE = (
+    "from widget import add_one\n\n"
+    "def test_add_one() -> None:\n    assert add_one(1) == 2\n"
+)
 
 
 def run_git(
@@ -69,21 +76,13 @@ def write_gate_script(gate_path: Path, marker_path: Path, exit_code: int) -> Non
 
 
 def install_native_pre_commit(hooks_path: Path) -> None:
-    """Install the native pre-commit module and its self-contained imports."""
+    """Register the actual package owner with its complete linter dependency tree."""
     hooks_path.mkdir()
-    shutil.copyfile(PRE_COMMIT_SOURCE_PATH, hooks_path / "pre_commit.py")
-    shutil.copyfile(GATE_UTILS_SOURCE_PATH, hooks_path / "gate_utils.py")
-    shutil.copytree(
-        GIT_HOOKS_CONSTANTS_SOURCE_PATH,
-        hooks_path / "git_hooks_constants",
-    )
     pre_commit_path = hooks_path / "pre-commit"
     pre_commit_path.write_text(
         "#!/usr/bin/env python3\n"
         "import sys\n"
-        "from pathlib import Path\n"
-        "shim_directory = Path(__file__).resolve().parent\n"
-        "sys.path.insert(0, str(shim_directory))\n"
+        f"sys.path.insert(0, {str(GIT_HOOKS_ROOT)!r})\n"
         "import pre_commit\n"
         "sys.exit(pre_commit.main())\n",
         encoding="utf-8",
@@ -133,9 +132,10 @@ def temporary_hooks_path(repository_root: Path, benchmark_hooks_path: Path) -> I
 
 
 def stage_module(repository_root: Path) -> None:
-    """Write and stage one Python module for the commit fixture."""
+    """Stage a valid module and matching test before exercising the legacy gate."""
     (repository_root / "widget.py").write_text(CLEAN_MODULE_SOURCE, encoding="utf-8")
-    run_git(repository_root, "add", "widget.py")
+    (repository_root / "test_widget.py").write_text(PAIRED_TEST_SOURCE, encoding="utf-8")
+    run_git(repository_root, "add", "widget.py", "test_widget.py")
 
 
 def build_bash_payload(repository_root: Path) -> str:
@@ -216,7 +216,7 @@ def test_temporary_hooks_path_restores_shared_worktree_config_on_timeout(
     initialize_repository(tmp_path)
     supported_hooks_path = tmp_path / "supported_hooks"
     supported_hooks_path.mkdir()
-    run_git(tmp_path, "config", "--local", "core.hooksPath", str(supported_hooks_path))
+    run_git(tmp_path, "config", "core.hooksPath", str(supported_hooks_path))
     unrelated_worktree = tmp_path.parent / "unrelated_worktree"
     run_git(tmp_path, "worktree", "add", "--detach", str(unrelated_worktree))
     benchmark_hooks_path = tmp_path / "benchmark_hooks"
