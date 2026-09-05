@@ -32,8 +32,6 @@ ACTIVE_RUNTIME_PROJECTION_PATHS = (
     "packages/claude-dev-env/commands/sr-loop.md",
     "packages/claude-dev-env/_shared/AGENTS.md",
     "packages/claude-dev-env/_shared/advisor/reference/third-party-bind.md",
-    "packages/claude-dev-env/_shared/pr-loop/audit-reply-template.md",
-    "packages/claude-dev-env/_shared/pr-loop/fix-protocol.md",
     "packages/claude-dev-env/hooks/session/AGENTS.md",
     "packages/claude-dev-env/hooks/session/working_style_prompt.py",
     "packages/claude-dev-env/hooks/session/test_working_style_prompt.py",
