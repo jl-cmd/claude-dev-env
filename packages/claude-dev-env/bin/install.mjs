@@ -36,6 +36,11 @@ import {
     PYTHON_PROBE_TIMEOUT_MILLISECONDS,
 } from './install-constants.mjs';
 import {
+    PSTACK_PLUGIN_DIRECTORY_NAME,
+    PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH,
+    refreshPstackPluginManifest,
+} from '../scripts/refresh_pstack_plugin_skills.mjs';
+import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
     isAllowedInstallDestination,
@@ -427,6 +432,27 @@ export function runCursorRuleSync(pythonCommand, scriptPath, claudeRoot, cursorR
         ],
         { stdio: 'inherit' },
     );
+}
+
+/**
+ * List every pstack skill folder in the manifest Claude Code reads.
+ *
+ * pstack is a plugin the user installs, so this run refreshes a folder it finds
+ * and skips a home without one. Claude Code loads a skills-directory folder
+ * holding `.claude-plugin/plugin.json` as a plugin and namespaces its skills as
+ * `pstack:how`; without the manifest, a folder of skill folders loads nothing.
+ *
+ * @returns {string|null} The manifest path when this run wrote it, else null.
+ */
+function refreshInstalledPstackPluginManifest() {
+    const pluginRoot = join(
+        CLAUDE_HOME,
+        MANAGED_SKILLS_DIRECTORY_NAME,
+        PSTACK_PLUGIN_DIRECTORY_NAME,
+    );
+    const outcome = refreshPstackPluginManifest(pluginRoot);
+    if (!outcome.didWrite) return null;
+    return join(pluginRoot, PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH);
 }
 
 function seedCodexPstackPreferences() {
@@ -2320,6 +2346,9 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     }
     summary.skills = { created: skillsCreated, updated: skillsUpdated, pruned: 0, paths: skillPaths };
     allInstalledFiles.push(...skillPaths);
+    const pstackManifestPath = refreshInstalledPstackPluginManifest();
+    if (pstackManifestPath) allInstalledFiles.push(pstackManifestPath);
+    summary.pstackPlugin = { manifestPath: pstackManifestPath };
     syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
     throwIfFault(FAULT_PHASES.AFTER_FILE_STAGING);
     throwIfFault(FAULT_PHASES.BEFORE_DURABLE_PROMOTION);
