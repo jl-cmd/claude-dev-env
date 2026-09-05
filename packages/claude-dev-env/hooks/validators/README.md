@@ -2,7 +2,40 @@
 
 AST-based Python style checks for code quality enforcement.
 
-The checks live in `python_style_checks.py`; the shared source-line splitting, function-discovery, and statement-classification helpers they build on live in `python_style_helpers.py`. `python_style_import_bootstrap.py` recognizes the repo's sys.path bootstrap-guard idiom so the imports-at-top check does not penalize a file for following it. `hook_timing_harness.py` measures real wall-clock time for the Write/Edit hooks `hooks.json` registers, reporting p50 and p95 over a configurable run count. `fast_save_validators.py` runs the twelve non-Mypy, non-Ruff checks in-process for the Write/Edit save-path gate, with no per-check subprocess.
+The checks live in `python_style_checks.py`. Shared source-line splitting, function discovery, and statement classification live in `python_style_helpers.py`. `python_style_import_bootstrap.py` recognizes the repo's sys.path bootstrap-guard idiom so the imports-at-top check does not penalize a file for following it. `fast_save_validators.py` runs the twelve non-Mypy, non-Ruff checks in-process for the Write/Edit save-path gate, with no per-check subprocess.
+
+## Production modules
+
+| File | Role |
+|---|---|
+| `abbreviation_checks.py` | Abbreviation and single-letter name checks |
+| `code_quality_checks.py` | Function, nesting, and file length checks |
+| `comment_checks.py` | Comment detection for the opt-in diff-aware linter |
+| `exempt_paths.py` | Shared config, test, and hook-infrastructure path exemptions |
+| `fast_save_validators.py` | In-process Write/Edit save-path validator roster |
+| `file_structure_checks.py` | File structure checks for pre-PR validation |
+| `git_checks.py` | Git and GitHub checks for pre-push review |
+| `health_check.py` | Validator availability, dependency, and version checks |
+| `magic_value_checks.py` | Hardcoded magic-number checks |
+| `mypy_integration.py` | Mypy static type checking integration |
+| `output_formatter.py` | Colored, diff, progress, and JSON validator output |
+| `pr_reference_checks.py` | PR and commit reference checks in comments |
+| `project_roots.py` | Project-root resolution from a path |
+| `pyproject_config_discovery.py` | Walk-up discovery of tool pyproject tables |
+| `python_antipattern_checks.py` | Mutable defaults, bare except, and print checks |
+| `python_style_checks.py` | Import placement, decorator spacing, blank lines, and view naming |
+| `python_style_helpers.py` | Source-line splitting and function-discovery helpers |
+| `python_style_import_bootstrap.py` | sys.path bootstrap-guard recognizer |
+| `react_checks.py` | React class-component and error-boundary checks |
+| `ruff_integration.py` | Ruff lint integration |
+| `run_all_validators.py` | Pre-push validator orchestration and report |
+| `security_checks.py` | Hardcoded-secret, SQL injection, and XSS checks |
+| `system_temporary_roots.py` | System temp-root membership for staged copies |
+| `todo_checks.py` | TODO/FIXME tracking with issue-reference requirement |
+| `type_safety_checks.py` | Missing type hints and Any usage checks |
+| `useless_test_checks.py` | Useless-test detection |
+| `validator_base.py` | Shared validator dataclasses, source read, and parse |
+| `validator_defaults.py` | Shared constants for the validators package |
 
 ## Checks Implemented
 

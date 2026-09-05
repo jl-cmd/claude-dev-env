@@ -38,6 +38,7 @@ param(
     [switch]$SkipTests,
     [switch]$SkipMypy,
     [switch]$SkipRuff,
+    [switch]$SkipRepositoryPolicy,
     [string]$CommentPolicyBase
 )
 
@@ -118,6 +119,12 @@ Invoke-Tool -Label 'comment-policy' -Action {
         python code_rules_gate.py --base $commentPolicyBase --comment-policy --repo-root $repositoryRoot
     } finally {
         Pop-Location
+    }
+}
+
+if (-not $SkipRepositoryPolicy) {
+    Invoke-Tool -Label 'repository-policy' -Action {
+        python (Join-Path $PSScriptRoot 'repository_policy.py') --repository-root $repositoryRoot
     }
 }
 
