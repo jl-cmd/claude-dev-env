@@ -1,16 +1,16 @@
 # Runner selection (medium review)
 
-How `/e-code-review medium` (and loop) should pick a **harness runner** for
-finder/verify work. This file is the map; `SKILL.md` only points here.
+How `/e-code-review medium` (and loop) picks a harness runner for finder and
+verify work. `SKILL.md` points here.
 
 ## What lives here
 
 | Topic | Content |
 |---|---|
-| Goal | One skill surface; many possible runners (Grok, Codex, Claude headless, …) |
+| Goal | One skill surface, many runners (Grok, Codex, Claude headless, and others) |
 | Today | `scripts/grok_code_review.py` is the Grok medium orchestration module |
 | Target | A thin selector chooses a runner by availability and task flags |
-| Non-goals | Reimplementing every harness inside this skill |
+| Out of scope | Reimplementing every harness inside this skill |
 
 ## Today
 
@@ -21,19 +21,20 @@ finder/verify work. This file is the map; `SKILL.md` only points here.
 
 ## Target shape (tracked separately)
 
-1. **Runner protocol** — shared inputs (diff base, head, angles) and outputs
+1. **Runner protocol.** Shared inputs (diff base, head, angles) and outputs
    (candidates, verdicts, severities).
-2. **Detection** — which runners are installed/configured (PATH, skills,
+2. **Detection.** Which runners are installed or configured (PATH, skills,
    account chain).
-3. **Selection** — pick one runner without baking a single vendor into
-   `SKILL.md` process steps.
-4. **Adapters** — thin wrappers: Grok (current module), Codex, Claude, …
+3. **Selection.** Pick one runner. Keep vendor choice out of `SKILL.md`
+   process steps.
+4. **Adapters.** Thin wrappers: Grok (current module), Codex, Claude, and
+   others.
 
-Open issue for implementation work should link this file and keep PRs small
-(Google small-CL practice: one concern per PR).
+Keep implementation pull requests small: one concern each. Link this file from
+the tracking issue.
 
 ## Related always-on docs
 
-- Skill hub: `../SKILL.md` (levels, fix, loop — not runner internals).
+- Skill hub: `../SKILL.md` (levels, fix, loop).
 - Preflight proposal: `preflight-proposal.md` (immutable range, local runner, proposal evidence).
 - Medium procedure: `medium.md`.
