@@ -66,6 +66,41 @@ const NESTED_SKILL_DIRECTORY = 'foo';
 const NESTED_SKILL_FILE_SEGMENTS = [NESTED_SKILL_DIRECTORY, 'scripts', 'a.py'];
 const MYPY_INI_FILE_NAME = '.mypy.ini';
 const SKIPPED_RECORD_SUMMARY_MARKER = 'manifest record(s) skipped';
+const RETIRED_PULL_REQUEST_HOOK_RELATIVE_PATHS = [
+    '_gh_pr_author_swap_utils.py',
+    'test__gh_pr_author_swap_utils.py',
+    'blocking/conventional_pr_title_gate.py',
+    'blocking/gh_body_arg_blocker.py',
+    'blocking/gh_pr_author_enforcer.py',
+    'blocking/gh_pr_author_restore.py',
+    'blocking/pr_description_writer_gate.py',
+    'blocking/test_conventional_pr_title_gate.py',
+    'blocking/test_gh_body_arg_blocker.py',
+    'blocking/test_gh_pr_author_enforcer.py',
+    'blocking/test_gh_pr_author_restore.py',
+    'blocking/test_gh_pr_author_swap_utils.py',
+    'blocking/test_pr_description_writer_gate.py',
+    'blocking/test_volatile_path_in_post_blocker.py',
+    'blocking/volatile_path_in_post_blocker.py',
+    'hooks_constants/conventional_pr_title_gate_constants.py',
+    'hooks_constants/gh_pr_author_swap_constants.py',
+    'hooks_constants/pr_description_writer_gate_constants.py',
+    'hooks_constants/volatile_path_in_post_blocker_constants.py',
+    'observability/pr_description_writer_spawn_tracker.py',
+    'observability/test_pr_description_writer_spawn_tracker.py',
+    'session/gh_pr_author_session_cleanup.py',
+    'session/test_gh_pr_author_session_cleanup.py',
+];
+const RETIRED_PULL_REQUEST_REGISTRATION_PATHS = [
+    'blocking/conventional_pr_title_gate.py',
+    'blocking/gh_body_arg_blocker.py',
+    'blocking/gh_pr_author_enforcer.py',
+    'blocking/gh_pr_author_restore.py',
+    'blocking/pr_description_writer_gate.py',
+    'blocking/volatile_path_in_post_blocker.py',
+    'observability/pr_description_writer_spawn_tracker.py',
+    'session/gh_pr_author_session_cleanup.py',
+];
 
 /**
  * Report whether a path under one managed root landed in a run backup.
@@ -1108,6 +1143,61 @@ test('a full reinstall removes the retired Everything path rewriter and keeps a 
             false,
             'the installed dispatcher constants omit the retired search hook',
         );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('a full reinstall removes retired pull request hooks and preserves foreign and recovery state', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const retiredPaths = RETIRED_PULL_REQUEST_HOOK_RELATIVE_PATHS.map(relativePath => (
+            join(sandbox.claudeDirectory, HOOKS_DIRECTORY_NAME, ...relativePath.split('/'))
+        ));
+        for (const retiredPath of retiredPaths) {
+            writeFileWithParents(retiredPath, 'an earlier install managed this file\n');
+        }
+        appendManifestFiles(sandbox.manifestPath, retiredPaths);
+        const foreignHookPath = join(
+            sandbox.claudeDirectory, HOOKS_DIRECTORY_NAME, 'blocking', 'foreign_pr_hook.py',
+        );
+        const foreignHookBytes = Buffer.from('a user hook the installer never wrote\n', 'utf8');
+        writeFileWithParents(foreignHookPath, foreignHookBytes);
+        const recoveryStatePath = join(
+            sandbox.homeDirectory, 'pending', 'gh_pr_author_swap_session-a.json',
+        );
+        const recoveryStateBytes = Buffer.from('{"original_account":"prior"}\n', 'utf8');
+        writeFileWithParents(recoveryStatePath, recoveryStateBytes);
+        const settings = readSettings(sandbox.claudeDirectory);
+        settings.hooks.PreToolUse.push({
+            matcher: 'Bash',
+            hooks: [
+                ...RETIRED_PULL_REQUEST_REGISTRATION_PATHS.map(relativePath => ({
+                    type: 'command',
+                    command: `python3 "${join(sandbox.claudeDirectory, HOOKS_DIRECTORY_NAME, ...relativePath.split('/')).replace(/\\/g, '/')}"`,
+                })),
+                { type: 'command', command: `python3 "${foreignHookPath.replace(/\\/g, '/')}"` },
+            ],
+        });
+        writeFileSync(
+            join(sandbox.claudeDirectory, SETTINGS_FILE_NAME),
+            JSON.stringify(settings, null, 4) + '\n',
+        );
+
+        runInstaller(sandbox.homeDirectory, []);
+
+        const freshManifest = readManifest(sandbox.manifestPath);
+        const allCommands = allHookCommands(readSettings(sandbox.claudeDirectory));
+        for (const retiredPath of retiredPaths) {
+            assert.equal(existsSync(retiredPath), false, `${retiredPath} leaves installed hooks`);
+            assert.equal(freshManifest.files.includes(retiredPath), false);
+        }
+        for (const relativePath of RETIRED_PULL_REQUEST_REGISTRATION_PATHS) {
+            assert.ok(allCommands.every(command => !command.includes(relativePath)));
+        }
+        assert.deepEqual(readFileSync(foreignHookPath), foreignHookBytes);
+        assert.deepEqual(readFileSync(recoveryStatePath), recoveryStateBytes);
     } finally {
         rmSync(sandbox.homeDirectory, { recursive: true, force: true });
     }

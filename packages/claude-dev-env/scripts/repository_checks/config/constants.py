@@ -132,11 +132,6 @@ ALL_TRACKED_SECRET_EXACT_EXEMPTIONS: frozenset[tuple[str, str, str]] = frozenset
             "09f83c224a02c370d3d63de5c330e1a830fc92866330fc7963b5b5fd20ffcb91",
         ),
         (
-            "packages/claude-dev-env/hooks/blocking/volatile_path_in_post_blocker.py",
-            "home-path",
-            "ed9203c8078e4c6b832600085f28f24656d679aa8dca82ecc2557afc3df25036",
-        ),
-        (
             "packages/claude-dev-env/hooks/hooks_constants/hardcoded_user_path_constants.py",
             "home-path",
             "0967160658d782c558722232cad7d47dc19267943d4667b41d3eff1e605be2f4",

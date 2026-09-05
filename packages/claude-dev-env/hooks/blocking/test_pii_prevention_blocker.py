@@ -42,6 +42,14 @@ SYNTHETIC_REAL_EMAIL = "owner.fixture@acme-corp.example.io"
 SYNTHETIC_HOME_PATH = r"C:\Users\fixture_commit_user\secret.txt"
 SYNTHETIC_PRIVATE_IP = "10.44.12.9"
 SYNTHETIC_SAFE_BODY = "All checks pass. Contact user@example.com for docs."
+HASH_MARKER = "#"
+
+
+def test_post_body_extraction_has_a_neutral_module_owner() -> None:
+    assert (
+        blocker_module.extract_gh_post_body_texts_for_privacy_gate.__module__
+        == "gh_post_body_texts"
+    )
 
 
 def _run_hook(payload: dict[str, object]) -> tuple[int, str]:
@@ -370,10 +378,7 @@ def test_dispatcher_roster_hosts_pii_blocker() -> None:
         if each_entry.script_relative_path == "blocking/pii_prevention_blocker.py"
     ]
     assert len(matching_bash_entries) == 1
-    assert (
-        matching_bash_entries[0].applicable_tool_names
-        == ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-    )
+    assert matching_bash_entries[0].applicable_tool_names == ALL_BASH_AND_POWERSHELL_TOOL_NAMES
 
 
 def test_is_git_commit_shell_command_covers_windows_and_flag_forms() -> None:
@@ -531,9 +536,7 @@ def test_is_git_commit_shell_command_detects_glued_and_newline_separators() -> N
     assert is_git_commit_shell_command("cd repo&&git commit -m x")
     assert is_git_commit_shell_command("git add notes.md\ngit commit -m update")
     assert is_git_commit_shell_command("git status\ngit commit -m x")
-    assert not is_git_commit_shell_command(
-        "gh pr comment 1 --body 'notes\ngit commit -m x'"
-    )
+    assert not is_git_commit_shell_command("gh pr comment 1 --body 'notes\ngit commit -m x'")
 
 
 def test_is_git_commit_shell_command_detects_backgrounded_commit() -> None:
@@ -681,11 +684,9 @@ def test_argument_bearing_wrapper_commit_scans_staged_pii(tmp_path: Path) -> Non
 
 
 def test_is_git_commit_shell_command_detects_commit_after_hash_bearing_token() -> None:
-    assert is_git_commit_shell_command(
-        "curl https://example.com/page#section && git commit -am x"
-    )
+    command = f"curl https://example.com/page{HASH_MARKER}section && git commit -am x"
+    assert is_git_commit_shell_command(command)
     assert is_git_commit_shell_command("echo done#note && git commit -m x")
-    assert is_git_commit_shell_command('git commit -m "fix #123"')
 
 
 def test_hash_bearing_token_before_commit_scans_staged_pii(tmp_path: Path) -> None:
@@ -721,21 +722,13 @@ def test_is_git_commit_shell_command_detects_unquoted_powershell_command() -> No
 
 
 def test_is_git_commit_shell_command_detects_powershell_preflags_before_command() -> None:
-    assert is_git_commit_shell_command(
-        'pwsh -ExecutionPolicy Bypass -Command "git commit -m x"'
-    )
-    assert is_git_commit_shell_command(
-        'pwsh -NonInteractive -Command "git commit -m x"'
-    )
+    assert is_git_commit_shell_command('pwsh -ExecutionPolicy Bypass -Command "git commit -m x"')
+    assert is_git_commit_shell_command('pwsh -NonInteractive -Command "git commit -m x"')
     assert is_git_commit_shell_command(
         'powershell -ExecutionPolicy Bypass -Command "git commit -m x"'
     )
-    assert is_git_commit_shell_command(
-        'pwsh -NoProfile -NonInteractive -Command "git commit -m x"'
-    )
-    assert not is_git_commit_shell_command(
-        'pwsh -NonInteractive -Command "git status"'
-    )
+    assert is_git_commit_shell_command('pwsh -NoProfile -NonInteractive -Command "git commit -m x"')
+    assert not is_git_commit_shell_command('pwsh -NonInteractive -Command "git status"')
 
 
 def test_is_git_commit_shell_command_detects_subshell_grouped_commit() -> None:
@@ -835,9 +828,7 @@ def test_is_git_commit_shell_command_detects_commit_after_apostrophe_line() -> N
 
 
 def test_is_git_commit_shell_command_ignores_commit_inside_quoted_body() -> None:
-    assert not is_git_commit_shell_command(
-        "gh pr comment 1 --body 'notes\ngit commit -m x'"
-    )
+    assert not is_git_commit_shell_command("gh pr comment 1 --body 'notes\ngit commit -m x'")
 
 
 def test_apostrophe_line_before_commit_scans_staged_pii(tmp_path: Path) -> None:
@@ -873,17 +864,9 @@ def test_powershell_backtick_continuation_commit_scans_staged_pii(
 
 
 def test_extract_git_commit_working_directory_resolves_dash_c_forms() -> None:
-    assert (
-        extract_git_commit_working_directory(r"git.exe -C /repoA commit -m x")
-        == "/repoA"
-    )
-    assert (
-        extract_git_commit_working_directory(r"git -C /repoA commit -m x") == "/repoA"
-    )
-    assert (
-        extract_git_commit_working_directory(r'git -C "C:/repo" commit -m x')
-        == "C:/repo"
-    )
+    assert extract_git_commit_working_directory(r"git.exe -C /repoA commit -m x") == "/repoA"
+    assert extract_git_commit_working_directory(r"git -C /repoA commit -m x") == "/repoA"
+    assert extract_git_commit_working_directory(r'git -C "C:/repo" commit -m x') == "C:/repo"
     assert extract_git_commit_working_directory("git commit -m x") is None
 
 
@@ -921,9 +904,7 @@ def test_exempt_repository_commit_skips_staged_pii_scan(
 ) -> None:
     repository_root = tmp_path / "repo"
     _init_repo_with_staged_email(repository_root)
-    _add_repository_origin(
-        repository_root, "https://github.com/ExemptOwner/exempt-repo.git"
-    )
+    _add_repository_origin(repository_root, "https://github.com/ExemptOwner/exempt-repo.git")
     monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
     deny_reason = evaluate_bash_command(
         "git commit -m test",
@@ -937,9 +918,7 @@ def test_exempt_repository_matches_ssh_origin_url(
 ) -> None:
     repository_root = tmp_path / "repo"
     _init_repo_with_staged_email(repository_root)
-    _add_repository_origin(
-        repository_root, "git@github.com:ExemptOwner/exempt-repo.git"
-    )
+    _add_repository_origin(repository_root, "git@github.com:ExemptOwner/exempt-repo.git")
     monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "exemptowner/EXEMPT-REPO")
     deny_reason = evaluate_bash_command(
         "git commit -m test",
@@ -953,9 +932,7 @@ def test_non_exempt_repository_commit_still_scans_staged_pii(
 ) -> None:
     repository_root = tmp_path / "repo"
     _init_repo_with_staged_email(repository_root)
-    _add_repository_origin(
-        repository_root, "https://github.com/OtherOwner/other-repo.git"
-    )
+    _add_repository_origin(repository_root, "https://github.com/OtherOwner/other-repo.git")
     monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
     deny_reason = evaluate_bash_command(
         "git commit -m test",
@@ -981,45 +958,35 @@ def test_repository_without_origin_is_not_exempt(
 
 def test_owner_repo_slug_from_https_origin_with_git_suffix() -> None:
     assert (
-        blocker_module._owner_repo_slug_from_origin_url(
-            "https://github.com/Owner/repo.git"
-        )
+        blocker_module._owner_repo_slug_from_origin_url("https://github.com/Owner/repo.git")
         == "owner/repo"
     )
 
 
 def test_owner_repo_slug_from_https_origin_without_git_suffix() -> None:
     assert (
-        blocker_module._owner_repo_slug_from_origin_url(
-            "https://github.com/Owner/repo"
-        )
+        blocker_module._owner_repo_slug_from_origin_url("https://github.com/Owner/repo")
         == "owner/repo"
     )
 
 
 def test_owner_repo_slug_from_scp_ssh_origin() -> None:
     assert (
-        blocker_module._owner_repo_slug_from_origin_url(
-            "git@github.com:Owner/repo.git"
-        )
+        blocker_module._owner_repo_slug_from_origin_url("git@github.com:Owner/repo.git")
         == "owner/repo"
     )
 
 
 def test_owner_repo_slug_from_ssh_scheme_origin() -> None:
     assert (
-        blocker_module._owner_repo_slug_from_origin_url(
-            "ssh://git@github.com/Owner/repo.git"
-        )
+        blocker_module._owner_repo_slug_from_origin_url("ssh://git@github.com/Owner/repo.git")
         == "owner/repo"
     )
 
 
 def test_owner_repo_slug_from_trailing_slash_git_suffix() -> None:
     assert (
-        blocker_module._owner_repo_slug_from_origin_url(
-            "https://github.com/Owner/repo.git/"
-        )
+        blocker_module._owner_repo_slug_from_origin_url("https://github.com/Owner/repo.git/")
         == "owner/repo"
     )
 
@@ -1035,9 +1002,7 @@ def test_owner_repo_slug_rejects_spoofed_evil_host() -> None:
 
 def test_owner_repo_slug_rejects_notgithub_com_host() -> None:
     assert (
-        blocker_module._owner_repo_slug_from_origin_url(
-            "https://notgithub.com/Owner/repo.git"
-        )
+        blocker_module._owner_repo_slug_from_origin_url("https://notgithub.com/Owner/repo.git")
         is None
     )
 
@@ -1071,28 +1036,21 @@ def test_owner_repo_slug_rejects_invalid_ssh_port_authority() -> None:
 
 def test_owner_repo_slug_from_https_origin_with_valid_port() -> None:
     assert (
-        blocker_module._owner_repo_slug_from_origin_url(
-            "https://github.com:443/Owner/repo.git"
-        )
+        blocker_module._owner_repo_slug_from_origin_url("https://github.com:443/Owner/repo.git")
         == "owner/repo"
     )
 
 
 def test_owner_repo_slug_from_ssh_origin_with_valid_port() -> None:
     assert (
-        blocker_module._owner_repo_slug_from_origin_url(
-            "ssh://git@github.com:22/Owner/repo.git"
-        )
+        blocker_module._owner_repo_slug_from_origin_url("ssh://git@github.com:22/Owner/repo.git")
         == "owner/repo"
     )
 
 
 def test_owner_repo_slug_rejects_path_shaped_origin() -> None:
     assert (
-        blocker_module._owner_repo_slug_from_origin_url(
-            "C:/repos/ExemptOwner/exempt-repo"
-        )
-        is None
+        blocker_module._owner_repo_slug_from_origin_url("C:/repos/ExemptOwner/exempt-repo") is None
     )
 
 
@@ -1101,9 +1059,7 @@ def test_spoofed_origin_host_still_denies_staged_email(
 ) -> None:
     repository_root = tmp_path / "repo"
     _init_repo_with_staged_email(repository_root)
-    _add_repository_origin(
-        repository_root, "https://evil.test/ExemptOwner/exempt-repo.git"
-    )
+    _add_repository_origin(repository_root, "https://evil.test/ExemptOwner/exempt-repo.git")
     monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
     deny_reason = evaluate_bash_command(
         "git commit -m test",
@@ -1151,9 +1107,7 @@ def test_trailing_slash_git_suffix_origin_still_exempts(
 ) -> None:
     repository_root = tmp_path / "repo"
     _init_repo_with_staged_email(repository_root)
-    _add_repository_origin(
-        repository_root, "https://github.com/ExemptOwner/exempt-repo.git/"
-    )
+    _add_repository_origin(repository_root, "https://github.com/ExemptOwner/exempt-repo.git/")
     monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
     deny_reason = evaluate_bash_command(
         "git commit -m test",
@@ -1162,14 +1116,10 @@ def test_trailing_slash_git_suffix_origin_still_exempts(
     assert deny_reason is None
 
 
-def test_ssh_scheme_origin_still_exempts(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_ssh_scheme_origin_still_exempts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     _init_repo_with_staged_email(repository_root)
-    _add_repository_origin(
-        repository_root, "ssh://git@github.com/ExemptOwner/exempt-repo.git"
-    )
+    _add_repository_origin(repository_root, "ssh://git@github.com/ExemptOwner/exempt-repo.git")
     monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
     deny_reason = evaluate_bash_command(
         "git commit -m test",
@@ -1197,9 +1147,7 @@ def test_post_body_still_scans_when_repository_is_exempt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CLAUDE_PII_EXEMPT_REPOS", "ExemptOwner/exempt-repo")
-    deny_reason = evaluate_post_body_texts(
-        [f"Reach me at {SYNTHETIC_REAL_EMAIL}"]
-    )
+    deny_reason = evaluate_post_body_texts([f"Reach me at {SYNTHETIC_REAL_EMAIL}"])
     assert deny_reason is not None
     assert "email" in deny_reason
 

@@ -17,6 +17,5 @@ from hooks_constants.bash_pre_tool_use_dispatcher_constants import (
 __all__ = ["ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES"]
 
 ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
-    BashHostedHookEntry("blocking/gh_pr_author_restore.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("observability/test_failure_recorder.py", ALL_BASH_ONLY_TOOL_NAMES),
 )

@@ -6,9 +6,7 @@ tokens that keep the recognizer to one unchained command, the pytest program
 and Python interpreter basenames, and the flag-token marker the path
 extractor uses to skip an option rather than an existing test file argument.
 
-``BASH_TOOL_NAME`` lives in ``gh_pr_author_swap_constants`` already; this
-module reuses that name rather than a second literal. The pytest-program and
-interpreter recognition here is deliberately its own small, stdlib-only
+The pytest-program and interpreter recognition here is deliberately its own small, stdlib-only
 check rather than a reuse of ``piped_pytest_blocker_constants`` /
 ``pytest_invocation``: those solve the harder pipe-and-wrapper problem and
 pull in a much larger transitive import for every Bash call regardless of
@@ -18,6 +16,8 @@ content, working against the point of the recognizer's own cheap prefilter.
 from __future__ import annotations
 
 import re
+
+BASH_TOOL_NAME = "Bash"
 
 ALL_PYTEST_MENTION_SUBSTRINGS: tuple[str, ...] = ("pytest", "py.test")
 EXIT_CODE_ERROR_PREFIX: str = "Error: Exit code "

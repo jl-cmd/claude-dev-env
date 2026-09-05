@@ -17,7 +17,20 @@ User-level rule: applies to **every** git repo that uses GitHub with `gh` (no ex
 
 **ALWAYS create PRs as DRAFT:** Use `gh pr create --draft` for ALL PRs
 
-**The pr-description-writer agent writes the body:** Spawn the `pr-description-writer` agent (Agent tool, `subagent_type` `pr-description-writer`), then publish what it returns with `--body-file`. `pr_description_writer_gate.py` (PreToolUse on Bash and PowerShell, hosted by `bash_pre_tool_use_dispatcher`) denies a `gh pr create` when the session records no such spawn. A trailing `# pr-description-skip` comment on the command opts out for a body you write yourself.
+Use the `pr-description-writer` agent before creating a pull request or
+rewriting its full description. Publish its title and body file through
+`.agents/skills/pull-request/scripts/pull_request.py`. The
+`pr-title-description` skill may review the writer's output but cannot replace
+the required writer.
+
+Run `_shared/pr-loop/scripts/durable_post_lint.py` before any pull request,
+issue, or GitHub MCP post. The linter checks the action-specific title, body,
+and volatile-path rules before credential lookup or network access.
+
+Use `.agents/skills/pull-request/scripts/recover_legacy_author.py
+<exact-state-file> --confirm-inactive` only for one explicitly selected legacy
+author record. Do not infer a record from age alone. Keep every other record
+untouched.
 
 ## Git Golden Rules (NON-NEGOTIABLE)
 

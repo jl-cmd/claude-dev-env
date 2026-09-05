@@ -1,0 +1,46 @@
+item	status	evidence
+Conciseness	PASS	SKILL.md stays below 500 lines and moves the ordered gate list to reference/publication-tasks.md.
+Degree of freedom	PASS	Gap analysis classifies the skill as low freedom for exact GitHub writes and recovery.
+Naming convention	PASS	pull-request is the established GitHub operation name and uses lowercase hyphen form.
+Description is a trigger catalog	PASS	Frontmatter names create, edit, body update, comment, review, draft, and scoped-author triggers.
+Description is not a story	PASS	Frontmatter contains capability and trigger terms only.
+Description match surface	PASS	Frontmatter separates pull request actions from issue and commit skills.
+SKILL.md body under 500 lines	PASS	SKILL.md is 220 lines.
+One level deep	PASS	SKILL.md links directly to reference/publication-tasks.md and every executable path.
+TOC on reference files over 100 lines	N/A	The only reference file is below 100 lines.
+No time-sensitive claims	PASS	The skill states stable command and policy contracts.
+Consistent terminology	PASS	The skill uses body file, process-local author, recovery record, and readback consistently.
+Forward slashes only	PASS	All paths in SKILL.md use forward slashes.
+Default provided	PASS	The default is pull_request.py with a body file and process-local account selection.
+Gotchas section present	PASS	SKILL.md lists path, inactivity, global switch, and output risks.
+Does not state the obvious	PASS	The body focuses on repository-specific gates, owners, commands, and exits.
+Not railroading	PASS	The skill routes issues, commits, convergence, and optional title review to their owners.
+When-this-applies section	PASS	The section names accepted actions and exact refusal responses.
+File index present	PASS	The file index names the hub, task seeds, commands, constants, tests, linter, and uploader.
+Concrete examples	PASS	SKILL.md includes create, rejected comment, and recovery outcomes.
+Workflows seed tasks	PASS	reference/publication-tasks.md is a plain task catalog and SKILL.md gives the host-tool fallback.
+Feedback loops where quality-critical	PASS	The process reruns lint after body or artifact changes and requires remote readback.
+Constraints separated	PASS	SKILL.md has a Constraints section for action, environment, body, recovery, and readback rules.
+Folder map at bottom	PASS	SKILL.md ends with the package tree.
+Skill type classified	PASS	Gap analysis classifies Type 7 CI/CD and deployment.
+Domain layout appropriate	N/A	The skill owns one pull request domain.
+Process steps classified	PASS	Gap analysis classifies each step as deterministic or judgment.
+Deterministic steps are not prose-only	PASS	Commands, linter, uploader, tests, and task seeds back every deterministic step.
+Body points at code	PASS	The process names when to run each script and how to treat non-zero exits.
+No executable-only fences	PASS	The skill contains no embedded production program.
+CODE_RULES on skill scripts	PASS	Exact staged lint, Ruff, and Mypy pass for the command and recovery scripts.
+Paired tests for new scripts	PASS	pull_request.py, recover_legacy_author.py, durable_post_lint.py, and constants have direct tests.
+Task seeds for required work lists	PASS	The ordered publication gate list lives in reference/publication-tasks.md.
+Scripts solve, do not punt	PASS	Commands return explicit codes and safe messages for invalid, unresolved, and failed states.
+Execute vs read intent clear	PASS	Every command instruction says run and names the expected exit behavior.
+Dependencies listed	PASS	SKILL.md lists Python, standard library, gh, linter, and uploader requirements.
+MCP tools fully qualified	N/A	The skill names no MCP tool call.
+Plan-validate-execute for high-stakes ops	PASS	Authoring, lint, privacy, account resolution, one action, and readback run in order.
+Setup instructions clear	PASS	Dependencies state how to set or omit GITHUB_DEFAULT_ACCOUNT.
+Persistent data uses CLAUDE_PLUGIN_DATA	N/A	Normal actions create no persistent data and recovery consumes a user-selected legacy file.
+Single capability boundary	PASS	The capability is one validated pull request action.
+Compose before reimplement	PASS	The skill invokes writer, privacy, issue, convergence, commit, and upload owners.
+Sub-skills table	PASS	Each invoked skill lists timing, output, and missing-owner behavior.
+Sibling boundary clear	PASS	Issue, commit, cleanup, and convergence actions are routed out explicitly.
+No monolith packing	PASS	The hub coordinates one action while shared validation and other workflows stay separate.
+Hooks declared	N/A	The skill registers no hook.
