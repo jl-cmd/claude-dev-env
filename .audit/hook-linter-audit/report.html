@@ -1,96 +1,206 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hook cleanup: seven write checks moved to local staged lint</title>
-<style>
-:root{color-scheme:dark;--bg:#07101d;--panel:#102036;--text:#f5f7fb;--muted:#b5c4d8;--line:#304765;--warn:#ffcb6b;--link:#a8ceff;--good:#65dfaf}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,sans-serif}main{max-width:1280px;margin:auto;padding:40px 24px 72px}h1{font-size:clamp(2rem,5vw,3.6rem);line-height:1.1;max-width:960px}h2{margin-top:2.4rem}p{max-width:1080px}a{color:var(--link)}code{font:.87em ui-monospace,monospace;overflow-wrap:anywhere}small,.muted{color:var(--muted)}.notice,.panel{padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.notice{border-left:5px solid var(--warn)}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:24px 0}.stats strong{display:block;font-size:2.5rem}.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid var(--line)}th{background:var(--panel)}td:first-child{width:36%}.tag{color:var(--good);font-weight:700}summary{cursor:pointer;font-weight:700}li{margin:.5rem 0}@media(max-width:700px){main{padding:24px 14px}.stats{grid-template-columns:1fr}table{min-width:780px}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hook to linter audit</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07101d;
+      --panel: #0f1b2d;
+      --panel-2: #13243a;
+      --text: #f5f7fb;
+      --muted: #a7b5c9;
+      --line: #29405f;
+      --good: #42d392;
+      --warn: #ffcb6b;
+      --bad: #ff6b7a;
+      --blue: #69a7ff;
+      --violet: #b794f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 85% 0%, #193b68 0%, transparent 32rem),
+        var(--bg);
+      color: var(--text);
+      font: 16px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 48px 0 72px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 860px; margin-bottom: 14px; font-size: clamp(2.3rem, 6vw, 5.2rem); line-height: .95; letter-spacing: -.055em; }
+    h2 { margin-bottom: 18px; font-size: 1.5rem; letter-spacing: -.02em; }
+    h3 { margin-bottom: 7px; font-size: 1rem; }
+    p { color: var(--muted); }
+    a { color: #9cc4ff; }
+    .eyebrow { color: var(--good); font-size: .82rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .lede { max-width: 780px; font-size: 1.15rem; }
+    .callout {
+      margin: 30px 0;
+      padding: 18px 22px;
+      border: 1px solid #2b885f;
+      border-radius: 16px;
+      background: #0e2a25;
+      color: #d8ffed;
+      font-size: 1.08rem;
+    }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 28px 0 44px; }
+    .stat, .panel, .step, .finding {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(160deg, var(--panel-2), var(--panel));
+    }
+    .stat { padding: 20px; min-height: 132px; }
+    .stat strong { display: block; margin: 4px 0; font-size: 2.6rem; line-height: 1; }
+    .stat span { color: var(--muted); font-size: .9rem; }
+    section { margin-top: 54px; }
+    .map { display: grid; grid-template-columns: 1fr 72px 1fr; align-items: stretch; }
+    .lane { padding: 24px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); }
+    .lane.current { box-shadow: inset 4px 0 var(--bad); }
+    .lane.target { box-shadow: inset 4px 0 var(--good); }
+    .lane-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .badge { padding: 5px 9px; border-radius: 999px; background: #263a56; color: var(--muted); font-size: .75rem; font-weight: 800; }
+    .flow { display: grid; gap: 9px; margin-top: 20px; }
+    .flow div { padding: 12px 14px; border-radius: 10px; background: #081423; color: #dce7f8; }
+    .flow .block { border-left: 3px solid var(--bad); }
+    .flow .lint { border-left: 3px solid var(--blue); }
+    .flow .safe { border-left: 3px solid var(--good); }
+    .arrow { display: grid; place-items: center; color: var(--good); font-size: 2.5rem; }
+    .bar { display: flex; height: 44px; overflow: hidden; border-radius: 11px; background: #081423; }
+    .bar span { display: grid; place-items: center; min-width: 24px; color: #07101d; font-size: .78rem; font-weight: 900; }
+    .delete { width: 27.85%; background: var(--bad); }
+    .linter { width: 20.25%; background: var(--blue); }
+    .command { width: 21.52%; background: var(--violet); }
+    .automation { width: 16.46%; background: var(--good); }
+    .ci { width: 8.86%; background: var(--warn); }
+    .boundary { width: 5.06%; background: #ff9955; }
+    .legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 18px; margin-top: 18px; }
+    .legend div { color: var(--muted); }
+    .legend b { color: var(--text); }
+    .findings { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .finding { padding: 18px; }
+    .finding p { margin-bottom: 0; }
+    .finding .code { color: var(--warn); font: 700 .75rem ui-monospace, monospace; letter-spacing: .05em; }
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; counter-reset: phase; }
+    .step { min-height: 180px; padding: 18px; counter-increment: phase; }
+    .step::before { content: counter(phase); display: grid; place-items: center; width: 30px; height: 30px; margin-bottom: 18px; border-radius: 50%; background: var(--blue); color: #061020; font-weight: 900; }
+    .step p { margin-bottom: 0; font-size: .9rem; }
+    .panel { padding: 22px; }
+    .links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .links a { display: block; padding: 13px 15px; border: 1px solid var(--line); border-radius: 10px; background: #081423; text-decoration: none; }
+    .note { margin-top: 18px; font-size: .86rem; }
+    @media (max-width: 850px) {
+      .stats, .steps { grid-template-columns: repeat(2, 1fr); }
+      .map { grid-template-columns: 1fr; gap: 12px; }
+      .arrow { transform: rotate(90deg); }
+      .legend, .links { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 560px) {
+      main { width: min(100% - 20px, 1180px); padding-top: 28px; }
+      .stats, .findings, .steps, .legend, .links { grid-template-columns: 1fr; }
+      .bar span { color: transparent; }
+    }
+  </style>
 </head>
-<body><main>
-<p class="tag">September 5, 2026 · PR #1296 implementation and verification</p>
-<h1>Seven write blockers are replaced by a local lint step.</h1>
-<p>The PR removes seven file-policy registrations from the write dispatcher and invokes <code>cde lint --staged</code> through the existing native Git pre-commit hook. Edits can proceed. Selected file violations are caught before the commit succeeds. Shared detector modules and unrelated controls remain.</p>
-<div class="notice"><strong>Deployment boundary.</strong> These removals are implemented in the PR and exercised in disposable Linux and Windows installations. Jon's workstation, installed Claude/Codex profiles, local Git configuration, and Python Automation checkout have not been modified or certified. Live workstation deployment is uncertified.</div>
-<div class="stats"><div class="panel"><small>Write registrations retired in the PR</small><strong>7</strong></div><div class="panel"><small>Windows install/commit proof</small><strong>48 / 48</strong><small>Linux proof job also passed</small></div><div class="panel"><small>Jon's live installations changed</small><strong>0</strong></div></div>
+<body>
+<main>
+  <p class="eyebrow">Full hook audit</p>
+  <h1>Zero blocking hooks is feasible.</h1>
+  <p class="lede">Move code checks to linters and required continuous integration. Move action safety to native product controls. Keep only bounded, nonblocking lifecycle work.</p>
 
-<h2>Implemented removals and execution step</h2>
-<p>Every row is a linter replacement. The native pre-commit owner runs the staged linter with the invoking Python interpreter, Git working directory, and active index. Any finding, failed rule, launch error, missing entry point, or timeout stops the commit. The retained legacy gate runs after a clean lint result. Repositories must use this managed native hook. Local hook-path overrides require independent readback.</p>
-<div class="scroll"><table><thead><tr><th>Retired write-dispatcher hook</th><th>Replacement rule</th><th>Scope and proof</th></tr></thead><tbody>
-<tr><td><code>blocking/code_rules_enforcer.py</code></td><td><code>code-rules</code></td><td>Selected staged source; real installed commit rejects the invalid type fixture. The independent Codex materializer registration is unchanged.</td></tr>
-<tr><td><code>blocking/tdd_enforcer.py</code></td><td><code>test-pairing</code></td><td>Staged change-set pairing; unpaired production fixture rejected, valid paired source accepted. The fixture proves pairing.</td></tr>
-<tr><td><code>blocking/windows_rmtree_blocker.py</code></td><td><code>rmtree-safety</code></td><td>Staged Python cleanup syntax. Only its write route is retired. The transient Bash-command route remains active.</td></tr>
-<tr><td><code>blocking/state_description_blocker.py</code></td><td><code>state-description</code></td><td>Staged source/Markdown; dispatcher allows the edit, actual Git commit rejects the same policy violation, and HEAD stays unchanged.</td></tr>
-<tr><td><code>blocking/subprocess_budget_completeness.py</code></td><td><code>subprocess-budget</code></td><td>Selected staged Python; incomplete timing-budget fixture rejected by the installed owner.</td></tr>
-<tr><td><code>blocking/hook_prose_detector_consistency.py</code></td><td><code>hook-prose-consistency</code></td><td>Staged hook Python module; mismatched detector/output contract rejected by the installed owner.</td></tr>
-<tr><td><code>blocking/workflow_substitution_slot_blocker.py</code></td><td><code>workflow-substitution</code></td><td>Staged workflow JavaScript template; incomplete substitution fixture rejected by the installed owner.</td></tr>
-</tbody></table></div>
-<p><strong>Reinstall persistence.</strong> All seven paths already belong to the installer's managed folded-hook set. Upgrade and repeated-install fixtures seed their legacy direct registrations, run the installer twice, and prove those entries stay absent. The installed dispatcher roster omits the seven children. Foreign hooks and permissions survive, and SHA-256 comparisons prove the shared detector implementations are still installed unchanged.</p>
+  <div class="callout">The target is zero blocking hooks, not zero blocking controls. Destructive actions and outbound private data still need protection outside the hook system.</div>
 
-<h2>Replacement defects repaired before use</h2>
-<div class="panel">
-<p><strong>Wrong staged index.</strong> Policy selection discarded <code>GIT_INDEX_FILE</code>. It now retains the invoking commit's active index while removing unrelated repository-directory overrides. The strict terminology path uses a separate staged environment. Generic explicit-repository callers retain their original isolation behavior.</p>
-<p><strong>Installed terminology import.</strong> The scripts directory may resolve through an agents-home link while the shared scripts remain under the managed Claude root. The linter now uses the existing shared-tree resolver. A neighboring root is accepted only when its scripts pointer resolves to the exact installed scripts tree. Default and named-profile layouts are tested.</p>
-<p><strong>Local ownership.</strong> <code>pre_commit.py</code> invokes the installed <code>scripts/cde_lint.py --staged</code>. The 240-second bound and exit propagation are tested at commit time.</p>
-</div>
+  <div class="stats" aria-label="Audit summary">
+    <div class="stat"><span>Canonical logical associations</span><strong>70</strong><span>32 direct plus 43 hosted, less 5 dispatcher wrappers</span></div>
+    <div class="stat"><span>Targets classified</span><strong>79/79</strong><span>Canonical, installed-only, and native Git targets</span></div>
+    <div class="stat"><span>Live configuration findings</span><strong>11</strong><span>Duplicates and missing registrations</span></div>
+    <div class="stat"><span>Target blocking hooks</span><strong>0</strong><span>Linters and native controls replace them</span></div>
+  </div>
 
-<h2>Verification results and limits</h2>
-<p>The focused local suite passed <strong>171 tests</strong>. The cross-platform proof at source commit <code>0dabb64ed8bf4f75a8ea328f3122956569a534f5</code> passed on Windows and Linux. The retained Windows JUnit report records <strong>48 passed, zero skipped, zero failures</strong>. The real installer was run twice and its native Git shim invoked through actual commits. The three selective-reinstall Node tests passed on both platforms. See <a href="https://github.com/jl-cmd/claude-dev-env/actions/runs/33976992114">the cross-platform run</a>.</p>
-<p>The broader suite then exposed three obsolete dispatcher expectations, two native-owner fixtures missing the required linter context, and one shared-environment regression. The repaired cases and related tests passed in a <strong>48-test local rerun</strong>. The two commit-boundary tests also passed after splitting an overlong helper. These counts describe separate overlapping runs. Do not add them. The final CI status belongs to the current PR head.</p>
-<p>Proof covers nonempty valid source and matching tests, equivalent negative fixtures for all seven rules, installed-module parity, valid commits, rejected commits with unchanged HEAD, unstaged fixes that leave staged violations visible, alternate indices, missing-linter errors, timeouts, and retained safety checks. Hosted CI tests the package. Python Automation's enforcement is local.</p>
-<p><a href="../hook-linter-conversion/evidence/local-hook-cutover-2026-09-05.json">Implementation evidence and checkpoint references</a> · <a href="decisions.tsv">Updated existing decision ledger</a> · <a href="https://github.com/jl-cmd/claude-dev-env/pull/1296">Current PR and checks</a></p>
+  <section aria-labelledby="map-title">
+    <h2 id="map-title">Move checks to their owners</h2>
+    <div class="map">
+      <div class="lane current">
+        <div class="lane-title"><h3>Today</h3><span class="badge">interrupts work</span></div>
+        <div class="flow">
+          <div class="block">Edit triggers blocking source checks</div>
+          <div class="block">Commit and push trigger more policy gates</div>
+          <div class="block">Pull request commands trigger account and prose gates</div>
+          <div class="block">One broad log records every block decision</div>
+        </div>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="lane target">
+        <div class="lane-title"><h3>After migration</h3><span class="badge">checks stay with owners</span></div>
+        <div class="flow">
+          <div class="lint">Editor runs file diagnostics</div>
+          <div class="lint">Staged linter checks the full change</div>
+          <div class="lint">Required continuous integration checks the repository</div>
+          <div class="safe">Native controls protect destructive and external actions</div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-<h2>Remaining blockers stay, with explicit gaps</h2>
-<p>The table names the source-observed remaining targets and unresolved coverage from this audit. <strong>All rows remain active or unchanged in their existing source routes.</strong> Filenames are relative to the CDE hooks tree unless qualified. W = write dispatcher; B = Bash/PowerShell dispatcher with its per-child tool filter; D = direct registration; P = post-write; S = Stop.</p>
-<div class="scroll"><table><thead><tr><th>Remaining hook / route</th><th>Candidate owner and step</th><th>Why it stays</th></tr></thead><tbody>
-<tr><td><code>validators/run_all_validators.py</code> / D</td><td>Policy lint plus independent Ruff</td><td>Policy-lint adapter excludes Ruff. Canonical duplicate write matchers also expose an installer merge gap. This cleanup leaves that registration in place.</td></tr>
-<tr><td>Codex <code>code_rules_enforcer.py</code> / apply_patch</td><td>Local staged lint</td><td>Separate materializer ownership and effective local invocation are not established for Jon's Codex profiles.</td></tr>
-<tr><td><code>windows_rmtree_blocker.py</code> / B</td><td>Runtime command protection</td><td>File lint cannot inspect every transient inline command. The Bash route is retained.</td></tr>
-<tr><td><code>duplicate_rmtree_helper_blocker.py</code> / W</td><td><code>rmtree-safety</code></td><td>Dedicated exemption/path parity and retirement fixtures are outside the seven verified removals.</td></tr>
-<tr><td><code>docstring_rule_gate_count_blocker.py</code> / W</td><td><code>docstring-gate-count</code></td><td>Its designated document/path selection needs a dedicated installed fixture.</td></tr>
-<tr><td><code>open_questions_in_plans_blocker.py</code> / W</td><td><code>open-questions</code></td><td>Local or untracked plan files may not reach staged lint; retain pending scope proof.</td></tr>
-<tr><td><code>validation/hook_format_validator.py</code> / W</td><td><code>hook-format</code></td><td>User/profile settings can be outside the repository index.</td></tr>
-<tr><td><code>lifecycle/config_change_guard.py</code> / D</td><td><code>hook-configuration</code></td><td>Live user configuration changes are not established as staged inputs.</td></tr>
-<tr><td><code>claude_md_orphan_file_blocker.py</code> / W</td><td>Repository-policy documentation check</td><td>Independent local repository-wide invocation and effective project scope remain unverified.</td></tr>
-<tr><td><code>env_var_table_code_drift_blocker.py</code> / W</td><td>Repository-policy environment check</td><td>Project-specific configuration and complete local coverage remain unverified.</td></tr>
-<tr><td><code>package_inventory_stale_blocker.py</code> / W</td><td>Repository-policy inventory check</td><td>Python Automation's local package inventory coverage is not established.</td></tr>
-<tr><td><code>pytest_testpaths_orphan_blocker.py</code> / W</td><td>Repository-policy discovery check</td><td>Every package's effective pytest configuration needs local verification.</td></tr>
-<tr><td><code>validation/mypy_validator.py</code> / P</td><td>Standalone Mypy</td><td>cde lint is not a Mypy replacement; local version, config and coverage remain independent.</td></tr>
-<tr><td><code>pii_prevention_blocker.py</code> / W, B, GitHub D</td><td>Tracked scanning and outbound native controls</td><td>Staged/committed scanning does not replace untracked or outbound data protection.</td></tr>
-<tr><td><code>sensitive_file_protector.py</code> / W</td><td>Native filesystem/approval controls</td><td>Equivalent live protected-path controls are unverified.</td></tr>
-<tr><td><code>destructive_command_blocker.py</code> / B</td><td>Native sandbox/approval controls</td><td>Equivalent action-time controls are unverified.</td></tr>
-<tr><td><code>ask_user_question_shape_blocker.py</code> / D</td><td>Native payload schema</td><td>Equivalent product schema enforcement is unverified.</td></tr>
-<tr><td><code>plain_language_blocker.py</code> / AskUserQuestion D</td><td>Stored-prompt plain-language lint</td><td>A stored-file linter does not replace live question-payload checks.</td></tr>
-<tr><td><code>block_main_commit.py</code> / B</td><td>Commit owner and branch controls</td><td>Remote rulesets do not prohibit local commits; applicable control parity is unverified.</td></tr>
-<tr><td><code>session_edit_stage_gate.py</code> / B</td><td>Explicit commit/staging owner</td><td>Staged-file lint does not establish session staging completeness.</td></tr>
-<tr><td><code>nas_ssh_binary_enforcer.py</code> / B</td><td>Explicit approved SSH command</td><td>No verified installed wrapper and invocation coverage.</td></tr>
-<tr><td><code>orchestrator_refresh_reschedule_gate.py</code> / D</td><td>Scheduler state validation</td><td>Runtime scheduler state is outside source lint.</td></tr>
-<tr><td><code>write_existing_file_blocker.py</code> / W</td><td>Editing/native action behavior</td><td>No equivalent replacement proof; blind overwrite protection remains.</td></tr>
-<tr><td><code>shell_substitution_blocker.py</code>, <code>piped_pytest_blocker.py</code> / B</td><td>Command semantics or explicit retirement</td><td>Catalog deletion proposals and known false positives do not establish replacements for these rules.</td></tr>
-<tr><td><code>cursor_cli_python_misfire_blocker.py</code>, <code>unscoped_search_blocker.py</code> / B</td><td>Command-owner argument/search checks</td><td>No demonstrated equivalent local command coverage.</td></tr>
-<tr><td><code>bot_mention_comment_blocker.py</code> / D</td><td>Posting preference retirement</td><td>No working linter replacement or separately approved policy removal established.</td></tr>
-<tr><td><code>fable_spawn_gate.py</code>, <code>luna_fast_mode_gate.py</code> / D</td><td>Agent/model/service configuration</td><td>Claude and Codex settings require separate verification.</td></tr>
-<tr><td><code>send_user_file_open_locally_blocker.py</code> / D</td><td>Native transfer action</td><td>No equivalent action-time proof.</td></tr>
-<tr><td><code>question_to_user_enforcer.py</code>, <code>session_handoff_blocker.py</code> / S</td><td>Prose policy retirement</td><td>No file-linter equivalence for these live conversation checks.</td></tr>
-<tr><td>Native Git <code>pre-commit</code></td><td>Local staged linter plus retained legacy gate</td><td>It is the verified replacement invocation point, not a hook removed by this PR. The legacy gate stays for remaining checks.</td></tr>
-<tr><td>Native Git <code>pre-push</code></td><td>Local committed-change checks and branch controls</td><td>Current gate scopes to checkout HEAD; every pushed object/ref and protected destination still require proof.</td></tr>
-<tr><td>Python Automation <code>shared_utils_install_guard.py</code></td><td>Approved editable-install command</td><td>Runtime installation target protection has no verified linter replacement.</td></tr>
-<tr><td>Python Automation <code>extraction_audit_guard.py</code></td><td>Independent local extraction validator</td><td>The hook imports the validator; a file under .github/ci is not proof of independent local execution.</td></tr>
-</tbody></table></div>
+  <section aria-labelledby="destinations-title">
+    <h2 id="destinations-title">Where each target goes</h2>
+    <div class="panel">
+      <div class="bar" role="img" aria-label="22 delete, 16 move to linter, 17 move to explicit command, 13 keep as nonblocking automation, 7 move to continuous integration, 4 replace with boundary controls">
+        <span class="delete">22</span><span class="linter">16</span><span class="command">17</span><span class="automation">13</span><span class="ci">7</span><span class="boundary">4</span>
+      </div>
+      <div class="legend">
+        <div><b>22 delete</b><br>Preferences, prose gates, duplicates, and stale installed targets</div>
+        <div><b>16 move to linter</b><br>Deterministic source and document rules</div>
+        <div><b>17 explicit commands</b><br>Test, search, worktree, cleanup, SSH, and pull request work</div>
+        <div><b>13 nonblocking</b><br>Lifecycle tracking and formatting</div>
+        <div><b>7 continuous integration</b><br>Repository, Git, and pull request rules</div>
+        <div><b>4 boundary controls</b><br>Destructive actions, secrets, private data, and payload schema</div>
+      </div>
+    </div>
+  </section>
 
-<h2>Python Automation and live deployment</h2>
-<p>Python Automation's Actions are disabled per the request and are not accepted as coverage. The new pre-commit path is local and runs without Actions wherever the managed hook is actually registered. Its <em>effective registration in Jon's checkout</em>, installed versions, local overrides, and package-specific configuration have not been read. Its two project hooks remain unchanged. Disposable fixtures do not authorize workstation removal.</p>
-<p>Claude user/project/local/managed settings, all profiles, plugin registrations, Codex hooks.json, nested installed dispatchers, Git config origins/includes/worktree overrides, and the effective native hook directory still require workstation readback. Package source and a merged PR do not prove live registration.</p>
+  <section aria-labelledby="findings-title">
+    <h2 id="findings-title">What the live audit found</h2>
+    <div class="findings">
+      <article class="finding"><span class="code">INSTALL MERGE</span><h3>Claude drops one managed validator</h3><p>Two canonical write groups use the same matcher. The installer replaces the first group with the second. The live configuration is missing the shared validator registration.</p></article>
+      <article class="finding"><span class="code">DUPLICATE EXECUTION</span><h3>Eight effective routes repeat</h3><p>Live Claude and Codex configurations keep legacy direct checks beside dispatcher children. A single action can run the same policy twice.</p></article>
+      <article class="finding"><span class="code">MISSING TARGET</span><h3>Codex points to two absent scripts</h3><p>The diagnostic stop wrapper and task list loop starter are registered but missing from the installed hook tree.</p></article>
+      <article class="finding"><span class="code">FALSE POSITIVE</span><h3>Safe PowerShell inspection was denied</h3><p>The Bash shell substitution rule interpreted a PowerShell backtick as command substitution during this audit.</p></article>
+      <article class="finding"><span class="code">ORDERING RISK</span><h3>Pull request author state can remain switched</h3><p>The author gate changes the global GitHub account before a later body gate can deny the same command. The restore event then does not run.</p></article>
+      <article class="finding"><span class="code">GIT RISK</span><h3>Push checks do not prove every pushed object</h3><p>The pre-push path checks the first update and the checkout head. It has no deadline around the shared gate process.</p></article>
+      <article class="finding"><span class="code">HIDDEN SIDE EFFECT</span><h3>Post-commit can create another commit</h3><p>A submodule commit can trigger a parent repository commit. Move that action to an explicit sync command.</p></article>
+      <article class="finding"><span class="code">RUNTIME EVIDENCE</span><h3>The block log reached 117 MB</h3><p>The snapshot held 182,713 valid block decisions and 11 malformed records. One recorded pre-commit gate timed out after 240 seconds. These are events, not unique user interruptions.</p></article>
+    </div>
+  </section>
 
-<h2>Other migrations and preserved behavior</h2>
-<p>All nine referenced migration PRs were verified merged: #1274, #1275, #1281, #1282, #1284, #1287, #1289, #1291 and #1292. #1291 merged September 5 at 13:31:26 UTC; #1292 at 14:01:44 UTC and explicitly reported no live installation. Their complete checkpoint timestamps and merge SHAs remain in <a href="../hook-linter-conversion/evidence/chat-audit-2026-09-05.json">the earlier source audit</a>.</p>
-<p>Submodule sync, Everything search, PR publication and test preflight are <strong>explicit commands</strong>. They do not replace every raw command or native connector route. The removed PR/search/test dispatcher entries in those migrations still require installed-only and alternate-profile readback. The independent Codex retirement list leaves Claude cleanup unproven.</p>
-<p>Auto-formatting, test-failure recording, edit tracking, instruction logging, applicable nonblocking lifecycle work, origin prefetch, and both write-dispatcher advisory children are preserved. The historical inventory and lifecycle catalog remain snapshots. Live counts were not recalculated.</p>
+  <section aria-labelledby="plan-title">
+    <h2 id="plan-title">Migration order</h2>
+    <div class="steps">
+      <article class="step"><h3>Freeze the inventory</h3><p>Land the static audit and lifecycle catalog. Make count drift fail continuous integration.</p></article>
+      <article class="step"><h3>Prune drift</h3><p>Remove installed duplicates, missing targets, and stale registrations.</p></article>
+      <article class="step"><h3>Build one linter</h3><p>Put deterministic rules behind changed-file, staged, base-revision, and JSON modes.</p></article>
+      <article class="step"><h3>Add required checks</h3><p>Run Ruff, Mypy, custom rules, JavaScript checks, tests, and document checks in continuous integration.</p></article>
+      <article class="step"><h3>Move workflow policy</h3><p>Give pull request, test, search, SSH, scheduler, and worktree policy to their owning commands.</p></article>
+      <article class="step"><h3>Prove native safety</h3><p>Test sandbox, approval, secret, private-data, and protected-branch controls on real actions.</p></article>
+      <article class="step"><h3>Remove all hook decisions</h3><p>Delete every deny, block, and ask path. Remove blocking native Git hooks.</p></article>
+      <article class="step"><h3>Reinstall and read back</h3><p>Verify Claude, Codex, and Git have no duplicate route, missing target, or blocking hook.</p></article>
+    </div>
+  </section>
 
-<h2>Backup, rollback and ledgers</h2>
-<p><strong>Exact source rollback.</strong> Branch <code>backup/hook-linter-before-cutover-20260905</code> points to <code>7a5c63208b1d22f8219c36363b4b3bf11aa852fa</code>. It retains the exact pre-cleanup source configuration, scripts and report. Restore only affected paths from that ref to undo this PR. Preserve unrelated work. The seven shared detector files remain.</p>
-<p><strong>Fixture backup.</strong> The installer tests copy the original settings bytes to <code>&lt;isolated-home&gt;/before-cutover/settings.json</code> and assert those bytes remain intact after both installs. That is a disposable test backup. <strong>No live workstation rollback directory exists because the workstation was not accessed or modified.</strong> Before any live edit, its exact affected configuration/scripts, links, permissions and hashes must be captured locally.</p>
-<p>The existing tracked <code>decisions.tsv</code> is appended with the seven removals, local owner, tests, source backup and live limitation. The requested local conversion <code>tasks.md</code>, <code>ledger.txt</code> and <code>live-install-impact.md</code> returned 404 at the GitHub snapshot. Their unseen workstation contents stay in place. The earlier pending ledger-append file remains historical evidence.</p>
-<p class="muted">Source baseline: 38151d21ff3ee80b6cf3cf24601b6174041035e2. Implementation is in PR #1296. Python Automation source checkpoint: 92718eb60ac83da27934f86f07081e7e3a39ac85. Live Windows cutover is uncertified.</p>
-</main></body></html>
+  <section aria-labelledby="evidence-title">
+    <h2 id="evidence-title">Audit files</h2>
+    <div class="panel links">
+      <a href="inventory.json">Machine inventory</a>
+      <a href="lifecycle-catalog.json">Lifecycle catalog</a>
+      <a href="migration-plan.md">Migration plan</a>
+      <a href="swarm-summary.md">Swarm summary</a>
+      <a href="design-synthesis.md">Tool design</a>
+      <a href="decisions.tsv">Decision ledger</a>
+    </div>
+    <p class="note">Audit date: September 4, 2026. The audit changed no live hook registration, user setting, Git hook path, account, branch, commit, push, or pull request.</p>
+  </section>
+</main>
+</body>
+</html>

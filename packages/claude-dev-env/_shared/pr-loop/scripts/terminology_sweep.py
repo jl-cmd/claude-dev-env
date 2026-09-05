@@ -7,7 +7,7 @@ names, and a reader who searches one never finds the other.
 ::
 
     code adds:  premium_request_interactions            the identifier
-    prose adds: the premium-request-budget field gates the run
+    prose adds: the premium-request-budget field         a hyphenated term
     flag: premium-request-budget  vs  premium_request_interactions  -- only the final word differs
     ok:   premium-request-interactions                   -- exact hyphen form, agrees
     ok:   premium-report-total  vs  premium_request_interactions  -- an earlier word differs, ordinary prose
@@ -47,7 +47,6 @@ from pr_loop_shared_constants.terminology_sweep_constants import (
     DIFF_OLD_FILE_HEADER_PREFIX,
     DIFF_REMOVED_LINE_PREFIX,
     GIT_BASE_TREE_REVISION,
-    GIT_INDEX_ENVIRONMENT_VARIABLE,
     GIT_DECODE_ERRORS,
     GIT_DIFF_OPERATION,
     GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
@@ -371,7 +370,7 @@ def _diverges_only_in_final_token(
 
     Args:
         candidate_tuple: The prose term's lowercase token tuple.
-        identifier_tuple: The introduced identifier's lowercase token tuple.
+        identifier_tuple: An introduced identifier's lowercase token tuple.
 
     Returns:
         True when both tuples run longer than the two-token identifier minimum,
@@ -582,29 +581,22 @@ def sweep_diff(
 
 
 def repository_environment() -> dict[str, str]:
-    """Return the environment without inherited Git repository overrides.
+    """Return the process environment with every GIT_ variable removed.
+
+    The sweep and the commit gate name their repository through an explicit
+    root argument. An inherited GIT_DIR or GIT_WORK_TREE would override
+    that root and point git at a different repository, so each spawned
+    subprocess runs with a scrubbed environment.
 
     Returns:
-        A copy of the environment with Git overrides removed for explicit-root callers.
+        A copy of ``os.environ`` without any variable whose name starts
+        with ``GIT_``.
     """
     return {
         each_key: each_setting
         for each_key, each_setting in os.environ.items()
         if not each_key.startswith("GIT_")
     }
-
-
-def staged_repository_environment() -> dict[str, str]:
-    """Keep the invoking commit's active index for staged lint.
-
-    Returns:
-        The isolated Git environment with GIT_INDEX_FILE retained when Git supplied one.
-    """
-    environment = repository_environment()
-    active_index = os.environ.get(GIT_INDEX_ENVIRONMENT_VARIABLE)
-    if active_index is not None:
-        environment[GIT_INDEX_ENVIRONMENT_VARIABLE] = active_index
-    return environment
 
 
 def _identifier_names_on_added_code_lines(diff_text: str) -> frozenset[str]:
@@ -682,7 +674,7 @@ def _run_strict_git(
             errors=GIT_DECODE_ERRORS,
             timeout=GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
             check=False,
-            env=staged_repository_environment(),
+            env=repository_environment(),
         )
     except (subprocess.TimeoutExpired, OSError) as e:
         raise RuntimeError(str(e)) from e
@@ -752,8 +744,8 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
     """Return terminology near-miss findings for a repository's staged diff.
 
     An identifier the base tree already names is not one the staged diff
-    introduces, so no prose is flagged against it. Only new identifiers
-    are swept.
+    introduces, so no prose is flagged against it. Only genuinely new
+    identifiers are swept.
 
     Args:
         repository_root: The repository root the staged diff is read from.
