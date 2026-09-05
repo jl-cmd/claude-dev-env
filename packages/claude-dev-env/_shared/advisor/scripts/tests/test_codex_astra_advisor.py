@@ -14,7 +14,9 @@ _ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 def _load_astra_module() -> ModuleType:
     scripts_root = Path(__file__).parent.parent
-    sys.path.insert(0, str(scripts_root / "config"))
+    config_root = str(scripts_root / "config")
+    if config_root not in sys.path:
+        sys.path.insert(0, config_root)
     specification = importlib.util.spec_from_file_location(
         "codex_astra_advisor", scripts_root / "codex_astra_advisor.py"
     )
@@ -81,6 +83,21 @@ def test_astra_flag_accepts_documented_truthy_values(truthy: str) -> None:
 
 def test_astra_flag_rejects_legacy_sol_setting() -> None:
     assert not astra_advisor.is_astra_advisor_enabled({"ADVISOR_SOL": "1"})
+
+
+def test_resolve_advisor_effort_uses_shared_setting_and_default() -> None:
+    assert astra_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "HIGH"}) == "high"
+    assert astra_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "unknown"}) == "low"
+
+
+def test_resolve_codex_executable_prefers_override_and_falls_back_to_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert astra_advisor.resolve_codex_executable(
+        {astra_advisor.ADVISOR_CODEX_EXECUTABLE_ENV_VAR: "/tmp/codex-custom"}
+    ) == "/tmp/codex-custom"
+    monkeypatch.setattr(astra_advisor.shutil, "which", lambda name: "/usr/bin/codex")
+    assert astra_advisor.resolve_codex_executable({}) == "/usr/bin/codex"
 
 
 @pytest.mark.parametrize("effort", ["low", "medium", "high", "xhigh", "max"])
@@ -239,8 +256,8 @@ def test_active_docs_use_astra_names() -> None:
         package_root / "docs" / "references" / "team-advisor-skill.md",
     ]
     legacy_names = ("ADVISOR_SOL", "--enable-sol", "codex_sol_advisor", "sol-rung.md")
-    for path in all_paths:
-        content = path.read_text(encoding="utf-8")
+    for each_path in all_paths:
+        content = each_path.read_text(encoding="utf-8")
         assert all(name not in content for name in legacy_names)
 
 
