@@ -602,8 +602,8 @@ EXPECTED_SOURCE_LINK_PAIRS = {
     }),
     "pr-description-writer.md": frozenset({
         (
-            "<agents-home>/skills/pr-title-description/SKILL.md",
-            "packages/claude-dev-env/.agents/skills/pr-title-description/SKILL.md",
+            "<agents-home>/agents/reference/pr-description-illustrative-voice.md",
+            "packages/claude-dev-env/.agents/agents/reference/pr-description-illustrative-voice.md",
         ),
         (
             "<managed-root>/rules/gh-cli-conventions.md#body-content-goes-in-a-file",

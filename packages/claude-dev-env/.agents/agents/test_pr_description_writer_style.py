@@ -17,6 +17,7 @@ def test_pr_description_writer_uses_repo_owned_progressive_samples() -> None:
     assert "only when needed" in agent_text
     assert "PR #2562" not in agent_text
     assert "PR #1150" not in agent_text
+    assert "skills/pr-title-description" not in agent_text
 
 
 def test_voice_reference_keeps_the_plain_illustrative_shape() -> None:
@@ -48,9 +49,6 @@ def test_verification_leads_with_a_human_visible_check() -> None:
 
 def test_full_diff_behavior_standard_is_explicit_in_writer_sources() -> None:
     all_writer_source_texts = [
-        (AGENT_DIRECTORY.parent / "skills" / "pr-title-description" / "SKILL.md").read_text(
-            encoding="utf-8"
-        ),
         AGENT_PATH.read_text(encoding="utf-8"),
         VOICE_REFERENCE_PATH.read_text(encoding="utf-8"),
     ]
