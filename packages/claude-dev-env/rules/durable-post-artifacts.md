@@ -40,10 +40,9 @@ name does not form a path.
 
 ## Validation
 
-Run `.agents/skills/_shared/pr-loop/scripts/durable_post_lint.py` before the
-server write. Pass the matching action and body file. Use `pr-create`,
-`pr-edit`, `pr-comment`, `pr-review`, `issue-create`, `issue-edit`,
-`issue-comment`, or `github-mcp-post`.
+Run `scripts/durable_post_lint.py` before the server write. Pass the matching
+action and body file. Use `pr-create`, `pr-edit`, `pr-comment`, `pr-review`,
+`issue-create`, `issue-edit`, `issue-comment`, or `github-mcp-post`.
 
 The linter reads the body file and reports a volatile local path without
 printing the body. Fix the body and rerun the linter before posting.
