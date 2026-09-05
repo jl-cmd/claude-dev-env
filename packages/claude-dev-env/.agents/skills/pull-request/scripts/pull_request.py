@@ -24,7 +24,6 @@ from github_pr_command_constants.config.constants import (
     PACKAGE_ROOT_PARENT_INDEX,
     REVIEW_EVENT_COMMENT,
     SELECTED_ACCOUNT_ENVIRONMENT_KEY,
-    SKILLS_DIRECTORY_PARENT_INDEX,
 )
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -60,11 +59,12 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _package_root() -> Path:
+    return Path(__file__).resolve().parents[PACKAGE_ROOT_PARENT_INDEX]
+
+
 def _linter_path() -> Path:
-    return (
-        Path(__file__).resolve().parents[SKILLS_DIRECTORY_PARENT_INDEX]
-        / "_shared/pr-loop/scripts/durable_post_lint.py"
-    )
+    return _package_root() / "scripts/durable_post_lint.py"
 
 
 def _linter_arguments(arguments: argparse.Namespace) -> list[str]:
@@ -139,10 +139,7 @@ def _post_arguments(arguments: argparse.Namespace) -> list[str]:
 
 
 def _shared_environment_key_names() -> tuple[str, str, tuple[str, ...]]:
-    shared_directory = (
-        Path(__file__).resolve().parents[PACKAGE_ROOT_PARENT_INDEX]
-        / "_shared/pr-loop/scripts"
-    )
+    shared_directory = _package_root() / "_shared/pr-loop/scripts"
     shared_directory_text = str(shared_directory)
     if shared_directory_text not in sys.path:
         sys.path.insert(0, shared_directory_text)
@@ -247,16 +244,7 @@ def main(
     all_environment: Mapping[str, str],
     command_runner: CommandRunner,
 ) -> int:
-    """Run one validated pull request action.
-
-    Args:
-        all_arguments: Command arguments after the script name.
-        all_environment: Parent environment copied for child processes.
-        command_runner: Process runner used by tests and production.
-
-    Returns:
-        The linter, account lookup, or GitHub action exit status.
-    """
+    """Run one validated pull request action."""
     arguments = _build_parser().parse_args(list(all_arguments))
     completed_lint = command_runner(
         _linter_arguments(arguments), check=False, shell=False
