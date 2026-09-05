@@ -1,10 +1,8 @@
 # Skill archive
 
-This directory preserves 19 retired Claude Dev Environment skills from commit `f5a984af48df0eb0f87f5211d4e92421c38df91b`.
+This directory holds 19 retired Claude Dev Environment skills, copied unchanged from `packages/claude-dev-env/.agents/skills/` at commit `f5a984af48df0eb0f87f5211d4e92421c38df91b`. Each copy includes scripts, tests, templates, references, and instruction files. `source-trees.json` records the source commit and original Git tree ID for every skill.
 
-Each skill is a complete, unchanged copy of its original directory under `packages/claude-dev-env/.agents/skills/`, including its scripts, tests, templates, references, and instruction files. Git tree IDs in `source-trees.json` identify the exact source snapshots.
-
-The repository's older archive remains at `packages/claude-dev-env/.agents/skills-archived/`. This batch uses the requested `skill-archive/` destination and the same unpacked-directory format.
+The older archive at `packages/claude-dev-env/.agents/skills-archived/` stays in place. This batch uses the same unpacked-directory format at `skill-archive/`.
 
 ## Retired skills
 
@@ -28,20 +26,20 @@ The repository's older archive remains at `packages/claude-dev-env/.agents/skill
 - `source-command-sr-loop`
 - `update`
 
-The retirement request named `pr-name-by-compatibility`. The matching repository skill is `pr-name-by-capability`, preserved here under its existing name.
+The request named `pr-name-by-compatibility`. The repository skill is `pr-name-by-capability`, archived under that name.
 
 ## Skill builder stub
 
-The active `skill-builder/SKILL.md` contains the requested placeholder:
+Active `skill-builder/SKILL.md` is the placeholder:
 
 > TODO: Rework to follow pstack philosophy.
 
-Its existing instruction files remain beside the stub. Its complete former implementation is preserved in this archive.
+Its instruction files stay beside the stub. The former implementation is in this archive.
 
-## Installation and recovery
+## Recovery
 
-Active skill discovery reads `packages/claude-dev-env/.agents/skills/`. This archive sits outside the installable package. The ever-shipped skill registry retains all retired names so the existing full-install retirement cleanup can recognize previously installed copies. `skill-builder` remains an installed skill through its stub.
+Installers read `packages/claude-dev-env/.agents/skills/`. This archive sits outside the installable package. `bin/ever-shipped-skills.mjs` still lists every retired name so full-install cleanup can remove leftover copies. `skill-builder` stays installed as the stub.
 
-This source change takes effect in a local environment after the changed package is installed. Installer group labels and historical references remain unchanged in this archival change.
+To apply this in a local environment, install the changed package. Installer group labels and historical references still name some of these skills.
 
-To recover a skill, copy its archived directory back into the active skills directory and review its dependencies before reinstalling. The source commit above also preserves each skill at its original path.
+To restore a skill, copy its archived directory back into the active skills directory. Review its dependencies, then reinstall. The source commit also still has each skill at its original path.
