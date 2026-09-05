@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib
 import os
 import subprocess
 import sys
@@ -20,10 +19,13 @@ from github_pr_command_constants.config.constants import (
     ACTION_FAILED_MESSAGE,
     ACTION_REVIEW,
     ALL_DURABLE_POST_LINTER_RELATIVE_PATH_PARTS,
+    ALL_GITHUB_AUTHORIZATION_ENVIRONMENT_KEYS,
     ALL_LINTER_ACTIONS_BY_COMMAND,
     ALL_REVIEW_FLAGS_BY_EVENT,
     CONFIG_DIR_OVERRIDE_ENVIRONMENT_KEY,
     DEFAULT_MANAGED_ROOT_DIRECTORY_NAME,
+    GH_TOKEN_ENVIRONMENT_KEY,
+    GITHUB_TOKEN_ENVIRONMENT_KEY,
     PACKAGE_ROOT_PARENT_INDEX,
     REVIEW_EVENT_COMMENT,
     SELECTED_ACCOUNT_ENVIRONMENT_KEY,
@@ -156,28 +158,9 @@ def _post_arguments(arguments: argparse.Namespace) -> list[str]:
     ]
 
 
-def _shared_environment_key_names() -> tuple[str, str, tuple[str, ...]]:
-    shared_directory = (
-        Path(__file__).resolve().parents[PACKAGE_ROOT_PARENT_INDEX]
-        / "_shared/pr-loop/scripts"
-    )
-    shared_directory_text = str(shared_directory)
-    if shared_directory_text not in sys.path:
-        sys.path.insert(0, shared_directory_text)
-    constants_module = importlib.import_module(
-        "pr_loop_shared_constants.post_audit_thread_constants"
-    )
-    return (
-        constants_module.GITHUB_TOKEN_ENV_VAR_NAME,
-        constants_module.GH_TOKEN_ENV_VAR_NAME,
-        constants_module.ALL_GH_TOKEN_ENV_VAR_NAMES,
-    )
-
-
 def _lookup_environment(all_environment: Mapping[str, str]) -> dict[str, str]:
     lookup_environment = dict(all_environment)
-    _, _, all_authorization_names = _shared_environment_key_names()
-    for each_name in all_authorization_names:
+    for each_name in ALL_GITHUB_AUTHORIZATION_ENVIRONMENT_KEYS:
         lookup_environment.pop(each_name, None)
     return lookup_environment
 
@@ -221,12 +204,9 @@ def _action_environment(
     )
     if account_authorization is None:
         return None
-    parent_authorization_name, child_authorization_name, _ = (
-        _shared_environment_key_names()
-    )
     action_environment = dict(all_environment)
-    action_environment.pop(parent_authorization_name, None)
-    action_environment[child_authorization_name] = account_authorization
+    action_environment.pop(GITHUB_TOKEN_ENVIRONMENT_KEY, None)
+    action_environment[GH_TOKEN_ENVIRONMENT_KEY] = account_authorization
     return action_environment
 
 
