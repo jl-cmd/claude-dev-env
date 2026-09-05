@@ -1,4 +1,4 @@
-"""Readiness checks for check_server_health, check_django_database,
+"""Django and Playwright readiness checks for check_server_health, check_django_database,
 check_test_db_flag, check_runserver_port_conflicts, and build_frontend."""
 
 from __future__ import annotations
@@ -128,7 +128,7 @@ def extract_port_from_url(target_url: str) -> str:
         target_url: URL whose authority may carry a port.
 
     Returns:
-        The explicit port, or the Django default when no valid port exists.
+        The port in the URL, or the Django default when the URL has no valid port.
     """
     try:
         parsed_url = urlparse(target_url)
@@ -140,7 +140,7 @@ def extract_port_from_url(target_url: str) -> str:
 
 
 def check_test_db_flag(target_url: str, project_root: Path) -> str | None:
-    """Return a diagnostic when a detected runserver lacks test DB.
+    """Return a diagnostic when a detected runserver is missing `--test-db`.
 
     Args:
         target_url: URL that identifies the expected Django port.
