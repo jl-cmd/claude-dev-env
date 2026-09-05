@@ -1,0 +1,30 @@
+{
+  "source_commit": "f5a984af48df0eb0f87f5211d4e92421c38df91b",
+  "source_directory": "packages/claude-dev-env/.agents/skills",
+  "archive_directory": "skill-archive",
+  "retained_stub": "skill-builder",
+  "requested_name_corrections": {
+    "pr-name-by-compatibility": "pr-name-by-capability"
+  },
+  "skills": {
+    "hitl": "cab2a89bc953f61f14d2a3f36499b62284ff68f0",
+    "autoconverge": "096f70a77c33d0f4ae510394e9f67a105803a450",
+    "pr-cleanup": "af3f862b25b9f4e4b970d297e1c81dbda51f6358",
+    "pr-name-by-capability": "19ba66e219be44cefb6b31fe2cd389f1fb49c5d3",
+    "pr-plain-language-cleanup": "3671c0cf642f78e943408532ffa24092b907a127",
+    "pr-refinement": "b9953bd10e6914eba34a145f84c7b6c569d07d96",
+    "pr-shared-extraction": "b844b34200678e12eecfc220e85ab8235d529834",
+    "pr-small-cl": "44fc73bfc237f73e8ba982d044854b67199b2403",
+    "pr-title-description": "2d1687373a980598b86b41531b7b0d47e919b851",
+    "prototype": "531cebe70c95085fb9be6d8c685d48d13d2a0f34",
+    "rebase": "661f26aa09bc0d8bf41add69ed78a4d35a2b4e97",
+    "review-router": "74be4dbf6bc6099814d8d803b9633a9a0d8536d2",
+    "review-tier": "5c2fcb87206ed875ab922edd8ebc4c38e9e93b32",
+    "run-claude-dev-env": "4bce606f726c37b3065d1d2734e04c64159aeee3",
+    "session-log": "fb415a512aca24372027bf167a50594a2ad0520b",
+    "session-tidy": "1a1c69ff003c61ef30d5da25aad9e964f576fe26",
+    "skill-builder": "dc1ad291f1a8742945325cc3a9cedd000143643e",
+    "source-command-sr-loop": "5aecf311bbf3d5ba0264edf99ddbad38ec70329a",
+    "update": "718a9a828fe9c82de090fc0ab686d5ddfb16c620"
+  }
+}
