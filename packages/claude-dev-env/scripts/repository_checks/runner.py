@@ -1,4 +1,4 @@
-"""Fail-closed orchestration for committed-tree repository checks."""
+"""Fail-closed runner for committed-tree repository checks."""
 
 from __future__ import annotations
 

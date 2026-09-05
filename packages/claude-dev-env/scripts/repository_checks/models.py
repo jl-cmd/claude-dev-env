@@ -22,7 +22,7 @@ class RepositoryFinding:
 
 @dataclass(frozen=True)
 class RepositoryCheckReport:
-    """Sorted findings plus check ids whose own execution failed."""
+    """Sorted findings and the check ids that failed while they ran."""
 
     all_findings: tuple[RepositoryFinding, ...]
     all_failed_check_ids: tuple[str, ...]

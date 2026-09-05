@@ -1,4 +1,4 @@
-"""Provide load_hooks_module with the hook package paths on sys.path."""
+"""Import a hooks module after putting the hook package paths on sys.path."""
 
 from __future__ import annotations
 

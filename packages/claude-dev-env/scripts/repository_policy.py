@@ -28,7 +28,7 @@ class _RepositoryPolicyUsageError(ValueError):
 
 class _RepositoryPolicyArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> Never:
-        """Raise a usage error and return control to the caller.
+        """Raise a usage error for the caller.
 
         Args:
             message: Parser error text.

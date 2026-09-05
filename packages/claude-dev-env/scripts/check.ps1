@@ -1,8 +1,9 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    One-shot quality gate — runs ruff, hooks mypy, pr-loop mypy,
-    process-tree mypy, and the blocking pytest suite from a single entry point.
+    One-shot quality gate. Runs ruff, hooks mypy, pr-loop mypy,
+    process-tree mypy, repository-policy, and the blocking pytest suite from a
+    single entry point.
 
 .DESCRIPTION
     Resolves paths relative to $PSScriptRoot so the script works from any CWD
@@ -11,9 +12,10 @@
     propagates this file). Tools: ruff over hooks/, mypy over hooks blocking
     and validators, mypy-pr-loop over _shared/pr-loop/scripts production
     modules, mypy-process-tree over the shared process-tree kill helper and
-    its constants, and optional pytest over the blocking enforcer suite. Each tool
-    runs sequentially; the first non-zero exit code is preserved as the
-    script's exit code so CI/pre-commit can short-circuit on the first failure.
+    its constants, repository-policy over the committed tree, and optional
+    pytest over the blocking enforcer suite. Each tool runs in sequence. The
+    first non-zero exit code is preserved as the script's exit code so CI and
+    pre-commit can stop on the first failure.
 
 .PARAMETER SkipTests
     Skip the pytest run. Useful during local iteration when you want only the
@@ -25,13 +27,16 @@
 .PARAMETER SkipRuff
     Skip the ruff run.
 
+.PARAMETER SkipRepositoryPolicy
+    Skip the committed-tree repository_policy.py run.
+
 .PARAMETER CommentPolicyBase
     Optional git reference used as the comment-policy baseline.
 
 .OUTPUTS
     Per-tool status lines on stdout. Final summary line:
         CHECK: OK
-        CHECK: FAILED tools=ruff,mypy,mypy-pr-loop,mypy-process-tree,pytest
+        CHECK: FAILED tools=ruff,repository-policy,mypy,mypy-pr-loop,mypy-process-tree,pytest
 #>
 [CmdletBinding()]
 param(
