@@ -19,8 +19,11 @@ from github_pr_command_constants.config.constants import (
     ACTION_EDIT,
     ACTION_FAILED_MESSAGE,
     ACTION_REVIEW,
+    ALL_DURABLE_POST_LINTER_RELATIVE_PATH_PARTS,
     ALL_LINTER_ACTIONS_BY_COMMAND,
     ALL_REVIEW_FLAGS_BY_EVENT,
+    CONFIG_DIR_OVERRIDE_ENVIRONMENT_KEY,
+    DEFAULT_MANAGED_ROOT_DIRECTORY_NAME,
     PACKAGE_ROOT_PARENT_INDEX,
     REVIEW_EVENT_COMMENT,
     SELECTED_ACCOUNT_ENVIRONMENT_KEY,
@@ -59,18 +62,33 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _package_root() -> Path:
-    return Path(__file__).resolve().parents[PACKAGE_ROOT_PARENT_INDEX]
+def _configured_managed_root(all_environment: Mapping[str, str]) -> Path:
+    configured_root_text = all_environment.get(CONFIG_DIR_OVERRIDE_ENVIRONMENT_KEY, "").strip()
+    if not configured_root_text:
+        return Path.home() / DEFAULT_MANAGED_ROOT_DIRECTORY_NAME
+    configured_root = Path(configured_root_text).expanduser()
+    if configured_root.is_absolute():
+        return configured_root
+    return Path.home() / configured_root
 
 
-def _linter_path() -> Path:
-    return _package_root() / "scripts/durable_post_lint.py"
+def _linter_path(all_environment: Mapping[str, str]) -> Path:
+    source_candidate = Path(__file__).resolve().parents[PACKAGE_ROOT_PARENT_INDEX].joinpath(
+        *ALL_DURABLE_POST_LINTER_RELATIVE_PATH_PARTS
+    )
+    if source_candidate.is_file():
+        return source_candidate
+    return _configured_managed_root(all_environment).joinpath(
+        *ALL_DURABLE_POST_LINTER_RELATIVE_PATH_PARTS
+    )
 
 
-def _linter_arguments(arguments: argparse.Namespace) -> list[str]:
+def _linter_arguments(
+    arguments: argparse.Namespace, all_environment: Mapping[str, str]
+) -> list[str]:
     all_arguments = [
         sys.executable,
-        str(_linter_path()),
+        str(_linter_path(all_environment)),
         "--action",
         ALL_LINTER_ACTIONS_BY_COMMAND[arguments.action],
     ]
@@ -139,7 +157,10 @@ def _post_arguments(arguments: argparse.Namespace) -> list[str]:
 
 
 def _shared_environment_key_names() -> tuple[str, str, tuple[str, ...]]:
-    shared_directory = _package_root() / "_shared/pr-loop/scripts"
+    shared_directory = (
+        Path(__file__).resolve().parents[PACKAGE_ROOT_PARENT_INDEX]
+        / "_shared/pr-loop/scripts"
+    )
     shared_directory_text = str(shared_directory)
     if shared_directory_text not in sys.path:
         sys.path.insert(0, shared_directory_text)
@@ -247,7 +268,7 @@ def main(
     """Run one validated pull request action."""
     arguments = _build_parser().parse_args(list(all_arguments))
     completed_lint = command_runner(
-        _linter_arguments(arguments), check=False, shell=False
+        _linter_arguments(arguments, all_environment), check=False, shell=False
     )
     if completed_lint.returncode != 0:
         return completed_lint.returncode
