@@ -435,12 +435,11 @@ export function runCursorRuleSync(pythonCommand, scriptPath, claudeRoot, cursorR
 }
 
 /**
- * List every pstack skill folder in the manifest Claude Code reads.
+ * Refresh the pstack plugin manifest Claude Code reads, when this home has one.
  *
- * pstack is a plugin the user installs, so this run refreshes a folder it finds
- * and skips a home without one. Claude Code loads a skills-directory folder
- * holding `.claude-plugin/plugin.json` as a plugin and namespaces its skills as
- * `pstack:how`; without the manifest, a folder of skill folders loads nothing.
+ * Claude Code loads a skills-directory folder as a plugin when it holds
+ * `.claude-plugin/plugin.json`, and namespaces its skills as `pstack:how`.
+ * Without the manifest, a folder of skill folders loads nothing.
  *
  * @returns {string|null} The manifest path when this run wrote it, else null.
  */
