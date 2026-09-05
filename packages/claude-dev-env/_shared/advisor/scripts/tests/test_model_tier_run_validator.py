@@ -47,7 +47,7 @@ def test_clean_single_spawn_at_top_of_slice_passes() -> None:
     assert validate_model_tier_run(run) is None
 
 
-def test_sol_codex_bind_succeeds_after_fable_when_enabled() -> None:
+def test_astra_codex_bind_succeeds_after_fable_when_enabled() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
@@ -56,35 +56,35 @@ def test_sol_codex_bind_succeeds_after_fable_when_enabled() -> None:
             {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
         ],
         selected_tier=ADVISOR_MODEL_TIER,
-        is_sol_enabled=True,
+        is_astra_enabled=True,
     )
     assert validate_model_tier_run(run) is None
 
 
-def test_fable_success_with_sol_enabled_stops_before_sol() -> None:
+def test_fable_success_with_astra_enabled_stops_before_astra() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
         attempts=[{"tier": "Fable", "result": "spawned"}],
         selected_tier="Fable",
-        is_sol_enabled=True,
+        is_astra_enabled=True,
     )
     assert validate_model_tier_run(run) is None
 
 
-def test_sol_first_walk_raises_when_sol_is_enabled() -> None:
+def test_astra_first_walk_raises_when_astra_is_enabled() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=[ADVISOR_MODEL_TIER, "Fable"],
         attempts=[{"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN}],
         selected_tier=ADVISOR_MODEL_TIER,
-        is_sol_enabled=True,
+        is_astra_enabled=True,
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
 
 
-def test_sol_rung_follows_fable_on_third_party_cli_floor_when_enabled() -> None:
+def test_astra_rung_follows_fable_on_third_party_cli_floor_when_enabled() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
         candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
@@ -93,13 +93,14 @@ def test_sol_rung_follows_fable_on_third_party_cli_floor_when_enabled() -> None:
             {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
         ],
         selected_tier=ADVISOR_MODEL_TIER,
-        is_sol_enabled=True,
+        is_astra_enabled=True,
+        host_profile="ThirdParty",
     )
 
     assert validate_model_tier_run(run) is None
 
 
-def test_sol_codex_result_requires_sol_candidate() -> None:
+def test_astra_codex_result_requires_astra_candidate() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=["Fable"],
@@ -110,7 +111,7 @@ def test_sol_codex_result_requires_sol_candidate() -> None:
         validate_model_tier_run(run)
 
 
-def test_sol_spawned_result_does_not_count_as_codex_success() -> None:
+def test_astra_spawned_result_does_not_count_as_codex_success() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
@@ -119,7 +120,7 @@ def test_sol_spawned_result_does_not_count_as_codex_success() -> None:
             {"tier": ADVISOR_MODEL_TIER, "result": "spawned"},
         ],
         selected_tier=ADVISOR_MODEL_TIER,
-        is_sol_enabled=True,
+        is_astra_enabled=True,
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
@@ -178,7 +179,7 @@ def test_attempts_out_of_ladder_order_raises() -> None:
             {"tier": "Fable", "result": "unavailable"},
         ],
         selected_tier=ADVISOR_MODEL_TIER,
-        is_sol_enabled=True,
+        is_astra_enabled=True,
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
@@ -193,7 +194,7 @@ def test_selected_tier_not_first_spawned_attempt_raises() -> None:
             {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
         ],
         selected_tier="Fable",
-        is_sol_enabled=True,
+        is_astra_enabled=True,
     )
     with pytest.raises(
         ModelTierRunError,
@@ -251,14 +252,14 @@ def test_empty_attempts_with_null_selected_tier_raises() -> None:
         validate_model_tier_run(run)
 
 
-def test_incomplete_fallback_walk_before_sol_raises() -> None:
+def test_incomplete_fallback_walk_before_astra_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
         attempts=[{"tier": "Fable", "result": "unavailable"}],
         selected_tier=None,
-        fallback_reason="stopped after Fable without trying Sol",
-        is_sol_enabled=True,
+        fallback_reason="stopped after Fable without trying Astra",
+        is_astra_enabled=True,
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
@@ -310,8 +311,8 @@ def test_cli_rejects_non_string_host_profile(tmp_path: Path) -> None:
     assert main([str(log_path)]) == 2
 
 
-def test_cli_rejects_non_boolean_sol_enabled(tmp_path: Path) -> None:
-    log_path = tmp_path / "invalid-sol-enabled.json"
+def test_cli_rejects_non_boolean_astra_enabled(tmp_path: Path) -> None:
+    log_path = tmp_path / "invalid-astra-enabled.json"
     log_path.write_text(
         json.dumps(
             {
@@ -319,7 +320,7 @@ def test_cli_rejects_non_boolean_sol_enabled(tmp_path: Path) -> None:
                 "candidate_tiers": ["Fable"],
                 "attempts": [{"tier": "Fable", "result": "spawned"}],
                 "selected_tier": "Fable",
-                "sol_enabled": "false",
+                "astra_enabled": "false",
             }
         ),
         encoding="utf-8",
@@ -333,16 +334,40 @@ def test_cli_rejects_incomplete_fallback_log(tmp_path: Path) -> None:
         json.dumps(
             {
                 "own_tier": "Opus",
-                "candidate_tiers": ["Fable", "Sol"],
+                "candidate_tiers": ["Fable", "Astra"],
                 "attempts": [{"tier": "Fable", "result": "unavailable"}],
                 "selected_tier": None,
                 "fallback_reason": "incomplete",
-                "sol_enabled": True,
+                "astra_enabled": True,
             }
         ),
         encoding="utf-8",
     )
     assert main([str(log_path)]) == 1
+
+
+def test_cli_loads_astra_enabled_fallback_walk(tmp_path: Path) -> None:
+    log_path = tmp_path / "astra-enabled-walk.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                "own_tier": "ThirdParty",
+                "host_profile": "ThirdParty",
+                "candidate_tiers": ["Fable", "Astra"],
+                "attempts": [
+                    {"tier": "Fable", "result": "unavailable"},
+                    {"tier": "Astra", "result": "codex"},
+                ],
+                "selected_tier": "Astra",
+                "astra_enabled": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert main([str(log_path)]) == 0
+    loaded_run = load_model_tier_run_from_json_path(from_path=log_path)
+    assert loaded_run.is_astra_enabled
+    assert loaded_run.selected_tier == "Astra"
 
 
 def test_cli_missing_path_returns_usage_exit_code() -> None:
@@ -472,7 +497,7 @@ def test_claude_host_self_token_is_not_spawn_success_raises() -> None:
         validate_model_tier_run(run)
 
 
-def test_codex_host_sol_in_session_spawn_passes() -> None:
+def test_codex_host_astra_in_session_spawn_passes() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=[ADVISOR_MODEL_TIER],
@@ -483,7 +508,7 @@ def test_codex_host_sol_in_session_spawn_passes() -> None:
     assert validate_model_tier_run(run) is None
 
 
-def test_codex_host_sol_codex_token_counts_as_success() -> None:
+def test_codex_host_astra_codex_token_counts_as_success() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=[ADVISOR_MODEL_TIER],
@@ -496,26 +521,26 @@ def test_codex_host_sol_codex_token_counts_as_success() -> None:
     assert validate_model_tier_run(run) is None
 
 
-def test_codex_host_fable_then_sol_walk_raises() -> None:
+def test_codex_host_fable_then_astra_walk_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
         attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
         selected_tier=ADVISOR_MODEL_TIER,
-        is_sol_enabled=True,
+        is_astra_enabled=True,
         host_profile="Codex",
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
 
 
-def test_codex_host_exhausted_sol_fails_closed() -> None:
+def test_codex_host_exhausted_astra_fails_closed() -> None:
     run = ModelTierRun(
         own_tier="Opus",
         candidate_tiers=[ADVISOR_MODEL_TIER],
         attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "unavailable"}],
         selected_tier=None,
-        fallback_reason="Codex in-session Sol spawn did not bind",
+        fallback_reason="Codex in-session Astra spawn did not bind",
         host_profile="Codex",
     )
     assert validate_model_tier_run(run) is None
@@ -527,9 +552,9 @@ def test_cli_loads_codex_host_profile(tmp_path: Path) -> None:
         json.dumps(
             {
                 "own_tier": "Opus",
-                "candidate_tiers": ["Sol"],
-                "attempts": [{"tier": "Sol", "result": "spawned"}],
-                "selected_tier": "Sol",
+                "candidate_tiers": ["Astra"],
+                "attempts": [{"tier": "Astra", "result": "spawned"}],
+                "selected_tier": "Astra",
                 "host_profile": "Codex",
             }
         ),

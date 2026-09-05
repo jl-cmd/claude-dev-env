@@ -24,15 +24,15 @@ One warm advisor at the strongest tier this session can reach. This session is t
 ## Bind
 
 1. Name the session identity first (protocol **Host profiles**), then walk the model floor.
-2. Claude: Fable first in-session at `ADVISOR_EFFORT` (default low). When Fable is out of usage, bind Sol at the same effort. Codex: Sol in-session. Third-party: headless Fable then Sol. When the host's walk fails, fail closed.
-3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); a native Sol subagent on Codex; one CLI `session_id` on a third-party host via the protocol Claude-chain.
+2. Claude: Fable first in-session at `ADVISOR_EFFORT` (default low). When Fable is out of usage, bind Astra at the same effort. Codex: Astra in-session. Third-party: headless Fable then Astra. When the host's walk fails, fail closed.
+3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); a native Astra subagent on Codex; one CLI `session_id` on a third-party host via the protocol Claude-chain or Astra helper.
 4. A Fable-tier spawn or re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in its prompt (protocol warm-up; `fable_spawn_gate` requires it).
 5. Skip the multi-consumer "who you are" opener — sole consumer.
-6. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound Claude advisor issues ENDORSE / CORRECTION / PLAN / STOP.
+6. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound advisor issues ENDORSE / CORRECTION / PLAN / STOP.
 
-**GOTCHA (Cursor / ThirdParty + Sol):** when the walk reaches Sol or the user asks for Sol, first tool call is `python ~/.claude/_shared/advisor/scripts/codex_sol_advisor.py --bind --enable-sol --cwd <repo-root>` with the charter on stdin — not Agent/Task, not a probe-path search. Details: [`third-party-bind.md`](../../_shared/advisor/reference/third-party-bind.md) GOTCHA and [`sol-rung.md`](../../_shared/advisor/reference/sol-rung.md).
+**GOTCHA (Cursor / ThirdParty + Astra):** when the walk reaches Astra or the user asks for Astra, first tool call is `python ~/.claude/_shared/advisor/scripts/codex_astra_advisor.py --bind --enable-astra --cwd <repo-root>` with the charter on stdin — not Agent/Task, not a probe-path search. Details: [`third-party-bind.md`](../../_shared/advisor/reference/third-party-bind.md) GOTCHA and [`astra-rung.md`](../../_shared/advisor/reference/astra-rung.md).
 
-Full walk, charter, consult packet, Sol routing, and drift re-bind live in the protocol read map and its authoritative `reference/` leaves.
+Full walk, charter, consult packet, Astra routing, and drift re-bind live in the protocol read map and its authoritative `reference/` leaves.
 
 ## Consult
 
@@ -44,6 +44,6 @@ Aim for two consults on a normal task: one after orientation and one after write
 
 ## Constraints
 
-- One bind per session; this session owns spawn, in-session Sol spawn, or CLI bind, drift re-bind, and shutdown.
+- One bind per session; this session owns spawn, in-session Astra spawn, or CLI bind, drift re-bind, and shutdown.
 - Bind at or above the protocol floor for this host.
 - The advisor only answers (messaging); the session runs tools and posts.

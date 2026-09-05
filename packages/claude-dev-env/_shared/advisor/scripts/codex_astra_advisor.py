@@ -1,4 +1,4 @@
-"""Bind and consult a read-only Codex CLI session at Sol low effort."""
+"""Bind and consult a read-only Codex CLI session at Astra low effort."""
 
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ _config_directory_text = str(_config_directory)
 if _config_directory_text not in sys.path:
     sys.path.insert(0, _config_directory_text)
 
-from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
+from advisor_scripts_constants.astra_advisor_constants import (
     ADVISOR_CODEX_EXECUTABLE_ENV_VAR,
-    ALL_SOL_TRUTHY_VALUES,
+    ALL_ASTRA_TRUTHY_VALUES,
     CLAUDE_CONFIG_DIRECTORY_NAME,
     CODEX_CONFIG_FLAG,
     CODEX_EXECUTABLE,
@@ -38,23 +38,23 @@ from advisor_scripts_constants.sol_advisor_constants import (  # noqa: E402
     USAGE_PROBE_PACKAGE_DIRECTORY_NAME,
     USAGE_PROBE_SCRIPTS_DIRECTORY_NAME,
     USAGE_PROBE_SHARED_DIRECTORY_NAME,
-    SOL_BIND_FAILURE_REASON,
-    SOL_CODEX_TIMEOUT_REASON,
-    SOL_CODEX_TIMEOUT_SECONDS,
-    SOL_EFFORT_FLAG,
-    SOL_ENABLE_FLAG,
-    SOL_ENV_VAR,
-    SOL_EXECUTABLE_NOT_FOUND_REASON,
-    SOL_FALLBACK_KIND_BROKEN,
-    SOL_FALLBACK_KIND_DECLINED,
-    SOL_INVALID_SIGNAL_REASON,
-    SOL_MALFORMED_JSONL_REASON,
-    SOL_MISSING_SESSION_REASON,
-    SOL_PREFLIGHT_FAILURE_REASON,
-    SOL_PROBE_TIMEOUT_REASON,
-    SOL_REPLY_FAILURE_REASON,
-    SOL_SESSION_ID_METAVAR,
-    SOL_USAGE_PROBE_TIMEOUT_SECONDS,
+    ASTRA_BIND_FAILURE_REASON,
+    ASTRA_CODEX_TIMEOUT_REASON,
+    ASTRA_CODEX_TIMEOUT_SECONDS,
+    ASTRA_EFFORT_FLAG,
+    ASTRA_ENABLE_FLAG,
+    ASTRA_ENV_VAR,
+    ASTRA_EXECUTABLE_NOT_FOUND_REASON,
+    ASTRA_FALLBACK_KIND_BROKEN,
+    ASTRA_FALLBACK_KIND_DECLINED,
+    ASTRA_INVALID_SIGNAL_REASON,
+    ASTRA_MALFORMED_JSONL_REASON,
+    ASTRA_MISSING_SESSION_REASON,
+    ASTRA_PREFLIGHT_FAILURE_REASON,
+    ASTRA_PROBE_TIMEOUT_REASON,
+    ASTRA_REPLY_FAILURE_REASON,
+    ASTRA_SESSION_ID_METAVAR,
+    ASTRA_USAGE_PROBE_TIMEOUT_SECONDS,
 )
 from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
     ADVISOR_CODEX_MODEL_ID,
@@ -71,8 +71,8 @@ from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
 
 
 @dataclass(frozen=True)
-class SolPreflight:
-    """Record the weekly-meter decision made before a Sol attempt."""
+class AstraPreflight:
+    """Record the weekly-meter decision made before an Astra attempt."""
 
     eligible: bool
     percent_left: float | None
@@ -81,7 +81,7 @@ class SolPreflight:
 
 
 @dataclass(frozen=True)
-class CodexSolAdvisorReply:
+class CodexAstraAdvisorReply:
     """Record a parsed Codex advisor response or an explicit fallback."""
 
     session_id: str | None
@@ -90,7 +90,7 @@ class CodexSolAdvisorReply:
     reason: str | None
     is_fallback: bool
     signal: str | None
-    sol_enabled: bool
+    astra_enabled: bool
     selected_tier: str
     outcome: str
     fallback_kind: str | None
@@ -99,24 +99,24 @@ class CodexSolAdvisorReply:
 def _preflight_fallback(
     reason: str,
     percent_left: float | None,
-    fallback_kind: str = SOL_FALLBACK_KIND_BROKEN,
-) -> SolPreflight:
-    return SolPreflight(False, percent_left, reason, fallback_kind)
+    fallback_kind: str = ASTRA_FALLBACK_KIND_BROKEN,
+) -> AstraPreflight:
+    return AstraPreflight(False, percent_left, reason, fallback_kind)
 
 
 def _reply_fallback(
     reason: str,
-    is_sol_enabled: bool,
-    fallback_kind: str | None = SOL_FALLBACK_KIND_BROKEN,
-) -> CodexSolAdvisorReply:
-    return CodexSolAdvisorReply(
+    is_astra_enabled: bool,
+    fallback_kind: str | None = ASTRA_FALLBACK_KIND_BROKEN,
+) -> CodexAstraAdvisorReply:
+    return CodexAstraAdvisorReply(
         session_id=None,
         guidance=None,
         successful=False,
         reason=reason,
         is_fallback=True,
         signal=None,
-        sol_enabled=is_sol_enabled,
+        astra_enabled=is_astra_enabled,
         selected_tier=ADVISOR_FALLBACK_TIER,
         outcome=ADVISOR_FALLBACK_RESULT,
         fallback_kind=fallback_kind,
@@ -127,15 +127,15 @@ def _reply_success(
     session_id: str,
     guidance: str,
     signal: str,
-) -> CodexSolAdvisorReply:
-    return CodexSolAdvisorReply(
+) -> CodexAstraAdvisorReply:
+    return CodexAstraAdvisorReply(
         session_id=session_id,
         guidance=guidance,
         successful=True,
         reason=None,
         is_fallback=False,
         signal=signal,
-        sol_enabled=True,
+        astra_enabled=True,
         selected_tier=ADVISOR_MODEL_TIER,
         outcome=CODEX_BIND_SUCCESS_TOKEN,
         fallback_kind=None,
@@ -148,21 +148,21 @@ def _resolved_setting_by_name(
     return os.environ if setting_by_name is None else setting_by_name
 
 
-def is_sol_advisor_enabled(
+def is_astra_advisor_enabled(
     setting_by_name: Mapping[str, str] | None,
 ) -> bool:
-    """Return whether the optional Sol rung is enabled.
+    """Return whether the optional Astra rung is enabled.
 
     Args:
         setting_by_name: Optional environment-like settings mapping.
 
     Returns:
-        Whether the Sol feature flag contains a recognized truthy value.
+        Whether the Astra feature flag contains a recognized truthy value.
     """
     resolved_setting_by_name = _resolved_setting_by_name(setting_by_name)
     return (
-        resolved_setting_by_name.get(SOL_ENV_VAR, "").strip().lower()
-        in ALL_SOL_TRUTHY_VALUES
+        resolved_setting_by_name.get(ASTRA_ENV_VAR, "").strip().lower()
+        in ALL_ASTRA_TRUTHY_VALUES
     )
 
 
@@ -181,11 +181,11 @@ def resolve_advisor_effort(
         # ok: default low
         resolve_advisor_effort({"ADVISOR_EFFORT": "nope"})
         # ok: default low
-        resolve_advisor_effort({"ADVISOR_SOL_EFFORT": "high"})
+        resolve_advisor_effort({"ADVISOR_ASTRA_EFFORT": "high"})
         # ok: default low
 
-    Fable and Sol both read this value. Unset and unrecognized values use
-    low. The Sol-only name does not set effort.
+    Fable and Astra both read this value. Unset and unrecognized values use
+    low. The Astra-only name does not set effort.
 
     Args:
         setting_by_name: Optional environment-like settings mapping.
@@ -210,7 +210,7 @@ def resolve_usage_probe_path(home_directory: Path) -> Path:
         resolve_usage_probe_path(Path.home())
             -> ~/.claude/_shared/pr-loop/scripts/codex_usage_probe.py
 
-    This is the only probe path the Sol helper uses. Do not search worktrees
+    This is the only probe path the Astra helper uses. Do not search worktrees
     or archived ``skills/codex-review`` trees for a second copy.
 
     Args:
@@ -257,10 +257,10 @@ def _parse_probe_percent(stdout_text: str) -> tuple[float | None, str | None]:
     return percent_left, None
 
 
-def run_sol_preflight(
+def run_astra_preflight(
     probe_path: Path,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
-) -> SolPreflight:
+) -> AstraPreflight:
     """Run the existing usage probe and require a finite meter above its gate.
 
     Args:
@@ -277,31 +277,31 @@ def run_sol_preflight(
             text=True,
             check=False,
             shell=False,
-            timeout=SOL_USAGE_PROBE_TIMEOUT_SECONDS,
+            timeout=ASTRA_USAGE_PROBE_TIMEOUT_SECONDS,
         )
         if completed_process.returncode != 0:
             return _preflight_fallback(
-                f"{SOL_PREFLIGHT_FAILURE_REASON}: probe exit {completed_process.returncode}",
+                f"{ASTRA_PREFLIGHT_FAILURE_REASON}: probe exit {completed_process.returncode}",
                 None,
             )
         percent_left, parse_reason = _parse_probe_percent(completed_process.stdout)
         if parse_reason is not None:
             return _preflight_fallback(
-                f"{SOL_PREFLIGHT_FAILURE_REASON}: {parse_reason}", None
+                f"{ASTRA_PREFLIGHT_FAILURE_REASON}: {parse_reason}", None
             )
         usage_gate = _load_usage_gate(probe_path)
         if not callable(usage_gate) or percent_left is None:
             return _preflight_fallback(
-                f"{SOL_PREFLIGHT_FAILURE_REASON}: usage meter is unknown", None
+                f"{ASTRA_PREFLIGHT_FAILURE_REASON}: usage meter is unknown", None
             )
         if not usage_gate(percent_left):
             return _preflight_fallback(
-                f"{SOL_PREFLIGHT_FAILURE_REASON}: usage meter is at or below the gate",
+                f"{ASTRA_PREFLIGHT_FAILURE_REASON}: usage meter is at or below the gate",
                 percent_left,
-                fallback_kind=SOL_FALLBACK_KIND_DECLINED,
+                fallback_kind=ASTRA_FALLBACK_KIND_DECLINED,
             )
     except subprocess.TimeoutExpired as probe_error:
-        return _preflight_fallback(f"{SOL_PROBE_TIMEOUT_REASON}: {probe_error}", None)
+        return _preflight_fallback(f"{ASTRA_PROBE_TIMEOUT_REASON}: {probe_error}", None)
     except (
         OSError,
         subprocess.SubprocessError,
@@ -311,9 +311,9 @@ def run_sol_preflight(
         ValueError,
     ) as probe_error:
         return _preflight_fallback(
-            f"{SOL_PREFLIGHT_FAILURE_REASON}: {probe_error}", None
+            f"{ASTRA_PREFLIGHT_FAILURE_REASON}: {probe_error}", None
         )
-    return SolPreflight(True, percent_left, "usage meter is above the Sol gate")
+    return AstraPreflight(True, percent_left, "usage meter is above the Astra gate")
 
 
 def resolve_codex_executable(
@@ -383,14 +383,14 @@ def _guidance_signal(guidance: str) -> str | None:
 def parse_codex_jsonl_reply(
     jsonl_text: str,
     existing_session_id: str | None,
-    is_sol_enabled: bool,
-) -> CodexSolAdvisorReply:
+    is_astra_enabled: bool,
+) -> CodexAstraAdvisorReply:
     """Parse strict Codex JSONL into a session id and final guidance.
 
     Args:
         jsonl_text: JSONL emitted by the Codex CLI.
         existing_session_id: Optional session id required on resume.
-        is_sol_enabled: Whether the attempted route had Sol enabled.
+        is_astra_enabled: Whether the attempted route had Astra enabled.
 
     Returns:
         The parsed guidance or an explicit Fable fallback reply.
@@ -403,7 +403,7 @@ def parse_codex_jsonl_reply(
                 continue
             event = json.loads(each_line)
             if not isinstance(event, dict):
-                return _reply_fallback(SOL_MALFORMED_JSONL_REASON, is_sol_enabled)
+                return _reply_fallback(ASTRA_MALFORMED_JSONL_REASON, is_astra_enabled)
             if event.get("type") == "thread.started":
                 thread_id = event.get("thread_id")
                 if isinstance(thread_id, str) and thread_id.strip():
@@ -417,47 +417,47 @@ def parse_codex_jsonl_reply(
             ):
                 final_guidance = completed_event["text"].strip()
     except (TypeError, json.JSONDecodeError):
-        return _reply_fallback(SOL_MALFORMED_JSONL_REASON, is_sol_enabled)
+        return _reply_fallback(ASTRA_MALFORMED_JSONL_REASON, is_astra_enabled)
     if discovered_session_id is None:
-        return _reply_fallback(SOL_MISSING_SESSION_REASON, is_sol_enabled)
+        return _reply_fallback(ASTRA_MISSING_SESSION_REASON, is_astra_enabled)
     if (
         existing_session_id is not None
         and discovered_session_id != existing_session_id
     ):
-        return _reply_fallback(SOL_MISSING_SESSION_REASON, is_sol_enabled)
+        return _reply_fallback(ASTRA_MISSING_SESSION_REASON, is_astra_enabled)
     if not final_guidance:
-        return _reply_fallback(SOL_REPLY_FAILURE_REASON, is_sol_enabled)
+        return _reply_fallback(ASTRA_REPLY_FAILURE_REASON, is_astra_enabled)
     guidance_signal = _guidance_signal(final_guidance)
     if guidance_signal is None:
-        return _reply_fallback(SOL_INVALID_SIGNAL_REASON, is_sol_enabled)
+        return _reply_fallback(ASTRA_INVALID_SIGNAL_REASON, is_astra_enabled)
     return _reply_success(discovered_session_id, final_guidance, guidance_signal)
 
 
-def _resolve_sol_preflight(
-    preflight: SolPreflight | None,
+def _resolve_astra_preflight(
+    preflight: AstraPreflight | None,
     probe_path: Path | None,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
-) -> SolPreflight:
+) -> AstraPreflight:
     if preflight is not None:
         return preflight
     resolved_probe_path = (
         resolve_usage_probe_path(Path.home()) if probe_path is None else probe_path
     )
-    return run_sol_preflight(
+    return run_astra_preflight(
         probe_path=resolved_probe_path, process_runner=process_runner
     )
 
 
-def run_codex_sol_advisor(
+def run_codex_astra_advisor(
     prompt: str,
     working_directory: Path,
-    preflight: SolPreflight | None,
+    preflight: AstraPreflight | None,
     probe_path: Path | None,
     setting_by_name: Mapping[str, str] | None,
     session_id: str | None,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
-) -> CodexSolAdvisorReply:
-    """Run one usage-gated read-only Sol bind or resume attempt.
+) -> CodexAstraAdvisorReply:
+    """Run one usage-gated read-only Astra bind or resume attempt.
 
     Args:
         prompt: Advisor charter or delta consult sent to Codex.
@@ -469,18 +469,18 @@ def run_codex_sol_advisor(
         process_runner: Callable used to execute the probe and Codex.
 
     Returns:
-        The parsed Sol guidance or an explicit Fable fallback reply.
+        The parsed Astra guidance or an explicit Fable fallback reply.
     """
-    if not is_sol_advisor_enabled(setting_by_name):
+    if not is_astra_advisor_enabled(setting_by_name):
         return _reply_fallback(
-            "Sol advisor flag is disabled",
+            "Astra advisor flag is disabled",
             False,
-            fallback_kind=SOL_FALLBACK_KIND_DECLINED,
+            fallback_kind=ASTRA_FALLBACK_KIND_DECLINED,
         )
     codex_executable = resolve_codex_executable(setting_by_name)
     if codex_executable is None:
-        return _reply_fallback(SOL_EXECUTABLE_NOT_FOUND_REASON, True)
-    resolved_preflight = _resolve_sol_preflight(preflight, probe_path, process_runner)
+        return _reply_fallback(ASTRA_EXECUTABLE_NOT_FOUND_REASON, True)
+    resolved_preflight = _resolve_astra_preflight(preflight, probe_path, process_runner)
     if not resolved_preflight.eligible:
         return _reply_fallback(
             resolved_preflight.reason,
@@ -500,46 +500,46 @@ def run_codex_sol_advisor(
             text=True,
             check=False,
             shell=False,
-            timeout=SOL_CODEX_TIMEOUT_SECONDS,
+            timeout=ASTRA_CODEX_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired as bind_error:
-        return _reply_fallback(f"{SOL_CODEX_TIMEOUT_REASON}: {bind_error}", True)
+        return _reply_fallback(f"{ASTRA_CODEX_TIMEOUT_REASON}: {bind_error}", True)
     except (OSError, subprocess.SubprocessError) as bind_error:
-        return _reply_fallback(f"{SOL_BIND_FAILURE_REASON}: {bind_error}", True)
+        return _reply_fallback(f"{ASTRA_BIND_FAILURE_REASON}: {bind_error}", True)
     if completed_process.returncode != 0:
         return _reply_fallback(
-            f"{SOL_BIND_FAILURE_REASON}: process exit {completed_process.returncode}",
+            f"{ASTRA_BIND_FAILURE_REASON}: process exit {completed_process.returncode}",
             True,
         )
     return parse_codex_jsonl_reply(
         completed_process.stdout,
         existing_session_id=session_id,
-        is_sol_enabled=True,
+        is_astra_enabled=True,
     )
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    """Build the command-line parser for Sol bind and resume.
+    """Build the command-line parser for Astra bind and resume.
 
     Returns:
         The parser for the helper's bind and resume modes.
     """
     argument_parser = argparse.ArgumentParser(
-        description="Bind or consult a read-only Codex Sol advisor."
+        description="Bind or consult a read-only Codex Astra advisor."
     )
     mode_group = argument_parser.add_mutually_exclusive_group(required=True)
     mode_group.add_argument("--bind", action="store_true")
-    mode_group.add_argument("--resume", metavar=SOL_SESSION_ID_METAVAR)
+    mode_group.add_argument("--resume", metavar=ASTRA_SESSION_ID_METAVAR)
     argument_parser.add_argument("--cwd", required=True, type=Path)
     argument_parser.add_argument(
-        SOL_ENABLE_FLAG,
-        dest="is_sol_requested",
+        ASTRA_ENABLE_FLAG,
+        dest="is_astra_requested",
         action="store_true",
-        help="Open the Sol rung for this invocation without an environment flag.",
+        help="Open the Astra rung for this invocation without an environment flag.",
     )
     argument_parser.add_argument(
-        SOL_EFFORT_FLAG,
-        dest="sol_effort",
+        ASTRA_EFFORT_FLAG,
+        dest="astra_effort",
         choices=ALL_ADVISOR_EFFORT_LEVELS,
         default=None,
         help="Shared advisor effort for this invocation.",
@@ -554,15 +554,15 @@ def main(all_cli_arguments: Sequence[str]) -> int:
         all_cli_arguments: Command-line arguments without the program name.
 
     Returns:
-        Zero for a successful Sol response, or one for an explicit fallback.
+        Zero for a successful Astra response, or one for an explicit fallback.
     """
     parsed_arguments = build_argument_parser().parse_args(list(all_cli_arguments))
     setting_by_name: dict[str, str] = dict(os.environ)
-    if parsed_arguments.is_sol_requested:
-        setting_by_name[SOL_ENV_VAR] = "1"
-    if parsed_arguments.sol_effort is not None:
-        setting_by_name[ADVISOR_EFFORT_ENV_VAR] = parsed_arguments.sol_effort
-    advisor_reply = run_codex_sol_advisor(
+    if parsed_arguments.is_astra_requested:
+        setting_by_name[ASTRA_ENV_VAR] = "1"
+    if parsed_arguments.astra_effort is not None:
+        setting_by_name[ADVISOR_EFFORT_ENV_VAR] = parsed_arguments.astra_effort
+    advisor_reply = run_codex_astra_advisor(
         prompt=sys.stdin.read(),
         working_directory=parsed_arguments.cwd,
         preflight=None,

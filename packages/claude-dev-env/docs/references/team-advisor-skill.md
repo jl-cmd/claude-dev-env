@@ -1,6 +1,6 @@
 # Team-Advisor Skill
 
-`/team-advisor` binds one standing warm advisor for this session at the strongest reachable tier. This skill is the selected custom reproduction path for advisor behavior: it forwards explicit packets to a warm Agent/SendMessage advisor or the read-only `codex_sol_advisor.py` path across many decision points.
+`/team-advisor` binds one standing warm advisor for this session at the strongest reachable tier. This skill is the selected custom reproduction path for advisor behavior: it forwards explicit packets to a warm Agent/SendMessage advisor or the read-only `codex_astra_advisor.py` path across many decision points.
 
 ## Refs
 
@@ -17,4 +17,4 @@ Follow the call rules in `advisor-tool.md` (orientation first, then consult befo
 
 ## Selected path
 
-`/team-advisor` is the repository's advisor implementation. It provides explicit first-consult packets, delta consults, a standing warm reviewer, an in-session Sol spawn on Codex, and a read-only Sol CLI option.
+`/team-advisor` is the repository's advisor implementation. It provides explicit first-consult packets, delta consults, a standing warm reviewer, an in-session Astra spawn on Codex, and a read-only Astra CLI option.

@@ -105,10 +105,21 @@ def test_sendmessage_reply_wait_is_positive_bound() -> None:
     assert ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS == 120
 
 
-def test_resolve_codex_model_id_maps_sol() -> None:
-    assert resolve_codex_model_id(f" {ADVISOR_MODEL_TIER.lower()} ") == (
-        ADVISOR_CODEX_MODEL_ID
-    )
+@pytest.mark.parametrize("tier_name", ["Astra", "astra", "ASTRA", " Astra "])
+def test_resolve_codex_model_id_maps_astra(tier_name: str) -> None:
+    assert ADVISOR_MODEL_TIER == "Astra"
+    assert ADVISOR_CODEX_MODEL_ID == "gpt-6-astra"
+    assert resolve_codex_model_id(tier_name) == "gpt-6-astra"
+
+
+def test_resolve_codex_model_id_rejects_old_sol_tier() -> None:
+    with pytest.raises(ValueError, match="not a known model tier"):
+        resolve_codex_model_id("Sol")
+
+
+def test_resolve_cli_model_id_rejects_astra_as_a_claude_alias() -> None:
+    with pytest.raises(ValueError, match="not a known model tier"):
+        resolve_cli_model_id("Astra")
 
 
 def test_resolve_codex_model_id_rejects_claude_tier() -> None:
@@ -132,6 +143,7 @@ def test_cli_model_alias_map_keys_match_known_tiers() -> None:
 def test_canonical_tier_name_strips_and_normalizes() -> None:
     assert canonical_tier_name(" opus ") == "Opus"
     assert canonical_tier_name("thirdparty") == "ThirdParty"
+    assert canonical_tier_name(" astra ") == "Astra"
     assert canonical_tier_name("") is None
     assert canonical_tier_name("Titan") is None
 

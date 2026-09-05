@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-ADVISOR_MODEL_TIER: str = "Sol"
-ADVISOR_CODEX_MODEL_ID: str = "gpt-5.6-sol"
+ADVISOR_MODEL_TIER: str = "Astra"
+ADVISOR_CODEX_MODEL_ID: str = "gpt-6-astra"
 ADVISOR_FALLBACK_TIER: str = "Fable"
 ADVISOR_FALLBACK_RESULT: str = "fable"
 ADVISOR_EFFORT_ENV_VAR: str = "ADVISOR_EFFORT"

@@ -19,9 +19,9 @@ The sections below hold the standing rules; open a reference file at the moment 
 |---|---|
 | Naming the session identity | [`reference/identity.md`](reference/identity.md) — Claude, Codex, or neither |
 | Binding on a Claude host | [`reference/warm-up.md`](reference/warm-up.md) — spawn fields, Fable token, charter |
-| Binding on a Codex host | [`reference/identity.md`](reference/identity.md) — in-session Sol spawn |
+| Binding on a Codex host | [`reference/identity.md`](reference/identity.md) — in-session Astra spawn |
 | Binding from a third-party host | [`reference/third-party-bind.md`](reference/third-party-bind.md) — CLI bind steps, fail-closed rule |
-| Fable is out of usage | [`reference/sol-rung.md`](reference/sol-rung.md) — Sol fallback at shared effort |
+| Fable is out of usage | [`reference/astra-rung.md`](reference/astra-rung.md) — Astra fallback at shared effort |
 | Composing a consult | [`reference/consult-format.md`](reference/consult-format.md) — packet, new-evidence and report-back rules |
 | Assembling an executor spawn prompt | [`reference/advisor-block.md`](reference/advisor-block.md) — the paste parts |
 | Advisor drifts, dies, or the task pivots | [`reference/lifecycle.md`](reference/lifecycle.md) — re-spawn and re-bind steps |
@@ -47,67 +47,67 @@ Mechanical override for scripts:
 
 ### Shared effort — any host
 
-Fable and Sol both read `ADVISOR_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`). The default is `low`.
-Pass `--effort <level>` on the Sol helper to set effort for that Sol run.
+Fable and Astra both read `ADVISOR_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`). The default is `low`.
+Pass `--effort <level>` on the Astra helper to set effort for that Astra run.
 Pass `--effort <level>` on the Claude CLI bind for Fable. An unset or unrecognized value uses `low`.
 
-### Sol rung
+### Astra rung
 
-On Claude and ThirdParty: when Fable is out of usage, bind Sol through the Codex helper.
-Open that attempt with `ADVISOR_SOL=1` (or `true` / `yes` / `on`) in the environment, or pass `--enable-sol` on the helper invocation.
+On Claude and ThirdParty: when Fable is out of usage, bind Astra through the Codex helper.
+Open that attempt with `ADVISOR_ASTRA=1` (or `true` / `yes` / `on`) in the environment, or pass `--enable-astra` on the helper invocation.
 Flag off both ways: fail closed when Fable did not bind.
-Flag on: run the Codex preflight and bind per [`reference/sol-rung.md`](reference/sol-rung.md); a failed preflight fails closed when Fable did not bind.
+Flag on: run the Codex preflight and bind per [`reference/astra-rung.md`](reference/astra-rung.md); a failed preflight fails closed when Fable did not bind.
 
-On Codex: Sol is the in-session default. The `ADVISOR_SOL` flag is not required. Fail closed when that spawn does not bind.
+On Codex: Astra is the in-session default. The `ADVISOR_ASTRA` flag is not required. Fail closed when that spawn does not bind.
 
 ### Claude host
 
-Use the **Model floor** ladder below (Fable first, then Sol when Fable is out of usage).
-Warm-up spawns `subagent_type: session-advisor` via the Agent tool; consults go through `SendMessage` to that warm agent.
+Use the **Model floor** ladder below (Fable first, then Astra when Fable is out of usage).
+Warm-up spawns `subagent_type: session-advisor` via the Agent tool for Fable; consults go through `SendMessage` to that warm agent. Astra uses the Codex helper.
 Assemble and paste each executor's Advisor block per the **Advisor block** section.
 
 ### Codex host
 
-Spawn a native in-session Sol subagent at `resolve_codex_model_id("Sol")`.
-Walk `candidate_tiers = ["Sol"]`. Record `{tier: "Sol", result: "spawned"}` on success.
-**Fail closed:** when Sol does not bind, set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop**.
-Do not walk Fable on a Codex host. Consults stay in-session with that Sol subagent.
+Spawn a native in-session Astra subagent at `resolve_codex_model_id("Astra")`.
+Walk `candidate_tiers = ["Astra"]`. Record `{tier: "Astra", result: "spawned"}` on success.
+**Fail closed:** when Astra does not bind, set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop**.
+Do not walk Fable on a Codex host. Consults stay in-session with that Astra subagent.
 Assemble and paste each executor's Advisor block per the **Advisor block** section.
 
 ### Third-party host
 
 On a third-party (non-Claude, non-Codex) harness, the shared CLI Claude-chain is the one path to a Claude advisor: bind Fable through it, per [`reference/third-party-bind.md`](reference/third-party-bind.md).
 The bound Claude session is the advisor; this third-party session stays the executor.
-Walk `candidate_tiers = ["Fable"]`. When Fable is out of usage, the sol rung binds after Fable (`candidate_tiers = ["Fable", "Sol"]`).
-**Cursor Sol first shot:** when the walk reaches Sol (or the user asks for Sol), bind through `codex_sol_advisor.py --bind --enable-sol` on the first tool call (see the GOTCHA in [`reference/third-party-bind.md`](reference/third-party-bind.md)) — not the Agent tool, and not a probe-path hunt.
+Walk `candidate_tiers = ["Fable"]`. When Fable is out of usage, the Astra rung binds after Fable (`candidate_tiers = ["Fable", "Astra"]`).
+**Cursor Astra first shot:** when the walk reaches Astra (or the user asks for Astra), bind through `codex_astra_advisor.py --bind --enable-astra` on the first tool call (see the GOTCHA in [`reference/third-party-bind.md`](reference/third-party-bind.md)) — not the Agent tool, and not a probe-path hunt.
 **Fail closed:** when every candidate fails, set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop** — ENDORSE / CORRECTION / PLAN / STOP come only from a bound advisor.
 Executors report to the orchestrating session; that session consults the bound advisor and relays the four-signal reply.
 
 ## Model floor
 
-On Claude and ThirdParty the advisor ladder is `Fable` first, then sol (flag-gated, Codex CLI) when Fable is out of usage.
-On Codex the walk is Sol only, in-session.
+On Claude and ThirdParty the advisor ladder is `Fable` first, then Astra (flag-gated, Codex CLI) when Fable is out of usage.
+On Codex the walk is Astra only, in-session.
 Opus is not an advisor candidate. `Sonnet` and `Haiku` are executor tiers only.
 Consumer `own_tier` is recorded on the spawn-walk log; it does not add Opus to the advisor walk.
 Tier names are canonical Title Case; the validator accepts any letter case and normalizes to Title Case.
-Try binds top-down. Each try resolves its candidate tier to the short model alias via the tier-to-alias map in [`reference/cli-chain.md`](reference/cli-chain.md).
+Try binds top-down. Fable resolves to the short model alias in [`reference/cli-chain.md`](reference/cli-chain.md); Astra resolves through `resolve_codex_model_id("Astra")` to `gpt-6-astra`.
 The advisor is created at `selected_tier` — the first ladder tier that binds.
-When Fable fails on a Claude host, try Sol if the flag is on, else fail closed. The CLI chain is the Fable bind path on a third-party host and the Claude-host fallback for Fable; it does not bind Opus as advisor.
-On a Codex host a failed Sol spawn fails closed per **Host profiles → Codex host**.
-On a third-party host the CLI chain is already the primary path, so a failed Fable (and Sol, when enabled) walk fails closed per **Host profiles → Third-party host**.
+When Fable fails on a Claude host, try Astra if the flag is on, else fail closed. The CLI chain is the Fable bind path on a third-party host and the Claude-host fallback for Fable; it does not bind Opus as advisor.
+On a Codex host a failed Astra spawn fails closed per **Host profiles → Codex host**.
+On a third-party host the CLI chain is already the primary path, so a failed Fable (and Astra, when enabled) walk fails closed per **Host profiles → Third-party host**.
 
 Emit a structured spawn-walk log so the walk can be checked mechanically: [`reference/spawn-walk-log.md`](reference/spawn-walk-log.md).
 The validator checks ladder shape only; host policy sits on top.
 
-**Equal-tier pairings.** Bind Fable for an independent second pass on irreversible or security-sensitive work. The advisor is Fable or Sol.
+**Equal-tier pairings.** Bind Fable for an independent second pass on irreversible or security-sensitive work. The advisor is Fable or Astra.
 
 ## Warm-up (once per session)
 
-On a **Claude host**, walk the candidate tiers top-down, spawning `session-advisor` in the background at each candidate's alias with the charter as its prompt, stopping at the first successful spawn.
+On a **Claude host**, spawn `session-advisor` at the Fable alias with the charter as its prompt. When Fable is out of usage and the Astra rung is open, bind Astra through the Codex helper instead.
 A **Fable**-tier try carries the exact token `FABLE-SPAWN-AUTHORIZED` in its prompt — `hooks/blocking/fable_spawn_gate.py` denies a Fable-tier spawn without it.
 Full spawn fields and the charter template: [`reference/warm-up.md`](reference/warm-up.md).
 
-On a **Codex host**, spawn a native in-session Sol subagent with the same charter. Bind fields: [`reference/identity.md`](reference/identity.md) and [`reference/warm-up.md`](reference/warm-up.md).
+On a **Codex host**, spawn a native in-session Astra subagent with the same charter. Bind fields: [`reference/identity.md`](reference/identity.md) and [`reference/warm-up.md`](reference/warm-up.md).
 
 On a **third-party host**, bind per [`reference/third-party-bind.md`](reference/third-party-bind.md) and charter the CLI session with the same charter — the reply contract is the same, and consults travel through the CLI runner.
 
@@ -140,7 +140,7 @@ Modes and failover, the tier-to-alias table, brief piping, and `--resume` sessio
 
 **Third-party host:** the primary bind and consult path; the walk order and fail-closed rule live in [`reference/third-party-bind.md`](reference/third-party-bind.md).
 
-**Codex host:** do not use this runner as the primary path. Sol binds in-session.
+**Codex host:** do not use this runner as the primary path. Astra binds in-session.
 
 **Claude host:** fall back to this runner exactly when one of these holds:
 - The Agent-tool spawn errors at every candidate tier down to the floor — the tool itself is unavailable.
