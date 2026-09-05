@@ -9,18 +9,6 @@ const canonicalContractSource = readFileSync(
   resolve(THIS_DIRECTORY, '../../../../_shared/pr-loop/preflight-proposal.md'),
   'utf8',
 )
-const sharedSkillSource = readFileSync(
-  resolve(THIS_DIRECTORY, '../../pr-shared-extraction/SKILL.md'),
-  'utf8',
-)
-const capabilitySkillSource = readFileSync(
-  resolve(THIS_DIRECTORY, '../../pr-name-by-capability/SKILL.md'),
-  'utf8',
-)
-const capabilityTaskSeedsSource = readFileSync(
-  resolve(THIS_DIRECTORY, '../../pr-name-by-capability/reference/task-seeds.md'),
-  'utf8',
-)
 const reviewSkillSource = readFileSync(
   resolve(THIS_DIRECTORY, '../../e-code-review/SKILL.md'),
   'utf8',
@@ -29,45 +17,6 @@ const reviewProposalSource = readFileSync(
   resolve(THIS_DIRECTORY, '../../e-code-review/reference/preflight-proposal.md'),
   'utf8',
 )
-
-const allSkillContracts = [
-  {
-    name: 'shared extraction audit',
-    skillSource: sharedSkillSource,
-    invocationPattern: /pr-shared-extraction preflight-proposal/,
-    classificationPattern: /priority and target/,
-    expectedDefaultBehavior: 'applies the prioritized fix band by default',
-  },
-  {
-    name: 'name by capability audit',
-    skillSource: capabilitySkillSource,
-    invocationPattern: /pr-name-by-capability preflight-proposal/,
-    classificationPattern: /violation or OK-driver classification/,
-    expectedDefaultBehavior: 'applies the suggested rename direction by default',
-  },
-]
-
-function assertProposalAdapter(skillContract) {
-  const preflightRoutingOffset = skillContract.skillSource.indexOf('`preflight-proposal`')
-  const reportOnlyRoutingOffset = skillContract.skillSource.indexOf('`audit-only`')
-
-  assert.ok(preflightRoutingOffset >= 0, `${skillContract.name} selects proposal mode`)
-  assert.ok(preflightRoutingOffset < reportOnlyRoutingOffset, `${skillContract.name} routes proposal mode first`)
-  assert.match(skillContract.skillSource, skillContract.invocationPattern)
-  assert.match(skillContract.skillSource, skillContract.classificationPattern)
-  assert.match(skillContract.skillSource, new RegExp(skillContract.expectedDefaultBehavior))
-}
-
-function assertTaskRoutingAndNormalMode() {
-  assert.match(sharedSkillSource, /Register this checklist with `update_plan`/)
-  assert.match(capabilitySkillSource, /Register every bullet from `reference\/task-seeds\.md` with `update_plan`/)
-  assert.match(capabilityTaskSeedsSource, /Register each item with `update_plan`/)
-  assert.doesNotMatch(sharedSkillSource, /TodoWrite|TaskCreate/)
-  assert.doesNotMatch(capabilitySkillSource, /TodoWrite|TaskCreate/)
-  assert.doesNotMatch(capabilityTaskSeedsSource, /TodoWrite|TaskCreate/)
-  assert.match(sharedSkillSource, /audit-only` is report-only/)
-  assert.match(capabilitySkillSource, /audit-only` is report-only/)
-}
 
 function assertSharedProposalContract(contractSource) {
   assert.match(contractSource, /caller-supplied isolated worktree/)
@@ -106,14 +55,7 @@ function assertReviewProposalAdapter() {
   assert.match(reviewProposalSource, /outcome: fixed \| no_change_needed \| skipped/)
 }
 
-test('audit modes retain their normal routing behavior', () => {
-  assertTaskRoutingAndNormalMode()
-})
-
-test('one shared contract defines proposal evidence for audit and review skills', () => {
-  for (const eachSkillContract of allSkillContracts) {
-    assertProposalAdapter(eachSkillContract)
-  }
+test('the shared contract defines proposal evidence for the active review skill', () => {
   assertReviewProposalAdapter()
   assertSharedProposalContract(canonicalContractSource)
 })
