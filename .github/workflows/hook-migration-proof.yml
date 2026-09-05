@@ -34,13 +34,13 @@ jobs:
           node-version: '22'
       - name: Install fixture dependencies
         run: python -m pip install -e packages/claude-dev-env pytest pyyaml ruff mypy
-      - name: Preserve the exact tested source
+      - name: Archive HEAD source
         run: git archive --format=tar.gz --output=hook-proof-source.tar.gz HEAD
       - name: Verify selective reinstall
         run: node --test packages/claude-dev-env/bin/install.policy-lint.test.mjs
-      - name: Verify local Git and linter behavior
+      - name: Run local Git and linter tests
         run: python -m pytest packages/claude-dev-env/hooks/git-hooks/test_pre_commit.py packages/claude-dev-env/hooks/git-hooks/test_native_policy_commit.py packages/claude-dev-env/hooks/git-hooks/test_installed_policy_lint.py packages/claude-dev-env/scripts/test_shared_tree_paths.py -q --junitxml=hook-proof-results.xml
-      - name: Retain reproducible fixture evidence
+      - name: Upload proof artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:

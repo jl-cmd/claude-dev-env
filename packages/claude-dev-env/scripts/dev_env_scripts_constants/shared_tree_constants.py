@@ -1,7 +1,6 @@
-"""Constants for resolving directories inside the installed shared tree.
+"""Directory names for the installed shared tree.
 
-These name the shape of the installed tree itself, not any one worker or
-skill that reads it, so every caller of shared_tree_paths shares them.
+Every caller of shared_tree_paths uses these names.
 """
 
 from __future__ import annotations

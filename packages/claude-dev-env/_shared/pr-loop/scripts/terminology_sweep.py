@@ -582,16 +582,14 @@ def sweep_diff(
 
 
 def repository_environment() -> dict[str, str]:
-    """Return the environment with repository overrides removed and the index retained.
+    """Return the process environment with Git repository overrides removed.
 
-    The sweep and the commit gate name their repository through an explicit
-    root argument. An inherited GIT_DIR or GIT_WORK_TREE would override
-    that root and point git at a different repository, so each spawned
-    subprocess runs with a scrubbed environment. The active GIT_INDEX_FILE
-    remains part of the staged-input contract for partial commits.
+    Keep GIT_INDEX_FILE so git still reads the active index on a partial
+    commit. Drop other GIT_ variables so spawned git uses the explicit
+    repository root.
 
     Returns:
-        A copy of ``os.environ`` without Git overrides other than the active index.
+        A copy of ``os.environ`` that keeps GIT_INDEX_FILE and drops other GIT_ names.
     """
     return {
         each_key: each_setting
@@ -745,8 +743,8 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
     """Return terminology near-miss findings for a repository's staged diff.
 
     An identifier the base tree already names is not one the staged diff
-    introduces, so no prose is flagged against it. Only genuinely new
-    identifiers are swept.
+    introduces, so no prose is flagged against it. Only new identifiers
+    are swept.
 
     Args:
         repository_root: The repository root the staged diff is read from.

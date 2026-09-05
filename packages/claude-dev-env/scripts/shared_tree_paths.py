@@ -39,7 +39,7 @@ def _linked_managed_root(module_path: Path, anchor_depth: int) -> Path | None:
         anchor_depth: Parent index of the package or agents root.
 
     Returns:
-        The paired Claude root when its scripts pointer resolves to this tree.
+        The Claude managed root when its scripts pointer resolves to this tree.
     """
     package_root = module_path.resolve().parents[anchor_depth]
     if not package_root.name.endswith(AGENTS_DIRECTORY_SUFFIX):
@@ -70,8 +70,9 @@ def resolve_shared_scripts_directory(
         flag: a resolved parent walks the link and misses _shared entirely
 
     Tries the un-resolved parent first, then a verified installed scripts
-    pointer, then the configured managed root and the resolved parent. When none holds the marker, returns the
-    un-resolved candidate, so an import failure names a readable path.
+    pointer, then the configured managed root, then the resolved parent.
+    If none holds the marker, returns the un-resolved candidate so an
+    import failure names a readable path.
 
     Args:
         module_file: Path of the importing module (``__file__``).
