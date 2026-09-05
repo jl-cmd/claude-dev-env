@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-09-05",
+  "repository": "jl-cmd/claude-dev-env",
+  "implementation_commit": "38151d21ff3ee80b6cf3cf24601b6174041035e2",
+  "main_rechecked_at": "f5a984af48df0eb0f87f5211d4e92421c38df91b",
+  "intervening_changes": [".release-please-manifest.json", "packages/claude-dev-env/CHANGELOG.md", "packages/claude-dev-env/package.json"],
+  "python_automation_commit": "92718eb60ac83da27934f86f07081e7e3a39ac85",
+  "scope": "GitHub source audit plus isolated Linux fixtures; not a Windows deployment or live hook audit",
+  "live_installation_inspected": false,
+  "live_configuration_changed": false,
+  "installed_script_hashes_verified": false,
+  "local_python_automation_coverage_verified": false,
+  "python_automation_ci_accepted_as_replacement": false,
+  "disabled_hooks": [],
+  "live_rollback_location": null,
+  "local_conversion_ledger_updated": false,
+  "original_report": {
+    "commit": "38151d21ff3ee80b6cf3cf24601b6174041035e2",
+    "path": ".audit/hook-linter-audit/report.html",
+    "git_blob_sha": "896c3750385670f90965fd313eb0474a1c6acd88",
+    "retention": "Exact original bytes remain in the existing Git object; no live backup is claimed"
+  },
+  "unavailable_at_implementation_commit": [
+    ".audit/hook-linter-conversion/tasks.md",
+    ".audit/hook-linter-conversion/ledger.txt",
+    ".audit/hook-linter-conversion/evidence/live-install-impact.md"
+  ],
+  "unavailable_file_interpretation": "Exact GitHub reads returned 404. Local checkout contents remain unknown and were not replaced.",
+  "migration_prs": [
+    {"number": 1274, "merged": true, "draft": false, "merged_at": "2026-09-04T19:24:43Z", "merge_commit": "bbd709136ff1a13f860c232df3b2b243be9bbd65"},
+    {"number": 1275, "merged": true, "draft": false, "merged_at": "2026-09-04T19:24:44Z", "merge_commit": "bbd709136ff1a13f860c232df3b2b243be9bbd65"},
+    {"number": 1281, "merged": true, "draft": false, "merged_at": "2026-09-04T22:11:02Z", "merge_commit": "c583a2408f6949c5b2efcf783a06a799448cf500"},
+    {"number": 1282, "merged": true, "draft": false, "merged_at": "2026-09-04T22:54:47Z", "merge_commit": "284532dd635c139aa3d5be64afc4f65068923f4e"},
+    {"number": 1284, "merged": true, "draft": false, "merged_at": "2026-09-05T00:59:04Z", "merge_commit": "ca0aec5bcb8ecf17600293576a0d7c23834b9608"},
+    {"number": 1287, "merged": true, "draft": false, "merged_at": "2026-09-05T02:46:52Z", "merge_commit": "ea7a18d81ddd99c0bf941b24e9a767acd45ac5ce"},
+    {"number": 1289, "merged": true, "draft": false, "merged_at": "2026-09-05T10:08:58Z", "merge_commit": "9f71536c3f048428baae2b1cd2e4fb93228be4b0"},
+    {"number": 1291, "merged": true, "draft": false, "merged_at": "2026-09-05T13:31:26Z", "merge_commit": "690232c8064690203e70f49969912fafed270798"},
+    {"number": 1292, "merged": true, "draft": false, "merged_at": "2026-09-05T14:01:44Z", "merge_commit": "38151d21ff3ee80b6cf3cf24601b6174041035e2"}
+  ],
+  "source_hashes": [
+    {"path": "packages/claude-dev-env/.agents/skills/_shared/pr-loop/scripts/durable_post_lint.py", "git_blob_sha": "69c946feafb15a96d6e4375cb5c150cfd20dc573", "sha256": "32d2be528c47938f48fbba20b353923ff26e17a947f3cfabf9373a822769adf6", "bytes": 7734, "git_blob_verified": true},
+    {"path": "packages/claude-dev-env/.agents/skills/_shared/pr-loop/scripts/skills_pr_loop_constants/durable_post_lint_constants.py", "git_blob_sha": "f5fee94aa8e38fb140f30a56b4d9d950223724cc", "sha256": "e072697002aa8e580f52e1e10b3b2a93461fcfe420fbac0fbc6d2a2cb5cec19d", "bytes": 2865, "git_blob_verified": true},
+    {"path": "packages/claude-dev-env/.agents/skills/_shared/pr-loop/scripts/skills_pr_loop_constants/__init__.py", "git_blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "bytes": 0, "git_blob_verified": true},
+    {"path": "packages/claude-dev-env/.agents/skills/pull-request/scripts/pull_request.py", "git_blob_sha": "182b62a0fe055a6f159c07eb87581f11e1e32be7", "sha256": "1ea6c7c21771301dc074fad124f3ca154f592d4bb748edc20a71bb984f99d33f", "bytes": 8868, "git_blob_verified": true},
+    {"path": "packages/claude-dev-env/.agents/skills/pull-request/scripts/github_pr_command_constants/config/constants.py", "git_blob_sha": "eeccf8843ff764eac25a814dd7d7c4e60eeccc61", "sha256": "9165a352ec8a9aa2ec044cc8ddcf672fbf3283b92608f122bd4fbdfddd0295a2", "bytes": 2143, "git_blob_verified": true},
+    {"path": "packages/claude-dev-env/.agents/skills/pull-request/scripts/github_pr_command_constants/__init__.py", "git_blob_sha": "a2bea2875ff5ffa3d7af588dac417e264beae8af", "sha256": "0e2c6d4cdb7d687c3ea31a33f8b4ecab6380217d886cbadf72126033128f7eaf", "bytes": 62, "git_blob_verified": true},
+    {"path": "packages/claude-dev-env/.agents/skills/pull-request/scripts/github_pr_command_constants/config/__init__.py", "git_blob_sha": "cb0c2a8d085d5fd2fc362105605cb984a9d06cd1", "sha256": "6f7b92dbe9479ef35ffea8b030b230709bc40292a6661f37a52df4dcd4d795fa", "bytes": 76, "git_blob_verified": true}
+  ],
+  "durable_post_cli_fixtures": {
+    "python": "3.13.5",
+    "platform": "Linux",
+    "boundary": "Actual durable_post_lint.py subprocess in an isolated temporary fixture",
+    "publication_attempted": false,
+    "temporary_fixture_removed": true,
+    "total": 16,
+    "passed": 16,
+    "cases": [
+      {"name": "valid-pr-create", "expected_exit": 0, "actual_exit": 0},
+      {"name": "invalid-pr-title", "expected_exit": 1, "actual_exit": 1},
+      {"name": "missing-required-heading", "expected_exit": 1, "actual_exit": 1},
+      {"name": "empty-body", "expected_exit": 1, "actual_exit": 1},
+      {"name": "volatile-windows-path", "expected_exit": 1, "actual_exit": 1},
+      {"name": "volatile-posix-path", "expected_exit": 1, "actual_exit": 1},
+      {"name": "volatile-worktree-path", "expected_exit": 1, "actual_exit": 1},
+      {"name": "valid-durable-comment", "expected_exit": 0, "actual_exit": 0},
+      {"name": "valid-marker-discussion", "expected_exit": 0, "actual_exit": 0},
+      {"name": "valid-title-only-edit", "expected_exit": 0, "actual_exit": 0},
+      {"name": "missing-create-title", "expected_exit": 2, "actual_exit": 2},
+      {"name": "missing-comment-body", "expected_exit": 2, "actual_exit": 2},
+      {"name": "invalid-action", "expected_exit": 2, "actual_exit": 2},
+      {"name": "invalid-utf8", "expected_exit": 2, "actual_exit": 2},
+      {"name": "missing-input-file", "expected_exit": 2, "actual_exit": 2},
+      {"name": "valid-github-mcp-post", "expected_exit": 0, "actual_exit": 0}
+    ]
+  },
+  "pr_command_fixtures": {
+    "python": "3.13.5",
+    "platform": "Linux",
+    "boundary": "Exact source PR command with real lint subprocess and fake gh publication process; no network or credentials accessed",
+    "temporary_fixture_removed": true,
+    "parent_environment_unchanged": true,
+    "total": 9,
+    "passed": 9,
+    "cases": [
+      {"name": "valid-create-lints-before-draft-publication", "expected_exit": 0, "actual_exit": 0, "trace": ["lint", "simulated-publication"]},
+      {"name": "publication-exit-status-propagated", "expected_exit": 7, "actual_exit": 7, "trace": ["lint", "simulated-publication"]},
+      {"name": "bad-title-never-looks-up-selected-account", "expected_exit": 1, "actual_exit": 1, "trace": ["lint"]},
+      {"name": "bad-body-never-looks-up-selected-account", "expected_exit": 1, "actual_exit": 1, "trace": ["lint"]},
+      {"name": "missing-body-never-publishes", "expected_exit": 2, "actual_exit": 2, "trace": ["lint"]},
+      {"name": "valid-comment-forwards-body-file", "expected_exit": 0, "actual_exit": 0, "trace": ["lint", "simulated-publication"]},
+      {"name": "valid-title-only-edit", "expected_exit": 0, "actual_exit": 0, "trace": ["lint", "simulated-publication"]},
+      {"name": "invalid-empty-edit-does-not-publish", "expected_exit": 2, "actual_exit": 2, "trace": ["lint"]},
+      {"name": "valid-review-forwards-review-event", "expected_exit": 0, "actual_exit": 0, "trace": ["lint", "simulated-publication"]}
+    ]
+  },
+  "installer_merge_reproduction": {
+    "node": "v22.16.0",
+    "source_path": "packages/claude-dev-env/bin/install.mjs",
+    "source_blob": "d7f539eeeb44c2d4c8812306d70f4b3ac74a0c35",
+    "scope": "Narrow in-memory reproduction of transcribed mergeHooksIntoSettings body with helper stand-ins, not a full installer test",
+    "shared_validator_retained": false,
+    "dispatcher_retained": true,
+    "foreign_hook_retained": true,
+    "unrelated_permissions_unchanged": true,
+    "repeated_merge_same_result": true,
+    "assertions_passed": 5,
+    "interpretation": "Confirms a source-level gap; does not approve removal"
+  },
+  "not_exercised": [
+    "Live Claude, Codex, alternate-profile and project registrations",
+    "Effective local Git hooksPath and overrides",
+    "Installed script and dependency parity",
+    "Full CDE policy-linter fixture suite",
+    "Separate local Ruff and Mypy coverage",
+    "Positive selected-account authorization lookup and legacy account recovery",
+    "Full test-runner preflight",
+    "Full installer upgrade and reinstall",
+    "Python Automation local runner and equivalent violations",
+    "Native safety and remote branch-control equivalence"
+  ],
+  "decision": "No additional blocking registration is approved for removal by this evidence"
+}
