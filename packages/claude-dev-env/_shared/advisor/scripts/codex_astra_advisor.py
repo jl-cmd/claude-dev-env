@@ -99,7 +99,7 @@ class CodexAstraAdvisorReply:
 def _preflight_fallback(
     reason: str,
     percent_left: float | None,
-    fallback_kind: str = ASTRA_FALLBACK_KIND_BROKEN,
+    fallback_kind: str,
 ) -> AstraPreflight:
     return AstraPreflight(False, percent_left, reason, fallback_kind)
 
@@ -283,25 +283,34 @@ def run_astra_preflight(
             return _preflight_fallback(
                 f"{ASTRA_PREFLIGHT_FAILURE_REASON}: probe exit {completed_process.returncode}",
                 None,
+                ASTRA_FALLBACK_KIND_BROKEN,
             )
         percent_left, parse_reason = _parse_probe_percent(completed_process.stdout)
         if parse_reason is not None:
             return _preflight_fallback(
-                f"{ASTRA_PREFLIGHT_FAILURE_REASON}: {parse_reason}", None
+                f"{ASTRA_PREFLIGHT_FAILURE_REASON}: {parse_reason}",
+                None,
+                ASTRA_FALLBACK_KIND_BROKEN,
             )
         usage_gate = _load_usage_gate(probe_path)
         if not callable(usage_gate) or percent_left is None:
             return _preflight_fallback(
-                f"{ASTRA_PREFLIGHT_FAILURE_REASON}: usage meter is unknown", None
+                f"{ASTRA_PREFLIGHT_FAILURE_REASON}: usage meter is unknown",
+                None,
+                ASTRA_FALLBACK_KIND_BROKEN,
             )
         if not usage_gate(percent_left):
             return _preflight_fallback(
                 f"{ASTRA_PREFLIGHT_FAILURE_REASON}: usage meter is at or below the gate",
                 percent_left,
-                fallback_kind=ASTRA_FALLBACK_KIND_DECLINED,
+                ASTRA_FALLBACK_KIND_DECLINED,
             )
     except subprocess.TimeoutExpired as probe_error:
-        return _preflight_fallback(f"{ASTRA_PROBE_TIMEOUT_REASON}: {probe_error}", None)
+        return _preflight_fallback(
+            f"{ASTRA_PROBE_TIMEOUT_REASON}: {probe_error}",
+            None,
+            ASTRA_FALLBACK_KIND_BROKEN,
+        )
     except (
         OSError,
         subprocess.SubprocessError,
@@ -311,7 +320,9 @@ def run_astra_preflight(
         ValueError,
     ) as probe_error:
         return _preflight_fallback(
-            f"{ASTRA_PREFLIGHT_FAILURE_REASON}: {probe_error}", None
+            f"{ASTRA_PREFLIGHT_FAILURE_REASON}: {probe_error}",
+            None,
+            ASTRA_FALLBACK_KIND_BROKEN,
         )
     return AstraPreflight(True, percent_left, "usage meter is above the Astra gate")
 
