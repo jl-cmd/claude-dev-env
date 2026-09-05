@@ -25,9 +25,7 @@ PR_TITLE = "feat(skills): add guarded pull request publication"
 ACCOUNT_A = "JonEcho"
 ACCOUNT_B = "ReviewBot"
 BODY_FILENAME = "pull-request-body.md"
-LINTER_PATH = (
-    _SCRIPTS_DIRECTORY.parents[1] / "_shared/pr-loop/scripts/durable_post_lint.py"
-)
+LINTER_PATH = _SCRIPTS_DIRECTORY.parents[3] / "scripts/durable_post_lint.py"
 COMMENT_CLI = ["comment", "--repo", REPOSITORY, "--number", PR_NUMBER, "--body-file"]
 ACTION_CASES = [
     (
