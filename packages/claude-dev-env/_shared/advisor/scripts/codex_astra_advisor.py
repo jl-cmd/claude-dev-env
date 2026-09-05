@@ -1,5 +1,7 @@
 """Bind and consult a read-only Codex CLI session through Astra."""
+
 from __future__ import annotations
+
 import argparse
 import importlib
 import json
@@ -11,12 +13,14 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
 _scripts_directory = Path(__file__).resolve().parent
 _config_directory = _scripts_directory / "config"
-for _import_directory in (_scripts_directory, _config_directory):
-    _import_directory_text = str(_import_directory)
-    if _import_directory_text not in sys.path:
-        sys.path.insert(0, _import_directory_text)
+for each_import_directory in (_scripts_directory, _config_directory):
+    each_import_directory_text = str(each_import_directory)
+    if each_import_directory_text not in sys.path:
+        sys.path.insert(0, each_import_directory_text)
+
 from advisor_scripts_constants.astra_advisor_constants import (
     ADVISOR_CODEX_EXECUTABLE_ENV_VAR,
     ALL_ASTRA_TRUTHY_VALUES,
@@ -65,12 +69,16 @@ from advisor_scripts_constants.advisor_route_constants import (
     CODEX_BIND_SUCCESS_TOKEN,
     SPAWN_OUTCOME_KEY,
 )
+
+
 @dataclass(frozen=True)
 class AstraPreflight:
     eligible: bool
     percent_left: float | None
     reason: str
     fallback_kind: str | None = None
+
+
 @dataclass(frozen=True)
 class CodexAstraAdvisorReply:
     session_id: str | None
@@ -83,10 +91,14 @@ class CodexAstraAdvisorReply:
     selected_tier: str
     outcome: str
     fallback_kind: str | None
+
+
 def _preflight_fallback(
     reason: str, percent_left: float | None, fallback_kind: str
 ) -> AstraPreflight:
     return AstraPreflight(False, percent_left, reason, fallback_kind)
+
+
 def _reply_fallback(
     reason: str,
     is_astra_enabled: bool,
@@ -104,6 +116,8 @@ def _reply_fallback(
         ADVISOR_FALLBACK_RESULT,
         fallback_kind,
     )
+
+
 def _reply_success(
     session_id: str, guidance: str, signal: str
 ) -> CodexAstraAdvisorReply:
@@ -119,16 +133,50 @@ def _reply_success(
         CODEX_BIND_SUCCESS_TOKEN,
         None,
     )
-def _resolved_settings(settings: Mapping[str, str] | None) -> Mapping[str, str]:
-    return os.environ if settings is None else settings
-def is_astra_advisor_enabled(settings: Mapping[str, str] | None) -> bool:
-    raw_setting = _resolved_settings(settings).get(ASTRA_ENV_VAR, "")
+
+
+def _resolved_settings(
+    all_settings: Mapping[str, str] | None,
+) -> Mapping[str, str]:
+    return os.environ if all_settings is None else all_settings
+
+
+def is_astra_advisor_enabled(all_settings: Mapping[str, str] | None) -> bool:
+    """Return whether the Astra advisor flag is enabled.
+
+    Args:
+        all_settings: Optional environment-like settings mapping.
+
+    Returns:
+        Whether the Astra feature flag contains a documented truthy value.
+    """
+    raw_setting = _resolved_settings(all_settings).get(ASTRA_ENV_VAR, "")
     return raw_setting.strip().lower() in ALL_ASTRA_TRUTHY_VALUES
-def resolve_advisor_effort(settings: Mapping[str, str] | None) -> str:
-    requested = _resolved_settings(settings).get(ADVISOR_EFFORT_ENV_VAR, "")
+
+
+def resolve_advisor_effort(all_settings: Mapping[str, str] | None) -> str:
+    """Resolve the configured advisor effort.
+
+    Args:
+        all_settings: Optional environment-like settings mapping.
+
+    Returns:
+        A supported effort level, defaulting to low.
+    """
+    requested = _resolved_settings(all_settings).get(ADVISOR_EFFORT_ENV_VAR, "")
     normalized = requested.strip().lower()
     return normalized if normalized in ALL_ADVISOR_EFFORT_LEVELS else ADVISOR_EFFORT_DEFAULT
+
+
 def resolve_usage_probe_path(home_directory: Path) -> Path:
+    """Return the installed Codex usage-probe path.
+
+    Args:
+        home_directory: Home directory used to construct the installed path.
+
+    Returns:
+        The absolute or relative probe path beneath the supplied home directory.
+    """
     return (
         home_directory
         / CLAUDE_CONFIG_DIRECTORY_NAME
@@ -137,11 +185,15 @@ def resolve_usage_probe_path(home_directory: Path) -> Path:
         / USAGE_PROBE_SCRIPTS_DIRECTORY_NAME
         / USAGE_PROBE_FILENAME
     )
+
+
 def _load_usage_gate(probe_path: Path) -> Callable[[float], bool]:
     probe_directory = str(probe_path.parent)
     if probe_directory not in sys.path:
         sys.path.insert(0, probe_directory)
     return importlib.import_module("codex_usage_probe").is_codex_review_required
+
+
 def _parse_probe_percent(stdout_text: str) -> tuple[float | None, str | None]:
     try:
         report = json.loads(stdout_text)
@@ -156,6 +208,8 @@ def _parse_probe_percent(stdout_text: str) -> tuple[float | None, str | None]:
     if not math.isfinite(percent_left):
         return None, "usage meter is malformed"
     return percent_left, None
+
+
 def _run_probe(
     probe_path: Path,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
@@ -168,6 +222,8 @@ def _run_probe(
         shell=False,
         timeout=ASTRA_USAGE_PROBE_TIMEOUT_SECONDS,
     )
+
+
 def _preflight_from_probe(
     probe_path: Path, completed: subprocess.CompletedProcess[str]
 ) -> AstraPreflight:
@@ -182,10 +238,21 @@ def _preflight_from_probe(
         reason = f"{ASTRA_PREFLIGHT_FAILURE_REASON}: usage meter is at or below the gate"
         return _preflight_fallback(reason, percent_left, ASTRA_FALLBACK_KIND_DECLINED)
     return AstraPreflight(True, percent_left, "usage meter is above the Astra gate")
+
+
 def run_astra_preflight(
     probe_path: Path,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> AstraPreflight:
+    """Run the usage probe and evaluate Astra eligibility.
+
+    Args:
+        probe_path: Path to the installed usage probe.
+        process_runner: Callable used to execute the probe.
+
+    Returns:
+        The meter decision and fallback metadata.
+    """
     try:
         completed = _run_probe(probe_path, process_runner)
         return _preflight_from_probe(probe_path, completed)
@@ -199,14 +266,36 @@ def run_astra_preflight(
             None,
             ASTRA_FALLBACK_KIND_BROKEN,
         )
-def resolve_codex_executable(settings: Mapping[str, str] | None) -> str | None:
-    override = _resolved_settings(settings).get(ADVISOR_CODEX_EXECUTABLE_ENV_VAR, "").strip()
+
+
+def resolve_codex_executable(all_settings: Mapping[str, str] | None) -> str | None:
+    """Resolve the Codex executable override or PATH entry.
+
+    Args:
+        all_settings: Optional environment-like settings mapping.
+
+    Returns:
+        The executable path or name, or None when unavailable.
+    """
+    override = _resolved_settings(all_settings).get(ADVISOR_CODEX_EXECUTABLE_ENV_VAR, "").strip()
     return override or shutil.which(CODEX_EXECUTABLE)
+
+
 def build_codex_arguments(
     codex_executable: str,
     session_id: str | None = None,
     reasoning_effort: str = ADVISOR_EFFORT_DEFAULT,
 ) -> list[str]:
+    """Build the shell-free Codex argv for bind or resume.
+
+    Args:
+        codex_executable: Resolved Codex executable.
+        session_id: Existing Codex session to resume, when present.
+        reasoning_effort: Codex model reasoning effort.
+
+    Returns:
+        The command argument vector.
+    """
     arguments = [
         codex_executable,
         CODEX_EXEC_SUBCOMMAND,
@@ -222,34 +311,58 @@ def build_codex_arguments(
         arguments.extend([CODEX_RESUME_SUBCOMMAND, session_id])
     arguments.append(CODEX_PROMPT_FROM_STDIN)
     return arguments
+
+
 def _guidance_signal(guidance: str) -> str | None:
-    for line in guidance.splitlines():
-        candidate = line.strip()
+    for each_line in guidance.splitlines():
+        candidate = each_line.strip()
         if candidate:
             return candidate if candidate in ALL_ADVISOR_GUIDANCE_SIGNALS else None
     return None
+
+
+def _parse_event_line(each_line: str) -> tuple[str | None, str | None]:
+    event = json.loads(each_line)
+    if not isinstance(event, dict):
+        raise TypeError("event must be an object")
+    discovered_session_id: str | None = None
+    discovered_guidance: str | None = None
+    if event.get("type") == "thread.started":
+        raw_session = event.get("thread_id")
+        if isinstance(raw_session, str) and raw_session.strip():
+            discovered_session_id = raw_session.strip()
+    completed_event = event.get("item")
+    if event.get("type") == "item.completed" and isinstance(completed_event, dict):
+        message_text = completed_event.get("text")
+        if completed_event.get("type") == "agent_message" and isinstance(message_text, str):
+            discovered_guidance = message_text.strip()
+    return discovered_session_id, discovered_guidance
+
+
 def parse_codex_jsonl_reply(
     jsonl_text: str,
     existing_session_id: str | None,
     is_astra_enabled: bool,
 ) -> CodexAstraAdvisorReply:
+    """Parse Codex JSONL into a typed Astra advisor reply.
+
+    Args:
+        jsonl_text: JSONL emitted by Codex.
+        existing_session_id: Existing session expected on resume.
+        is_astra_enabled: Whether this route had Astra enabled.
+
+    Returns:
+        A successful advisor reply or typed fallback.
+    """
     session_id: str | None = None
     guidance: str | None = None
     try:
-        for line in jsonl_text.splitlines():
-            if not line.strip():
+        for each_line in jsonl_text.splitlines():
+            if not each_line.strip():
                 continue
-            event = json.loads(line)
-            if not isinstance(event, dict):
-                return _reply_fallback(ASTRA_MALFORMED_JSONL_REASON, is_astra_enabled)
-            if event.get("type") == "thread.started":
-                raw_session = event.get("thread_id")
-                if isinstance(raw_session, str) and raw_session.strip():
-                    session_id = raw_session.strip()
-            raw_item = event.get("item")
-            if event.get("type") == "item.completed" and isinstance(raw_item, dict):
-                if raw_item.get("type") == "agent_message" and isinstance(raw_item.get("text"), str):
-                    guidance = raw_item["text"].strip()
+            discovered_session_id, discovered_guidance = _parse_event_line(each_line)
+            session_id = discovered_session_id or session_id
+            guidance = discovered_guidance or guidance
     except (TypeError, json.JSONDecodeError):
         return _reply_fallback(ASTRA_MALFORMED_JSONL_REASON, is_astra_enabled)
     if session_id is None or (existing_session_id is not None and session_id != existing_session_id):
@@ -258,6 +371,8 @@ def parse_codex_jsonl_reply(
         return _reply_fallback(ASTRA_REPLY_FAILURE_REASON, is_astra_enabled)
     signal = _guidance_signal(guidance)
     return _reply_success(session_id, guidance, signal) if signal else _reply_fallback(ASTRA_INVALID_SIGNAL_REASON, is_astra_enabled)
+
+
 def _resolve_preflight(
     preflight: AstraPreflight | None,
     probe_path: Path | None,
@@ -267,11 +382,13 @@ def _resolve_preflight(
         return preflight
     resolved_path = resolve_usage_probe_path(Path.home()) if probe_path is None else probe_path
     return run_astra_preflight(resolved_path, process_runner)
+
+
 def _run_codex(
     prompt: str,
     working_directory: Path,
     session_id: str | None,
-    settings: Mapping[str, str] | None,
+    all_settings: Mapping[str, str] | None,
     executable: str,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> subprocess.CompletedProcess[str]:
@@ -279,7 +396,7 @@ def _run_codex(
         build_codex_arguments(
             executable,
             session_id=session_id,
-            reasoning_effort=resolve_advisor_effort(settings),
+            reasoning_effort=resolve_advisor_effort(all_settings),
         ),
         cwd=str(working_directory),
         input=prompt,
@@ -289,6 +406,8 @@ def _run_codex(
         shell=False,
         timeout=ASTRA_CODEX_TIMEOUT_SECONDS,
     )
+
+
 def run_codex_astra_advisor(
     prompt: str,
     working_directory: Path,
@@ -298,6 +417,20 @@ def run_codex_astra_advisor(
     session_id: str | None,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> CodexAstraAdvisorReply:
+    """Run one usage-gated Astra bind or resume attempt.
+
+    Args:
+        prompt: Advisor charter or consult text.
+        working_directory: Repository working directory.
+        preflight: Optional precomputed meter decision.
+        probe_path: Optional usage-probe path.
+        setting_by_name: Optional environment-like settings mapping.
+        session_id: Existing session to resume.
+        process_runner: Callable used to execute probe and Codex processes.
+
+    Returns:
+        A successful advisor reply or typed fallback.
+    """
     if not is_astra_advisor_enabled(setting_by_name):
         return _reply_fallback("Astra advisor flag is disabled", False, ASTRA_FALLBACK_KIND_DECLINED)
     executable = resolve_codex_executable(setting_by_name)
@@ -317,7 +450,14 @@ def run_codex_astra_advisor(
     if completed.returncode != 0:
         return _reply_fallback(f"{ASTRA_BIND_FAILURE_REASON}: process exit {completed.returncode}", True)
     return parse_codex_jsonl_reply(completed.stdout, session_id, True)
+
+
 def build_argument_parser() -> argparse.ArgumentParser:
+    """Build the Astra helper command-line parser.
+
+    Returns:
+        The configured parser.
+    """
     parser = argparse.ArgumentParser(description="Bind or consult a read-only Codex Astra advisor.")
     mode_group = parser.add_mutually_exclusive_group(required=True)
     mode_group.add_argument("--bind", action="store_true")
@@ -331,25 +471,37 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=None,
     )
     return parser
+
+
 def main(all_cli_arguments: Sequence[str]) -> int:
+    """Run one bind or resume request from stdin.
+
+    Args:
+        all_cli_arguments: CLI arguments excluding the program name.
+
+    Returns:
+        Zero for a successful advisor reply and one for fallback.
+    """
     parsed = build_argument_parser().parse_args(list(all_cli_arguments))
-    settings = dict(os.environ)
+    all_settings = dict(os.environ)
     if parsed.is_astra_requested:
-        settings[ASTRA_ENV_VAR] = "1"
+        all_settings[ASTRA_ENV_VAR] = "1"
     if parsed.astra_effort is not None:
-        settings[ADVISOR_EFFORT_ENV_VAR] = parsed.astra_effort
+        all_settings[ADVISOR_EFFORT_ENV_VAR] = parsed.astra_effort
     reply = run_codex_astra_advisor(
         sys.stdin.read(),
         parsed.cwd,
         None,
         None,
-        settings,
+        all_settings,
         parsed.resume if not parsed.bind else None,
         subprocess.run,
     )
     payload = asdict(reply)
     payload[SPAWN_OUTCOME_KEY] = payload.pop("outcome")
-    print(json.dumps(payload, sort_keys=True))
+    sys.stdout.write(f"{json.dumps(payload, sort_keys=True)}\n")
     return 0 if reply.successful else 1
+
+
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
