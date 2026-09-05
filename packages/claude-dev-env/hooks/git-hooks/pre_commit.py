@@ -54,7 +54,7 @@ def run_staged_policy_lint() -> int:
     try:
         script_path = resolve_policy_lint_script_path()
         if not script_path.is_file():
-            print(POLICY_LINT_UNAVAILABLE_MESSAGE, file=sys.stderr)
+            sys.stderr.write(POLICY_LINT_UNAVAILABLE_MESSAGE + "\n")
             return POLICY_LINT_INFRASTRUCTURE_EXIT_CODE
         completion = subprocess.run(
             [sys.executable, str(script_path.resolve(strict=True)), POLICY_LINT_STAGED_ARGUMENT],
@@ -62,7 +62,7 @@ def run_staged_policy_lint() -> int:
             timeout=POLICY_LINT_TIMEOUT_SECONDS,
         )
     except (OSError, subprocess.TimeoutExpired) as launch_error:
-        print(POLICY_LINT_FAILED_MESSAGE.format(error=launch_error), file=sys.stderr)
+        sys.stderr.write(POLICY_LINT_FAILED_MESSAGE.format(error=launch_error) + "\n")
         return POLICY_LINT_INFRASTRUCTURE_EXIT_CODE
     return completion.returncode
 
