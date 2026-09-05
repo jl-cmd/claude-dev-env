@@ -9,7 +9,7 @@ Call `resolve_session_identity` from `$HOME/.claude/_shared/advisor/scripts/tier
 
 | Identity text | Host profile | Bind path |
 |---|---|---|
-| a `codex` token | Codex | In-session Sol spawn |
+| a `codex` token | Codex | In-session Astra spawn |
 | a `claude` token | Claude | In-session Fable spawn of `session-advisor` |
 | any other identity | ThirdParty | Headless CLI chain |
 
@@ -17,11 +17,11 @@ When both `codex` and `claude` tokens appear, Codex wins. Empty text is ThirdPar
 
 ## Bind path
 
-**Claude.** Spawn `subagent_type: session-advisor` at Fable through the Agent tool. When Fable is out of usage, bind Sol through the Codex helper if `ADVISOR_SOL` is on. Fail closed when neither binds.
+**Claude.** Spawn `subagent_type: session-advisor` at Fable through the Agent tool. When Fable is out of usage, bind Astra through the Codex helper if `ADVISOR_ASTRA` is on. Fail closed when neither binds.
 
-**Codex.** Spawn a native in-session Sol subagent at `resolve_codex_model_id("Sol")` (`gpt-5.6-sol`). Walk `candidate_tiers = ["Sol"]`. Record `{tier: "Sol", result: "spawned"}` on success. The `ADVISOR_SOL` flag is not required. Fail closed when Sol does not bind. Do not walk Fable on a Codex host.
+**Codex.** Spawn a native in-session Astra subagent at `resolve_codex_model_id("Astra")` (`gpt-6-astra`). Walk `candidate_tiers = ["Astra"]`. Record `{tier: "Astra", result: "spawned"}` on success. The `ADVISOR_ASTRA` flag is not required. Fail closed when Astra does not bind. Do not walk Fable on a Codex host.
 
-**ThirdParty.** Bind Fable through the CLI Claude-chain. When Fable is out of usage, bind Sol through the Codex helper if `ADVISOR_SOL` is on. Fail closed when neither binds.
+**ThirdParty.** Bind Fable through the CLI Claude-chain. When Fable is out of usage, bind Astra through the Codex helper if `ADVISOR_ASTRA` is on. Fail closed when neither binds.
 
 ## Mechanical override
 

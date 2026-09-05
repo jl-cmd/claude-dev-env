@@ -1,8 +1,7 @@
 """Mechanically validate a model-tier spawn-walk log.
 
 The advisor protocol's Model floor section emits a structured spawn-walk log.
-This validator reads that log back and checks its invariants. A run is judged
-from data, not inferred from a transcript.
+This validator reads that log back and checks its invariants.
 
 ::
 
@@ -24,12 +23,12 @@ from data, not inferred from a transcript.
 
     codex_bind = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Sol"],
-        attempts=[{"tier": "Sol", "result": "spawned"}],
-        selected_tier="Sol",
+        candidate_tiers=["Astra"],
+        attempts=[{"tier": "Astra", "result": "spawned"}],
+        selected_tier="Astra",
         host_profile="Codex",
     )
-    validate_model_tier_run(codex_bind)  # ok: Codex in-session Sol spawn
+    validate_model_tier_run(codex_bind)  # ok: Codex in-session Astra spawn
 
 A run whose selected_tier is not the first successful bind fails.
 On any broken invariant, validate_model_tier_run raises ModelTierRunError.
@@ -93,7 +92,7 @@ class ModelTierRun:
     attempts: list[dict[str, str]]
     selected_tier: str | None
     fallback_reason: str | None = None
-    is_sol_enabled: bool = False
+    is_astra_enabled: bool = False
     host_profile: str = HOST_PROFILE_CLAUDE
 
 
@@ -113,7 +112,7 @@ def _canonical_tier_list(all_tier_names: list[str]) -> list[str] | None:
 
 def _expected_candidate_tiers(
     own_tier: str,
-    is_sol_enabled: bool = False,
+    is_astra_enabled: bool = False,
     host_profile: str = HOST_PROFILE_CLAUDE,
 ) -> list[str]:
     maybe_canonical_own_tier = canonical_tier_name(own_tier)
@@ -127,7 +126,7 @@ def _expected_candidate_tiers(
     if maybe_canonical_host == HOST_PROFILE_CODEX:
         return [ADVISOR_MODEL_TIER]
     all_expected_candidates = [ADVISOR_FALLBACK_TIER]
-    if is_sol_enabled:
+    if is_astra_enabled:
         all_expected_candidates.append(ADVISOR_MODEL_TIER)
     return all_expected_candidates
 
@@ -164,11 +163,11 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
         validate_model_tier_run(cli_bind)     # ok: CLI Claude-chain bind
         validate_model_tier_run(broken_log)   # flag: ModelTierRunError
 
-    Candidate tiers are Fable, plus Sol when ``is_sol_enabled`` is true, on
-    Claude and ThirdParty hosts. A Codex host walks Sol only. Consumer
-    ``own_tier`` is recorded and must be a known tier; it does not add Opus
+    Candidate tiers are Fable, plus Astra when ``is_astra_enabled`` is true, on
+    Claude and ThirdParty hosts. A Codex host walks Astra only. Consumer
+    ``own_tier`` is recorded and must be a known tier. It does not add Opus
     to the advisor walk. Tries walk that list in order. Early stop only
-    after ``spawned``, ``cli``, or Sol ``codex`` (and Sol ``spawned`` on a
+    after ``spawned``, ``cli``, or Astra ``codex`` (and Astra ``spawned`` on a
     Codex host). A null selected_tier requires a full walk plus
     fallback_reason.
 
@@ -183,7 +182,7 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
     """
     all_expected_candidates = _expected_candidate_tiers(
         run.own_tier,
-        is_sol_enabled=run.is_sol_enabled,
+        is_astra_enabled=run.is_astra_enabled,
         host_profile=run.host_profile,
     )
     maybe_canonical_candidates = _canonical_tier_list(run.candidate_tiers)
@@ -257,9 +256,9 @@ def load_model_tier_run_from_json_path(from_path: Path) -> ModelTierRun:
         TypeError: When a field has the wrong shape.
     """
     parsed_payload = json.loads(from_path.read_text(encoding="utf-8"))
-    raw_sol_enabled = parsed_payload.get("sol_enabled", False)
-    if not isinstance(raw_sol_enabled, bool):
-        raise TypeError("sol_enabled must be a boolean")
+    raw_astra_enabled = parsed_payload.get("astra_enabled", False)
+    if not isinstance(raw_astra_enabled, bool):
+        raise TypeError("astra_enabled must be a boolean")
     raw_host_profile = parsed_payload.get(HOST_PROFILE_JSON_KEY, HOST_PROFILE_CLAUDE)
     if not isinstance(raw_host_profile, str):
         raise TypeError(HOST_PROFILE_MUST_BE_STRING_MESSAGE)
@@ -269,7 +268,7 @@ def load_model_tier_run_from_json_path(from_path: Path) -> ModelTierRun:
         attempts=list(parsed_payload["attempts"]),
         selected_tier=parsed_payload.get("selected_tier"),
         fallback_reason=parsed_payload.get("fallback_reason"),
-        is_sol_enabled=raw_sol_enabled,
+        is_astra_enabled=raw_astra_enabled,
         host_profile=raw_host_profile,
     )
 
