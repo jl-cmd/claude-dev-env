@@ -4,7 +4,7 @@ When `--fix` is passed, apply the reviewed findings to the working tree.
 
 ## Preflight-proposal mode
 
-When the hub selects `preflight-proposal`, consume the established proposal context, selected review level, and current pull-request head.
+When the hub selects `preflight-proposal`, use the proposal context, selected review level, and current pull-request head.
 
 ## Resume the finding agent
 

@@ -11,8 +11,6 @@ argument-hint: "[issue action - file | update | close | refresh-epic | full hand
 
 # Issue tracker
 
-**User wants an issue action done. Here is how those actions work.**
-
 **dedup -> do the work -> markers only -> numbers + URLs**
 
 Run every step the ask needs in one go (file, label, attach, refresh, and so on). The `issue-tracker` agent is the primary handler for one action per turn; this skill is the session path when the agent is unavailable or the ask spans several steps.

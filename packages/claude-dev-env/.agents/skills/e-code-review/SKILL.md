@@ -39,7 +39,7 @@ Triggers: `/e-code-review <level> [--fix] [loop]`. `<level>` is `low`, `medium`,
 
 - **No level, or an unknown level.** Respond exactly: `Which effort level — low, medium, or xhigh?`
 
-## Evaluation-backed defaults (e-code-review family)
+## Effort defaults
 
 When the caller asks which level to pick for a known fixture band (easy / medium / demanding scope), use the committed OP-02B evaluation evidence. Thinking stays on; **effort** is the only cost/latency lever.
 
@@ -49,7 +49,7 @@ When the caller asks which level to pick for a known fixture band (easy / medium
 | medium | `xhigh` | same file → `medium` (maps evaluation `high`) |
 | demanding | `xhigh` | same file → `demanding` (maps evaluation `max`) |
 
-Resolve programmatically with `scripts/effort_evaluation.py` → `resolve_skill_effort_for_band`. Every default cites a completed evaluation row. The user-facing command still requires an explicit level flag; these defaults answer "what should I pick?" for this workflow family only.
+Resolve programmatically with `scripts/effort_evaluation.py` → `resolve_skill_effort_for_band`. Every default cites a completed evaluation row. The command still requires an explicit level. These defaults answer which level to pick for this family.
 
 Detail: `reference/effort-evaluation.md`.
 

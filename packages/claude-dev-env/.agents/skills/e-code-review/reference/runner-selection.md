@@ -3,14 +3,11 @@
 How `/e-code-review medium` (and loop) picks a harness runner for finder and
 verify work. `SKILL.md` points here.
 
-## What lives here
-
 | Topic | Content |
 |---|---|
 | Goal | One skill surface, many runners (Grok, Codex, Claude headless, and others) |
 | Today | `scripts/grok_code_review.py` is the Grok medium orchestration module |
 | Target | A thin selector chooses a runner by availability and task flags |
-| Out of scope | Reimplementing every harness inside this skill |
 
 ## Today
 
@@ -30,10 +27,9 @@ verify work. `SKILL.md` points here.
 4. **Adapters.** Thin wrappers: Grok (current module), Codex, Claude, and
    others.
 
-Keep implementation pull requests small: one concern each. Link this file from
-the tracking issue.
+Link this file from the tracking issue.
 
-## Related always-on docs
+## Related
 
 - Skill hub: `../SKILL.md` (levels, fix, loop).
 - Preflight proposal: `preflight-proposal.md` (immutable range, local runner, proposal evidence).

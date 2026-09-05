@@ -1,8 +1,6 @@
 # Review preflight proposal mode
 
-This file owns the proposal contract for `e-code-review`.
-
-Use this review mode when the caller selects `preflight-proposal`:
+Use this mode when the caller selects `preflight-proposal`:
 
 ```text
 /e-code-review preflight-proposal <pr_number> --level low --base-sha <base_sha> --head-sha <head_sha> --worktree <isolated_worktree>
@@ -32,22 +30,15 @@ Use this review mode when the caller selects `preflight-proposal`:
 10. Keep commit, push, pull-request body, pull-request comment, pull-request review, pull-request update, merge, rebase, and Ready-state mutations disabled.
 11. Return the proposal for downstream disposition. The downstream owner adds the proposal ID to its selected or dispositioned proposal collection. Reapplication uses exactly the selected records and their changed paths. Give each later finding a new proposal ID and evidence record.
 
-## Review extension
+## Review level
 
-The caller resolves the review level before invocation and always passes `--level`. Use this mapping:
+The caller resolves the review level before invocation and always passes `--level`. Omitted `--level` is `low`. Passed `low`, `medium`, or `xhigh` stay as given.
 
-| Caller selection | Resolved `--level` |
-|---|---|
-| Omitted override | `low` |
-| `low` | `low` |
-| `medium` | `medium` |
-| `xhigh` | `xhigh` |
+The `review_level` evidence is the resolved `--level` value.
 
-The `review_level` evidence mirrors the resolved `--level` value.
+Run the selected level as `<review_level> --fix loop`. The selected level keeps its normal finding and fix rules. Require `HEAD` to equal the supplied head SHA before each round.
 
-Run the selected level as `<review_level> --fix loop`. The selected level owns its normal finding and fix rules. Require `HEAD` to equal the supplied head SHA before each round.
-
-Keep Gate 1, Gate 2, the bare code-rules gate, and exact required tests.
+Gate 1, Gate 2, the bare code-rules gate, and exact required tests still apply.
 
 ## Evidence record
 
