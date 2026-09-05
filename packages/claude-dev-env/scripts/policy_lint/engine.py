@@ -26,8 +26,8 @@ def lint(
 ) -> LintReport:
     """Run the selected rules on one source selection.
 
-    Repository and diff selections check active code. Explicit file and editor
-    selections also accept archived skills for a requested historical audit.
+    Repository and diff selections check active code. File and editor
+    selections include archived skills.
 
     Args:
         request: Repository root, source, and rule sets.
