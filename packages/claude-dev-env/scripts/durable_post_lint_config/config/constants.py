@@ -23,7 +23,6 @@ ALL_POST_ACTIONS: frozenset[str] = frozenset(
         ACTION_PR_REVIEW,
     }
 )
-
 ALL_BODY_REQUIRED_ACTIONS: frozenset[str] = frozenset(
     {
         ACTION_GITHUB_MCP_POST,
@@ -35,13 +34,10 @@ ALL_BODY_REQUIRED_ACTIONS: frozenset[str] = frozenset(
         ACTION_PR_REVIEW,
     }
 )
-
 ALL_PR_DESCRIPTION_ACTIONS: frozenset[str] = frozenset(
     {ACTION_PR_CREATE, ACTION_PR_EDIT}
 )
-
 ALL_TITLE_ACTIONS: frozenset[str] = frozenset({ACTION_PR_CREATE, ACTION_PR_EDIT})
-
 ALL_CONVENTIONAL_TITLE_TYPES: tuple[str, ...] = (
     "build",
     "chore",
@@ -55,11 +51,9 @@ ALL_CONVENTIONAL_TITLE_TYPES: tuple[str, ...] = (
     "style",
     "test",
 )
-
 CONVENTIONAL_TITLE_PATTERN: re.Pattern[str] = re.compile(
     rf"^(?:{'|'.join(ALL_CONVENTIONAL_TITLE_TYPES)})(?:\([^)\r\n]+\))?!?: [^\s].*$"
 )
-
 ALL_REQUIRED_PR_DESCRIPTION_HEADINGS: tuple[str, ...] = (
     "Summary",
     "Description",
@@ -67,12 +61,10 @@ ALL_REQUIRED_PR_DESCRIPTION_HEADINGS: tuple[str, ...] = (
     "How",
     "Verification",
 )
-
 ALL_PATH_ANCHORED_VOLATILE_PATH_MARKERS: tuple[str, ...] = (
     ".claude-profile-a/jobs/",
     ".claude/worktrees/",
 )
-
 ALL_BARE_VOLATILE_PATH_MARKERS: tuple[str, ...] = (
     "appdata/local/temp",
     "/tmp/",
@@ -80,7 +72,6 @@ ALL_BARE_VOLATILE_PATH_MARKERS: tuple[str, ...] = (
     "$env:temp",
     "$claude_job_dir",
 )
-
 BODY_FILE_ENCODING = "utf-8"
 CLEAN_EXIT_CODE = 0
 CONTENT_FINDING_EXIT_CODE = 1
@@ -88,7 +79,6 @@ EMPTY_BODY_CODE = "empty-body"
 INPUT_ERROR_EXIT_CODE = 2
 PATH_ANCHOR_CHARACTER = "/"
 PATH_SEGMENT_START_CHARACTERS = "_-"
-
 BODY_FILE_UNREADABLE_MESSAGE = "body file is not readable UTF-8 text"
 BODY_REQUIRED_MESSAGE = "this action requires a body file"
 BODY_MUST_NOT_BE_EMPTY_MESSAGE = "body file must contain text"

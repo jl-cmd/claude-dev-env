@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from skills_pr_loop_constants.durable_post_lint_constants import (
+from durable_post_lint_config.config.constants import (
     ACTION_PR_CREATE,
     ACTION_PR_EDIT,
     ALL_BARE_VOLATILE_PATH_MARKERS,
@@ -82,14 +82,7 @@ def _text_has_anchored_marker(normalized_text: str, marker: str) -> bool:
 
 
 def find_volatile_path_marker(body_text: str) -> str | None:
-    """Return the first volatile path marker in a GitHub post body.
-
-    Args:
-        body_text: Post body text to scan.
-
-    Returns:
-        The matched marker, or None when the body names no volatile path.
-    """
+    """Return the first volatile path marker in a GitHub post body."""
     normalized_text = body_text.replace("\\", PATH_ANCHOR_CHARACTER).lower()
     for each_marker in ALL_PATH_ANCHORED_VOLATILE_PATH_MARKERS:
         if _text_has_anchored_marker(normalized_text, each_marker):
@@ -101,17 +94,7 @@ def find_volatile_path_marker(body_text: str) -> str | None:
 
 
 def read_body_file(body_file: Path) -> str:
-    """Read one UTF-8 body file without exposing its contents on failure.
-
-    Args:
-        body_file: Local post body file.
-
-    Returns:
-        Decoded body text.
-
-    Raises:
-        DurablePostInputError: The file is missing, unreadable, or invalid UTF-8.
-    """
+    """Read one UTF-8 body file without exposing its contents on failure."""
     try:
         return body_file.read_text(encoding=BODY_FILE_ENCODING)
     except (OSError, UnicodeError) as error:
@@ -184,19 +167,7 @@ def lint_durable_post(
     title: str | None,
     body_text: str | None,
 ) -> tuple[DurablePostFinding, ...]:
-    """Return content findings for one locally valid GitHub post request.
-
-    Args:
-        action: GitHub post action name.
-        title: Pull request title when the action accepts one.
-        body_text: Decoded body text when the action accepts a body.
-
-    Returns:
-        Content findings in stable rule order.
-
-    Raises:
-        DurablePostUsageError: The action and supplied fields are not a valid request.
-    """
+    """Return content findings for one locally valid GitHub post request."""
     _validate_request_shape(action, title, body_text)
     return (*_title_findings(title), *_body_findings(action, body_text))
 
@@ -210,14 +181,7 @@ def _parse_arguments(all_arguments: Sequence[str]) -> argparse.Namespace:
 
 
 def main(all_arguments: Sequence[str]) -> int:
-    """Validate one GitHub post and return its result status.
-
-    Args:
-        all_arguments: Command arguments after the script name.
-
-    Returns:
-        Zero when clean, one for content findings, or two for invalid input.
-    """
+    """Validate one GitHub post and return its result status."""
     arguments = _parse_arguments(all_arguments)
     try:
         body_text = (

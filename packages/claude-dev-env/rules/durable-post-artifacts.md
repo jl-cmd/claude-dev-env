@@ -40,7 +40,8 @@ name does not form a path.
 
 ## Validation
 
-Run `.agents/skills/_shared/pr-loop/scripts/durable_post_lint.py` before the
+Resolve the active managed root (`CLAUDE_CONFIG_DIR` when set, `~/.claude`
+otherwise), then run `<managed-root>/scripts/durable_post_lint.py` before the
 server write. Pass the matching action and body file. Use `pr-create`,
 `pr-edit`, `pr-comment`, `pr-review`, `issue-create`, `issue-edit`,
 `issue-comment`, or `github-mcp-post`.

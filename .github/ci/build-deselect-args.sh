@@ -9,7 +9,6 @@
 # both counts together and is out of this check's reach.
 
 deselect_source_lists=(
-  .github/ci/live-post-audit-deselects.txt
   .github/ci/windows-semantics-node-ids.txt
   .github/ci/known-pending-deselects.txt
 )

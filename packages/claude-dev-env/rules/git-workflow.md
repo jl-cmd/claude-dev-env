@@ -19,13 +19,13 @@ User-level rule: applies to **every** git repo that uses GitHub with `gh`. Small
 
 Use the `pr-description-writer` agent before creating a pull request or
 rewriting its full description. Publish its title and body file through
-`.agents/skills/pull-request/scripts/pull_request.py`. The
-`pr-title-description` skill may review the writer's output but cannot replace
-the required writer.
+`.agents/skills/pull-request/scripts/pull_request.py`.
 
-Run `_shared/pr-loop/scripts/durable_post_lint.py` before any pull request,
-issue, or GitHub MCP post. The linter checks the action-specific title, body,
-and volatile-path rules before credential lookup or network access.
+Resolve the active managed root (`CLAUDE_CONFIG_DIR` when set, `~/.claude`
+otherwise), then run `<managed-root>/scripts/durable_post_lint.py` before any
+pull request, issue, or GitHub MCP post. The linter checks the action-specific
+title, body, and volatile-path rules before credential lookup or network
+access.
 
 Use `.agents/skills/pull-request/scripts/recover_legacy_author.py
 <exact-state-file> --confirm-inactive` only for one explicitly selected legacy

@@ -19,7 +19,6 @@ packages = [
     "hooks_constants",
     "git_hooks_constants",
     "pr_loop_shared_constants",
-    "skills_pr_loop_constants",
     "pr_converge_skill_constants",
     "pr_converge_scripts_constants",
     "usage_pause_constants",
@@ -37,7 +36,6 @@ packages = [
 hooks_constants = "hooks/hooks_constants"
 git_hooks_constants = "hooks/git-hooks/git_hooks_constants"
 pr_loop_shared_constants = "_shared/pr-loop/scripts/pr_loop_shared_constants"
-skills_pr_loop_constants = ".agents/skills/_shared/pr-loop/scripts/skills_pr_loop_constants"
 pr_converge_skill_constants = "_shared/pr-loop/scripts/pr_converge_skill_constants"
 pr_converge_scripts_constants = "_shared/pr-loop/scripts/pr_converge_scripts_constants"
 usage_pause_constants = ".agents/skills/usage-pause/scripts/usage_pause_constants"

@@ -32,6 +32,8 @@ const INSTALLER_PATH = join(THIS_DIRECTORY, 'install.mjs');
 const PACKAGE_DIRECTORY = dirname(THIS_DIRECTORY);
 const SHIPPED_SKILL_NAME = 'privacy-hygiene';
 const ELI5_SKILL_NAME = 'eli5';
+const E_CODE_REVIEW_SKILL_NAME = 'e-code-review';
+const REFERENCE_DIRECTORY_NAME = 'reference';
 const SHIPPED_AGENT_FILE_NAME = 'clean-coder.md';
 const SHIPPED_AGENT_FILE_NAMES = [
     SHIPPED_AGENT_FILE_NAME,
@@ -69,10 +71,7 @@ const CLEAN_CODER_POLICY_REFERENCES = [
     ],
 ];
 const PERSONAL_SKILL_NAME = 'my-notes';
-const SHARED_DIRECTORY_NAME = '_shared';
-const PR_LOOP_DIRECTORY_NAME = 'pr-loop';
 const PREFLIGHT_PROPOSAL_FILE_NAME = 'preflight-proposal.md';
-const PREFLIGHT_PROPOSAL_POINTER = '@~/.claude/_shared/pr-loop/preflight-proposal.md';
 
 /**
  * @param {string} homeDirectory
@@ -100,20 +99,23 @@ function runInstaller(homeDirectory, extraArguments, environmentOverrides = {}) 
 }
 
 /**
- * @param {{ homeDirectory: string, skillsInstallDirectory: string }} installationPaths
+ * @param {{ skillsInstallDirectory: string }} installationPaths
  */
 function assertProposalContractInstallation(installationPaths) {
-    const { homeDirectory, skillsInstallDirectory } = installationPaths;
+    const { skillsInstallDirectory } = installationPaths;
     const allContractPathSegments = [
-        SHARED_DIRECTORY_NAME, PR_LOOP_DIRECTORY_NAME, PREFLIGHT_PROPOSAL_FILE_NAME,
+        E_CODE_REVIEW_SKILL_NAME,
+        REFERENCE_DIRECTORY_NAME,
+        PREFLIGHT_PROPOSAL_FILE_NAME,
     ];
-    const installedPointerPath = join(skillsInstallDirectory, ...allContractPathSegments);
-    const pointerLine = readFileSync(installedPointerPath, 'utf8').trimEnd().split('\n').at(-1);
-    const allTargetSegments = pointerLine.slice('@~/'.length).split('/');
-    const installedContractPath = join(homeDirectory, ...allTargetSegments);
-    const sourceContractPath = join(PACKAGE_DIRECTORY, ...allContractPathSegments);
+    const installedContractPath = join(skillsInstallDirectory, ...allContractPathSegments);
+    const sourceSkillsDirectory = resolvePackageManagedDirectory(
+        PACKAGE_DIRECTORY,
+        MANAGED_SKILLS_DIRECTORY_NAME,
+    );
+    const sourceContractPath = join(sourceSkillsDirectory, ...allContractPathSegments);
 
-    assert.equal(pointerLine, PREFLIGHT_PROPOSAL_POINTER);
+    assert.equal(existsSync(installedContractPath), true);
     assert.equal(readFileSync(installedContractPath, 'utf8'), readFileSync(sourceContractPath, 'utf8'));
 }
 
@@ -197,7 +199,7 @@ test('a full install writes skills and agents under .agents and points .claude a
         );
         assert.equal(realpathSync(lookupSkillFile), realpathSync(canonicalSkillFile));
         assert.equal(realpathSync(lookupEli5SkillFile), realpathSync(canonicalEli5SkillFile));
-        assertProposalContractInstallation({ homeDirectory, skillsInstallDirectory });
+        assertProposalContractInstallation({ skillsInstallDirectory });
         assert.equal(
             readFileSync(lookupAgentFile, 'utf8'),
             readFileSync(canonicalAgentFile, 'utf8'),

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib
 import os
 import subprocess
 import sys
@@ -19,12 +18,17 @@ from github_pr_command_constants.config.constants import (
     ACTION_EDIT,
     ACTION_FAILED_MESSAGE,
     ACTION_REVIEW,
+    ALL_DURABLE_POST_LINTER_RELATIVE_PATH_PARTS,
+    ALL_GITHUB_AUTHORIZATION_ENVIRONMENT_KEYS,
     ALL_LINTER_ACTIONS_BY_COMMAND,
     ALL_REVIEW_FLAGS_BY_EVENT,
+    CONFIG_DIR_OVERRIDE_ENVIRONMENT_KEY,
+    DEFAULT_MANAGED_ROOT_DIRECTORY_NAME,
+    GH_TOKEN_ENVIRONMENT_KEY,
+    GITHUB_TOKEN_ENVIRONMENT_KEY,
     PACKAGE_ROOT_PARENT_INDEX,
     REVIEW_EVENT_COMMENT,
     SELECTED_ACCOUNT_ENVIRONMENT_KEY,
-    SKILLS_DIRECTORY_PARENT_INDEX,
 )
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -60,17 +64,33 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _linter_path() -> Path:
-    return (
-        Path(__file__).resolve().parents[SKILLS_DIRECTORY_PARENT_INDEX]
-        / "_shared/pr-loop/scripts/durable_post_lint.py"
+def _configured_managed_root(all_environment: Mapping[str, str]) -> Path:
+    configured_root_text = all_environment.get(CONFIG_DIR_OVERRIDE_ENVIRONMENT_KEY, "").strip()
+    if not configured_root_text:
+        return Path.home() / DEFAULT_MANAGED_ROOT_DIRECTORY_NAME
+    configured_root = Path(configured_root_text).expanduser()
+    if configured_root.is_absolute():
+        return configured_root
+    return Path.home() / configured_root
+
+
+def _linter_path(all_environment: Mapping[str, str]) -> Path:
+    source_candidate = Path(__file__).resolve().parents[PACKAGE_ROOT_PARENT_INDEX].joinpath(
+        *ALL_DURABLE_POST_LINTER_RELATIVE_PATH_PARTS
+    )
+    if source_candidate.is_file():
+        return source_candidate
+    return _configured_managed_root(all_environment).joinpath(
+        *ALL_DURABLE_POST_LINTER_RELATIVE_PATH_PARTS
     )
 
 
-def _linter_arguments(arguments: argparse.Namespace) -> list[str]:
+def _linter_arguments(
+    arguments: argparse.Namespace, all_environment: Mapping[str, str]
+) -> list[str]:
     all_arguments = [
         sys.executable,
-        str(_linter_path()),
+        str(_linter_path(all_environment)),
         "--action",
         ALL_LINTER_ACTIONS_BY_COMMAND[arguments.action],
     ]
@@ -138,28 +158,9 @@ def _post_arguments(arguments: argparse.Namespace) -> list[str]:
     ]
 
 
-def _shared_environment_key_names() -> tuple[str, str, tuple[str, ...]]:
-    shared_directory = (
-        Path(__file__).resolve().parents[PACKAGE_ROOT_PARENT_INDEX]
-        / "_shared/pr-loop/scripts"
-    )
-    shared_directory_text = str(shared_directory)
-    if shared_directory_text not in sys.path:
-        sys.path.insert(0, shared_directory_text)
-    constants_module = importlib.import_module(
-        "pr_loop_shared_constants.post_audit_thread_constants"
-    )
-    return (
-        constants_module.GITHUB_TOKEN_ENV_VAR_NAME,
-        constants_module.GH_TOKEN_ENV_VAR_NAME,
-        constants_module.ALL_GH_TOKEN_ENV_VAR_NAMES,
-    )
-
-
 def _lookup_environment(all_environment: Mapping[str, str]) -> dict[str, str]:
     lookup_environment = dict(all_environment)
-    _, _, all_authorization_names = _shared_environment_key_names()
-    for each_name in all_authorization_names:
+    for each_name in ALL_GITHUB_AUTHORIZATION_ENVIRONMENT_KEYS:
         lookup_environment.pop(each_name, None)
     return lookup_environment
 
@@ -203,12 +204,9 @@ def _action_environment(
     )
     if account_authorization is None:
         return None
-    parent_authorization_name, child_authorization_name, _ = (
-        _shared_environment_key_names()
-    )
     action_environment = dict(all_environment)
-    action_environment.pop(parent_authorization_name, None)
-    action_environment[child_authorization_name] = account_authorization
+    action_environment.pop(GITHUB_TOKEN_ENVIRONMENT_KEY, None)
+    action_environment[GH_TOKEN_ENVIRONMENT_KEY] = account_authorization
     return action_environment
 
 
@@ -247,19 +245,10 @@ def main(
     all_environment: Mapping[str, str],
     command_runner: CommandRunner,
 ) -> int:
-    """Run one validated pull request action.
-
-    Args:
-        all_arguments: Command arguments after the script name.
-        all_environment: Parent environment copied for child processes.
-        command_runner: Process runner used by tests and production.
-
-    Returns:
-        The linter, account lookup, or GitHub action exit status.
-    """
+    """Run one validated pull request action."""
     arguments = _build_parser().parse_args(list(all_arguments))
     completed_lint = command_runner(
-        _linter_arguments(arguments), check=False, shell=False
+        _linter_arguments(arguments, all_environment), check=False, shell=False
     )
     if completed_lint.returncode != 0:
         return completed_lint.returncode

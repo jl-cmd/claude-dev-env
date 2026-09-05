@@ -1,6 +1,6 @@
 """Tests for durable GitHub post linter constants."""
 
-from skills_pr_loop_constants.durable_post_lint_constants import (
+from durable_post_lint_config.config.constants import (
     ALL_CONVENTIONAL_TITLE_TYPES,
     ALL_POST_ACTIONS,
     CONVENTIONAL_TITLE_PATTERN,

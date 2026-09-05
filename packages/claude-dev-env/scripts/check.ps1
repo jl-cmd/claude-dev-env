@@ -152,7 +152,6 @@ if (-not $SkipMypy) {
                 copilot_quota.py `
                 fix_hookspath.py `
                 grant_project_claude_permissions.py `
-                post_audit_thread.py `
                 preflight_self_heal.py `
                 preflight.py `
                 reviewer_availability.py `

@@ -38,9 +38,8 @@ Use this skill for one pull request action:
 - Submit a pull request review.
 - Recover one selected legacy author record before the action.
 
-Send issue create, edit, and comment work to `issue-tracker`. Send review
-convergence to `pr-cleanup` or `autoconverge`. Send commits to
-`source-command-commit`.
+Send issue create, edit, and comment work to `issue-tracker`. Send review and
+fix-loop work to `e-code-review`. Send commits to `source-command-commit`.
 
 Require one repository and one action target. Stop before author lookup or
 network work when the repository, pull request, action, author, or required
@@ -75,11 +74,9 @@ current process environment.
 | Skill | When | Produces | If missing |
 |---|---|---|---|
 | `pr-description-writer` | Before create or a full body rewrite | A reviewed title and body file | Stop the create or rewrite and report that authoring is required |
-| `pr-title-description` | Optional title and body review | Review findings for the writer's output | Continue with the required writer output |
 | `privacy-hygiene` | Before any durable GitHub post | A clean body and repository privacy sweep | Stop before publication and report the missing gate |
 | `issue-tracker` | Issue create, edit, or comment requests | Issue state and issue URLs | Route the request there. |
-| `pr-cleanup` | Placement, naming, sizing, or cleanup convergence | Cleanup findings or a focused PR boundary | Route the request there. |
-| `autoconverge` | Autonomous PR review and fix loops | A converged draft or ready-state decision | Route the request there. |
+| `e-code-review` | Review or review/fix loop requests | Structured findings or a clean review result | Route the request there. |
 | `source-command-commit` | Commit or push requests | A verified commit or pushed branch | Route the request there. |
 
 ## Task seeding
@@ -102,14 +99,16 @@ request target. Create actions publish drafts. Record the target before any writ
 
 For create and full body rewrite, invoke the installed
 `pr-description-writer`. Require its title and body file as the authoring
-output. `pr-title-description` may review that output. A comment or review may
-use a supplied body file when it does not rewrite the pull request description.
+output. A comment or review may use a supplied body file when it does not
+rewrite the pull request description.
 
 ### 3. Run the local linter
 
-Run `_shared/pr-loop/scripts/durable_post_lint.py` with the matching action and
-title or body file. Use `pr-create`, `pr-edit`, `pr-comment`, or `pr-review`.
-The linter owns the action-specific body, title, and volatile-path rules.
+Resolve the active managed root (`CLAUDE_CONFIG_DIR` when set, `~/.claude`
+otherwise), then run `<managed-root>/scripts/durable_post_lint.py` with the
+matching action and title or body file. Use `pr-create`, `pr-edit`, `pr-comment`,
+or `pr-review`. The linter owns the action-specific body, title, and
+volatile-path rules.
 
 Exit code `0` continues to the next gate. Any non-zero exit stops the action. Fix
 the named local input and rerun the linter. Do not look up the author or make a
@@ -197,8 +196,7 @@ The recovery command restores the named account and deletes only that record.
 | `scripts/recover_legacy_author.py` | Command for one selected legacy author record |
 | `scripts/test_github_pr_command_constants.py` | Tests for the command and recovery constants |
 | `scripts/test_recover_legacy_author.py` | Tests for `recover_legacy_author.py` |
-| `_shared/pr-loop/scripts/durable_post_lint.py` | Shared action-aware title, body, and path validator |
-| `_shared/pr-loop/scripts/test_durable_post_lint.py` | Tests for the shared validator |
+| `<managed-root>/scripts/durable_post_lint.py` | Shared action-aware title, body, and path validator |
 | `scripts/gh_artifact_upload.py` | Helper for permanent GitHub binary evidence URLs |
 | `scripts/tests/test_gh_artifact_upload.py` | Tests for binary evidence upload |
 

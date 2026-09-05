@@ -96,7 +96,6 @@ def _comment_policy_surfaces(package_root: Path) -> tuple[Path, ...]:
         package_root / "system-prompts" / "software-engineer.xml",
         package_root / ".agents" / "agents" / "clean-coder.md",
         package_root / ".agents" / "agents" / "code-quality-agent.md",
-        package_root / "_shared" / "pr-loop" / "code-rules-gate.md",
         package_root / "audit-rubrics" / "category_rubrics" / "category-j-code-rules-compliance.md",
         package_root / "audit-rubrics" / "prompts" / "category-j-code-rules-compliance.md",
         package_root / "audit-rubrics" / "category_rubrics" / "category-l-behavior-equivalence.md",
@@ -160,7 +159,7 @@ def _category_l_policy_texts() -> tuple[str, str, str]:
     )
 
 
-def _comment_policy_summary_texts() -> tuple[str, str, str, str]:
+def _comment_policy_summary_texts() -> tuple[str, str, str]:
     clean_coder = _PACKAGE_ROOT / ".agents" / "agents" / "clean-coder.md"
     category_j = (
         _PACKAGE_ROOT
@@ -169,24 +168,21 @@ def _comment_policy_summary_texts() -> tuple[str, str, str, str]:
         / "category-j-code-rules-compliance.md"
     )
     code_quality = _PACKAGE_ROOT / ".agents" / "agents" / "code-quality-agent.md"
-    gate = _PACKAGE_ROOT / "_shared" / "pr-loop" / "code-rules-gate.md"
     return tuple(
         each_path.read_text(encoding="utf-8").lower()
-        for each_path in (clean_coder, category_j, code_quality, gate)
+        for each_path in (clean_coder, category_j, code_quality)
     )
 
 
 def test_comment_policy_uses_changed_comment_names_and_type_directives() -> None:
     category_l_rubric, category_l_prompt, audit_categories = _category_l_policy_texts()
-    clean_coder, category_j, code_quality, gate = _comment_policy_summary_texts()
+    clean_coder, category_j, code_quality = _comment_policy_summary_texts()
     assert "| l7 | changed-comment handling" in category_l_rubric
     assert "**l7. changed-comment handling**" in category_l_prompt
     assert '"axis_name": "changed-comment handling"' in audit_categories
     assert "no type-ignore directives" in clean_coder
     assert "no `# type: ignore` directives" in category_j
     assert "production and test code" in code_quality
-    assert "comments tied to touched code are removed" in gate
-    assert "comments tied to untouched code remain unchanged" in gate
 
 
 def test_comment_policy_removes_directive_justification_guidance() -> None:

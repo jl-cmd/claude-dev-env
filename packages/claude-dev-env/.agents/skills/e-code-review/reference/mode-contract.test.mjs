@@ -33,7 +33,8 @@ function assertReviewLevelExtension() {
 }
 
 function assertProposalHandoffs() {
-  assert.match(proposalSource, /canonical contract owns the immutable range/)
+  assert.match(proposalSource, /This file owns the proposal contract for `e-code-review`/)
+  assert.match(proposalSource, /exact `base_sha\.\.\.head_sha` range/)
   const fixModeSource = sourceBetweenHeadings(
     fixSource,
     '## Preflight-proposal mode',
