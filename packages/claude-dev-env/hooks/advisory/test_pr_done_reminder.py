@@ -129,6 +129,23 @@ def test_should_say_done_when_mergeable_and_checks_pass() -> None:
     assert "NOT DONE" not in context
 
 
+def test_should_keep_the_checklist_order_verdict_then_recheck_then_footer() -> None:
+    all_lines = pr_done_reminder.build_reminder_context(_CLEAN_PR_OBJECT).split("\n")
+
+    all_labels = [each_line.split(":")[0] for each_line in all_lines[1:-1]]
+    assert all_labels == [
+        "PR #42  https",
+        "Mergeable",
+        "CI checks",
+        "Draft",
+        "Label done",
+        "Verdict",
+        "Add label",
+        "Re-check",
+    ]
+    assert all_lines[-1] == "A PR is done only when every line above is clean."
+
+
 def test_should_say_not_done_and_name_the_conflict_fix() -> None:
     conflicted = {**_CLEAN_PR_OBJECT, "mergeable": "CONFLICTING", "mergeStateStatus": "DIRTY"}
 

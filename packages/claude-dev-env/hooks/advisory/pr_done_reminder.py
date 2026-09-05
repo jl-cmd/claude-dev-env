@@ -230,6 +230,24 @@ def _has_done_label(all_pr_fields: dict[str, object]) -> bool:
     )
 
 
+def _is_done(mergeable_value: str, all_check_counts: dict[str, int]) -> bool:
+    return (
+        mergeable_value == MERGEABLE_CLEAN_VALUE
+        and all_check_counts["failing"] == 0
+        and all_check_counts["pending"] == 0
+    )
+
+
+def _verdict_lines(number: object, is_done: bool) -> list[str]:
+    """Return the verdict line, the add-label command on DONE, and the re-check line."""
+    all_lines = [f"Verdict:     {VERDICT_DONE if is_done else VERDICT_NOT_DONE}"]
+    if is_done:
+        add_label_command = ADD_LABEL_COMMAND_TEMPLATE.format(number=number, label=DONE_LABEL_NAME)
+        all_lines.append(f"Add label:   {add_label_command}")
+    all_lines.append(f"Re-check:    {RECHECK_COMMAND_TEMPLATE.format(number=number)}")
+    return all_lines
+
+
 def build_reminder_context(all_pr_fields: dict[str, object]) -> str:
     """Build the checklist text from a ``gh pr view --json`` object.
 
@@ -246,12 +264,6 @@ def build_reminder_context(all_pr_fields: dict[str, object]) -> str:
         mergeable_value, ALL_REMINDER_HINTS_BY_MERGEABLE[MERGEABLE_UNKNOWN_VALUE]
     )
     all_check_counts = _check_counts(all_pr_fields)
-    is_done = (
-        mergeable_value == MERGEABLE_CLEAN_VALUE
-        and all_check_counts["failing"] == 0
-        and all_check_counts["pending"] == 0
-    )
-    verdict = VERDICT_DONE if is_done else VERDICT_NOT_DONE
     all_lines = [
         REMINDER_HEADER,
         f"PR #{number}  {all_pr_fields.get('url', '')}",
@@ -259,14 +271,9 @@ def build_reminder_context(all_pr_fields: dict[str, object]) -> str:
         f"CI checks:   {_checks_line(all_check_counts)}",
         f"Draft:       {'yes' if all_pr_fields.get('isDraft') else 'no'}",
         f"Label done:  {'set' if _has_done_label(all_pr_fields) else 'not set'}",
-        f"Verdict:     {verdict}",
+        *_verdict_lines(number, _is_done(mergeable_value, all_check_counts)),
+        REMINDER_FOOTER,
     ]
-    if is_done:
-        all_lines.append(
-            f"Add label:   {ADD_LABEL_COMMAND_TEMPLATE.format(number=number, label=DONE_LABEL_NAME)}"
-        )
-    all_lines.append(f"Re-check:    {RECHECK_COMMAND_TEMPLATE.format(number=number)}")
-    all_lines.append(REMINDER_FOOTER)
     return REMINDER_LINE_SEPARATOR.join(all_lines)
 
 
