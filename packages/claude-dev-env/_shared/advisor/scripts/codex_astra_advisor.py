@@ -70,26 +70,26 @@ def _resolved_settings(
 
 
 def is_astra_advisor_enabled(all_settings: Mapping[str, str] | None) -> bool:
-    """Return whether the Astra advisor flag is enabled.
+    """Return whether the Astra advisor flag is on.
 
     Args:
-        all_settings: Optional environment-like settings mapping.
+        all_settings: Environment mapping, or None to read os.environ.
 
     Returns:
-        Whether the Astra feature flag contains a documented truthy value.
+        True when the flag holds a truthy value.
     """
     raw_setting = _resolved_settings(all_settings).get(ASTRA_ENV_VAR, "")
     return raw_setting.strip().lower() in ALL_ASTRA_TRUTHY_VALUES
 
 
 def resolve_advisor_effort(all_settings: Mapping[str, str] | None) -> str:
-    """Resolve the configured advisor effort.
+    """Return ADVISOR_EFFORT, or low when the value is missing or unknown.
 
     Args:
-        all_settings: Optional environment-like settings mapping.
+        all_settings: Environment mapping, or None to read os.environ.
 
     Returns:
-        A supported effort level, defaulting to low.
+        The requested effort, or low.
     """
     requested = _resolved_settings(all_settings).get(ADVISOR_EFFORT_ENV_VAR, "")
     normalized = requested.strip().lower()
@@ -97,13 +97,13 @@ def resolve_advisor_effort(all_settings: Mapping[str, str] | None) -> str:
 
 
 def resolve_usage_probe_path(home_directory: Path) -> Path:
-    """Return the installed Codex usage-probe path.
+    """Return the Codex usage-probe path under home_directory.
 
     Args:
-        home_directory: Home directory for constructing the installed path.
+        home_directory: Home directory that holds the installed probe.
 
     Returns:
-        The absolute or relative probe path beneath the supplied home directory.
+        Path to the usage probe under that home.
     """
     return (
         home_directory
@@ -116,13 +116,13 @@ def resolve_usage_probe_path(home_directory: Path) -> Path:
 
 
 def resolve_codex_executable(all_settings: Mapping[str, str] | None) -> str | None:
-    """Resolve the Codex executable override or PATH entry.
+    """Return the Codex executable from the override or PATH.
 
     Args:
-        all_settings: Optional environment-like settings mapping.
+        all_settings: Environment mapping, or None to read os.environ.
 
     Returns:
-        The executable path or name, or None when unavailable.
+        Executable path or name, or None if neither is set.
     """
     override = _resolved_settings(all_settings).get(ADVISOR_CODEX_EXECUTABLE_ENV_VAR, "").strip()
     return override or shutil.which(CODEX_EXECUTABLE)
@@ -133,15 +133,15 @@ def build_codex_arguments(
     session_id: str | None = None,
     reasoning_effort: str = ADVISOR_EFFORT_DEFAULT,
 ) -> list[str]:
-    """Build the shell-free Codex argv for bind or resume.
+    """Build the Codex command list for bind or resume.
 
     Args:
-        codex_executable: Resolved Codex executable.
-        session_id: Existing Codex session to resume, when present.
-        reasoning_effort: Codex model reasoning effort.
+        codex_executable: Codex executable path or name.
+        session_id: Session to resume, or None for a new bind.
+        reasoning_effort: Codex reasoning effort.
 
     Returns:
-        The command argument vector.
+        Command arguments for Codex exec.
     """
     arguments = [
         codex_executable,
@@ -230,12 +230,19 @@ def run_codex_astra_advisor(
     session_id: str | None,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> CodexAstraAdvisorReply:
-    """Run one usage-gated Astra bind or resume attempt.
+    """Bind or resume a read-only Codex Astra advisor.
+
     Args:
-        prompt, working_directory, preflight, probe_path, setting_by_name, session_id,
-        process_runner: Advisor inputs and process executor.
+        prompt: Advisor prompt text.
+        working_directory: Working directory for Codex.
+        preflight: Usage probe result, or None to run the probe.
+        probe_path: Usage-probe path, or None for the installed path.
+        setting_by_name: Environment mapping, or None to read os.environ.
+        session_id: Session to resume, or None for a new bind.
+        process_runner: Callable that runs the probe and Codex.
+
     Returns:
-        A successful advisor reply or typed fallback.
+        Advisor reply, or a fallback.
     """
     if not is_astra_advisor_enabled(setting_by_name):
         return build_fallback_reply("Astra advisor flag is disabled", False, ASTRA_FALLBACK_KIND_DECLINED)
@@ -247,10 +254,10 @@ def run_codex_astra_advisor(
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
-    """Build the Astra helper command-line parser.
+    """Build the command-line parser for bind and resume.
 
     Returns:
-        The configured parser.
+        Argument parser for this helper.
     """
     parser = argparse.ArgumentParser(description="Bind or consult a read-only Codex Astra advisor.")
     mode_group = parser.add_mutually_exclusive_group(required=True)
@@ -271,10 +278,10 @@ def main(all_cli_arguments: Sequence[str]) -> int:
     """Run one bind or resume request from stdin.
 
     Args:
-        all_cli_arguments: CLI arguments excluding the program name.
+        all_cli_arguments: CLI arguments after the program name.
 
     Returns:
-        Zero for a successful advisor reply and one for fallback.
+        0 when the advisor reply succeeds, 1 on fallback.
     """
     parsed = build_argument_parser().parse_args(list(all_cli_arguments))
     all_settings = dict(os.environ)

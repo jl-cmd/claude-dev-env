@@ -1,4 +1,4 @@
-"""Parse and construct typed Astra advisor replies."""
+"""Parse Codex JSONL and build Astra advisor replies."""
 
 from __future__ import annotations
 
@@ -40,15 +40,15 @@ def build_fallback_reply(
     is_astra_enabled: bool,
     fallback_kind: str | None = ASTRA_FALLBACK_KIND_BROKEN,
 ) -> CodexAstraAdvisorReply:
-    """Build a typed fallback reply.
+    """Build a failed advisor reply.
 
     Args:
-        reason: Explanation for the fallback.
-        is_astra_enabled: Whether the Astra route was enabled.
-        fallback_kind: Classification of the fallback.
+        reason: Why the request fell back.
+        is_astra_enabled: True when the Astra flag was on.
+        fallback_kind: Kind of fallback.
 
     Returns:
-        A typed fallback reply.
+        Failed reply with no session or guidance.
     """
     return CodexAstraAdvisorReply(
         None,
@@ -67,15 +67,15 @@ def build_fallback_reply(
 def build_success_reply(
     session_id: str, guidance: str, signal: str
 ) -> CodexAstraAdvisorReply:
-    """Build a successful typed reply.
+    """Build a successful advisor reply.
 
     Args:
-        session_id: Codex session identifier.
-        guidance: Advisor guidance text.
-        signal: Leading guidance signal.
+        session_id: Codex session id.
+        guidance: Advisor text.
+        signal: First-line guidance signal.
 
     Returns:
-        A successful typed reply.
+        Successful reply with Astra enabled.
     """
     return CodexAstraAdvisorReply(
         session_id,
@@ -134,15 +134,16 @@ def parse_codex_jsonl_reply(
     is_astra_enabled: bool,
     fallback_kind: str | None = None,
 ) -> CodexAstraAdvisorReply:
-    """Parse Codex JSONL into a typed Astra advisor reply.
+    """Parse Codex JSONL into an Astra advisor reply.
 
     Args:
-        jsonl_text: JSONL emitted by Codex.
-        existing_session_id: Existing session expected on resume.
-        is_astra_enabled: Whether this route had Astra enabled.
+        jsonl_text: JSONL from Codex stdout.
+        existing_session_id: Session expected on resume, or None on bind.
+        is_astra_enabled: True when the Astra flag was on.
+        fallback_kind: Kind of fallback on a failed reply.
 
     Returns:
-        A successful advisor reply or typed fallback.
+        Advisor reply, or a fallback.
     """
     try:
         session_id, guidance = _collect_reply_parts(jsonl_text)

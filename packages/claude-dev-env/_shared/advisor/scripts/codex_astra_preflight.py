@@ -91,14 +91,14 @@ def run_astra_preflight(
     probe_path: Path,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> AstraPreflight:
-    """Run the usage probe and evaluate Astra eligibility.
+    """Run the usage probe and decide whether Astra may bind.
 
     Args:
         probe_path: Path to the installed usage probe.
-        process_runner: Callable for executing the probe.
+        process_runner: Callable that runs the probe.
 
     Returns:
-        The meter decision and fallback metadata.
+        Eligibility, remaining usage percent, reason, and fallback kind.
     """
     try:
         completed = _run_probe(probe_path, process_runner)
