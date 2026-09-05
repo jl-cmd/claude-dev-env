@@ -17,12 +17,6 @@
 #   - Issue #21 listed hooks/blocking/test_gh_artifact_upload.py; amended to the
 #     real path packages/claude-dev-env/scripts/tests/test_gh_artifact_upload.py.
 #
-# Quality gate (#23): runs packages/claude-dev-env/scripts/check.ps1 -SkipTests
-# (ruff + mypy). The enforcer pytest suite runs in the package-suite job under
-# the same event gating, so the quality gate carries the static-analysis tools
-# only. The bare local `check.ps1` (no -SkipTests) stays the full ruff + mypy +
-# pytest gate.
-#
 # basetemp lives under RUNNER_TEMP (not OS temp root, not inside the repo) so
 # is_ephemeral_script_path Linux exemptions do not treat pytest temp paths as
 # ephemeral production scripts.
@@ -258,13 +252,10 @@ jobs:
             ruff \
             mypy
 
-      - name: "Run check.ps1 -SkipTests (ruff + mypy)"
+      - name: "Run check.ps1 -SkipTests -SkipRepositoryPolicy"
         shell: pwsh
         run: |
-          # Static-analysis gate: ruff + mypy. The enforcer pytest suite runs in
-          # the package-suite job under the same event gating, so check.ps1 runs
-          # with -SkipTests here. The bare local check.ps1 stays the full gate.
-          $checkOutputLines = & pwsh -File packages/claude-dev-env/scripts/check.ps1 -SkipTests 2>&1
+          $checkOutputLines = & pwsh -File packages/claude-dev-env/scripts/check.ps1 -SkipTests -SkipRepositoryPolicy 2>&1
           $checkExitCode = $LASTEXITCODE
           $checkOutputLines | ForEach-Object { Write-Host $_ }
           $checkOutputText = ($checkOutputLines | Out-String)
@@ -274,6 +265,39 @@ jobs:
           if ($checkOutputText -notmatch 'CHECK: OK') {
             throw "check.ps1 output missing CHECK: OK"
           }
+
+  committed-tree:
+    name: Check the committed tree from the event merge base
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install committed-tree checker dependencies
+        run: pip install -e packages/claude-dev-env/
+
+      - name: Lint changes from the event merge base
+        env:
+          EVENT_BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          event_base_revision="${EVENT_BASE_REVISION}"
+          zero_revision="0000000000000000000000000000000000000000"
+          if [ -z "${event_base_revision}" ] || [ "${event_base_revision}" = "${zero_revision}" ]; then
+            event_base_revision="$(git rev-parse HEAD^1)"
+          fi
+          comparison_revision="$(git merge-base HEAD "${event_base_revision}")"
+          python packages/claude-dev-env/scripts/cde_lint.py --base "${comparison_revision}"
+
+      - name: Check repository policy
+        run: python packages/claude-dev-env/scripts/repository_policy.py
 
   windows-semantics:
     name: Windows-semantics micro-suite

@@ -1227,6 +1227,97 @@ class TestFetchPullRequestSnapshot:
         assert len(recording_api_caller.all_recorded_calls) == 2
 
 
+def _load_workflow(workflow_filename: str) -> tuple[str, dict[str, object]]:
+    workflow_path = _REPO_ROOT_PATH / ".github" / "workflows" / workflow_filename
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    parsed_workflow = yaml.safe_load(workflow_text)
+    assert isinstance(parsed_workflow, dict)
+    return workflow_text, parsed_workflow
+
+
+def _workflow_job(
+    parsed_workflow: dict[str, object], job_identifier: str
+) -> dict[str, object]:
+    all_jobs = parsed_workflow["jobs"]
+    assert isinstance(all_jobs, dict)
+    selected_job = all_jobs[job_identifier]
+    assert isinstance(selected_job, dict)
+    return selected_job
+
+
+def _job_run_text(job: dict[str, object]) -> str:
+    all_steps = job["steps"]
+    assert isinstance(all_steps, list)
+    all_run_blocks: list[str] = []
+    for each_step in all_steps:
+        assert isinstance(each_step, dict)
+        maybe_run_block = each_step.get("run")
+        if isinstance(maybe_run_block, str):
+            all_run_blocks.append(maybe_run_block)
+    return "\n".join(all_run_blocks)
+
+
+class TestCommittedTreeContinuousIntegration:
+    def should_lint_changes_from_the_event_merge_base(self) -> None:
+        _workflow_text, parsed_workflow = _load_workflow("ci-tests.yml")
+        committed_tree_job = _workflow_job(parsed_workflow, "committed-tree")
+        committed_tree_run_text = _job_run_text(committed_tree_job)
+        assert "github.event.pull_request.base.sha" in str(committed_tree_job)
+        assert 'git merge-base HEAD "${event_base_revision}"' in committed_tree_run_text
+        assert (
+            'cde_lint.py --base "${comparison_revision}"'
+            in committed_tree_run_text
+        )
+
+    def should_run_cde_lint_against_the_push_parent_on_main(self) -> None:
+        workflow_text, _parsed_workflow = _load_workflow("ci-tests.yml")
+        assert "github.event.before" in workflow_text
+
+    def should_run_the_repository_checker_on_pull_requests_and_main_pushes(self) -> None:
+        _workflow_text, parsed_workflow = _load_workflow("ci-tests.yml")
+        committed_tree_job = _workflow_job(parsed_workflow, "committed-tree")
+        committed_tree_run_text = _job_run_text(committed_tree_job)
+        assert "packages/claude-dev-env/scripts/repository_policy.py" in (
+            committed_tree_run_text
+        )
+        assert committed_tree_job.get("if") in (None, "")
+
+    def should_keep_repository_policy_out_of_the_quality_job(self) -> None:
+        _workflow_text, parsed_workflow = _load_workflow("ci-tests.yml")
+        quality_job_run_text = _job_run_text(
+            _workflow_job(parsed_workflow, "quality-gate")
+        )
+        assert "-SkipRepositoryPolicy" in quality_job_run_text
+        assert "repository_policy.py" not in quality_job_run_text
+
+    def should_keep_ruff_mypy_javascript_and_instruction_pairs_in_native_jobs(
+        self,
+    ) -> None:
+        workflow_text, parsed_workflow = _load_workflow("ci-tests.yml")
+        jobs = parsed_workflow["jobs"]
+        assert isinstance(jobs, dict)
+        assert "quality-gate" in jobs
+        assert "javascript" in jobs
+        assert "check.ps1 -SkipTests" in workflow_text or "-SkipTests" in workflow_text
+        instruction_pairs_text, instruction_pairs_workflow = _load_workflow(
+            "validate-instruction-pairs.yml"
+        )
+        assert "validate_instruction_pairs.py" in instruction_pairs_text
+        assert "instruction-pairs" in instruction_pairs_workflow["jobs"]
+
+
+class TestDraftPullRequestTitleValidation:
+    def should_validate_draft_pull_request_titles(self) -> None:
+        workflow_text, parsed_workflow = _load_workflow("pr-check.yml")
+        assert "draft == false" not in workflow_text
+        jobs = parsed_workflow["jobs"]
+        assert isinstance(jobs, dict)
+        validate_job = jobs["validate"]
+        assert isinstance(validate_job, dict)
+        assert "if" not in validate_job
+        assert validate_job["name"] == "Validate PR title"
+
+
 def _declared_label_names() -> frozenset[str]:
     labels_yml_path = _CI_SCRIPTS_DIR.parent / "labels.yml"
     raw_labels = yaml.safe_load(labels_yml_path.read_text(encoding="utf-8"))
