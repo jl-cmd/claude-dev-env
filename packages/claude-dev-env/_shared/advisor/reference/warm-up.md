@@ -8,7 +8,7 @@ Open this when binding the warm advisor on a Claude host or a Codex host, and fo
 The consuming skill's session tries Fable first. Spawn with:
 
 - `subagent_type: session-advisor` (see [`agents/session-advisor.md`](../../../agents/session-advisor.md) for the full signal contract).
-- `model`: the short alias via `resolve_cli_model_id("Fable")` (alias table: [`cli-chain.md`](cli-chain.md)) — `fable`. When Fable is out of usage and the Astra rung is open, use the Codex helper in [`astra-rung.md`](astra-rung.md) instead of this Agent spawn.
+- `model`: the short alias via `resolve_cli_model_id("Fable")` (alias table: [`cli-chain.md`](cli-chain.md)) — `fable`. When Fable is out of usage and the Astra rung is open, continue with the Codex helper in [`astra-rung.md`](astra-rung.md) as the Astra fallback.
 - `name`: a name the session and every consumer will use to reach it (e.g. `team-advisor-agent`).
 - `run_in_background: true`.
 - `prompt`: the charter below. A **Fable**-tier try carries the exact token `FABLE-SPAWN-AUTHORIZED` in that prompt — `hooks/blocking/fable_spawn_gate.py` denies every `Agent` or `Task` spawn at `model: fable` whose prompt lacks that token. A try at any other tier needs no token.
