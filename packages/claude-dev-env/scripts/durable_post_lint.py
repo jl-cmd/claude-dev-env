@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from durable_post_lint_constants import (
+from durable_post_lint_config.config.constants import (
     ACTION_PR_CREATE,
     ACTION_PR_EDIT,
     ALL_BARE_VOLATILE_PATH_MARKERS,
