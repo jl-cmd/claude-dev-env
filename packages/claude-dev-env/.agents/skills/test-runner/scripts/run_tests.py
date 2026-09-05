@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run pytest or Playwright after deterministic local readiness checks.
+"""Run pytest or Playwright after Django and Playwright readiness checks.
 
 ::
 
@@ -64,7 +64,7 @@ check_test_db_flag = preflight_checks.check_test_db_flag
 
 @dataclass(frozen=True)
 class SelectedRunner:
-    """The supported runner selected from the child argument vector."""
+    """The supported runner selected from the child arguments."""
 
     name: str
     is_playwright: bool
@@ -163,7 +163,7 @@ def _is_playwright_executable(
 
 
 def select_runner(all_child_arguments: Sequence[str]) -> SelectedRunner:
-    """Select one supported runner from an explicit child argv.
+    """Select one supported runner from the child arguments.
 
     Args:
         all_child_arguments: Child executable and its arguments.
@@ -172,7 +172,7 @@ def select_runner(all_child_arguments: Sequence[str]) -> SelectedRunner:
         The selected runner classification.
 
     Raises:
-        ValueError: The child argv is empty or unsupported.
+        ValueError: The child arguments are empty or unsupported.
     """
     if not all_child_arguments:
         raise ValueError(ERROR_CHILD_COMMAND_REQUIRED)
@@ -189,14 +189,14 @@ def extract_target_url(
     all_child_arguments: Sequence[str],
     is_playwright: bool,
 ) -> str:
-    """Return a URL carried by child args or the runner's local default.
+    """Return a URL from the child arguments, or the runner default.
 
     Args:
         all_child_arguments: Child executable and its arguments.
         is_playwright: Whether to use the Playwright default URL.
 
     Returns:
-        An explicit base URL or the selected runner's default URL.
+        A URL from the child arguments, or the runner default.
     """
     for each_index, each_argument in enumerate(all_child_arguments):
         if each_argument == BASE_URL_FLAG and each_index + 1 < len(all_child_arguments):
@@ -241,9 +241,9 @@ def run_preflight(
     """Run checks required by the selected runner before child launch.
 
     Args:
-        selected_runner: Runner selected from child argv.
+        selected_runner: Runner selected from child arguments.
         project_root: Directory used for project checks.
-        all_child_arguments: Complete child argv used for URL selection.
+        all_child_arguments: Complete child arguments used for URL selection.
 
     Returns:
         A blocking diagnostic when a readiness check fails, otherwise None.
@@ -285,7 +285,7 @@ def run_child_process(
 
 
 def main(all_arguments: Sequence[str]) -> int:
-    """Validate and run one explicit test command.
+    """Validate arguments, run preflight, then launch the child.
 
     Args:
         all_arguments: Command arguments without the executable name.

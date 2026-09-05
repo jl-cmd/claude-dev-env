@@ -249,7 +249,7 @@ git -C <repo-root> remote set-head origin -a
 
 The commit and push gates still fire on cloud Bash git commands and gate the
 run: `session_edit_stage_gate` and `block_main_commit`. Run tests through the
-explicit `test-runner` skill when the repository needs Django or Playwright
+`test-runner` skill when the repository needs Django or Playwright
 readiness checks.
 Follow them normally. `precommit_code_rules_gate` is a library module with no
 hook entry point; the native `git-hooks/pre_commit.py` runs the real

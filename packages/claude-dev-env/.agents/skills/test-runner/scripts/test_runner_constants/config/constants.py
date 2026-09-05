@@ -1,4 +1,4 @@
-"""Names, messages, and limits used by the explicit test runner."""
+"""Names, messages, and limits used by the test-runner command."""
 
 from __future__ import annotations
 

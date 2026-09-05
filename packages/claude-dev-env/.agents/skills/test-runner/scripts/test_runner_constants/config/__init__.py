@@ -1,1 +1,1 @@
-"""Configuration package for the explicit test runner."""
+"""Configuration package for the test-runner command."""

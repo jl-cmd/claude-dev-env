@@ -1,1 +1,1 @@
-"""Constants package for the explicit test runner."""
+"""Constants package for the test-runner command."""
