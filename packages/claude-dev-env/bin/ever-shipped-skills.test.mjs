@@ -28,3 +28,7 @@ test('EVER_SHIPPED_SKILL_NAMES includes every current shipped skill', () => {
 
     assert.deepEqual(allUncoveredSkillNames, [], 'every current skill must enter the fallback set');
 });
+
+test('EVER_SHIPPED_SKILL_NAMES retains the explicit test runner', () => {
+    assert.ok(EVER_SHIPPED_SKILL_NAMES.has('test-runner'));
+});

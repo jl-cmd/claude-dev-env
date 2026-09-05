@@ -172,6 +172,7 @@ export const CORE_SKILLS = [
     'grok-spawn',
     'pr-small-cl',
     'everything-search',
+    'test-runner',
     'privacy-hygiene',
     'issue-tracker',
     'task-build',

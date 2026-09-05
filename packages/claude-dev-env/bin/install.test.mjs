@@ -228,6 +228,11 @@ test('CORE_SKILLS ships ELI5 as the leaf presentation skill', () => {
     assert.equal(INSTALL_GROUPS.core.skills.includes('eli5'), true);
 });
 
+test('CORE_SKILLS ships test-runner for explicit Django and Playwright readiness checks', () => {
+    assert.ok(CORE_SKILLS.includes('test-runner'));
+    assert.equal(INSTALL_GROUPS.core.skills.includes('test-runner'), true);
+});
+
 
 test('EVER_SHIPPED_SKILL_NAMES retains imagegen so reinstall prunes the retired skill', () => {
     assert.ok(

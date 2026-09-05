@@ -122,6 +122,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'syncing-submodules',
     'task-build',
     'team-advisor',
+    'test-runner',
     'update',
     'usage-pause',
     'verified-build',

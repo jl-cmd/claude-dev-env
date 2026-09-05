@@ -26,7 +26,7 @@ Author-keyed logic accounts for the split: a self-PR check keys on the login tha
 
 ## Hooks that still gate a cloud run
 
-The commit and push gates read git commands, which a cloud run still issues through Bash, so they fire normally and the run follows them: `session_edit_stage_gate`, `block_main_commit`, `test_preflight_check`, and the pre-push base-ref check that needs `origin/HEAD` set (SKILL.md Step 2).
+The commit and push gates read git commands, which a cloud run still issues through Bash, so they fire normally and the run follows them: `session_edit_stage_gate`, `block_main_commit`, and the pre-push base-ref check that needs `origin/HEAD` set (SKILL.md Step 2). Run tests through the explicit `test-runner` skill when Django or Playwright readiness checks apply.
 
 ## Hooks that go quiet on the MCP path
 
