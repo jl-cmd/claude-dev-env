@@ -29,10 +29,10 @@ def terminology_diagnostics(
     document_set: DocumentSet,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Report staged prose that near-misses a newly introduced identifier.
+    """Report prose that near-misses a newly introduced identifier.
 
     Args:
-        document_set: Candidate staged documents and repository root.
+        document_set: Staged or base change selection and repository root.
         load_module: Shared script module loader.
 
     Returns:
