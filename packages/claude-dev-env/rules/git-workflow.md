@@ -23,9 +23,9 @@ rewriting its full description. Publish its title and body file through
 `pr-title-description` skill may review the writer's output but cannot replace
 the required writer.
 
-Run `_shared/pr-loop/scripts/durable_post_lint.py` before any pull request,
-issue, or GitHub MCP post. The linter checks the action-specific title, body,
-and volatile-path rules before credential lookup or network access.
+Run `scripts/durable_post_lint.py` before any pull request, issue, or GitHub MCP
+post. The linter checks the action-specific title, body, and volatile-path rules
+before credential lookup or network access.
 
 Use `.agents/skills/pull-request/scripts/recover_legacy_author.py
 <exact-state-file> --confirm-inactive` only for one explicitly selected legacy
