@@ -1181,6 +1181,11 @@ export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/pytest_testpaths_orphan_blocker.py',
     'blocking/open_questions_in_plans_blocker.py',
     'blocking/md_to_html_blocker.py',
+    'blocking/gh_body_arg_blocker.py',
+    'blocking/volatile_path_in_post_blocker.py',
+    'blocking/conventional_pr_title_gate.py',
+    'blocking/gh_pr_author_enforcer.py',
+    'blocking/pr_description_writer_gate.py',
     'session/untracked_repo_detector.py',
 ]);
 
@@ -1198,11 +1203,13 @@ export const POST_FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'workflow/auto_formatter.py',
     'workflow/doc_gist_auto_publish.py',
     'workflow/md_to_html_companion.py',
+    'blocking/gh_pr_author_restore.py',
 ]);
 
-/** Hook scripts that still ship but no longer run as registered hooks. */
 export const RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS = new Set([
     'session/untracked_repo_detector.py',
+    'session/gh_pr_author_session_cleanup.py',
+    'observability/pr_description_writer_spawn_tracker.py',
 ]);
 
 /**

@@ -222,7 +222,6 @@ def test_powershell_selects_the_shared_hooks_in_registration_order() -> None:
         "blocking/cursor_cli_python_misfire_blocker.py",
         "blocking/unscoped_search_blocker.py",
         "blocking/pii_prevention_blocker.py",
-        "blocking/pr_description_writer_gate.py",
     ]
 
 
@@ -270,9 +269,7 @@ def test_dispatcher_denies_subshell_disguised_as_arithmetic_expansion() -> None:
     the live Bash tool path.
     """
     payload_text = _bash_payload("echo $((cd /tmp) && pwd)")
-    decision, _reason = _decision_from_stdout(
-        _run_process(_DISPATCHER_SCRIPT, payload_text).stdout
-    )
+    decision, _reason = _decision_from_stdout(_run_process(_DISPATCHER_SCRIPT, payload_text).stdout)
     assert decision == "deny"
 
 

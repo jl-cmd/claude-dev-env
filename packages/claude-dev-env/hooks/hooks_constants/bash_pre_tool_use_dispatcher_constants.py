@@ -56,7 +56,6 @@ class BashHostedHookEntry:
 
 ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
     BashHostedHookEntry("blocking/destructive_command_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/gh_body_arg_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/shell_substitution_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/piped_pytest_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry(
@@ -65,15 +64,9 @@ ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
     ),
     BashHostedHookEntry("blocking/unscoped_search_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
     BashHostedHookEntry("blocking/nas_ssh_binary_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/volatile_path_in_post_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/pii_prevention_blocker.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
-    BashHostedHookEntry("blocking/conventional_pr_title_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/block_main_commit.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/session_edit_stage_gate.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/test_preflight_check.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("blocking/windows_rmtree_blocker.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry("blocking/gh_pr_author_enforcer.py", ALL_BASH_ONLY_TOOL_NAMES),
-    BashHostedHookEntry(
-        "blocking/pr_description_writer_gate.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-    ),
 )

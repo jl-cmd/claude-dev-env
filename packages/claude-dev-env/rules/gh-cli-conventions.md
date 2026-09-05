@@ -1,26 +1,36 @@
-# gh CLI Conventions
+# gh CLI conventions
 
-Two call shapes the `gh` CLI gets wrong by default.
+Two `gh` call shapes need explicit handling.
 
-## Body content goes in a file
+## Put body content in a file
 
-Every `gh` command carrying markdown body content (`gh pr create/edit/comment/review`, `gh issue create/edit/comment`) uses `--body-file <path>` with a temp file — never a `--body` / `-b` string, where backticks land on GitHub as a literal `` \` ``. Write the temp file BOM-free:
+Every `gh` command that carries markdown body content uses
+`--body-file <path>`. This applies to `gh pr create`, `gh pr edit`,
+`gh pr comment`, `gh pr review`, `gh issue create`, `gh issue edit`, and
+`gh issue comment`. Never pass a `--body` or `-b` string. Write the file as
+BOM-free UTF-8:
 
 ```powershell
 [IO.File]::WriteAllText($bodyPath, $body, [Text.UTF8Encoding]::new($false))
 ```
 
-MCP GitHub tools take `body` as a structured parameter and are unaffected.
+MCP GitHub tools take `body` as a structured parameter. Write the same body to
+a UTF-8 file and run the shared linter before sending that parameter.
 
-`gh_body_arg_blocker.py` (PreToolUse on Bash, hosted by `bash_pre_tool_use_dispatcher`) blocks `--body <arg>` and returns the corrective message.
+For pull requests, use
+`.agents/skills/pull-request/scripts/pull_request.py`. It passes
+`--body-file` to `gh` after the action-aware linter succeeds. For issues and
+GitHub MCP posts, run the linter directly with `issue-create`, `issue-edit`,
+`issue-comment`, or `github-mcp-post` as the action.
 
 ## Paginated reads slurp before they filter
 
-Every `gh api` read of a paginated GitHub list endpoint (PR `reviews` / `comments` / `files`, issue `comments`, `pulls`, `issues`) uses `--paginate --slurp` piped to **external** `jq`. The built-in `--jq` runs per page, so a cross-page operation like `sort_by | last` gives a wrong-but-confident result.
+Every `gh api` read of a paginated GitHub list endpoint uses
+`--paginate --slurp` and pipes the result to external `jq`. This applies to PR
+reviews, comments, and files, plus issue comments, pulls, and issues. The
+built-in `--jq` runs once per page and can produce a wrong cross-page result.
 
-Single-object endpoints (`pulls/<n>`, `issues/<n>`) skip pagination and may use `--jq` directly. For a newest-first walk, sort the slurped array and take the last element; for single-page bounds, cap with a `per_page` query parameter.
-
-## Sibling rules
-
-- [`destructive-commands.md`](destructive-commands.md) — why a body describing `rm -rf` must travel by file path.
-- [`durable-post-artifacts.md`](durable-post-artifacts.md) — what a post body may reference.
+Single-object endpoints such as `pulls/<n>` and `issues/<n>` do not need
+pagination and may use `--jq` directly. For a newest-first walk, sort the
+slurped array and take the last element. For one page, cap the request with a
+`per_page` query parameter.
