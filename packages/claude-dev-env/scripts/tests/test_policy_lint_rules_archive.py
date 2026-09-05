@@ -23,8 +23,9 @@ from policy_lint.model import (
 
 def _git(repository_root: Path, *arguments: str) -> None:
     environment = {
-        name: value for name, value in os.environ.items()
-        if not name.upper().startswith("GIT_")
+        variable_name: variable_text
+        for variable_name, variable_text in os.environ.items()
+        if not variable_name.upper().startswith("GIT_")
     }
     subprocess.run(
         ["git", *arguments], cwd=repository_root, env=environment,
@@ -51,6 +52,7 @@ def archive_repository(tmp_path: Path) -> Path:
 
 
 def _marker_diagnostics(document: Document, repository_root: Path) -> tuple[Diagnostic, ...]:
+    assert (repository_root / document.path).is_file()
     return (Diagnostic("marker", Severity.ERROR, "Checked document", Location(document.path, 1)),)
 
 
