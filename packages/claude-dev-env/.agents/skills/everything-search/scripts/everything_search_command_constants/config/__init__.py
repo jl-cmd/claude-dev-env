@@ -1,1 +1,1 @@
-"""Configuration for the explicit Everything command."""
+"""Configuration for the Everything search command."""

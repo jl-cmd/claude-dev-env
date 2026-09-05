@@ -1,1 +1,1 @@
-"""Constants for the explicit Everything command."""
+"""Constants for the Everything search command."""

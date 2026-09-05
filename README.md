@@ -69,7 +69,7 @@ npx claude-dev-env --uninstall
 
 ### Bootstrap the project-path registry (one-time, post-install)
 
-The Everything search command and the untracked-repo detector both read their state from a per-user registry at `~/.claude/project-paths.json`. This file maps short repository names to absolute paths. It is per-user data and stays out of this repository.
+The Everything search command and the untracked-repo detector both read `~/.claude/project-paths.json`. That file maps short repository names to absolute paths. It is per-user data and is not committed here.
 
 After installing or updating `claude-dev-env`, run the bootstrap script once to populate the registry by scanning for `.git` directories with Everything's command-line binary:
 
@@ -90,7 +90,7 @@ Once the registry is populated, run:
 python "${CLAUDE_SKILL_DIR}/scripts/everything_search.py" <repo-name> <search arguments>
 ```
 
-The command expands the exact repository-name argument to one absolute path argument before it starts `es.exe`. The first argument supplies the search scope, so options-only requests stop before the child process starts.
+The command replaces an exact repository name with one absolute path, then starts `es.exe`. Put the search scope in the first argument. An options-only request exits before `es.exe` starts.
 
 ## What This Solves
 
@@ -119,7 +119,7 @@ Behavioral rules loaded into every session. These shape how Claude approaches wo
 | `agent-spawn-protocol` | Context sufficiency check before delegating to agents |
 | `git-workflow` | Draft PRs, stacked PR patterns, review-response protocol |
 | `testing` | Complete mocks, reference TEST_QUALITY.md |
-| `context7` | Fetch current docs through Context7 MCP as the source |
+| `context7` | Fetch current docs through Context7 MCP |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |
 
 ### Codex exec-policy files

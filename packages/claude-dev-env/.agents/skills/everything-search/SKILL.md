@@ -13,23 +13,23 @@ Search files instantly on Windows using the Everything command-line interface (e
 
 ## Hard limits
 
-Every search carries a scope: a project path or registry token, an `ext:` filter, a `dm:` date filter, a `size:` filter, or a name pattern. A bare whole-drive scan or a network-share sweep is out of bounds — narrow the search to what you need.
+Every search carries a scope: a project path or registry token, an `ext:` filter, a `dm:` date filter, a `size:` filter, or a name pattern. A bare whole-drive scan or a network-share sweep is out of bounds. Narrow the search to what you need.
 
 When `es.exe` fails or returns nothing, self-heal first: fall back to the `Glob` tool (name and path patterns) or `Grep` (file contents), and report the outage so the reader knows the index was unavailable. When self-healing also fails, ask the user through `AskUserQuestion` with a short analysis and next-step options.
 
 ## Registry tokens
 
-Use the bundled command for registry-backed searches:
+Run project-name searches through this command:
 
 ```text
 python "${CLAUDE_SKILL_DIR}/scripts/everything_search.py" <project-name> <search arguments>
 ```
 
-The command reads `~/.claude/project-paths.json`. It expands an exact bare project name or exact `{project-name}` argument to one absolute path argument, then starts `es.exe` without a shell. It preserves unknown names, absolute paths, flags, and spaces inside each argument.
+The command reads `~/.claude/project-paths.json`. An exact project name or `{project-name}` argument becomes one absolute path. Unknown names, absolute paths, flags, and spaces stay as they are. The command then starts `es.exe` without a shell.
 
-Put the search scope first. The first argument names a project, path, file, extension, date, or size scope. An options-only request exits before `es.exe` starts. Use `-version` alone to read the installed Everything command version.
+Put the search scope first. The first argument names a project, path, file, extension, date, or size. An options-only request exits before `es.exe` starts. Use `-version` alone to read the installed Everything version.
 
-A missing registry permits direct path and operator searches. Malformed registry content, an empty search, a missing `es.exe`, or a process start failure returns a nonzero exit. The command returns the `es.exe` exit status after a successful start.
+Path and operator searches run when the registry file is missing. Malformed registry content, an empty search, a missing `es.exe`, or a process start failure returns a nonzero exit. After a successful start, the command returns the `es.exe` exit status.
 
 ## Instructions
 
@@ -145,11 +145,6 @@ Run separate searches for each extension type:
 - Combine with path to narrow scope
 - Results return instantly regardless of drive size
 
-## Files
-
-- `scripts/everything_search.py` runs one argument-safe Everything search.
-- `scripts/test_everything_search.py` verifies registry expansion and command failures.
-
 ### Junctions, Symlinks & Drive Mapping
 
 Everything indexes REAL paths only, not junctions or mapped drives.
@@ -167,3 +162,8 @@ Everything indexes REAL paths only, not junctions or mapped drives.
 **Common drive mappings:**
 - `Z:\Projects\` -> `Y:\Work\Projects\`
 - When in Z:\, translate to Y:\ equivalent for Everything searches
+
+## Files
+
+- `scripts/everything_search.py` runs one Everything search without a shell.
+- `scripts/test_everything_search.py` verifies registry expansion and command failures.

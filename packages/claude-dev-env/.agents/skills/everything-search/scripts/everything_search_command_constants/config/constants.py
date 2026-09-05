@@ -1,4 +1,4 @@
-"""Configuration constants for the explicit Everything command."""
+"""Configuration constants for the Everything search command."""
 
 CLAUDE_DIRECTORY_NAME = ".claude"
 EXECUTABLE_NAME = "es.exe"

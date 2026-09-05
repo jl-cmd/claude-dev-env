@@ -22,11 +22,11 @@ from everything_search_command_constants.config.constants import (
 
 
 class RegistryRunFatal(ValueError):
-    """Report an unreadable or invalid project-path registry."""
+    """Stop the run when the project-path registry is unreadable or invalid."""
 
 
 def load_registry(registry_path: Path) -> dict[str, str]:
-    """Load string path entries from a registry file.
+    """Read project names and absolute paths from a registry file.
 
     Args:
         registry_path: Registry file to read.
@@ -85,14 +85,16 @@ def expand_search_arguments(
     all_search_arguments: Sequence[str],
     all_registered_paths_by_name: Mapping[str, str],
 ) -> list[str]:
-    """Expand exact project names while preserving argument boundaries.
+    """Replace an exact project name or `{project-name}` token with its registered path.
+
+    Unknown names, absolute paths, flags, and spaces stay as their own arguments.
 
     Args:
         all_search_arguments: Everything search arguments.
         all_registered_paths_by_name: Absolute paths keyed by project name.
 
     Returns:
-        Search arguments with exact project tokens replaced.
+        Arguments with exact project names replaced by their paths.
     """
     all_expanded_arguments: list[str] = []
     for each_search_argument in all_search_arguments:
@@ -170,7 +172,7 @@ def _is_informational_operation(all_search_arguments: Sequence[str]) -> bool:
 
 
 def main(all_search_arguments: Sequence[str]) -> int:
-    """Resolve project tokens and run one Everything search.
+    """Expand project names and run one Everything search.
 
     Args:
         all_search_arguments: Arguments passed to Everything.
