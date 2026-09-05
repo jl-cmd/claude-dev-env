@@ -28,7 +28,7 @@ def _git_environment() -> dict[str, str]:
     }
 
 
-def _run_git(repository_root: Path, *all_arguments: str) -> None:
+def _git_stdout(repository_root: Path, *all_arguments: str) -> str:
     completed = subprocess.run(
         [constants.GIT_EXECUTABLE, *all_arguments],
         cwd=repository_root,
@@ -38,6 +38,11 @@ def _run_git(repository_root: Path, *all_arguments: str) -> None:
         env=_git_environment(),
     )
     assert completed.returncode == 0, completed.stderr
+    return completed.stdout.strip()
+
+
+def _run_git(repository_root: Path, *all_arguments: str) -> None:
+    _git_stdout(repository_root, *all_arguments)
 
 
 def _initialize_repository(repository_root: Path) -> Path:
@@ -200,7 +205,9 @@ def test_staged_missing_non_delete_blob_should_raise(
 def test_git_blob_unexpected_failure_should_raise(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def failed_git(*_all_arguments: object, **_all_keywords: object) -> subprocess.CompletedProcess[bytes]:
+    def failed_git(
+        *_all_arguments: object, **_all_keywords: object
+    ) -> subprocess.CompletedProcess[bytes]:
         return subprocess.CompletedProcess(
             args=[constants.GIT_EXECUTABLE],
             returncode=1,
@@ -252,6 +259,22 @@ def test_base_source_should_compare_merge_base_and_read_worktree_bytes(
     assert selected_document.text == "feature-worktree\n"
     assert selected_document.prior_text == "base-text\n"
     assert selected_document.origin == ContentOrigin.REVISION_DIFF
+
+
+def test_base_selection_records_merge_base_revision_and_staged_does_not(
+    tmp_path: Path,
+) -> None:
+    repository_root = _initialize_repository(tmp_path)
+    _commit_text(repository_root, "file.py", "base-text\n")
+    _run_git(repository_root, "checkout", "--quiet", "-b", "feature")
+    _commit_text(repository_root, "file.py", "feature-committed\n")
+
+    merge_base = _git_stdout(repository_root, "merge-base", "main", "HEAD")
+    base_document_set = select_documents(LintRequest.base(repository_root, "main"))
+    staged_document_set = select_documents(LintRequest.staged(repository_root))
+
+    assert base_document_set.base_revision == merge_base
+    assert staged_document_set.base_revision is None
 
 
 def test_repository_source_should_read_tracked_worktree_files_only(

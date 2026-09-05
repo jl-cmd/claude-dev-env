@@ -37,9 +37,13 @@ def lint(
         A report of diagnostics and rule execution state.
     """
     document_set = _runtime_document_set(select_documents(request))
-    candidate_rules = tuple(all_registry) if all_registry is not None else default_registry()
+    candidate_rules = (
+        tuple(all_registry) if all_registry is not None else default_registry()
+    )
     selected = selected_rules(candidate_rules, request.rule_sets)
-    all_diagnostics, executed, failed, skipped = _run_selected_rules(selected, document_set)
+    all_diagnostics, executed, failed, skipped = _run_selected_rules(
+        selected, document_set
+    )
     return LintReport(
         1,
         tuple(sorted(all_diagnostics, key=_diagnostic_sort_key)),
@@ -63,14 +67,18 @@ def _runtime_document_set(document_set: DocumentSet) -> DocumentSet:
         if _is_runtime_path(each_document.path)
     )
     all_deleted_paths = tuple(
-        each_path for each_path in document_set.deleted_paths if _is_runtime_path(each_path)
+        each_path
+        for each_path in document_set.deleted_paths
+        if _is_runtime_path(each_path)
     ) + tuple(
         old_path
         for old_path, new_path in document_set.renamed_paths
         if _is_runtime_path(old_path) and not _is_runtime_path(new_path)
     )
     all_renamed_paths = tuple(
-        each_pair for each_pair in document_set.renamed_paths if _is_runtime_path(each_pair[1])
+        each_pair
+        for each_pair in document_set.renamed_paths
+        if _is_runtime_path(each_pair[1])
     )
     return DocumentSet(
         all_documents,
@@ -78,6 +86,7 @@ def _runtime_document_set(document_set: DocumentSet) -> DocumentSet:
         document_set.repository_root,
         all_deleted_paths,
         all_renamed_paths,
+        document_set.base_revision,
     )
 
 

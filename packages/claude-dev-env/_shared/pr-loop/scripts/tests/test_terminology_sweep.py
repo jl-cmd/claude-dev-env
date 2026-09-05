@@ -54,6 +54,54 @@ def _init_git_repository(repository_path: Path) -> None:
         )
 
 
+def _run_repository_git(repository_path: Path, all_arguments: list[str]) -> str:
+    completed = subprocess.run(
+        all_arguments,
+        cwd=repository_path,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=_hermetic_git_environment(),
+    )
+    return completed.stdout.strip()
+
+
+def _write_repository_text(
+    repository_path: Path, relative_path: str, text: str
+) -> None:
+    (repository_path / relative_path).write_text(text, encoding="utf-8")
+
+
+def _commit_all(repository_path: Path, message: str) -> None:
+    _run_repository_git(repository_path, ["git", "add", "-A"])
+    _run_repository_git(repository_path, ["git", "commit", "-m", message])
+
+
+def _head_revision(repository_path: Path) -> str:
+    return _run_repository_git(repository_path, ["git", "rev-parse", "HEAD"])
+
+
+def _committed_near_miss_repository(repository_path: Path) -> str:
+    _init_git_repository(repository_path)
+    _write_repository_text(repository_path, "quota.py", "baseline = 1\n")
+    _write_repository_text(repository_path, "README.md", "Baseline quota text.\n")
+    _commit_all(repository_path, "base")
+    comparison_revision = _head_revision(repository_path)
+    _write_repository_text(
+        repository_path,
+        "quota.py",
+        "baseline = 1\npremium_request_interactions = 5\n",
+    )
+    _commit_all(repository_path, "identifier")
+    _write_repository_text(
+        repository_path,
+        "README.md",
+        "The premium-request-budget field gates the run.\n",
+    )
+    _commit_all(repository_path, "documentation")
+    return comparison_revision
+
+
 CODE_AND_PROSE_DIFF = (
     "diff --git a/api/quota.py b/api/quota.py\n"
     "--- a/api/quota.py\n"
@@ -314,72 +362,8 @@ def test_staged_terminology_findings_empty_when_clean(tmp_path: Path) -> None:
 def test_strict_base_terminology_findings_reports_committed_near_miss(
     tmp_path: Path,
 ) -> None:
-    _init_git_repository(tmp_path)
-    source_path = tmp_path / "quota.py"
-    documentation_path = tmp_path / "README.md"
-    source_path.write_text("baseline = 1\n", encoding="utf-8")
-    documentation_path.write_text("Baseline quota text.\n", encoding="utf-8")
-    subprocess.run(
-        ["git", "add", "-A"],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-        env=_hermetic_git_environment(),
-    )
-    subprocess.run(
-        ["git", "commit", "-m", "base"],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-        env=_hermetic_git_environment(),
-    )
-    comparison_revision = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-        text=True,
-        env=_hermetic_git_environment(),
-    ).stdout.strip()
-    source_path.write_text(
-        "baseline = 1\npremium_request_interactions = 5\n",
-        encoding="utf-8",
-    )
-    subprocess.run(
-        ["git", "add", "-A"],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-        env=_hermetic_git_environment(),
-    )
-    subprocess.run(
-        ["git", "commit", "-m", "identifier"],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-        env=_hermetic_git_environment(),
-    )
-    documentation_path.write_text(
-        "The premium-request-budget field gates the run.\n",
-        encoding="utf-8",
-    )
-    subprocess.run(
-        ["git", "add", "-A"],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-        env=_hermetic_git_environment(),
-    )
-    subprocess.run(
-        ["git", "commit", "-m", "documentation"],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-        env=_hermetic_git_environment(),
-    )
-
+    comparison_revision = _committed_near_miss_repository(tmp_path)
     all_findings = strict_base_terminology_findings(tmp_path, comparison_revision)
-
     assert len(all_findings) == 1
     assert "README.md:1" in all_findings[0]
     assert "premium-request-budget" in all_findings[0]
