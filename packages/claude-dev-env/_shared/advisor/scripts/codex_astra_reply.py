@@ -132,6 +132,7 @@ def parse_codex_jsonl_reply(
     jsonl_text: str,
     existing_session_id: str | None,
     is_astra_enabled: bool,
+    fallback_kind: str | None = None,
 ) -> CodexAstraAdvisorReply:
     """Parse Codex JSONL into a typed Astra advisor reply.
 
@@ -146,12 +147,12 @@ def parse_codex_jsonl_reply(
     try:
         session_id, guidance = _collect_reply_parts(jsonl_text)
     except (TypeError, json.JSONDecodeError):
-        return build_fallback_reply(ASTRA_MALFORMED_JSONL_REASON, is_astra_enabled)
+        return build_fallback_reply(ASTRA_MALFORMED_JSONL_REASON, is_astra_enabled, fallback_kind)
     if session_id is None or (existing_session_id is not None and session_id != existing_session_id):
-        return build_fallback_reply(ASTRA_MISSING_SESSION_REASON, is_astra_enabled)
+        return build_fallback_reply(ASTRA_MISSING_SESSION_REASON, is_astra_enabled, fallback_kind)
     if not guidance:
-        return build_fallback_reply(ASTRA_REPLY_FAILURE_REASON, is_astra_enabled)
+        return build_fallback_reply(ASTRA_REPLY_FAILURE_REASON, is_astra_enabled, fallback_kind)
     signal = _guidance_signal(guidance)
     if signal is None:
-        return build_fallback_reply(ASTRA_INVALID_SIGNAL_REASON, is_astra_enabled)
+        return build_fallback_reply(ASTRA_INVALID_SIGNAL_REASON, is_astra_enabled, fallback_kind)
     return build_success_reply(session_id, guidance, signal)
