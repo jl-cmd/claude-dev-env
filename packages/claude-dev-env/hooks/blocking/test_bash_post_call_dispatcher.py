@@ -15,16 +15,26 @@ from pathlib import Path
 
 import pytest
 
-from bash_post_call_dispatcher import dispatch, main, select_applicable_entries
+from bash_post_call_dispatcher import (
+    additional_context_from_hook_output,
+    dispatch,
+    main,
+    select_applicable_entries,
+)
 from hooks_constants.bash_pre_tool_use_dispatcher_constants import BASH_TOOL_NAME
 from hooks_constants.hosted_hook_runner import HostedHookRun
 from tdd_enforcer_parts import content_hash_store
 
+_ALL_EXPECTED_ROSTER_PATHS = [
+    "observability/test_failure_recorder.py",
+    "advisory/pr_done_reminder.py",
+]
 
-def test_select_applicable_entries_returns_the_hosted_hook_for_bash() -> None:
+
+def test_select_applicable_entries_returns_the_hosted_hooks_for_bash() -> None:
     all_entries = select_applicable_entries(BASH_TOOL_NAME)
     all_script_paths = [each_entry.script_relative_path for each_entry in all_entries]
-    assert all_script_paths == ["observability/test_failure_recorder.py"]
+    assert all_script_paths == _ALL_EXPECTED_ROSTER_PATHS
 
 
 def test_select_applicable_entries_returns_none_for_a_write_tool() -> None:
@@ -45,7 +55,58 @@ def test_dispatch_runs_every_hosted_hook_in_roster_order(
 
     dispatch('{"tool_name": "Bash"}', BASH_TOOL_NAME)
 
-    assert all_call_paths == ["test_failure_recorder.py"]
+    assert all_call_paths == [Path(each_path).name for each_path in _ALL_EXPECTED_ROSTER_PATHS]
+
+
+def test_dispatch_forwards_hosted_hook_additional_context_as_one_payload(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    context_by_hook = {
+        "test_failure_recorder.py": "",
+        "pr_done_reminder.py": json.dumps(
+            {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "PR #42"}}
+        ),
+    }
+
+    def _fake_run_hook(script_path: str, payload_text: str) -> HostedHookRun:
+        del payload_text
+        return HostedHookRun(
+            captured_stdout=context_by_hook[Path(script_path).name], did_crash=False
+        )
+
+    monkeypatch.setattr("bash_post_call_dispatcher.run_hook_capturing_output", _fake_run_hook)
+
+    dispatch('{"tool_name": "Bash"}', BASH_TOOL_NAME)
+
+    emitted = json.loads(capsys.readouterr().out)
+    assert emitted == {
+        "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "PR #42"}
+    }
+    assert "decision" not in emitted
+
+
+def test_dispatch_writes_nothing_when_no_hosted_hook_printed_context(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def _fake_run_hook(script_path: str, payload_text: str) -> HostedHookRun:
+        del script_path, payload_text
+        return HostedHookRun(captured_stdout="", did_crash=False)
+
+    monkeypatch.setattr("bash_post_call_dispatcher.run_hook_capturing_output", _fake_run_hook)
+
+    dispatch('{"tool_name": "Bash"}', BASH_TOOL_NAME)
+
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(
+    "captured_stdout",
+    ["", "   ", "not json", "[]", '{"decision": "block"}', '{"hookSpecificOutput": {}}'],
+)
+def test_additional_context_from_hook_output_ignores_non_context_output(
+    captured_stdout: str,
+) -> None:
+    assert additional_context_from_hook_output(captured_stdout) is None
 
 
 def test_main_exits_zero_and_writes_nothing_to_stdout(
