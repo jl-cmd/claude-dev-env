@@ -16,6 +16,7 @@ The checks live in `python_style_checks.py`. Shared source-line splitting, funct
 | `file_structure_checks.py` | File structure checks for pre-PR validation |
 | `git_checks.py` | Git and GitHub checks for pre-push review |
 | `health_check.py` | Validator availability, dependency, and version checks |
+| `hook_timing_harness.py` | Hook runtime measurement and threshold report |
 | `magic_value_checks.py` | Hardcoded magic-number checks |
 | `mypy_integration.py` | Mypy static type checking integration |
 | `output_formatter.py` | Colored, diff, progress, and JSON validator output |
