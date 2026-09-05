@@ -1,5 +1,40 @@
 # Changelog
 
+## [3.0.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.36.0...claude-dev-env-v3.0.0) (2026-09-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **advisor:** use ADVISOR_ASTRA, --enable-astra, codex_astra_advisor.py, and astra_enabled in place of the Sol advisor names.
+
+### Features
+
+* **advisor:** switch team-advisor from Sol to Astra ([8324678](https://github.com/jl-cmd/claude-dev-env/commit/8324678dcb90bb4850ca801f6998e06f2468c9c6))
+* **advisor:** use Astra for the Codex team advisor ([d825309](https://github.com/jl-cmd/claude-dev-env/commit/d82530915a9436cdf25610ec27add96151901cfb))
+* **ci:** check the committed tree from the event merge base ([ca0aec5](https://github.com/jl-cmd/claude-dev-env/commit/ca0aec5bcb8ecf17600293576a0d7c23834b9608))
+* **ci:** enforce committed-tree policy ([6319faa](https://github.com/jl-cmd/claude-dev-env/commit/6319faa7157cd2c546e6bf5ba1e486a5efa71d59))
+* **lint:** add staged terminology rule ([7d6b9eb](https://github.com/jl-cmd/claude-dev-env/commit/7d6b9ebb91668b5b34971e0f32d406f79f3e4215))
+* **lint:** flag staged prose that near-misses a new identifier ([284532d](https://github.com/jl-cmd/claude-dev-env/commit/284532dd635c139aa3d5be64afc4f65068923f4e))
+
+
+### Bug Fixes
+
+* **advisor:** pair Astra helper modules with tests ([7bfb907](https://github.com/jl-cmd/claude-dev-env/commit/7bfb90712ad69f60d79c3712637de140abed4d18))
+* **advisor:** satisfy Astra helper quality gates ([1af5332](https://github.com/jl-cmd/claude-dev-env/commit/1af53321810c5469664ea93d174f6a5153cb9fbc))
+* **ci:** make Astra preflight fallback kind explicit ([2fd4f43](https://github.com/jl-cmd/claude-dev-env/commit/2fd4f4324926c9bec18c4c7bd96fd25aeafe97d7))
+* **ci:** satisfy Astra advisor committed-tree rules ([ff0a9aa](https://github.com/jl-cmd/claude-dev-env/commit/ff0a9aad9291acd877b6fa8c2d89238a40a173f0))
+* **ci:** scope environment reference checks ([a525ffd](https://github.com/jl-cmd/claude-dev-env/commit/a525ffd89ecfaf36f6e03157f02fb4bd7d3fd374))
+
+
+### Documentation
+
+* **ci:** inventory hook timing harness ([a5036e0](https://github.com/jl-cmd/claude-dev-env/commit/a5036e0c11691894d1bcdffa7ed453682712745f))
+
+
+### Tests
+
+* **ci:** cover Astra advisor public resolvers ([04d59c1](https://github.com/jl-cmd/claude-dev-env/commit/04d59c193ef3e710e343b55b1c8cce006f021972))
+
 ## [2.36.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v2.35.0...claude-dev-env-v2.36.0) (2026-09-04)
 
 
