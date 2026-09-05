@@ -58,6 +58,22 @@ test('writeAllGitHookShims creates one shim per known hook name', () => {
 });
 
 
+test('known git hooks exclude post-commit', () => {
+    assert.equal(KNOWN_GIT_HOOK_NAMES.includes('post-commit'), false);
+});
+
+
+test('writeAllGitHookShims does not create a post-commit shim', () => {
+    const { temporaryRoot, gitHooksDirectory } = makeTemporaryGitHooksDirectory();
+    try {
+        writeAllGitHookShims({ gitHooksDirectory });
+        assert.equal(existsSync(join(gitHooksDirectory, 'post-commit')), false);
+    } finally {
+        rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+});
+
+
 test('configureGlobalGitHooksPath sets the path when nothing is currently configured', () => {
     const commandsRun = [];
     const gitConfigReaderReturningEmpty = () => '';
@@ -204,5 +220,4 @@ test('writeGitHookShim rejects hooks directory that is a symlink (loopP5c-5)', (
         rmSync(temporaryRoot, { recursive: true, force: true });
     }
 });
-
 

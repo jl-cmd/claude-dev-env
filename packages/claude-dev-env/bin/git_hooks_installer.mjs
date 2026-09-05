@@ -6,7 +6,6 @@ import { join } from 'node:path';
 export const KNOWN_GIT_HOOK_NAMES = Object.freeze([
     'pre-commit',
     'pre-push',
-    'post-commit',
 ]);
 
 export const SHIM_DOCSTRING = (
