@@ -85,7 +85,7 @@ def expand_search_arguments(
     all_search_arguments: Sequence[str],
     all_registered_paths_by_name: Mapping[str, str],
 ) -> list[str]:
-    """Replace an exact project name or `{project-name}` token with its registered path.
+    """Map an exact project name or `{project-name}` token to its registered path.
 
     Unknown names, absolute paths, flags, and spaces stay as their own arguments.
 
@@ -94,7 +94,7 @@ def expand_search_arguments(
         all_registered_paths_by_name: Absolute paths keyed by project name.
 
     Returns:
-        Arguments with exact project names replaced by their paths.
+        Arguments with exact project names mapped to their paths.
     """
     all_expanded_arguments: list[str] = []
     for each_search_argument in all_search_arguments:

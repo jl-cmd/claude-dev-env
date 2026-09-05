@@ -90,7 +90,7 @@ Once the registry is populated, run:
 python "${CLAUDE_SKILL_DIR}/scripts/everything_search.py" <repo-name> <search arguments>
 ```
 
-The command replaces an exact repository name with one absolute path, then starts `es.exe`. Put the search scope in the first argument. An options-only request exits before `es.exe` starts.
+The command maps an exact repository name to one absolute path, then starts `es.exe`. Put the search scope in the first argument. An options-only request exits before `es.exe` starts.
 
 ## What This Solves
 
