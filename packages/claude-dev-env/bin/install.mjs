@@ -6,7 +6,10 @@ import { homedir } from 'node:os';
 import { execSync, execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { installAllGitHooks } from './git_hooks_installer.mjs';
+import {
+    installAllGitHooks,
+    KNOWN_GIT_HOOK_NAMES,
+} from './git_hooks_installer.mjs';
 import { installMypyIniForClaudeHooks } from './install_mypy_ini.mjs';
 import { expandHomeDirectoryTokensInSettings } from './expand_home_directory_tokens.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
@@ -2368,7 +2371,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         } else {
             console.warn(`  Git hooks: ${gitHookInstallationResult.hooksPathConfigurationResult.reason}`);
         }
-        console.log(`  Git hook shims: ${gitHookInstallationResult.createdShimPaths.length} files (pre-commit, pre-push, post-commit)`);
+        console.log(`  Git hook shims: ${gitHookInstallationResult.createdShimPaths.length} files (${KNOWN_GIT_HOOK_NAMES.join(', ')})`);
         syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
         throwIfFault(FAULT_PHASES.AFTER_GIT_CONFIG);
         throwIfFault(FAULT_PHASES.AFTER_LINK_PUBLICATION);

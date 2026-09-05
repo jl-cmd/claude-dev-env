@@ -51,6 +51,13 @@ import {
 } from './expand_home_directory_tokens.mjs';
 
 
+test('installer reports the authoritative Git hook names', () => {
+    const installerSource = readFileSync(new URL('./install.mjs', import.meta.url), 'utf8');
+    assert.match(installerSource, /KNOWN_GIT_HOOK_NAMES\.join\(', '\)/);
+    assert.doesNotMatch(installerSource, /pre-commit, pre-push, post-commit/);
+});
+
+
 function createTemporaryGitRepository() {
     const repositoryRoot = mkdtempSync(join(tmpdir(), 'cdev-installer-validation-'));
     const gitOptions = { cwd: repositoryRoot, stdio: 'ignore' };
