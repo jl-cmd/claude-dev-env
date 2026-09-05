@@ -6,13 +6,6 @@ from hooks_constants.bash_post_call_dispatcher_constants import (
 from hooks_constants.bash_pre_tool_use_dispatcher_constants import BASH_TOOL_NAME
 
 
-def test_roster_names_the_gh_pr_author_restore_hook() -> None:
-    all_script_paths = [
-        each_entry.script_relative_path for each_entry in ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES
-    ]
-    assert "blocking/gh_pr_author_restore.py" in all_script_paths
-
-
 def test_roster_names_the_test_failure_recorder_hook() -> None:
     all_script_paths = [
         each_entry.script_relative_path for each_entry in ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES

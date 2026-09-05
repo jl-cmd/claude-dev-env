@@ -1,8 +1,8 @@
-# Git Workflow
+# Git workflow
 
-User-level rule: applies to **every** git repo that uses GitHub with `gh` (no exceptions for “small” or non-primary repos unless the user says otherwise in the session).
+User-level rule: applies to **every** git repo that uses GitHub with `gh`. Small or non-primary repos follow the same rule unless the user says otherwise in the session.
 
-## Workflow Decision Tree
+## Workflow decision tree
 
 **When to use stacked PRs:** Feature B depends on Feature A's implementation
 
@@ -13,19 +13,32 @@ User-level rule: applies to **every** git repo that uses GitHub with `gh` (no ex
 2. Get reviewed and MERGE infrastructure first
 3. Launch parallel feature PRs that use merged infrastructure
 
-## PR Submission Rules
+## Pull request submission rules
 
 **ALWAYS create PRs as DRAFT:** Use `gh pr create --draft` for ALL PRs
 
-**The pr-description-writer agent writes the body:** Spawn the `pr-description-writer` agent (Agent tool, `subagent_type` `pr-description-writer`), then publish what it returns with `--body-file`. `pr_description_writer_gate.py` (PreToolUse on Bash and PowerShell, hosted by `bash_pre_tool_use_dispatcher`) denies a `gh pr create` when the session records no such spawn. A trailing `# pr-description-skip` comment on the command opts out for a body you write yourself.
+Use the `pr-description-writer` agent before creating a pull request or
+rewriting its full description. Publish its title and body file through
+`.agents/skills/pull-request/scripts/pull_request.py`. The
+`pr-title-description` skill may review the writer's output but cannot replace
+the required writer.
 
-## Git Golden Rules (NON-NEGOTIABLE)
+Run `_shared/pr-loop/scripts/durable_post_lint.py` before any pull request,
+issue, or GitHub MCP post. The linter checks the action-specific title, body,
+and volatile-path rules before credential lookup or network access.
+
+Use `.agents/skills/pull-request/scripts/recover_legacy_author.py
+<exact-state-file> --confirm-inactive` only for one explicitly selected legacy
+author record. Do not infer a record from age alone. Keep every other record
+untouched.
+
+## Git golden rules
 
 1. **DRAFT BEFORE PUSH**: When pushing ANYTHING to a PR, it MUST be in draft state first
    - Before push: `gh pr ready --undo`
    - After review approved: `gh pr ready`
 
-## Never Commit Working Documents or Images
+## Never commit working documents or images
 
 **NEVER commit these files to the repo:**
 
@@ -49,4 +62,4 @@ An image a PR needs as visual evidence is not an exception to that row. Upload i
 
 Repair only reported findings, then re-verify after every repair.
 
-Every `gh` post in this workflow uses `--body-file` per `gh-cli-conventions.md` and keeps volatile scratch paths out per `durable-post-artifacts.md`; stage session edits per `re-stage-before-commit.md` before each commit.
+Every `gh` post in this workflow uses `--body-file` per `gh-cli-conventions.md` and keeps volatile scratch paths out per `durable-post-artifacts.md`. Stage session edits per `re-stage-before-commit.md` before each commit.

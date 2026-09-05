@@ -23,30 +23,69 @@ def hook_configuration_diagnostics(
     adapter_support._document_path(repository_root, document)
     if document.path.name != "hooks.json":
         return ()
-    all_messages = _hook_configuration_messages(document.text)
+    all_messages = _hook_configuration_messages(document.text, document.prior_text)
     return adapter_support._diagnostics_for_messages(
         document, "hook-configuration", all_messages
     )
 
 
-def _hook_configuration_messages(configuration_text: str) -> tuple[str, ...]:
+def _parsed_configuration(
+    configuration_text: str,
+    invalid_json_message: str,
+    invalid_object_message: str,
+) -> dict[object, object]:
     try:
         parsed_configuration = json.loads(configuration_text)
-    except json.JSONDecodeError:
-        return ("Hook configuration is not valid JSON",)
+    except json.JSONDecodeError as error:
+        raise ValueError(invalid_json_message) from error
     if not isinstance(parsed_configuration, dict):
-        return ("Hook configuration must be an object",)
-    all_registered_strings = _registered_hook_strings(parsed_configuration)
-    if any(
-        _contains_action_boundary_marker(each_string)
-        for each_string in all_registered_strings
-    ):
+        raise TypeError(invalid_object_message)
+    return parsed_configuration
+
+
+def _action_boundary_strings(
+    all_configuration_entries: dict[object, object],
+) -> frozenset[str]:
+    return frozenset(
+        each_string
+        for each_string in _registered_hook_strings(all_configuration_entries)
+        if _contains_action_boundary_marker(each_string)
+    )
+
+
+def _hook_configuration_messages(
+    configuration_text: str,
+    prior_configuration_text: str | None,
+) -> tuple[str, ...]:
+    try:
+        current_configuration = _parsed_configuration(
+            configuration_text,
+            "Hook configuration is not valid JSON",
+            "Hook configuration must be an object",
+        )
+        all_current_action_boundary_strings = _action_boundary_strings(
+            current_configuration
+        )
+        if prior_configuration_text is None:
+            all_prior_action_boundary_strings: frozenset[str] = frozenset()
+        else:
+            prior_configuration = _parsed_configuration(
+                prior_configuration_text,
+                "Prior hook configuration is not valid JSON",
+                "Prior hook configuration must be an object",
+            )
+            all_prior_action_boundary_strings = _action_boundary_strings(
+                prior_configuration
+            )
+    except (TypeError, ValueError) as error:
+        return (str(error),)
+    if all_current_action_boundary_strings - all_prior_action_boundary_strings:
         return ("Hook configuration registers a deny, block, or ask policy path",)
     return ()
 
 
 def _registered_hook_strings(
-    all_configuration_entries: dict[object, object]
+    all_configuration_entries: dict[object, object],
 ) -> tuple[str, ...]:
     all_registered_strings: list[str] = []
     for each_key, each_entry in all_configuration_entries.items():
@@ -62,7 +101,9 @@ def _registered_strings_for_entry(
     all_registered_strings: list[str] = []
     if each_key in constants.ALL_HOOK_REGISTRATION_KEYS and isinstance(each_entry, str):
         all_registered_strings.append(each_entry)
-    if each_key in constants.ALL_DECISION_REGISTRATION_KEYS and isinstance(each_entry, str):
+    if each_key in constants.ALL_DECISION_REGISTRATION_KEYS and isinstance(
+        each_entry, str
+    ):
         all_registered_strings.append(each_entry)
     all_registered_strings.extend(_registered_nested_strings(each_entry))
     return tuple(all_registered_strings)

@@ -88,6 +88,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'pr-loop-lifecycle',
     'pr-review-responder',
     'pr-scope-resolve',
+    'pull-request',
     'pre-compact',
     'privacy-hygiene',
     'prototype',

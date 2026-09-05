@@ -1,23 +1,18 @@
 #!/usr/bin/env python3
 """PreToolUse hook: block writes, durable posts, and commits that carry PII.
 
-Surfaces guarded:
+::
 
-- Write / Edit / MultiEdit — new content about to land on disk
-- Bash / PowerShell ``gh`` post subcommands and GitHub MCP post tools — durable
-  bodies
-- Bash / PowerShell ``git commit`` (including ``git.exe`` and flag forms) —
-  staged file contents about to become history. Commit message bodies are out
-  of scope; only staged blob text is scanned.
+    Write/Edit/MultiEdit  -> scan new disk content
+    gh post / GitHub MCP  -> scan durable bodies
+    git commit            -> scan staged blob text, not the commit message
 
-Payload and post-body scanning live in ``pii_payload_scan``; git-commit command
-detection lives in ``pii_commit_command``; both re-export through this entry
-module so the hooks.json wiring and every importer resolve unchanged.
-
-A repository named in ``CLAUDE_PII_EXEMPT_REPOS`` or the ``pii_exempt_repositories``
-list in ``~/.claude/local-identity.json`` skips the staged-commit scan; a
-repository without a readable origin remote is never exempt. Exact values listed
-under ``pii_allowlisted_values`` for a repository's origin slug may pass the
+``pii_payload_scan`` and ``pii_commit_command`` re-export through this
+entry module so hooks.json wiring and importers stay unchanged.
+``CLAUDE_PII_EXEMPT_REPOS`` or ``pii_exempt_repositories`` in
+``~/.claude/local-identity.json`` skip the staged-commit scan. A repo
+without a readable origin remote is never exempt.
+``pii_allowlisted_values`` for a repository origin slug may pass
 Write/Edit and staged-commit scans in that repository only.
 """
 
@@ -56,7 +51,7 @@ try:
     )
     from pii_scanner import is_path_exempt_from_pii_scan, scan_text_for_pii
     from precommit_code_rules_gate import resolve_repository_root
-    from volatile_path_in_post_blocker import (
+    from gh_post_body_texts import (
         extract_gh_post_body_texts_for_privacy_gate,
         extract_mcp_body_texts,
     )
@@ -124,7 +119,8 @@ def list_staged_file_paths(
     try:
         completed_process = subprocess.run(
             list(ALL_STAGED_FILES_COMMAND),
-            check=False, capture_output=True,
+            check=False,
+            capture_output=True,
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=str(repository_root),
@@ -148,7 +144,8 @@ def _git_show_staged_blob(
     try:
         completed_process = subprocess.run(
             list(ALL_STAGED_BLOB_SHOW_COMMAND_PREFIX) + [staged_blob_reference],
-            check=False, capture_output=True,
+            check=False,
+            capture_output=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=str(repository_root),
         )
@@ -197,9 +194,7 @@ def _scan_staged_path(
     repository_root: Path, relative_path: str, all_allowlisted_values: frozenset[str]
 ) -> str | None:
     """Return a deny reason for one staged path, or None when it is clean."""
-    staged_text, unscannable_reason = read_staged_file_text(
-        repository_root, relative_path
-    )
+    staged_text, unscannable_reason = read_staged_file_text(repository_root, relative_path)
     if unscannable_reason is not None:
         return unscannable_reason
     if staged_text is None:
@@ -217,9 +212,9 @@ def _scan_staged_path(
 def evaluate_staged_commit(repository_root: Path) -> str | None:
     """Return a deny reason when staged content carries PII or is unscannable.
 
-    Fail-closed: git list/show failures and unscannable blobs deny the commit
-    rather than treating unread content as clean. A value in the repository's
-    PII allowlist is dropped from the findings, so its commits may carry it.
+    Git list or show failures and unscannable blobs deny the commit. A value
+    in the repository's PII allowlist is dropped from the findings, so its
+    commits may carry it.
 
     Args:
         repository_root: Repository whose index is about to be committed.
@@ -234,22 +229,18 @@ def evaluate_staged_commit(repository_root: Path) -> str | None:
     for each_relative_path in all_relative_paths:
         if is_path_exempt_from_pii_scan(each_relative_path):
             continue
-        deny_reason = _scan_staged_path(
-            repository_root, each_relative_path, all_allowlisted_values
-        )
+        deny_reason = _scan_staged_path(repository_root, each_relative_path, all_allowlisted_values)
         if deny_reason is not None:
             return deny_reason
     return None
 
 
-def _evaluate_commit_staged_content(
-    bash_command: str, working_directory: str | None
-) -> str | None:
+def _evaluate_commit_staged_content(bash_command: str, working_directory: str | None) -> str | None:
     """Scan the staged content of the repository the commit command targets.
 
-    Resolves the repository from the command's ``-C``/``cd`` path, falling back
-    to the session working directory only when the command names none, so a
-    removed cwd never blocks a commit that targets a valid repo.
+    Resolves the repository from the command's ``-C`` or ``cd`` path. Falls
+    back to the session working directory only when the command names none. A
+    removed cwd does not block a commit that targets a valid repo.
 
     Args:
         bash_command: The Bash or PowerShell tool command string.
@@ -259,9 +250,7 @@ def _evaluate_commit_staged_content(
         Deny reason text, or None when the staged content is clean or exempt.
     """
     command_directory = compose_command_working_directory(bash_command)
-    attempted_directory = (
-        command_directory if command_directory is not None else working_directory
-    )
+    attempted_directory = command_directory if command_directory is not None else working_directory
     expanded_directory = expand_user_directory(attempted_directory)
     repository_root = resolve_repository_root(expanded_directory)
     if repository_root is None:
@@ -271,9 +260,7 @@ def _evaluate_commit_staged_content(
     return evaluate_staged_commit(repository_root)
 
 
-def evaluate_bash_command(
-    bash_command: str, working_directory: str | None
-) -> str | None:
+def evaluate_bash_command(bash_command: str, working_directory: str | None) -> str | None:
     """Return a deny reason for a shell gh post or git commit with PII.
 
     Args:
@@ -284,10 +271,8 @@ def evaluate_bash_command(
     Returns:
         Deny reason text, or None when the command is clean or out of scope.
     """
-    all_post_bodies, body_file_failure_reason = (
-        extract_gh_post_body_texts_for_privacy_gate(
-            bash_command, working_directory=working_directory
-        )
+    all_post_bodies, body_file_failure_reason = extract_gh_post_body_texts_for_privacy_gate(
+        bash_command, working_directory=working_directory
     )
     if body_file_failure_reason is not None:
         return body_file_failure_reason
@@ -308,9 +293,7 @@ def _evaluate_shell_tool(
         return None
     working_directory_value = all_tool_input.get("working_directory")
     working_directory = (
-        working_directory_value
-        if isinstance(working_directory_value, str)
-        else None
+        working_directory_value if isinstance(working_directory_value, str) else None
     )
     if working_directory is None:
         cwd_value = payload_by_key.get("cwd")
@@ -332,9 +315,7 @@ def evaluate(payload_by_key: dict[str, object]) -> str | None:
     raw_tool_input = payload_by_key.get("tool_input", {})
     all_tool_input = raw_tool_input if isinstance(raw_tool_input, dict) else {}
     if tool_name in ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES:
-        return evaluate_write_edit_payload(
-            tool_name, all_tool_input, hook_payload=payload_by_key
-        )
+        return evaluate_write_edit_payload(tool_name, all_tool_input, hook_payload=payload_by_key)
     if tool_name == APPLY_PATCH_TOOL_NAME:
         return evaluate_apply_patch_payload(all_tool_input, hook_payload=payload_by_key)
     if tool_name in ALL_SHELL_TOOL_NAMES:

@@ -20,27 +20,21 @@ POWERSHELL_TOOL_NAME = ALL_CONSTANT_BINDINGS["POWERSHELL_TOOL_NAME"]
 
 _EXPECTED_BASH_ORDER = (
     "blocking/destructive_command_blocker.py",
-    "blocking/gh_body_arg_blocker.py",
     "blocking/shell_substitution_blocker.py",
     "blocking/piped_pytest_blocker.py",
     "blocking/cursor_cli_python_misfire_blocker.py",
     "blocking/unscoped_search_blocker.py",
     "blocking/nas_ssh_binary_enforcer.py",
-    "blocking/volatile_path_in_post_blocker.py",
     "blocking/pii_prevention_blocker.py",
-    "blocking/conventional_pr_title_gate.py",
     "blocking/block_main_commit.py",
     "blocking/session_edit_stage_gate.py",
     "blocking/windows_rmtree_blocker.py",
-    "blocking/gh_pr_author_enforcer.py",
-    "blocking/pr_description_writer_gate.py",
 )
 
 _POWERSHELL_APPLICABLE = (
     "blocking/cursor_cli_python_misfire_blocker.py",
     "blocking/unscoped_search_blocker.py",
     "blocking/pii_prevention_blocker.py",
-    "blocking/pr_description_writer_gate.py",
 )
 
 

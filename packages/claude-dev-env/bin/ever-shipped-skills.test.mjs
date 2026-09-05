@@ -32,3 +32,7 @@ test('EVER_SHIPPED_SKILL_NAMES includes every current shipped skill', () => {
 test('EVER_SHIPPED_SKILL_NAMES retains the explicit test runner', () => {
     assert.ok(EVER_SHIPPED_SKILL_NAMES.has('test-runner'));
 });
+
+test('EVER_SHIPPED_SKILL_NAMES includes the pull request skill', () => {
+    assert.equal(EVER_SHIPPED_SKILL_NAMES.has('pull-request'), true);
+});

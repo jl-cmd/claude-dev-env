@@ -11,7 +11,7 @@ from code_rules_command_dispatch import (  # noqa: E402
     check_unanchored_command_dispatch,
 )
 
-GATE_PATH = "packages/claude-dev-env/hooks/blocking/conventional_pr_title_gate.py"
+GATE_PATH = "packages/claude-dev-env/hooks/blocking/block_main_commit.py"
 
 UNANCHORED_SOURCE = (
     "import re\n"
@@ -84,7 +84,7 @@ def test_ignores_file_outside_hooks_blocking() -> None:
 
 
 def test_ignores_test_file() -> None:
-    test_path = "packages/claude-dev-env/hooks/blocking/test_conventional_pr_title_gate.py"
+    test_path = "packages/claude-dev-env/hooks/blocking/test_block_main_commit.py"
     assert check_unanchored_command_dispatch(UNANCHORED_SOURCE, test_path) == []
 
 

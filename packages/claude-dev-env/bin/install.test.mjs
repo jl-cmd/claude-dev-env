@@ -1251,7 +1251,7 @@ const OLD_FOLDED_HOOKS_SETTINGS = {
 
 
 test('FOLDED_HOOK_RELATIVE_PATHS contains folded hooks plus retired entries', () => {
-    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 16);
+    assert.equal(FOLDED_HOOK_RELATIVE_PATHS.size, 21);
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/write_existing_file_blocker.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/code_rules_enforcer.py'));
     assert.ok(FOLDED_HOOK_RELATIVE_PATHS.has('blocking/pytest_testpaths_orphan_blocker.py'));
@@ -1261,16 +1261,22 @@ test('FOLDED_HOOK_RELATIVE_PATHS contains folded hooks plus retired entries', ()
 
 
 test('retired hook registrations stay managed so reinstall removes them', () => {
-    const retiredPath = 'session/untracked_repo_detector.py';
+    const retiredPaths = new Set([
+        'session/untracked_repo_detector.py',
+        'session/gh_pr_author_session_cleanup.py',
+        'observability/pr_description_writer_spawn_tracker.py',
+    ]);
     const shippedHooks = JSON.parse(
         readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')
     );
     const shippedCommands = Object.values(shippedHooks.hooks).flatMap(matcherGroups => (
         matcherGroups.flatMap(matcherGroup => matcherGroup.hooks.map(hook => hook.command))
     ));
-    assert.deepEqual(RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS, new Set([retiredPath]));
-    assert.ok(managedHookScriptRelativePaths({ hooks: {} }).has(retiredPath));
-    assert.ok(shippedCommands.every(command => !command.includes(retiredPath)));
+    assert.deepEqual(RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS, retiredPaths);
+    for (const retiredPath of retiredPaths) {
+        assert.ok(managedHookScriptRelativePaths({ hooks: {} }).has(retiredPath));
+        assert.ok(shippedCommands.every(command => !command.includes(retiredPath)));
+    }
 });
 
 
@@ -1293,6 +1299,11 @@ test('FOLDED_HOOK_RELATIVE_PATHS lists every hook the PreToolUse dispatcher host
     ];
     const retiredHooks = [
         'blocking/md_to_html_blocker.py',
+        'blocking/gh_body_arg_blocker.py',
+        'blocking/volatile_path_in_post_blocker.py',
+        'blocking/conventional_pr_title_gate.py',
+        'blocking/gh_pr_author_enforcer.py',
+        'blocking/pr_description_writer_gate.py',
         'session/untracked_repo_detector.py',
     ];
     for (const hostedPath of dispatcherHostedHooks) {
@@ -1485,12 +1496,13 @@ const OLD_POST_FOLDED_HOOKS_SETTINGS = {
 };
 
 
-test('POST_FOLDED_HOOK_RELATIVE_PATHS contains the after-write hooks and the retired md_to_html_companion', () => {
-    assert.equal(POST_FOLDED_HOOK_RELATIVE_PATHS.size, 4);
+test('POST_FOLDED_HOOK_RELATIVE_PATHS contains hosted and retired post-tool hooks', () => {
+    assert.equal(POST_FOLDED_HOOK_RELATIVE_PATHS.size, 5);
     assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('validation/mypy_validator.py'));
     assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('workflow/auto_formatter.py'));
     assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('workflow/doc_gist_auto_publish.py'));
     assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('workflow/md_to_html_companion.py'));
+    assert.ok(POST_FOLDED_HOOK_RELATIVE_PATHS.has('blocking/gh_pr_author_restore.py'));
 });
 
 
