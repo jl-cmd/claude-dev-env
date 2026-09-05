@@ -3,7 +3,7 @@
   "date": "2026-09-05",
   "repository": "jl-cmd/claude-dev-env",
   "pull_request": 1296,
-  "scope": "Executable source cleanup and actual disposable installations; not Jon's workstation deployment",
+  "scope": "Executable source cleanup and disposable installations. Jon's workstation is unchanged",
   "source_backup": {
     "branch": "backup/hook-linter-before-cutover-20260905",
     "commit": "7a5c63208b1d22f8219c36363b4b3bf11aa852fa",
@@ -18,7 +18,7 @@
   "replacement_invocation": {
     "owner": "packages/claude-dev-env/hooks/git-hooks/pre_commit.py",
     "command": "Python from native hook -> scripts/cde_lint.py --staged",
-    "time": "Before native Git commit; independent of GitHub Actions",
+    "time": "Before native Git commit. GitHub Actions is not required",
     "requires": "Effective managed native pre-commit registration in each repository",
     "input": "Git index including the invoking GIT_INDEX_FILE",
     "timeout_seconds": 240,
@@ -49,7 +49,7 @@
     {"kind": "full-suite regression repair rerun", "passed": 48, "failures": 0, "platform": "Linux", "covers": "Retained legacy gate isolation, updated native-owner fixtures, retired-dispatcher expectations and terminology tests"},
     {"kind": "commit-boundary test length refactor", "passed": 2, "failures": 0, "platform": "Linux"}
   ],
-  "counting_note": "Checkpoint suites overlap; do not add their test counts. Current full CI status must be read from the PR head.",
+  "counting_note": "Checkpoint suites overlap. Do not add their test counts. Read current full CI status from the PR head.",
   "remaining_blockers_report": ".audit/hook-linter-audit/report.html",
   "live_completion_requires": [
     "Read effective Claude, Codex, profiles, project settings and nested installed dispatchers",

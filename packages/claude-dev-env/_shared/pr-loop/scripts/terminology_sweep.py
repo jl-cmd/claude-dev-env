@@ -595,10 +595,10 @@ def repository_environment() -> dict[str, str]:
 
 
 def staged_repository_environment() -> dict[str, str]:
-    """Preserve the active index only for the staged linter's explicit input contract.
+    """Keep the invoking commit's active index for staged lint.
 
     Returns:
-        The isolated Git environment with the invoking commit's index retained.
+        The isolated Git environment with GIT_INDEX_FILE retained when Git supplied one.
     """
     environment = repository_environment()
     active_index = os.environ.get(GIT_INDEX_ENVIRONMENT_VARIABLE)
@@ -752,8 +752,8 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
     """Return terminology near-miss findings for a repository's staged diff.
 
     An identifier the base tree already names is not one the staged diff
-    introduces, so no prose is flagged against it. Only genuinely new
-    identifiers are swept.
+    introduces, so no prose is flagged against it. Only new identifiers
+    are swept.
 
     Args:
         repository_root: The repository root the staged diff is read from.

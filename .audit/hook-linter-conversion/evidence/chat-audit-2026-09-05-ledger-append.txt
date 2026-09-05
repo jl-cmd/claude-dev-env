@@ -34,7 +34,7 @@ GAPS / KEEP ACTIVE
 The report table names each source-observed target, its candidate owner, invocation stage, and specific gap. Rows stay active. The native pre-commit gap now records the source lint step added on this branch.
 - Claude merge: two canonical write groups share a matcher; the second drops the first managed validator.
 - Codex: the materializer adds the apply_patch code-rules hook and independently preserves older hooks; the inspected retired set names only untracked_repo_detector.py.
-- Native Git: source pre-commit now runs cde lint --staged before the older staged gate. Live core.hooksPath, installed shims, and replacement execution were not inspected. pre-push checks checkout HEAD rather than proving every pushed object. Reinstall still generates both shims.
+- Native Git: source pre-commit now runs cde lint --staged before the older staged gate. Live core.hooksPath, installed shims, and replacement execution were not inspected. pre-push checks checkout HEAD. Every pushed object is still unproven. Reinstall still generates both shims.
 - Policy lint: Ruff is excluded by the adapter; Mypy is separate; terminology requires --staged; test pairing requires staged/base selection.
 - Runtime boundaries: file lint does not replace transient shell checks, outbound data controls, protected-file controls, live question payload validation, scheduler state, or SSH ownership.
 - Shared implementations: policy lint imports old hook modules. Do not delete those modules when retiring registrations.
