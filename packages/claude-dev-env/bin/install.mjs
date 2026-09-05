@@ -442,14 +442,14 @@ export function runCursorRuleSync(pythonCommand, scriptPath, claudeRoot, cursorR
  * holding `.claude-plugin/plugin.json` as a plugin and namespaces its skills as
  * `pstack:how`; without the manifest, a folder of skill folders loads nothing.
  *
+ * @param {string} [skillsRoot] The skills root to read. Defaults to the root
+ *   this run installs into.
  * @returns {string|null} The manifest path when this run wrote it, else null.
  */
-function refreshInstalledPstackPluginManifest() {
-    const pluginRoot = join(
-        CLAUDE_HOME,
-        MANAGED_SKILLS_DIRECTORY_NAME,
-        PSTACK_PLUGIN_DIRECTORY_NAME,
-    );
+export function refreshInstalledPstackPluginManifest(
+    skillsRoot = join(CLAUDE_HOME, MANAGED_SKILLS_DIRECTORY_NAME),
+) {
+    const pluginRoot = join(skillsRoot, PSTACK_PLUGIN_DIRECTORY_NAME);
     const outcome = refreshPstackPluginManifest(pluginRoot);
     if (!outcome.didWrite) return null;
     return join(pluginRoot, PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH);
