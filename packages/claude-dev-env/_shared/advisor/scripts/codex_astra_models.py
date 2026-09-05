@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 
 
@@ -44,3 +45,19 @@ def _parse_codex_event(each_line: str) -> tuple[str | None, str | None]:
         if completed_event.get("type") == "agent_message" and isinstance(message_text, str):
             discovered_guidance = message_text.strip()
     return discovered_session_id, discovered_guidance
+
+
+def _parse_probe_percent(stdout_text: str) -> tuple[float | None, str | None]:
+    try:
+        report = json.loads(stdout_text)
+    except (TypeError, json.JSONDecodeError):
+        return None, "usage report is malformed"
+    if not isinstance(report, dict):
+        return None, "usage report is malformed"
+    raw_percent = report.get("percent_left")
+    if isinstance(raw_percent, bool) or not isinstance(raw_percent, (int, float)):
+        return None, "usage meter is unknown" if raw_percent is None else "usage meter is malformed"
+    percent_left = float(raw_percent)
+    if not math.isfinite(percent_left):
+        return None, "usage meter is malformed"
+    return percent_left, None

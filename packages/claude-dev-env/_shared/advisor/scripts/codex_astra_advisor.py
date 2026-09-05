@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
-import math
 import os
 import shutil
 import subprocess
@@ -20,6 +19,18 @@ sys.path[:0] = [
     if each_import_directory_text not in sys.path
 ]
 
+from advisor_scripts_constants.advisor_route_constants import (
+    ADVISOR_CODEX_MODEL_ID,
+    ADVISOR_EFFORT_DEFAULT,
+    ADVISOR_EFFORT_ENV_VAR,
+    ADVISOR_FALLBACK_RESULT,
+    ADVISOR_FALLBACK_TIER,
+    ADVISOR_MODEL_TIER,
+    ALL_ADVISOR_EFFORT_LEVELS,
+    ALL_ADVISOR_GUIDANCE_SIGNALS,
+    CODEX_BIND_SUCCESS_TOKEN,
+    SPAWN_OUTCOME_KEY,
+)
 from advisor_scripts_constants.astra_advisor_constants import (
     ADVISOR_CODEX_EXECUTABLE_ENV_VAR,
     ALL_ASTRA_TRUTHY_VALUES,
@@ -42,8 +53,8 @@ from advisor_scripts_constants.astra_advisor_constants import (
     ASTRA_USAGE_PROBE_TIMEOUT_SECONDS,
     CLAUDE_CONFIG_DIRECTORY_NAME,
     CODEX_CONFIG_FLAG,
-    CODEX_EXECUTABLE,
     CODEX_EXEC_SUBCOMMAND,
+    CODEX_EXECUTABLE,
     CODEX_JSON_FLAG,
     CODEX_MODEL_FLAG,
     CODEX_PROMPT_FROM_STDIN,
@@ -56,19 +67,12 @@ from advisor_scripts_constants.astra_advisor_constants import (
     USAGE_PROBE_SCRIPTS_DIRECTORY_NAME,
     USAGE_PROBE_SHARED_DIRECTORY_NAME,
 )
-from advisor_scripts_constants.advisor_route_constants import (
-    ADVISOR_CODEX_MODEL_ID,
-    ADVISOR_EFFORT_DEFAULT,
-    ADVISOR_EFFORT_ENV_VAR,
-    ADVISOR_FALLBACK_RESULT,
-    ADVISOR_FALLBACK_TIER,
-    ADVISOR_MODEL_TIER,
-    ALL_ADVISOR_EFFORT_LEVELS,
-    ALL_ADVISOR_GUIDANCE_SIGNALS,
-    CODEX_BIND_SUCCESS_TOKEN,
-    SPAWN_OUTCOME_KEY,
+from codex_astra_models import (
+    AstraPreflight,
+    CodexAstraAdvisorReply,
+    _parse_codex_event,
+    _parse_probe_percent,
 )
-from codex_astra_models import AstraPreflight, CodexAstraAdvisorReply, _parse_codex_event
 
 
 def _preflight_fallback(
@@ -80,7 +84,7 @@ def _preflight_fallback(
 def _reply_fallback(
     reason: str,
     is_astra_enabled: bool,
-    fallback_kind: str | None = ASTRA_FALLBACK_KIND_BROKEN,
+    fallback_kind: str | None,
 ) -> CodexAstraAdvisorReply:
     return CodexAstraAdvisorReply(
         None,
@@ -146,22 +150,6 @@ def _load_usage_gate(probe_path: Path) -> Callable[[float], bool]:
     if probe_directory not in sys.path:
         sys.path.insert(0, probe_directory)
     return importlib.import_module("codex_usage_probe").is_codex_review_required
-
-
-def _parse_probe_percent(stdout_text: str) -> tuple[float | None, str | None]:
-    try:
-        report = json.loads(stdout_text)
-    except (TypeError, json.JSONDecodeError):
-        return None, "usage report is malformed"
-    if not isinstance(report, dict):
-        return None, "usage report is malformed"
-    raw_percent = report.get("percent_left")
-    if isinstance(raw_percent, bool) or not isinstance(raw_percent, (int, float)):
-        return None, "usage meter is unknown" if raw_percent is None else "usage meter is malformed"
-    percent_left = float(raw_percent)
-    if not math.isfinite(percent_left):
-        return None, "usage meter is malformed"
-    return percent_left, None
 
 
 def _run_probe(
@@ -252,8 +240,17 @@ def parse_codex_jsonl_reply(
     jsonl_text: str,
     existing_session_id: str | None,
     is_astra_enabled: bool,
-    fallback_kind: str | None = None,
 ) -> CodexAstraAdvisorReply:
+    """Parse a Codex JSONL response.
+
+    Args:
+        jsonl_text: Codex JSONL output.
+        existing_session_id: Expected resumed session.
+        is_astra_enabled: Whether Astra was enabled.
+
+    Returns:
+        A typed advisor reply.
+    """
     session_id: str | None = None
     guidance: str | None = None
     try:
@@ -264,14 +261,14 @@ def parse_codex_jsonl_reply(
             session_id = discovered_session_id or session_id
             guidance = discovered_guidance or guidance
     except (TypeError, json.JSONDecodeError):
-        return _reply_fallback(ASTRA_MALFORMED_JSONL_REASON, is_astra_enabled, fallback_kind)
+        return _reply_fallback(ASTRA_MALFORMED_JSONL_REASON, is_astra_enabled, ASTRA_FALLBACK_KIND_BROKEN)
     if session_id is None or (existing_session_id is not None and session_id != existing_session_id):
-        return _reply_fallback(ASTRA_MISSING_SESSION_REASON, is_astra_enabled, fallback_kind)
+        return _reply_fallback(ASTRA_MISSING_SESSION_REASON, is_astra_enabled, ASTRA_FALLBACK_KIND_BROKEN)
     if not guidance:
-        return _reply_fallback(ASTRA_REPLY_FAILURE_REASON, is_astra_enabled, fallback_kind)
+        return _reply_fallback(ASTRA_REPLY_FAILURE_REASON, is_astra_enabled, ASTRA_FALLBACK_KIND_BROKEN)
     signal = _guidance_signal(guidance)
     return _reply_success(session_id, guidance, signal) if signal else _reply_fallback(
-        ASTRA_INVALID_SIGNAL_REASON, is_astra_enabled, fallback_kind
+        ASTRA_INVALID_SIGNAL_REASON, is_astra_enabled, ASTRA_FALLBACK_KIND_BROKEN
     )
 
 
@@ -323,7 +320,7 @@ def run_codex_astra_advisor(
         return _reply_fallback("Astra advisor flag is disabled", False, ASTRA_FALLBACK_KIND_DECLINED)
     executable = resolve_codex_executable(setting_by_name)
     if executable is None:
-        return _reply_fallback(ASTRA_EXECUTABLE_NOT_FOUND_REASON, True)
+        return _reply_fallback(ASTRA_EXECUTABLE_NOT_FOUND_REASON, True, ASTRA_FALLBACK_KIND_BROKEN)
     resolved_preflight = _resolve_preflight(preflight, probe_path, process_runner)
     if not resolved_preflight.eligible:
         return _reply_fallback(resolved_preflight.reason, True, resolved_preflight.fallback_kind)
@@ -350,11 +347,15 @@ def _run_enabled_advisor(
             prompt, working_directory, session_id, setting_by_name, executable, process_runner
         )
     except subprocess.TimeoutExpired as error:
-        return _reply_fallback(f"{ASTRA_CODEX_TIMEOUT_REASON}: {error}", True)
+        return _reply_fallback(f"{ASTRA_CODEX_TIMEOUT_REASON}: {error}", True, ASTRA_FALLBACK_KIND_BROKEN)
     except (OSError, subprocess.SubprocessError) as error:
-        return _reply_fallback(f"{ASTRA_BIND_FAILURE_REASON}: {error}", True)
+        return _reply_fallback(f"{ASTRA_BIND_FAILURE_REASON}: {error}", True, ASTRA_FALLBACK_KIND_BROKEN)
     if completed.returncode != 0:
-        return _reply_fallback(f"{ASTRA_BIND_FAILURE_REASON}: process exit {completed.returncode}", True)
+        return _reply_fallback(
+            f"{ASTRA_BIND_FAILURE_REASON}: process exit {completed.returncode}",
+            True,
+            ASTRA_FALLBACK_KIND_BROKEN,
+        )
     return parse_codex_jsonl_reply(completed.stdout, session_id, True)
 
 
