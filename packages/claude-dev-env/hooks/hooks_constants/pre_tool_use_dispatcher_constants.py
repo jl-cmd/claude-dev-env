@@ -1,8 +1,10 @@
 """Constants for the PreToolUse dispatcher that hosts Write/Edit/MultiEdit hooks.
 
-Holds the ordered hosted-hook list with per-hook applicable-tool sets, the
-special exit codes, the deny decision string, and the hook-event name. The
-dispatcher imports each of these by name.
+The roster retains action-boundary checks, repository checks, and checks whose
+local replacement scope remains unresolved. File-policy rules with a staged
+replacement run through cde lint in the native pre-commit owner. Their detector
+modules remain available to that linter. Bash cleanup protection has its own
+roster and remains active.
 """
 
 from __future__ import annotations
@@ -55,14 +57,10 @@ ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES: frozenset[str] = frozenset(
     ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES | {APPLY_PATCH_TOOL_NAME}
 )
 
-# apply_patch reaches this narrower roster: the gates whose miss causes immediate
-# harm, plus the TDD gate and the edit tracker. It stays off the full lint surface.
 ALL_IMMEDIATE_HARM_SCRIPT_PATHS: tuple[str, ...] = (
     "blocking/pii_prevention_blocker.py",
     "blocking/sensitive_file_protector.py",
     "blocking/write_existing_file_blocker.py",
-    "blocking/code_rules_enforcer.py",
-    "blocking/tdd_enforcer.py",
 )
 
 
@@ -110,36 +108,7 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     ),
     HostedHookEntry(
-        script_relative_path="blocking/code_rules_enforcer.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/tdd_enforcer.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/windows_rmtree_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
         script_relative_path="blocking/duplicate_rmtree_helper_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/state_description_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-        native_module_name=STATE_DESCRIPTION_BLOCKER_MODULE_NAME,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/subprocess_budget_completeness.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/hook_prose_detector_consistency.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/workflow_substitution_slot_blocker.py",
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     ),
     HostedHookEntry(
