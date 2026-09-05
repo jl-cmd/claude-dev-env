@@ -23,7 +23,6 @@ packages = [
     "pr_converge_skill_constants",
     "pr_converge_scripts_constants",
     "usage_pause_constants",
-    "prototype_scripts_constants",
     "codex_review_scripts_constants",
     "e_code_review_scripts_constants",
     "dev_env_scripts_constants",
@@ -42,7 +41,6 @@ skills_pr_loop_constants = ".agents/skills/_shared/pr-loop/scripts/skills_pr_loo
 pr_converge_skill_constants = "_shared/pr-loop/scripts/pr_converge_skill_constants"
 pr_converge_scripts_constants = "_shared/pr-loop/scripts/pr_converge_scripts_constants"
 usage_pause_constants = ".agents/skills/usage-pause/scripts/usage_pause_constants"
-prototype_scripts_constants = ".agents/skills/prototype/scripts/prototype_scripts_constants"
 codex_review_scripts_constants = "_shared/pr-loop/scripts/codex_review_scripts_constants"
 e_code_review_scripts_constants = ".agents/skills/e-code-review/scripts/e_code_review_scripts_constants"
 dev_env_scripts_constants = "scripts/dev_env_scripts_constants"

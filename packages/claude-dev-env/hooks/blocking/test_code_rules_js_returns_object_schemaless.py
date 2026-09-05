@@ -34,8 +34,8 @@ check_js_returns_object_schemaless_branch = (
 
 _MJS_PATH = "skills/autoconverge/workflow/converge.mjs"
 
-_SHIPPED_CONVERGE_MJS = (
-    _HOOK_DIRECTORY.parents[1] / ".agents" / "skills" / "autoconverge" / "workflow" / "converge.mjs"
+_ARCHIVED_CONVERGE_MJS = (
+    _HOOK_DIRECTORY.parents[3] / "skill-archive" / "autoconverge" / "workflow" / "converge.mjs"
 )
 
 
@@ -161,7 +161,7 @@ def test_skips_python_files() -> None:
     assert issues == []
 
 
-def test_shipped_converge_mjs_passes_its_own_check() -> None:
-    shipped_source = _SHIPPED_CONVERGE_MJS.read_text(encoding="utf-8")
-    issues = check_js_returns_object_schemaless_branch(shipped_source, _MJS_PATH)
+def test_archived_converge_regression_fixture_passes_the_check() -> None:
+    archived_source = _ARCHIVED_CONVERGE_MJS.read_text(encoding="utf-8")
+    issues = check_js_returns_object_schemaless_branch(archived_source, _MJS_PATH)
     assert issues == []
