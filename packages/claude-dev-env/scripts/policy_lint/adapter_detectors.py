@@ -38,15 +38,22 @@ def terminology_diagnostics(
     Returns:
         Diagnostics that name the prose file and line.
     """
-    if document_set.selection is not SelectionKind.STAGED:
+    all_arguments: tuple[Path | str, ...]
+    if document_set.selection is SelectionKind.BASE:
+        if document_set.base_revision is None:
+            raise ValueError("Base selection is missing its comparison revision")
+        checker_name = "strict_base_terminology_findings"
+        all_arguments = (document_set.repository_root, document_set.base_revision)
+    elif document_set.selection is SelectionKind.STAGED:
+        checker_name = "strict_staged_terminology_findings"
+        all_arguments = (document_set.repository_root,)
+    else:
         return ()
     terminology_module = load_module(constants.TERMINOLOGY_SWEEP_MODULE_NAME)
     helper_stdout = StringIO()
     helper_stderr = StringIO()
     with redirect_stdout(helper_stdout), redirect_stderr(helper_stderr):
-        all_findings = terminology_module.strict_staged_terminology_findings(
-            document_set.repository_root
-        )
+        all_findings = getattr(terminology_module, checker_name)(*all_arguments)
     return tuple(_terminology_diagnostic(each_finding) for each_finding in all_findings)
 
 

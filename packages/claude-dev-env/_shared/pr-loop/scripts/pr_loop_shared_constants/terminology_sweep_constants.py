@@ -107,6 +107,12 @@ ALL_GIT_DIFF_CACHED_UNIFIED_ZERO_COMMAND: tuple[str, ...] = (
     "--unified=0",
 )
 
+ALL_GIT_DIFF_UNIFIED_ZERO_COMMAND: tuple[str, ...] = (
+    "git",
+    "diff",
+    "--unified=0",
+)
+
 GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS: int = 30
 
 GIT_NO_MATCH_EXIT_CODE: int = 1

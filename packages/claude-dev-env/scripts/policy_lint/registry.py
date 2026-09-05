@@ -141,7 +141,7 @@ def default_registry() -> tuple[model.Rule, ...]:
         model.ChangeSetRule(
             "terminology-sweep",
             frozenset({"changed"}),
-            frozenset({model.SelectionKind.STAGED}),
+            frozenset({model.SelectionKind.STAGED, model.SelectionKind.BASE}),
             adapters.terminology_diagnostics,
         ),
         model.RepositoryRule(

@@ -172,7 +172,7 @@ def _documents_from_changes(
     selection_kind = SelectionKind.STAGED if is_staged else SelectionKind.BASE
     return DocumentSet(
         tuple(all_documents), selection_kind, repository_root,
-        tuple(all_deleted_paths), tuple(all_renamed_paths),
+        tuple(all_deleted_paths), tuple(all_renamed_paths), base_revision,
     )
 
 
@@ -354,6 +354,7 @@ def _normalize_document_set(repository_root: Path, document_set: DocumentSet) ->
         repository_root,
         all_deleted_paths,
         all_renamed_paths,
+        document_set.base_revision,
     )
 
 

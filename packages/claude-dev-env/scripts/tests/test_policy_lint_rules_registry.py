@@ -291,7 +291,9 @@ def test_registry_registers_unique_python_validator_rule() -> None:
 def test_registry_registers_terminology_change_set_rule() -> None:
     terminology_rule = _terminology_rule()
     assert terminology_rule.rule_sets == _CHANGED_RULE_SETS
-    assert terminology_rule.selections == frozenset({SelectionKind.STAGED})
+    assert terminology_rule.selections == frozenset(
+        {SelectionKind.STAGED, SelectionKind.BASE}
+    )
 
 
 def test_registry_runs_test_pairing_for_staged_and_base_changes() -> None:
@@ -339,6 +341,207 @@ def test_terminology_rule_suppresses_identifier_present_in_prior_tree(
     lint_report = lint(LintRequest.staged(tmp_path), all_registry=(_terminology_rule(),))
 
     assert lint_report.diagnostics == ()
+
+
+def test_terminology_rule_reports_committed_changes_from_base(
+    tmp_path: Path,
+) -> None:
+    _ensure_git_repository(tmp_path)
+    source_path = tmp_path / "src" / "quota.py"
+    documentation_path = tmp_path / "docs" / "README.md"
+    source_path.parent.mkdir()
+    documentation_path.parent.mkdir()
+    source_path.write_text("baseline = 1\n", encoding="utf-8")
+    documentation_path.write_text("Baseline quota text.\n", encoding="utf-8")
+    _commit_repository(tmp_path, "base")
+    comparison_revision = subprocess.run(
+        ("git", "rev-parse", "HEAD"),
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    source_path.write_text(
+        "baseline = 1\npremium_request_interactions = 5\n",
+        encoding="utf-8",
+    )
+    _commit_repository(tmp_path, "identifier")
+    documentation_path.write_text(
+        "The premium-request-budget field gates the run.\n",
+        encoding="utf-8",
+    )
+    _commit_repository(tmp_path, "documentation")
+    (tmp_path / "staged.txt").write_text("unrelated index content\n", encoding="utf-8")
+    subprocess.run(
+        ("git", "add", "--", "staged.txt"),
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+
+    lint_report = lint(
+        LintRequest.base(tmp_path, comparison_revision),
+        all_registry=(_terminology_rule(),),
+    )
+
+    assert len(lint_report.diagnostics) == 1
+    assert lint_report.diagnostics[0].location is not None
+    assert lint_report.diagnostics[0].location.path == PurePosixPath("docs/README.md")
+
+
+def test_terminology_base_uses_worktree_while_staged_uses_index(
+    tmp_path: Path,
+) -> None:
+    _ensure_git_repository(tmp_path)
+    source_path = tmp_path / "src" / "quota.py"
+    documentation_path = tmp_path / "docs" / "README.md"
+    source_path.parent.mkdir()
+    documentation_path.parent.mkdir()
+    source_path.write_text("baseline = 1\n", encoding="utf-8")
+    documentation_path.write_text("Baseline quota text.\n", encoding="utf-8")
+    _commit_repository(tmp_path, "base")
+    comparison_revision = subprocess.run(
+        ("git", "rev-parse", "HEAD"),
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    source_path.write_text(
+        "baseline = 1\npremium_request_interactions = 5\n",
+        encoding="utf-8",
+    )
+    _commit_repository(tmp_path, "identifier")
+    documentation_path.write_text(
+        "The premium-request-budget field gates the run.\n",
+        encoding="utf-8",
+    )
+    _commit_repository(tmp_path, "documentation")
+    source_path.write_text(
+        "baseline = 1\n"
+        "premium_request_interactions = 5\n"
+        "another_request_total = 2\n",
+        encoding="utf-8",
+    )
+    documentation_path.write_text(
+        "The another-request-budget field gates the run.\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ("git", "add", "-A"),
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    documentation_path.write_text(
+        "The another-request-total field gates the run.\n",
+        encoding="utf-8",
+    )
+
+    base_report = lint(
+        LintRequest.base(tmp_path, comparison_revision),
+        all_registry=(_terminology_rule(),),
+    )
+    staged_report = lint(
+        LintRequest.staged(tmp_path),
+        all_registry=(_terminology_rule(),),
+    )
+
+    assert base_report.diagnostics == ()
+    assert len(staged_report.diagnostics) == 1
+    assert staged_report.diagnostics[0].location is not None
+    assert staged_report.diagnostics[0].location.path == PurePosixPath(
+        "docs/README.md"
+    )
+
+
+def test_terminology_base_suppresses_identifier_present_in_comparison_base(
+    tmp_path: Path,
+) -> None:
+    _ensure_git_repository(tmp_path)
+    source_path = tmp_path / "src" / "quota.py"
+    documentation_path = tmp_path / "docs" / "README.md"
+    source_path.parent.mkdir()
+    documentation_path.parent.mkdir()
+    source_path.write_text(
+        "premium_request_interactions = 5\n",
+        encoding="utf-8",
+    )
+    documentation_path.write_text("Baseline quota text.\n", encoding="utf-8")
+    _commit_repository(tmp_path, "base")
+    comparison_revision = subprocess.run(
+        ("git", "rev-parse", "HEAD"),
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    source_path.write_text(
+        "premium_request_interactions = 5\n"
+        "premium_request_interactions = 6\n",
+        encoding="utf-8",
+    )
+    documentation_path.write_text(
+        "The premium-request-budget field gates the run.\n",
+        encoding="utf-8",
+    )
+    _commit_repository(tmp_path, "existing identifier")
+
+    lint_report = lint(
+        LintRequest.base(tmp_path, comparison_revision),
+        all_registry=(_terminology_rule(),),
+    )
+
+    assert lint_report.diagnostics == ()
+
+
+def test_terminology_base_handles_renames_and_deletions(
+    tmp_path: Path,
+) -> None:
+    _ensure_git_repository(tmp_path)
+    old_source_path = tmp_path / "src" / "old_quota.py"
+    deleted_documentation_path = tmp_path / "docs" / "obsolete.md"
+    old_source_path.parent.mkdir()
+    deleted_documentation_path.parent.mkdir()
+    old_source_path.write_text("baseline = 1\n", encoding="utf-8")
+    deleted_documentation_path.write_text("Obsolete quota text.\n", encoding="utf-8")
+    _commit_repository(tmp_path, "base")
+    comparison_revision = subprocess.run(
+        ("git", "rev-parse", "HEAD"),
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    new_source_path = tmp_path / "src" / "new_quota.py"
+    subprocess.run(
+        ("git", "mv", "--", str(old_source_path), str(new_source_path)),
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    new_source_path.write_text(
+        "baseline = 1\npremium_request_interactions = 5\n",
+        encoding="utf-8",
+    )
+    deleted_documentation_path.unlink()
+    documentation_path = tmp_path / "docs" / "README.md"
+    documentation_path.write_text(
+        "The premium-request-budget field gates the run.\n",
+        encoding="utf-8",
+    )
+    _commit_repository(tmp_path, "rename and delete")
+
+    lint_report = lint(
+        LintRequest.base(tmp_path, comparison_revision),
+        all_registry=(_terminology_rule(),),
+    )
+
+    assert len(lint_report.diagnostics) == 1
+    assert lint_report.diagnostics[0].location is not None
+    assert lint_report.diagnostics[0].location.path == PurePosixPath(
+        "docs/README.md"
+    )
 
 
 def test_terminology_rule_skips_file_selection(tmp_path: Path) -> None:
