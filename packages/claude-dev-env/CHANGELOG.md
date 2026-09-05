@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.1.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v4.0.0...claude-dev-env-v4.1.0) (2026-09-05)
+
+
+### Features
+
+* **git:** make submodule parent sync explicit ([ea7a18d](https://github.com/jl-cmd/claude-dev-env/commit/ea7a18d81ddd99c0bf941b24e9a767acd45ac5ce))
+* **git:** make submodule parent sync explicit ([184a855](https://github.com/jl-cmd/claude-dev-env/commit/184a8558398356d615619815329eda2212b8d0f4))
+
 ## [4.0.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v3.0.0...claude-dev-env-v4.0.0) (2026-09-05)
 
 
