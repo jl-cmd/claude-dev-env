@@ -1,5 +1,57 @@
 # Changelog
 
+## [4.4.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v4.3.0...claude-dev-env-v4.4.0) (2026-09-05)
+
+
+### Features
+
+* **hooks:** add PR done checklist context reminder after push ([8506d95](https://github.com/jl-cmd/claude-dev-env/commit/8506d95753f58a24b22dbfb1b4ce52d98e4f07dc))
+* **hooks:** hand the agent a PR done checklist after each push ([90306b1](https://github.com/jl-cmd/claude-dev-env/commit/90306b180a9b9a413e56a78a2027c47bdacd390e))
+* **install:** publish pstack as a skills-directory plugin ([bca64ce](https://github.com/jl-cmd/claude-dev-env/commit/bca64ceb3330825fd2986f7fb605b6e40d56f8c6))
+* **install:** publish pstack as a skills-directory plugin ([f0663e4](https://github.com/jl-cmd/claude-dev-env/commit/f0663e44ae4da44a7e553a38f95ffb095da55006))
+* **lint:** define the required local staged policy-lint step ([bcc95ab](https://github.com/jl-cmd/claude-dev-env/commit/bcc95ab1a3de4e15069e939e321d1ebc86dcc3a8))
+* **lint:** run staged policy lint locally before the existing commit gate ([29da240](https://github.com/jl-cmd/claude-dev-env/commit/29da24036706778405b0df9f2936090040052f8a))
+
+
+### Bug Fixes
+
+* **agents:** keep PR writer guidance on live sources ([c67bd71](https://github.com/jl-cmd/claude-dev-env/commit/c67bd7137e53b31d5c55cf16f538979ed1059ddc))
+* **ci:** keep installer lifecycle coverage outside retired skills ([698cf03](https://github.com/jl-cmd/claude-dev-env/commit/698cf03751724e26635a1b1d563cf4c6515ddeb7))
+* **ci:** stop packaging the archived prototype constants ([917778b](https://github.com/jl-cmd/claude-dev-env/commit/917778bd0e6eab490e8ca04445f42e23f424b636))
+* **hooks:** complete staged-lint retirement proof and record implemented cleanup ([407b67b](https://github.com/jl-cmd/claude-dev-env/commit/407b67bdf473cf0efa2ffe2f366b6ad4ce8fa8f5))
+* **lint:** keep staged-linter diagnostics on the CLI error stream ([3202f12](https://github.com/jl-cmd/claude-dev-env/commit/3202f12fb1769da0d197861e6875b1f7f43ed7bd))
+* **lint:** prove installed local replacements and preserve Git's active index ([0dabb64](https://github.com/jl-cmd/claude-dev-env/commit/0dabb64ed8bf4f75a8ea328f3122956569a534f5))
+* **lint:** separate automatic live-code checks from skill archives ([cf97f39](https://github.com/jl-cmd/claude-dev-env/commit/cf97f397eca5cfd8466111c6d6ddc58b7461543d))
+* **scripts:** read CLAUDE_CONFIG_DIR in the pstack refresher ([89f0413](https://github.com/jl-cmd/claude-dev-env/commit/89f041361d76a6678fe6b775a28898a62d7dec61))
+
+
+### Maintenance
+
+* **hooks:** remove audit and pr-loop noise from cleanup ([c6b46b3](https://github.com/jl-cmd/claude-dev-env/commit/c6b46b37854ad2db6f571226664c6d9f448004b7))
+* **skills:** archive 19 skills and keep a skill-builder stub ([1ef9619](https://github.com/jl-cmd/claude-dev-env/commit/1ef96196e4aff4bf2a7d54551ce2d90b525a5582))
+* **skills:** archive retired skills and keep skill-builder stub ([4b9ab24](https://github.com/jl-cmd/claude-dev-env/commit/4b9ab24e37079a93d076586bafbfaaf920a2962b))
+
+
+### Refactoring
+
+* **hooks:** replace seven write blockers with local staged lint ([97dbd06](https://github.com/jl-cmd/claude-dev-env/commit/97dbd06b193e453adcd4c406f6713c9e116eebc4))
+* **hooks:** retire seven write blockers covered by local staged policy lint ([3e8498d](https://github.com/jl-cmd/claude-dev-env/commit/3e8498daf0b18ae96e5d0920ee5ed0def200fcb2))
+* **hooks:** split the checklist builder under the 30-line cap ([4fd46ce](https://github.com/jl-cmd/claude-dev-env/commit/4fd46ceb25f939e54aaee521736e322b7a27976f))
+
+
+### Tests
+
+* **hooks:** prove edits proceed and the real local commit step catches violations ([35a4c52](https://github.com/jl-cmd/claude-dev-env/commit/35a4c52fe0638b23e29cf0b992d33af24bdb15a7))
+* **installer:** cover retired skills and the retained skill-builder stub ([7f6830c](https://github.com/jl-cmd/claude-dev-env/commit/7f6830cc079e8913b5c927a90f24bfcdcf6b024a))
+* **install:** pair the pstack step with the install suite ([ed34989](https://github.com/jl-cmd/claude-dev-env/commit/ed349891cf7865f55432e34a9c39570ff68b6d89))
+* **install:** prove retired file-hook registrations stay removed on reinstall ([ec0e639](https://github.com/jl-cmd/claude-dev-env/commit/ec0e639d325fa9a0b83cf0d8cedeae02042404f9))
+* keep proposal checks scoped to the active review skill ([211d4d7](https://github.com/jl-cmd/claude-dev-env/commit/211d4d7a4e8df114557eec7b7fcfe561c2e5a9a3))
+* **lint:** exercise the real staged replacement and failure propagation ([d6e1e3b](https://github.com/jl-cmd/claude-dev-env/commit/d6e1e3bc782dc26aed5e8efbba6e9bcf97019334))
+* **lint:** keep the replacement fixtures in the matching pre-commit test file ([c32034d](https://github.com/jl-cmd/claude-dev-env/commit/c32034da1fe15e87de61214dc09b51caab1a35a4))
+* **lint:** pair native commit changes with real isolated staged-lint fixtures ([488c46b](https://github.com/jl-cmd/claude-dev-env/commit/488c46b954574c1200a4eab4c89bf433648c54d8))
+* retain JavaScript rule regression coverage using archived fixtures ([4ce5a2b](https://github.com/jl-cmd/claude-dev-env/commit/4ce5a2b85936d562417fdd54d14ddda225e85880))
+* verify archive rule paths and use explicit environment names ([1efcfa8](https://github.com/jl-cmd/claude-dev-env/commit/1efcfa8fd447bfb401a3506e90015b76453712ac))
+
 ## [4.3.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v4.2.0...claude-dev-env-v4.3.0) (2026-09-05)
 
 
