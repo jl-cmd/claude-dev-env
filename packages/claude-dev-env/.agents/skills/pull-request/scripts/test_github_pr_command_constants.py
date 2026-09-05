@@ -1,5 +1,12 @@
 """Tests for explicit GitHub pull request command constants."""
 
+import sys
+from pathlib import Path
+
+_SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIRECTORY))
+
 from github_pr_command_constants.config import constants
 
 
