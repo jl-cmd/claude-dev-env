@@ -1,0 +1,51 @@
+name: Local hook migration proof
+
+on:
+  pull_request:
+    paths:
+      - 'packages/claude-dev-env/hooks/**'
+      - 'packages/claude-dev-env/scripts/policy_lint/**'
+      - 'packages/claude-dev-env/scripts/cde_lint.py'
+      - 'packages/claude-dev-env/bin/**'
+      - '.github/workflows/hook-migration-proof.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: local-hook-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-boundary:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install fixture dependencies
+        run: python -m pip install -e packages/claude-dev-env pytest pyyaml ruff mypy
+      - name: Archive HEAD source
+        run: git archive --format=tar.gz --output=hook-proof-source.tar.gz HEAD
+      - name: Verify selective reinstall
+        run: node --test packages/claude-dev-env/bin/install.policy-lint.test.mjs
+      - name: Run local Git and linter tests
+        run: python -m pytest packages/claude-dev-env/hooks/git-hooks/test_pre_commit.py packages/claude-dev-env/hooks/git-hooks/test_native_policy_commit.py packages/claude-dev-env/hooks/git-hooks/test_installed_policy_lint.py packages/claude-dev-env/scripts/test_shared_tree_paths.py -q --junitxml=hook-proof-results.xml
+      - name: Upload proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-hook-proof-${{ runner.os }}
+          path: |
+            hook-proof-source.tar.gz
+            hook-proof-results.xml
+          retention-days: 3

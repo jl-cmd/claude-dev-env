@@ -13,6 +13,9 @@ try:
     if str(_BLOCKING_DIR) not in sys.path:
         sys.path.insert(0, str(_BLOCKING_DIR))
 
+    from hooks_constants.bash_pre_tool_use_dispatcher_constants import (
+        ALL_BASH_HOSTED_HOOK_ENTRIES,
+    )
     from hooks_constants.pre_tool_use_dispatcher_constants import (
         ALL_HOSTED_HOOK_ENTRIES,
         ALL_IMMEDIATE_HARM_SCRIPT_PATHS,
@@ -74,10 +77,12 @@ def test_duplicate_rmtree_helper_blocker_runs_via_runpy() -> None:
     assert entry.native_module_name is None
 
 
-def test_windows_rmtree_blocker_still_registered() -> None:
-    entry = _entry_for("blocking/windows_rmtree_blocker.py")
-    assert entry is not None
-    assert entry.applicable_tool_names == ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES
+def test_windows_rmtree_write_check_is_retired_but_bash_check_remains() -> None:
+    assert _entry_for("blocking/windows_rmtree_blocker.py") is None
+    all_bash_paths = {
+        each_entry.script_relative_path for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES
+    }
+    assert "blocking/windows_rmtree_blocker.py" in all_bash_paths
 
 
 def test_blocking_hook_crash_deny_reason_surfaces_the_constant() -> None:
@@ -119,22 +124,11 @@ def test_every_hosted_script_path_exists_under_the_hooks_root() -> None:
         )
 
 
-def test_every_native_module_exposes_a_callable_evaluate() -> None:
-    nativized_entries = [
-        each_entry
-        for each_entry in ALL_HOSTED_HOOK_ENTRIES
-        if each_entry.native_module_name is not None
-    ]
-    assert nativized_entries, (
-        "the roster must carry at least one nativized hook for this test to lock the contract"
-    )
-    for each_entry in nativized_entries:
-        native_module = importlib.import_module(each_entry.native_module_name)
-        evaluate_function = getattr(native_module, "evaluate", None)
-        assert callable(evaluate_function), (
-            f"{each_entry.native_module_name} must expose a callable named evaluate, "
-            "matching the native_module_name docstring contract"
-        )
+def test_retired_native_detector_keeps_its_callable_linter_interface() -> None:
+    native_module = importlib.import_module("state_description_blocker")
+    assert native_module.find_violations("The API uses port 8080.", "guide.md") == []
+    assert native_module.find_violations("Previously set via env var.", "guide.md")
+    assert all(each_entry.native_module_name is None for each_entry in ALL_HOSTED_HOOK_ENTRIES)
 
 
 def test_four_way_set_covers_every_mutation_tool_name() -> None:
@@ -144,7 +138,7 @@ def test_four_way_set_covers_every_mutation_tool_name() -> None:
 
 
 def test_immediate_harm_hooks_reach_apply_patch() -> None:
-    """PII, sensitive-path, existing-file, CODE_RULES, and TDD gates all see apply_patch."""
+    """PII, sensitive-path, and existing-file checks retain apply_patch coverage."""
     for each_script_path in ALL_IMMEDIATE_HARM_SCRIPT_PATHS:
         entry = _entry_for(each_script_path)
         assert entry is not None, f"{each_script_path} must stay on the hosted roster"
@@ -154,8 +148,6 @@ def test_immediate_harm_hooks_reach_apply_patch() -> None:
 
 
 _ALL_DEFERRED_LINT_SCRIPT_PATHS = (
-    "blocking/state_description_blocker.py",
-    "blocking/workflow_substitution_slot_blocker.py",
     "blocking/claude_md_orphan_file_blocker.py",
     "blocking/package_inventory_stale_blocker.py",
     "blocking/env_var_table_code_drift_blocker.py",
@@ -164,9 +156,6 @@ _ALL_DEFERRED_LINT_SCRIPT_PATHS = (
     "blocking/docstring_rule_gate_count_blocker.py",
     "blocking/duplicate_rmtree_helper_blocker.py",
     "validation/hook_format_validator.py",
-    "blocking/hook_prose_detector_consistency.py",
-    "blocking/subprocess_budget_completeness.py",
-    "blocking/windows_rmtree_blocker.py",
     "advisory/refactor_guard.py",
     "advisory/migration_safety_advisor.py",
 )
@@ -177,7 +166,7 @@ def test_lint_and_advisory_hooks_stay_off_the_apply_patch_roster() -> None:
 
     apply_patch reaches only a gate whose violation is already real and
     unrecoverable the moment the call returns: a leaked secret, an exposed
-    sensitive path, a blind overwrite, or an untested change landing. Every
+    sensitive path, or a blind overwrite. Every
     hook named here instead judges the quality of the authored content for a
     consequence the write itself does not cause right now: doc-inventory
     drift, prose or naming style, a future-runtime correctness pattern (an
@@ -225,13 +214,12 @@ def test_edit_and_multi_edit_applicable_sets_are_equal() -> None:
     )
 
 
-def test_multi_edit_widened_hooks_reach_multi_edit() -> None:
+def test_retained_boundary_hooks_reach_multi_edit() -> None:
     all_multi_edit_widened_script_paths = (
         "blocking/write_existing_file_blocker.py",
-        "blocking/code_rules_enforcer.py",
-        "blocking/tdd_enforcer.py",
-        "blocking/state_description_blocker.py",
-    )
+        "blocking/sensitive_file_protector.py",
+        "blocking/pii_prevention_blocker.py",
+        )
     for each_script_path in all_multi_edit_widened_script_paths:
         entry = _entry_for(each_script_path)
         assert entry is not None, f"{each_script_path} must stay on the hosted roster"
