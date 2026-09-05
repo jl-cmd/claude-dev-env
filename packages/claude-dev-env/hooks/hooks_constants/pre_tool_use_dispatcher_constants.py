@@ -1,8 +1,9 @@
 """Constants for the PreToolUse dispatcher that hosts Write/Edit/MultiEdit hooks.
 
-Holds the ordered hosted-hook list with per-hook applicable-tool sets, the
-special exit codes, the deny decision string, and the hook-event name. The
-dispatcher imports each of these by name.
+The roster keeps action-boundary checks, repository checks, and checks without
+a proven local replacement. File-policy rules with a staged replacement run
+through cde lint in native pre-commit. Their detectors stay importable for that
+linter. Bash cleanup protection uses its own roster.
 """
 
 from __future__ import annotations
@@ -55,14 +56,10 @@ ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES: frozenset[str] = frozenset(
     ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES | {APPLY_PATCH_TOOL_NAME}
 )
 
-# apply_patch reaches this narrower roster: the gates whose miss causes immediate
-# harm, plus the TDD gate and the edit tracker. It stays off the full lint surface.
 ALL_IMMEDIATE_HARM_SCRIPT_PATHS: tuple[str, ...] = (
     "blocking/pii_prevention_blocker.py",
     "blocking/sensitive_file_protector.py",
     "blocking/write_existing_file_blocker.py",
-    "blocking/code_rules_enforcer.py",
-    "blocking/tdd_enforcer.py",
 )
 
 
@@ -71,19 +68,18 @@ STATE_DESCRIPTION_BLOCKER_MODULE_NAME = "state_description_blocker"
 
 @dataclass(frozen=True)
 class HostedHookEntry:
-    """A single hosted hook with its applicable-tools constraint and blocking flag.
+    """One hosted hook, the tools it applies to, and whether a crash blocks.
 
     Attributes:
         script_relative_path: Hook path relative to the hooks/ directory.
         applicable_tool_names: Tool names this hook applies to. The dispatcher
             skips the hook when the payload's tool is not in this set.
-        is_blocking: True when a crash surfaces a blocking signal; False when the
+        is_blocking: True when a crash is a blocking signal. False when the
             hook is advisory and a crash stays silent.
-        native_module_name: The importable module name whose evaluate function
-            the dispatcher calls in-process for this hook, or None when the hook
-            runs via runpy under __main__. The named module exposes a function
-            named `evaluate` taking the payload dict and returning a deny-reason
-            string or None.
+        native_module_name: Importable module whose evaluate function the
+            dispatcher calls in-process, or None when the hook runs via runpy
+            under __main__. evaluate takes the payload dict and returns a
+            deny-reason string or None.
     """
 
     script_relative_path: str
@@ -110,36 +106,7 @@ ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     ),
     HostedHookEntry(
-        script_relative_path="blocking/code_rules_enforcer.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/tdd_enforcer.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/windows_rmtree_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
         script_relative_path="blocking/duplicate_rmtree_helper_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/state_description_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-        native_module_name=STATE_DESCRIPTION_BLOCKER_MODULE_NAME,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/subprocess_budget_completeness.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/hook_prose_detector_consistency.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/workflow_substitution_slot_blocker.py",
         applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
     ),
     HostedHookEntry(

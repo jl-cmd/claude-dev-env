@@ -1,16 +1,8 @@
-"""Native-equivalence tests for the nativized PreToolUse hosted hooks.
+"""Preserve detector equivalence while retiring its dispatcher registration.
 
-For the state_description_blocker hook the dispatcher runs natively. This suite
-asserts the native evaluate() call and the hook's standalone __main__ subprocess
-path decide identically on the same payload: same allow-or-deny, same deny-reason
-text. It also asserts the dispatcher reaches the same decision through its native
-path.
-
-The corpus pairs allowing payloads with denying payloads for each hook so the
-equivalence holds across both outcomes. Each payload names an absolute file
-under this repository and carries the repository root as its ``cwd``, so the
-decision belongs to this checkout rather than to the directory pytest runs
-from.
+The standalone state-description detector remains callable by the policy linter.
+Its function and script agree on valid and invalid inputs; the write dispatcher
+allows these policy findings to reach the staged linter.
 """
 
 from __future__ import annotations
@@ -195,28 +187,6 @@ def _deny_reason_from_dispatcher(payload_dictionary: dict[str, object]) -> str |
     )
     return _deny_reason_from_script_stdout(completed_process.stdout.strip())
 
-def _deny_payload_from_dispatcher(payload_dictionary: dict[str, object]) -> dict[str, object]:
-    """Run the dispatcher as a subprocess and return its parsed deny payload.
-
-    Args:
-        payload_dictionary: The payload dict to send as JSON on stdin.
-
-    Returns:
-        The dispatcher's emitted deny JSON parsed into a dict.
-    """
-    completed_process = subprocess.run(
-        [sys.executable, _DISPATCHER_SCRIPT],
-        check=False,
-        input=json.dumps(payload_dictionary),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        env=_subprocess_environment(),
-    )
-    parsed_payload = json.loads(completed_process.stdout.strip())
-    assert isinstance(parsed_payload, dict)
-    return parsed_payload
-
 def test_state_description_native_allows_match_script() -> None:
     """state_description_blocker native allow matches the script's allow."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _STATE_DESCRIPTION_ALLOW_CONTENT)
@@ -262,18 +232,17 @@ def test_state_description_native_multi_edit_deny_matches_script() -> None:
     assert native_reason == script_reason
 
 
-def test_dispatcher_native_path_denies_state_description() -> None:
-    """The dispatcher's native path denies a state_description_blocker violation."""
+def test_dispatcher_allows_the_retired_state_description_rule() -> None:
+    """The detector still finds the violation, but the write dispatcher allows it."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _STATE_DESCRIPTION_DENY_CONTENT)
     native_reason = _evaluate_with_prose_style_opt_in(state_description_blocker.evaluate, payload_dictionary)
     dispatcher_reason = _deny_reason_from_dispatcher(payload_dictionary)
     assert native_reason is not None
-    assert dispatcher_reason is not None
-    assert native_reason in dispatcher_reason
+    assert dispatcher_reason is None
 
 
-def test_dispatcher_native_state_description_carries_additional_context() -> None:
-    """The dispatcher's state-description deny carries the standalone additionalContext."""
+def test_standalone_state_description_retains_additional_context() -> None:
+    """The retained standalone interface still supplies its corrective context."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _STATE_DESCRIPTION_DENY_CONTENT)
     deny_reason = _evaluate_with_prose_style_opt_in(state_description_blocker.evaluate, payload_dictionary)
     assert deny_reason is not None
@@ -281,20 +250,20 @@ def test_dispatcher_native_state_description_carries_additional_context() -> Non
     standalone_hook_specific = standalone_payload["hookSpecificOutput"]
     assert isinstance(standalone_hook_specific, dict)
     expected_additional_context = standalone_hook_specific["additionalContext"]
-    dispatcher_payload = _deny_payload_from_dispatcher(payload_dictionary)
-    dispatcher_hook_specific = dispatcher_payload.get("hookSpecificOutput", {})
-    assert isinstance(dispatcher_hook_specific, dict)
-    assert dispatcher_hook_specific.get("additionalContext") == expected_additional_context
+    script_payload = json.loads(_run_script_subprocess(_STATE_DESCRIPTION_SCRIPT, payload_dictionary))
+    script_hook_specific = script_payload.get("hookSpecificOutput", {})
+    assert isinstance(script_hook_specific, dict)
+    assert script_hook_specific.get("additionalContext") == expected_additional_context
 
-def test_dispatcher_native_state_description_carries_system_message() -> None:
-    """The dispatcher's state-description deny carries the standalone systemMessage."""
+def test_standalone_state_description_retains_system_message() -> None:
+    """The retained standalone interface still supplies its system message."""
     payload_dictionary = _write_payload_dictionary(_MARKDOWN_PATH, _STATE_DESCRIPTION_DENY_CONTENT)
     deny_reason = _evaluate_with_prose_style_opt_in(state_description_blocker.evaluate, payload_dictionary)
     assert deny_reason is not None
     standalone_payload = state_description_blocker.build_deny_payload(deny_reason)
     expected_system_message = standalone_payload["systemMessage"]
     assert isinstance(expected_system_message, str)
-    dispatcher_payload = _deny_payload_from_dispatcher(payload_dictionary)
-    dispatcher_system_message = dispatcher_payload.get("systemMessage")
-    assert isinstance(dispatcher_system_message, str)
-    assert expected_system_message in dispatcher_system_message
+    script_payload = json.loads(_run_script_subprocess(_STATE_DESCRIPTION_SCRIPT, payload_dictionary))
+    script_system_message = script_payload.get("systemMessage")
+    assert isinstance(script_system_message, str)
+    assert expected_system_message in script_system_message

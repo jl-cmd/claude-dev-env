@@ -428,44 +428,30 @@ def test_context_survives_alongside_deny_reason(
     assert dispatcher_result.stdout.strip(), "Dispatcher must emit output when denying"
 
 
-def test_all_deny_reasons_present_when_multiple_hooks_deny() -> None:
-    """When two or more hooks deny, all their reasons appear in the dispatcher output.
-
-    Uses a Write to an existing markdown path with a historical phrase
-    ("previously") so write_existing_file_blocker and state_description_blocker
-    both deny.
-    """
-    existing_markdown_path = str(Path(__file__).resolve().parent / "CLAUDE.md")
-    multi_deny_content = (
-        "# Guide\n\n"
-        "Previously the system used a different mechanism.\n"
-    )
-    payload_text = _write_payload(existing_markdown_path, multi_deny_content)
+def test_all_deny_reasons_present_when_multiple_hooks_deny(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """Preserve every deny reason from the retained file-boundary checks."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    existing_sensitive_path = tmp_path / ".env"
+    existing_sensitive_path.write_text("VALUE=fixture\n", encoding="utf-8")
+    payload_text = _write_payload(str(existing_sensitive_path), "VALUE=changed\n")
     _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
-
     dispatcher_result = _run_dispatcher(payload_text)
     dispatcher_is_deny, dispatcher_reason = _parse_hook_decision(dispatcher_result)
-    assert dispatcher_is_deny, "Dispatcher must deny when any hook denies"
-
-    applicable_entries = _applicable_entries_for_tool(WRITE_TOOL_NAME)
+    assert dispatcher_is_deny
     all_expected_deny_reasons: list[str] = []
-    for each_entry in applicable_entries:
+    for each_entry in _applicable_entries_for_tool(WRITE_TOOL_NAME):
         completed_process = _run_hook_subprocess(each_entry.script_relative_path, payload_text)
         is_deny, reason_text = _parse_hook_decision(completed_process)
         if is_deny and reason_text:
             all_expected_deny_reasons.append(reason_text)
-
     assert len(all_expected_deny_reasons) >= 2, (
-        f"Test payload must trip at least two hooks — got {len(all_expected_deny_reasons)}. "
-        "Check that an existing path triggers write_existing_file_blocker and "
-        "'previously' triggers state_description_blocker on a Write."
+        "Existing-file and sensitive-file checks must both deny the fixture"
     )
     for each_reason in all_expected_deny_reasons:
-        assert each_reason in dispatcher_reason, (
-            f"Missing deny reason in dispatcher output.\n"
-            f"Expected reason: {each_reason!r}\n"
-            f"Dispatcher reason: {dispatcher_reason!r}"
-        )
+        assert each_reason in dispatcher_reason
 
 
 def test_aggregate_exit_code_two_signals_deny() -> None:
@@ -686,18 +672,12 @@ def test_emit_allow_preserves_system_message_and_additional_context(
     assert parsed["systemMessage"] == "system-a\nsystem-b"
 
 
-def test_later_hook_deny_survives_early_hook_exit() -> None:
-    """Dispatcher denies even when an earlier hook exits cleanly before a later hook denies.
-
-    state_description_blocker denies a markdown write with a historical phrase.
-    Earlier hooks exit 0 (allow). The dispatcher must catch each hook's
-    SystemExit and continue, so the later denial reaches the aggregator.
-    """
-    payload_text = _write_payload(
-        _MARKDOWN_FILE_PATH,
-        "# Doc\n\nPreviously this section used a different mechanism.\n",
-    )
+def test_later_hook_deny_survives_early_hook_exit(tmp_path: Path) -> None:
+    """A retained document-reference denial survives earlier successful checks."""
+    payload_text = _orphan_claude_md_payload(tmp_path)
     _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
+    is_deny, reason = _parse_hook_decision(_run_dispatcher(payload_text))
+    assert is_deny, reason
 
 
 def test_dispatcher_write_applies_both_groups() -> None:
@@ -712,8 +692,8 @@ def test_dispatcher_write_applies_both_groups() -> None:
     assert "blocking/write_existing_file_blocker.py" in all_write_script_paths, (
         "write_existing_file_blocker (Group A) must be in Write applicable set"
     )
-    assert len(all_write_entries) == 18, (
-        f"Write tool must apply to all 18 hosted hooks, got {len(all_write_entries)}"
+    assert len(all_write_entries) == 11, (
+        f"Write tool must apply to the 11 retained write hooks, got {len(all_write_entries)}"
     )
 
 
@@ -727,8 +707,8 @@ def test_dispatcher_edit_applies_both_groups() -> None:
     assert "advisory/refactor_guard.py" in all_edit_script_paths, (
         "refactor_guard is Edit-scoped and hosted, so it belongs in the Edit applicable set"
     )
-    assert len(all_edit_entries) == 20, (
-        f"expected 20 Edit entries, got {len(all_edit_entries)}"
+    assert len(all_edit_entries) == 13, (
+        f"expected 13 retained Edit entries, got {len(all_edit_entries)}"
     )
 
 
@@ -751,7 +731,7 @@ def test_dispatcher_multi_edit_reaches_the_sensitive_protector() -> None:
 def test_dispatcher_apply_patch_applies_immediate_harm_hooks() -> None:
     """apply_patch applies to exactly the immediate-harm roster.
 
-    apply_patch reaches only the immediate-harm-plus-TDD roster the constants
+    apply_patch reaches only the retained immediate-harm roster the constants
     module names, not the full Write/Edit/MultiEdit lint surface.
     """
     all_apply_patch_entries = _applicable_entries_for_tool(APPLY_PATCH_TOOL_NAME)
@@ -885,45 +865,19 @@ def _parse_hook_allow(completed_process: subprocess.CompletedProcess[str]) -> bo
     return hook_specific.get("permissionDecision") == "allow"
 
 
-def test_dispatcher_reemits_explicit_allow_from_tdd_enforcer(tmp_path: Path) -> None:
-    """The dispatcher re-emits an explicit allow when tdd_enforcer's allow branch fires.
-
-    tdd_enforcer writes an explicit allow payload for a constants-only Python
-    Write, which auto-approves the write standalone. Run against the dispatcher,
-    the same payload must produce an explicit allow decision identical to the
-    standalone tdd_enforcer output, rather than a silent fall-back to the default
-    permission flow.
-
-    Args:
-        tmp_path: Pytest temp directory hosting the fresh config target path.
-    """
+def test_retired_tdd_hook_cannot_auto_approve_the_write(tmp_path: Path) -> None:
+    """Pairing belongs to staged lint; its edit-time auto-approval is absent."""
     config_target_path = str(tmp_path / "config" / "timing.py")
     constants_only_content = (
         '"""Timing constants."""\n\nMAXIMUM_RETRIES = 3\nRETRY_DELAY_SECONDS = 5\n'
     )
     payload_text = _write_payload(config_target_path, constants_only_content)
-
     standalone_result = _run_hook_subprocess("blocking/tdd_enforcer.py", payload_text)
-    assert _parse_hook_allow(standalone_result), (
-        "tdd_enforcer must emit an explicit allow for a constants-only Python Write — "
-        "if it does not, this fixture no longer exercises the allow branch"
-    )
-
+    assert _parse_hook_allow(standalone_result)
     dispatcher_result = _run_dispatcher(payload_text)
-    dispatcher_is_deny, _reason = _parse_hook_decision(dispatcher_result)
-    assert not dispatcher_is_deny, "dispatcher must not deny a payload tdd_enforcer allows"
-    assert _parse_hook_allow(dispatcher_result), (
-        "dispatcher must re-emit an explicit allow when a hosted hook allows explicitly "
-        "and no hook denies, matching the standalone tdd_enforcer behavior — "
-        f"got stdout {dispatcher_result.stdout.strip()!r}"
-    )
-    dispatcher_payload = json.loads(dispatcher_result.stdout.strip())
-    standalone_payload = json.loads(standalone_result.stdout.strip())
-    assert dispatcher_payload == standalone_payload, (
-        "dispatcher allow payload must match the standalone tdd_enforcer allow payload.\n"
-        f"Standalone: {standalone_payload!r}\n"
-        f"Dispatcher: {dispatcher_payload!r}"
-    )
+    dispatcher_is_deny, reason = _parse_hook_decision(dispatcher_result)
+    assert not dispatcher_is_deny, reason
+    assert not _parse_hook_allow(dispatcher_result)
 
 
 def test_runpy_hosted_hook_sees_its_own_argv_not_the_dispatchers(tmp_path: Path) -> None:
@@ -1007,13 +961,7 @@ def _dispatcher_matchers(all_pre_tool_use_groups: list[dict]) -> list[str]:
 
 
 def test_apply_patch_has_no_standalone_code_rules_enforcer_hooks_json_entry() -> None:
-    """apply_patch's code_rules_enforcer coverage comes only from the dispatcher.
-
-    hooks.json once registered a standalone apply_patch to code_rules_enforcer.py
-    PreToolUse command. That entry is now folded into the dispatcher's own
-    Write|Edit|MultiEdit|apply_patch matcher, so no separate command may still
-    spawn code_rules_enforcer.py for apply_patch on its own.
-    """
+    """The retired code-rules hook has no direct apply_patch registration."""
     hooks_json_text = (_HOOKS_ROOT / "hooks.json").read_text(encoding="utf-8")
     all_pre_tool_use_groups = json.loads(hooks_json_text)["hooks"]["PreToolUse"]
 
@@ -1115,60 +1063,47 @@ def test_dispatcher_denies_apply_patch_add_onto_an_existing_path(tmp_path: Path)
 
 
 def test_dispatcher_allows_clean_apply_patch_add(tmp_path: Path) -> None:
-    """The dispatcher allows an apply_patch "add" whose paired test already exists.
-
-    tdd_enforcer now reaches apply_patch the same way it reaches Write: an
-    untested production file is exactly the immediate-harm case the apply_patch
-    boundary rule names, so "clean" here means test-first was honored before
-    the tool call, not that TDD is skipped for this tool. The paired test file
-    is written to disk first, matching how test_dispatcher_surfaces_migration_
-    warning_for_edit proves a fresh Edit passes tdd_enforcer.
-    """
-    (tmp_path / "test_services.py").write_text(
-        "def test_add_one():\n    assert True\n", encoding="utf-8"
-    )
+    """A clean patch can proceed before the staged linter evaluates test pairing."""
     patch_command = _codex_add_patch(
-        "services.py",
-        "def add_one(value: int) -> int:\n    return value + 1\n",
+        "services.py", "def add_one(value: int) -> int:\n    return value + 1\n",
     )
     payload_text = _apply_patch_payload(str(tmp_path), patch_command)
-
     dispatcher_result = _run_dispatcher(payload_text)
     is_deny, reason_text = _parse_hook_decision(dispatcher_result)
-    assert not is_deny, (
-        f"dispatcher must allow an apply_patch add with a fresh paired test, "
-        f"got deny reason {reason_text!r}"
-    )
+    assert not is_deny, reason_text
 
 
-def test_hosted_hook_set_covers_all_write_edit_blocking_hooks() -> None:
-    """The hosted hook set covers all previously-registered Write/Edit blocking hooks.
+ALL_RETAINED_PATHS = {
+    "blocking/write_existing_file_blocker.py",
+    "blocking/sensitive_file_protector.py",
+    "blocking/pii_prevention_blocker.py",
+    "validation/hook_format_validator.py",
+    "blocking/duplicate_rmtree_helper_blocker.py",
+    "blocking/claude_md_orphan_file_blocker.py",
+    "blocking/package_inventory_stale_blocker.py",
+    "blocking/env_var_table_code_drift_blocker.py",
+    "blocking/pytest_testpaths_orphan_blocker.py",
+    "blocking/open_questions_in_plans_blocker.py",
+    "blocking/docstring_rule_gate_count_blocker.py",
+    "advisory/refactor_guard.py",
+    "advisory/migration_safety_advisor.py",
+}
+ALL_RETIRED_PATHS = {
+    "blocking/code_rules_enforcer.py",
+    "blocking/tdd_enforcer.py",
+    "blocking/windows_rmtree_blocker.py",
+    "blocking/state_description_blocker.py",
+    "blocking/subprocess_budget_completeness.py",
+    "blocking/hook_prose_detector_consistency.py",
+    "blocking/workflow_substitution_slot_blocker.py",
+}
 
-    Verifies that removing the standalone gate entries from hooks.json did not
-    silently drop coverage: every script path that was registered as a blocking
-    PreToolUse hook for Write/Edit is present in the dispatcher's hosted set.
-    """
-    all_hosted_script_paths = frozenset(
+def test_hosted_hook_set_retains_boundaries_and_excludes_replaced_file_checks() -> None:
+    """Keep unresolved controls and exclude the seven staged-linter replacements."""
+    all_hosted_script_paths = {
         each_entry.script_relative_path for each_entry in ALL_HOSTED_HOOK_ENTRIES
-    )
-    previously_registered_blocking_hooks: frozenset[str] = frozenset({
-        "blocking/write_existing_file_blocker.py",
-        "blocking/sensitive_file_protector.py",
-        "validation/hook_format_validator.py",
-        "blocking/code_rules_enforcer.py",
-        "blocking/tdd_enforcer.py",
-        "blocking/windows_rmtree_blocker.py",
-        "blocking/state_description_blocker.py",
-        "blocking/subprocess_budget_completeness.py",
-        "blocking/hook_prose_detector_consistency.py",
-        "blocking/workflow_substitution_slot_blocker.py",
-        "blocking/claude_md_orphan_file_blocker.py",
-        "blocking/pytest_testpaths_orphan_blocker.py",
-        "blocking/open_questions_in_plans_blocker.py",
-    })
-    for each_script_path in previously_registered_blocking_hooks:
-        assert each_script_path in all_hosted_script_paths, (
-            f"Previously-registered blocking hook {each_script_path!r} is missing "
-            "from the dispatcher's hosted hook set — coverage was lost when the "
-            "standalone entry was removed from hooks.json"
-        )
+    }
+    assert all_hosted_script_paths == ALL_RETAINED_PATHS
+    assert not all_hosted_script_paths.intersection(ALL_RETIRED_PATHS)
+    for each_relative_path in ALL_RETIRED_PATHS:
+        assert (_HOOKS_ROOT / each_relative_path).is_file()
