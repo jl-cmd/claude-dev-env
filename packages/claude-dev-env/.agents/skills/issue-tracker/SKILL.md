@@ -61,10 +61,9 @@ Search open and closed issues on the target repo before create. Open twin -> upd
 Prefer GitHub MCP. Fall back to `gh` on the same REST endpoints. Full map and `.id` rule: [reference/operation-matrix.md](reference/operation-matrix.md).
 
 Before issue creation, a full issue body edit, or an issue comment, write the
-body to a UTF-8 file and run
-`../_shared/pr-loop/scripts/durable_post_lint.py`. Use `issue-create`,
-`issue-edit`, or `issue-comment` as the action. Send the server write only
-after exit code `0`.
+body to a UTF-8 file and run `../../../scripts/durable_post_lint.py`. Use
+`issue-create`, `issue-edit`, or `issue-comment` as the action. Send the server
+write only after exit code `0`.
 
 ## Handoff input
 
