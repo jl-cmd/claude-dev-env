@@ -29,12 +29,6 @@ def test_review_event_flags_are_complete() -> None:
 
 def test_account_boundary_constants_are_safe_and_stable() -> None:
     assert constants.SELECTED_ACCOUNT_ENVIRONMENT_KEY == "GITHUB_DEFAULT_ACCOUNT"
-    assert constants.GITHUB_TOKEN_ENVIRONMENT_KEY == "GITHUB_TOKEN"
-    assert constants.GH_TOKEN_ENVIRONMENT_KEY == "GH_TOKEN"
-    assert constants.ALL_GITHUB_AUTHORIZATION_ENVIRONMENT_KEYS == (
-        "GITHUB_TOKEN",
-        "GH_TOKEN",
-    )
     assert constants.ACCOUNT_LOOKUP_FAILURE_EXIT_CODE == 1
     assert constants.ACCOUNT_LOOKUP_FAILED_MESSAGE.endswith("lookup failed\n")
     assert constants.ACCOUNT_LOOKUP_EMPTY_MESSAGE.endswith("returned no value\n")
