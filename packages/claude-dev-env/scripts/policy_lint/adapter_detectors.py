@@ -29,14 +29,17 @@ def terminology_diagnostics(
     document_set: DocumentSet,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Report staged prose that near-misses a newly introduced identifier.
+    """Report prose that near-misses an identifier a staged or base selection introduces.
 
     Args:
-        document_set: Candidate staged documents and repository root.
+        document_set: Staged documents, or base documents with a comparison revision.
         load_module: Shared script module loader.
 
     Returns:
         Diagnostics that name the prose file and line.
+
+    Raises:
+        ValueError: Base selection is missing its comparison revision.
     """
     all_arguments: tuple[Path | str, ...]
     if document_set.selection is SelectionKind.BASE:

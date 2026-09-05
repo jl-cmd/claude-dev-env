@@ -627,19 +627,20 @@ def _base_tree_names(
     all_names: frozenset[str],
     tree_revision: str,
 ) -> frozenset[str]:
-    """Return the names the repository's base tree already contains.
+    """Return the names already present in one tree revision.
 
-    Each name is looked up as a whole word in the base revision's tree. A
-    repository with no commits yet, or a lookup that git cannot run, reports
-    the name as absent, so the sweep then treats it as newly introduced.
-    That is the behaviour the sweep has with no base-tree check at all.
+    Each name is looked up as a whole word in ``tree_revision``. A repository
+    with no commits, or a lookup that git cannot run, reports the name as
+    absent, so the sweep treats it as newly introduced. A failed lookup
+    matches a sweep with no tree check.
 
     Args:
         repository_root: The repository root the lookups run in.
         all_names: The identifier names to look up.
+        tree_revision: The tree to search.
 
     Returns:
-        The subset of names present in the base tree.
+        The subset of names present in that tree.
     """
     all_present_names: set[str] = set()
     for each_name in sorted(all_names):
@@ -743,17 +744,17 @@ def strict_staged_terminology_findings(repository_root: Path) -> list[str]:
 def strict_base_terminology_findings(
     repository_root: Path, base_revision: str
 ) -> list[str]:
-    """Return near-miss findings for one base comparison.
+    """Return near-miss findings for worktree changes against one base revision.
 
     Args:
-        repository_root: The repository root the worktree diff is read from.
-        base_revision: The tree that worktree changes are compared against.
+        repository_root: Repository root used to read the worktree diff.
+        base_revision: Comparison tree for the diff and identifier lookups.
 
     Returns:
-        One finding string per near-miss term on a changed added prose line.
+        One finding string per near-miss term on an added prose line.
 
     Raises:
-        RuntimeError: Git could not read the committed diff or look up an
+        RuntimeError: Git could not read the worktree diff or look up an
             identifier in the comparison tree.
     """
     all_arguments = (
@@ -788,8 +789,8 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
     """Return terminology near-miss findings for a repository's staged diff.
 
     An identifier the base tree already names is not one the staged diff
-    introduces, so no prose is flagged against it. Only genuinely new
-    identifiers are swept.
+    introduces, so no prose is flagged against it. Only new identifiers
+    are swept.
 
     Args:
         repository_root: The repository root the staged diff is read from.
