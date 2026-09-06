@@ -57,6 +57,9 @@ GIT_REFERENCE_RESOURCE_NAME = "git reference"
 COMMIT_ENDPOINT_TEMPLATE = "/repos/{repository}/git/commits/{commit_sha}"
 STATUS_ENDPOINT_TEMPLATE = "/repos/{repository}/statuses/{commit_sha}"
 ISSUE_LABELS_ENDPOINT_TEMPLATE = "/repos/{repository}/issues/{pull_number}/labels"
+ISSUE_LABELS_PAGE_ENDPOINT_TEMPLATE = (
+    "/repos/{repository}/issues/{pull_number}/labels?per_page={page_size}&page={page}"
+)
 ISSUE_LABEL_ENDPOINT_TEMPLATE = (
     "/repos/{repository}/issues/{pull_number}/labels/{label}"
 )

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import io
 import json
 import sys
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,13 +21,14 @@ from automatic_advisory.configuration import (
     AdvisoryConfigurationError,
     load_advisory_settings,
 )
-from automatic_advisory.model import ChildOutcome
+from automatic_advisory.model import AdvisoryState, ChildOutcome
 from automatic_advisory.runner import (
     AdvisoryGitHub,
     AutomaticAdvisoryRunner,
     Publication,
     run_verification_child,
 )
+from pr_verification.lock import SupervisorLockError
 
 
 def test_runner_retries_after_dirty_checkout_becomes_clean(tmp_path: Path) -> None:
@@ -318,3 +321,67 @@ def test_release_windows_process_host_returns_false_when_stdin_breaks_on_close()
     assert was_released is False
     assert child_process.stdin is None
     assert broken_stream.close_calls == 1
+
+
+class _CycleFailsOnceRunner:
+    def __init__(self, cycle_error: Exception) -> None:
+        self.cycle_error = cycle_error
+        self.all_cycles: list[str] = []
+
+    def run_once(self, should_rerun: bool = False) -> tuple[AdvisoryState, ...]:
+        self.all_cycles.append("cycle")
+        if len(self.all_cycles) == 1:
+            raise self.cycle_error
+        return (
+            AdvisoryState(
+                "JonEcho/python-automation",
+                3087,
+                "passed",
+                "unchanged remote head and base",
+                None,
+                None,
+                "2026-09-06T16:00:00+00:00",
+                None,
+                "report.json",
+            ),
+        )
+
+
+def _stop_polling_on_the_second_sleep(
+    all_sleeps: list[float],
+) -> Callable[[float], None]:
+    def sleeper(poll_seconds: float) -> None:
+        all_sleeps.append(poll_seconds)
+        if len(all_sleeps) == 2:
+            raise KeyboardInterrupt
+
+    return sleeper
+
+
+@pytest.mark.parametrize(
+    "cycle_error",
+    [
+        SupervisorLockError("supervisor lock is held by another owner"),
+        OSError("state file is temporarily unavailable"),
+    ],
+)
+def test_polling_reports_a_failed_cycle_and_runs_the_next_cycle(
+    cycle_error: Exception,
+) -> None:
+    advisory_runner = _CycleFailsOnceRunner(cycle_error)
+    all_sleeps: list[float] = []
+    stdout = io.StringIO()
+
+    exit_code = advisory_cli.run_polling(
+        advisory_runner,
+        1.5,
+        stdout,
+        _stop_polling_on_the_second_sleep(all_sleeps),
+    )
+
+    assert exit_code == 0
+    assert advisory_runner.all_cycles == ["cycle", "cycle"]
+    assert all_sleeps == [1.5, 1.5]
+    all_lines = stdout.getvalue().splitlines()
+    assert json.loads(all_lines[0]) == {"poll_error": str(cycle_error)}
+    assert json.loads(all_lines[1])["status"] == "passed"

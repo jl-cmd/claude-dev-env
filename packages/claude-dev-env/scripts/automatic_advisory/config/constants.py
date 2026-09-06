@@ -36,6 +36,7 @@ STATE_STATUS_FAILED = "failed"
 STATE_STATUS_PENDING = "pending"
 STATE_STATUS_ERROR = "error"
 STATE_STATUS_NEVER_RUN = "never_run"
+POLL_ERROR_KEY = "poll_error"
 ALL_TERMINAL_STATUSES = frozenset({STATE_STATUS_PASSED, STATE_STATUS_FAILED})
 STATE_REASON_CHECKOUT_MISMATCH = "checkout does not match the open pull request"
 STATE_REASON_DIRTY_CHECKOUT = "checkout has uncommitted changes"

@@ -20,6 +20,7 @@ from pr_verification.lock import SupervisorLock, SupervisorLockError
 from pr_verification.model import RepositorySettings
 
 from automatic_advisory.config.constants import (
+    POLL_ERROR_KEY,
     REPORT_NEWLINE,
     STATE_STATUS_KEY,
     STATE_STATUS_NEVER_RUN,
@@ -179,10 +180,14 @@ def run_polling(
 ) -> int:
     """Run advisory checks until the caller interrupts polling.
 
+    A cycle that fails on a held supervisor lock or a file error writes one
+    JSON error line and the next cycle runs, so a manual run beside the poller
+    never ends the poller.
+
     Args:
         advisory_runner: Runner for explicit checkout and pull request pairs.
         poll_seconds: Delay between completed cycles.
-        stdout: Stream for each persisted state.
+        stdout: Stream for each persisted state and each failed cycle.
         sleeper: Delay function used between cycles.
 
     Returns:
@@ -190,10 +195,27 @@ def run_polling(
     """
     try:
         while True:
-            write_states(advisory_runner.run_once(), stdout)
+            _run_one_poll_cycle(advisory_runner, stdout)
             sleeper(poll_seconds)
     except KeyboardInterrupt:
         return SUCCESS_EXIT_CODE
+
+
+def _run_one_poll_cycle(
+    advisory_runner: AutomaticAdvisoryRunner,
+    stdout: TextIO,
+) -> None:
+    try:
+        write_states(advisory_runner.run_once(), stdout)
+    except (OSError, SupervisorLockError) as cycle_error:
+        _write_poll_error(cycle_error, stdout)
+
+
+def _write_poll_error(cycle_error: Exception, stdout: TextIO) -> None:
+    stdout.write(
+        json.dumps({POLL_ERROR_KEY: str(cycle_error)}, sort_keys=True) + REPORT_NEWLINE
+    )
+    stdout.flush()
 
 
 def write_states(

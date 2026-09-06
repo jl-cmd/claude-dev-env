@@ -161,7 +161,9 @@ def test_adds_and_removes_one_label_without_replacing_other_labels() -> None:
     assert add_url.endswith("/repos/owner/repository/issues/7/labels")
     assert json.loads(add_body or b"{}") == {"labels": ["local-checks:passed"]}
     assert read_method == "GET"
-    assert read_url.endswith("/repos/owner/repository/issues/7/labels")
+    assert read_url.endswith(
+        "/repos/owner/repository/issues/7/labels?per_page=100&page=1"
+    )
     assert read_body is None
     assert remove_method == "DELETE"
     assert remove_url.endswith(

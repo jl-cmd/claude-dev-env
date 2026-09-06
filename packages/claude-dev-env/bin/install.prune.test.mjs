@@ -1327,6 +1327,131 @@ test('a full reinstall removes retired pull request hooks and preserves foreign 
     }
 });
 
+
+const CODEX_DIRECTORY_NAME = '.codex';
+const CODEX_HOOKS_CONFIGURATION_FILE_NAME = 'hooks.json';
+const FOREIGN_TOOL_DIRECTORY_NAME = 'other-tool';
+const FOREIGN_CODEX_HOOK_COMMAND = 'python3 my_own_codex_gate.py --user-authored';
+
+
+/**
+ * Build the command one hook registration runs for a script under a hooks root.
+ *
+ * @param {string} hooksRoot The hooks directory the registration names.
+ * @param {string[]} relativeSegments The script path segments under that directory.
+ * @returns {string} The registration command.
+ */
+function hookCommandUnder(hooksRoot, relativeSegments) {
+    return `python3 "${join(hooksRoot, ...relativeSegments).replace(/\\/g, '/')}"`;
+}
+
+
+/**
+ * Write a Codex hooks file registering one retired script beside a foreign entry.
+ *
+ * @param {{homeDirectory: string}} sandbox The sandbox paths.
+ * @returns {{codexHooksPath: string, codexRetiredCommand: string}} The file and its retired entry.
+ */
+function seedCodexHookRegistrations(sandbox) {
+    const codexDirectory = join(sandbox.homeDirectory, CODEX_DIRECTORY_NAME);
+    const codexHooksPath = join(codexDirectory, CODEX_HOOKS_CONFIGURATION_FILE_NAME);
+    const codexRetiredCommand = hookCommandUnder(
+        join(codexDirectory, HOOKS_DIRECTORY_NAME), RETIRED_HOOK_RELATIVE_SEGMENTS,
+    );
+    writeFileWithParents(codexHooksPath, JSON.stringify({
+        hooks: {
+            [RETIRED_HOOK_EVENT_TYPE]: [{
+                matcher: 'Bash',
+                hooks: [
+                    { type: 'command', command: codexRetiredCommand },
+                    { type: 'command', command: FOREIGN_CODEX_HOOK_COMMAND },
+                ],
+            }],
+        },
+    }, null, 4) + '\n');
+    return { codexHooksPath, codexRetiredCommand };
+}
+
+
+test('a full reinstall prunes a retired registration the Codex hooks file holds and leaves a stand-in', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        const retiredHookPath = join(
+            sandbox.claudeDirectory, HOOKS_DIRECTORY_NAME, ...RETIRED_HOOK_RELATIVE_SEGMENTS,
+        );
+        writeFileWithParents(retiredHookPath, RETIRED_HOOK_SEEDED_CONTENTS);
+        appendManifestFiles(sandbox.manifestPath, [retiredHookPath]);
+        const { codexHooksPath, codexRetiredCommand } = seedCodexHookRegistrations(sandbox);
+
+        const installOutput = runInstallerReadingBothStreams(sandbox.homeDirectory, []);
+
+        const codexCommands = allHookCommands(JSON.parse(readFileSync(codexHooksPath, 'utf8')));
+        assert.equal(
+            codexCommands.includes(codexRetiredCommand),
+            false,
+            'the Codex registration naming the retired script is pruned like a settings.json one',
+        );
+        assert.equal(
+            codexCommands.includes(FOREIGN_CODEX_HOOK_COMMAND),
+            true,
+            'the user-authored Codex entry sharing the matcher group survives',
+        );
+        assert.equal(
+            spawnSync(detectPython(), [retiredHookPath], { encoding: 'utf8' }).status,
+            0,
+            'the Codex registration alone earns the retired path an inert stand-in',
+        );
+        assert.match(
+            installOutput,
+            /Restart open sessions: this install retired blocking\/retired_gate\.py/,
+            'the run names the retired registration and asks for a restart',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
+
+test('a full reinstall leaves a registration under a hooks root the installer does not own', () => {
+    const sandbox = createSandbox();
+    try {
+        runInstaller(sandbox.homeDirectory, []);
+        seedRetiredManagedHook(sandbox);
+        const foreignHooksRoot = join(
+            sandbox.homeDirectory, FOREIGN_TOOL_DIRECTORY_NAME, '.claude', HOOKS_DIRECTORY_NAME,
+        );
+        const foreignHookPath = join(foreignHooksRoot, ...RETIRED_HOOK_RELATIVE_SEGMENTS);
+        const foreignHookBytes = Buffer.from('another tool owns this gate\n', 'utf8');
+        writeFileWithParents(foreignHookPath, foreignHookBytes);
+        const foreignCommand = hookCommandUnder(foreignHooksRoot, RETIRED_HOOK_RELATIVE_SEGMENTS);
+        const settings = readSettings(sandbox.claudeDirectory);
+        settings.hooks[RETIRED_HOOK_EVENT_TYPE].push({
+            matcher: 'Bash',
+            hooks: [{ type: 'command', command: foreignCommand }],
+        });
+        writeFileSync(
+            join(sandbox.claudeDirectory, SETTINGS_FILE_NAME),
+            JSON.stringify(settings, null, 4) + '\n',
+        );
+
+        runInstaller(sandbox.homeDirectory, []);
+
+        assert.equal(
+            allHookCommands(readSettings(sandbox.claudeDirectory)).includes(foreignCommand),
+            true,
+            'a registration whose hooks root the installer does not own keeps its entry',
+        );
+        assert.deepEqual(
+            readFileSync(foreignHookPath),
+            foreignHookBytes,
+            'the foreign script keeps its own bytes, so no stand-in replaced it',
+        );
+    } finally {
+        rmSync(sandbox.homeDirectory, { recursive: true, force: true });
+    }
+});
+
 test('a full reinstall removes a retired hook entry under an event type the current config leaves out', () => {
     const sandbox = createSandbox();
     try {

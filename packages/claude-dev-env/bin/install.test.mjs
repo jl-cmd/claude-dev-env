@@ -45,6 +45,7 @@ import {
     settingsHookCommandsAtPath,
     retiredHookPathsNamedByCommands,
     writeRetiredHookStandIns,
+    ownedHookRootComparisonKeys,
     detectPython,
     retainNewestRunBackupOnly,
     refreshInstalledPstackPluginManifest,
@@ -2581,6 +2582,131 @@ test('writeRetiredHookStandIns leaves a hook file the prune could not move exact
             readFileSync(survivingPath, 'utf8'),
             survivingContents,
             'the file a failed prune left behind keeps its own bytes',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+const AGENTS_HOOKS_ROOT_SEGMENTS = ['.agents', 'hooks'];
+const CODEX_HOOKS_ROOT_SEGMENTS = ['.codex', 'hooks'];
+const FOREIGN_HOOKS_ROOT_SEGMENTS = ['other-tool', '.claude', 'hooks'];
+
+
+/**
+ * Build the ownership one retirement walk reads for one sandbox.
+ *
+ * @param {string} sandboxRoot The sandbox home the `$HOME` spelling expands to.
+ * @param {string[]} allHookRootPaths The hooks directories the installer owns there.
+ * @returns {{allOwnedHookRootKeys: Set<string>, homeDirectory: string}} The ownership.
+ */
+function sandboxHookOwnership(sandboxRoot, allHookRootPaths) {
+    return {
+        allOwnedHookRootKeys: ownedHookRootComparisonKeys(allHookRootPaths),
+        homeDirectory: sandboxRoot,
+    };
+}
+
+
+/**
+ * Build the command one hook registration runs for a script under a hooks root.
+ *
+ * @param {string} hooksRoot The hooks directory the registration names.
+ * @param {string} relativePath The script path under that directory.
+ * @returns {string} The registration command.
+ */
+function hookCommandUnder(hooksRoot, relativePath) {
+    const scriptPath = join(hooksRoot, ...relativePath.split('/')).replace(/\\/g, '/');
+    return `python3 "${scriptPath}"`;
+}
+
+
+test('a retired registration spelled under the agents hooks root is named, because both roots are owned', () => {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-owned-hook-roots-'));
+    try {
+        const claudeHooksRoot = join(sandboxRoot, '.claude', 'hooks');
+        const agentsHooksRoot = join(sandboxRoot, ...AGENTS_HOOKS_ROOT_SEGMENTS);
+        const codexHooksRoot = join(sandboxRoot, ...CODEX_HOOKS_ROOT_SEGMENTS);
+
+        const namedPaths = retiredHookPathsNamedByCommands(
+            [
+                hookCommandUnder(agentsHooksRoot, RETIRED_HOOK_RELATIVE_PATH),
+                hookCommandUnder(codexHooksRoot, SECOND_RETIRED_HOOK_RELATIVE_PATH),
+            ],
+            new Set([RETIRED_HOOK_RELATIVE_PATH, SECOND_RETIRED_HOOK_RELATIVE_PATH]),
+            sandboxHookOwnership(
+                sandboxRoot, [claudeHooksRoot, agentsHooksRoot, codexHooksRoot],
+            ),
+        );
+
+        assert.deepEqual(
+            [...namedPaths].sort(),
+            [RETIRED_HOOK_RELATIVE_PATH, SECOND_RETIRED_HOOK_RELATIVE_PATH].sort(),
+            'a registration under any owned hooks root names its retired script',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('a retired registration reaching an owned root through a junction is named', () => {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-owned-hook-junction-'));
+    try {
+        const agentsHooksRoot = join(sandboxRoot, ...AGENTS_HOOKS_ROOT_SEGMENTS);
+        const claudeHooksRoot = join(sandboxRoot, '.claude', 'hooks');
+        mkdirSync(agentsHooksRoot, { recursive: true });
+        mkdirSync(dirname(claudeHooksRoot), { recursive: true });
+        symlinkSync(agentsHooksRoot, claudeHooksRoot, 'junction');
+
+        const namedPaths = retiredHookPathsNamedByCommands(
+            [hookCommandUnder(agentsHooksRoot, RETIRED_HOOK_RELATIVE_PATH)],
+            new Set([RETIRED_HOOK_RELATIVE_PATH]),
+            sandboxHookOwnership(sandboxRoot, [claudeHooksRoot]),
+        );
+
+        assert.deepEqual(
+            [...namedPaths],
+            [RETIRED_HOOK_RELATIVE_PATH],
+            'the junction and the directory it reaches are one owned hooks root',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('a registration under a hooks root the installer does not own is never named or pruned', () => {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-foreign-hook-root-'));
+    try {
+        const claudeHooksRoot = join(sandboxRoot, '.claude', 'hooks');
+        const foreignHooksRoot = join(sandboxRoot, ...FOREIGN_HOOKS_ROOT_SEGMENTS);
+        const foreignCommand = hookCommandUnder(foreignHooksRoot, RETIRED_HOOK_RELATIVE_PATH);
+        const settingsPath = join(sandboxRoot, 'settings.json');
+        writeFileSync(settingsPath, JSON.stringify({
+            hooks: {
+                PreToolUse: [{
+                    matcher: '*',
+                    hooks: [{ type: 'command', command: foreignCommand }],
+                }],
+            },
+        }, null, 4) + '\n');
+        const ownership = sandboxHookOwnership(sandboxRoot, [claudeHooksRoot]);
+
+        const namedPaths = retiredHookPathsNamedByCommands(
+            [foreignCommand], new Set([RETIRED_HOOK_RELATIVE_PATH]), ownership,
+        );
+        const removedCount = pruneRetiredHookEntriesFromSettings(
+            settingsPath, new Set([RETIRED_HOOK_RELATIVE_PATH]), ownership,
+        );
+
+        assert.equal(namedPaths.size, 0, 'a foreign registration earns no stand-in');
+        assert.equal(removedCount, 0, 'a foreign registration is never pruned');
+        assert.equal(
+            JSON.parse(readFileSync(settingsPath, 'utf8')).hooks.PreToolUse[0].hooks[0].command,
+            foreignCommand,
+            'the foreign entry stays exactly as the other tool wrote it',
         );
     } finally {
         rmSync(sandboxRoot, { recursive: true, force: true });

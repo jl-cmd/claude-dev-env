@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import urllib.parse
 
 from .branch_refs import (
     GetJson,
@@ -25,7 +24,6 @@ from .config.constants import (
     HTTP_CREATED,
     HTTP_NO_CONTENT,
     HTTP_OK,
-    ISSUE_LABEL_ENDPOINT_TEMPLATE,
     ISSUE_LABELS_ENDPOINT_TEMPLATE,
     ISSUE_LABELS_KEY,
     JSON_CONTENT_TYPE,
@@ -38,6 +36,7 @@ from .config.constants import (
     STATUS_STATE_KEY,
     UTF8_ENCODING,
 )
+from .github_labels import DeleteLabel, ReadLabelsPage, remove_label_if_present
 from .github_parsing import (
     GitHubError,
     _parse_pull_candidates,
@@ -65,41 +64,6 @@ def _build_status_body(state: StatusState, context: str, description: str) -> by
         STATUS_DESCRIPTION_KEY: description,
     }
     return json.dumps(status_payload).encode(UTF8_ENCODING)
-
-
-def _label_is_present(all_labels: object, label: str) -> bool:
-    if not isinstance(all_labels, list):
-        return False
-    return any(
-        isinstance(each_label, dict) and each_label.get("name") == label
-        for each_label in all_labels
-    )
-
-
-def _remove_label_if_present(
-    requester: HttpRequester,
-    api_url: str,
-    repository: RepositorySettings,
-    pull_request_number: int,
-    label: str,
-    all_headers: dict[str, str],
-) -> None:
-    labels_endpoint = ISSUE_LABELS_ENDPOINT_TEMPLATE.format(
-        repository=repository.slug,
-        pull_number=pull_request_number,
-    )
-    all_labels = request_json(
-        requester, "GET", api_url + labels_endpoint, all_headers, None, HTTP_OK
-    )
-    if not _label_is_present(all_labels, label):
-        return
-    encoded_label = urllib.parse.quote(label, safe="")
-    endpoint = ISSUE_LABEL_ENDPOINT_TEMPLATE.format(
-        repository=repository.slug,
-        pull_number=pull_request_number,
-        label=encoded_label,
-    )
-    _delete_label(requester, api_url + endpoint, all_headers)
 
 
 def _list_open_candidates(
@@ -292,13 +256,13 @@ class GitHubApi:
         Raises:
             GitHubError: If GitHub rejects the request.
         """
-        _remove_label_if_present(
-            self.requester,
-            self.api_url,
+        all_headers = authorized_headers(self.installation_token)
+        remove_label_if_present(
+            _labels_page_reader(self.requester, self.api_url, all_headers),
+            _label_deleter(self.requester, self.api_url, all_headers),
             repository,
             pull_request_number,
             label,
-            authorized_headers(self.installation_token),
         )
 
     def get_json(self, endpoint: str) -> object:
@@ -335,6 +299,26 @@ def authorized_headers(token: str) -> dict[str, str]:
         CONTENT_TYPE_HEADER: JSON_CONTENT_TYPE,
         API_VERSION_HEADER: GITHUB_API_VERSION,
     }
+
+
+def _labels_page_reader(
+    requester: HttpRequester, api_url: str, all_headers: dict[str, str]
+) -> ReadLabelsPage:
+    def read_labels_page(endpoint: str) -> object:
+        return request_json(
+            requester, "GET", api_url + endpoint, all_headers, None, HTTP_OK
+        )
+
+    return read_labels_page
+
+
+def _label_deleter(
+    requester: HttpRequester, api_url: str, all_headers: dict[str, str]
+) -> DeleteLabel:
+    def delete_label(endpoint: str) -> None:
+        _delete_label(requester, api_url + endpoint, all_headers)
+
+    return delete_label
 
 
 def _delete_label(
