@@ -36,3 +36,7 @@ test('EVER_SHIPPED_SKILL_NAMES retains the explicit test runner', () => {
 test('EVER_SHIPPED_SKILL_NAMES includes the pull request skill', () => {
     assert.equal(EVER_SHIPPED_SKILL_NAMES.has('pull-request'), true);
 });
+
+test('EVER_SHIPPED_SKILL_NAMES includes the windows scheduled task skill', () => {
+    assert.equal(EVER_SHIPPED_SKILL_NAMES.has('windows-scheduled-task'), true);
+});

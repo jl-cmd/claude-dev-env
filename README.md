@@ -196,6 +196,7 @@ Slash commands for common workflows.
 | `orchestrator-refresh` | Sub-skill fired by the `/orchestrator` loop about every 20 minutes to re-assert the executor-advisor discipline mid-run |
 | `anthropic-plan` | Readonly codebase exploration before code changes, produces a plan file |
 | `everything-search` | Fast Windows file search via Everything (voidtools) es.exe |
+| `windows-scheduled-task` | Register a repeating headless Windows task: endless repetition, S4U or Interactive principal, absolute action paths, placement outside installer-managed directories, and a teardown command |
 | `recall` | Retrieve prior session context and decisions from Obsidian vault |
 | `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |
 | `task-build` | Gather every open task in the session and register each on the task list via TaskCreate |
