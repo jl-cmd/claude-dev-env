@@ -51,7 +51,6 @@ def test_write_edit_hook_commands_reads_the_real_hooks_json_roster() -> None:
     all_commands = hook_timing_harness.write_edit_hook_commands(_HOOKS_JSON_PATH)
     all_labels = [each_label for each_label, _each_command in all_commands]
     assert all_labels == [
-        "run_all_validators",
         "pre_tool_use_dispatcher",
         "post_tool_use_dispatcher",
         "session_file_edit_tracker",
@@ -169,17 +168,15 @@ def test_run_hosted_command_once_milliseconds_drives_the_real_tracker() -> None:
 
 
 def test_measure_hosted_command_wall_times_covers_the_real_roster() -> None:
-    """A live run against the real hooks.json roster returns all four hooks.
+    """A live run against the real hooks.json roster returns all three hooks.
 
     Runs each registered command once against a real repository file,
-    including ``run_all_validators``, so this is the one place the suite pays
-    its full wall time to prove the roster end to end.
+    so this is the one place the suite pays its full wall time to prove the roster end to end.
     """
     all_wall_times_by_label = hook_timing_harness.measure_hosted_command_wall_times(
         _HOOKS_JSON_PATH, _PACKAGE_ROOT, _REAL_TARGET_FILE, 1
     )
     assert set(all_wall_times_by_label) == {
-        "run_all_validators",
         "pre_tool_use_dispatcher",
         "post_tool_use_dispatcher",
         "session_file_edit_tracker",

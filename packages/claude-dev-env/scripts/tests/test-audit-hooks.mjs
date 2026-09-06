@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -73,6 +73,37 @@ test("renders deterministic private JSON", () => {
   assert.equal(first.includes("python3 ${CLAUDE_PLUGIN_ROOT}"), false);
 });
 
+test("does not compare the live graph with retired baseline counts", () => {
+  const report = auditHooks({ repositoryRoot });
+  assert.equal(report.summary.directCount, report.directRegistrations.length);
+  assert.equal(report.summary.effectiveCount, report.hostedRegistrations.length);
+  assert.equal(report.summary.logicalAssociationCount, report.logicalRegistrations.length);
+  assert.ok(report.summary.directCount > 0);
+  assert.ok(report.summary.effectiveCount > 0);
+  assert.ok(report.summary.logicalAssociationCount > report.summary.directCount);
+  assert.equal(report.findings.some(({ code }) => code === "DIRECT_COUNT_DRIFT"), false);
+  assert.equal(report.findings.some(({ code }) => code === "HOSTED_COUNT_DRIFT"), false);
+});
+
+test("does not execute registered commands", () => {
+  const fixture = createAuditFixture({
+    canonicalHooks: {
+      PreToolUse: [{
+        hooks: [{
+          command: "node -e \"require('node:fs').writeFileSync('audit-executed', 'yes')\"",
+          type: "command",
+        }],
+      }],
+    },
+  });
+  try {
+    auditHooks({ repositoryRoot: fixture.fixtureRoot });
+    assert.equal(existsSync(path.join(fixture.fixtureRoot, "audit-executed")), false);
+  } finally {
+    rmSync(fixture.fixtureRoot, { force: true, recursive: true });
+  }
+});
+
 test("reports every unclassified target", () => {
   const temporaryRoot = mkdtempSync(path.join(tmpdir(), "hook-audit-"));
   const catalogPath = path.join(temporaryRoot, "lifecycle.json");
@@ -84,6 +115,15 @@ test("reports every unclassified target", () => {
   } finally {
     rmSync(temporaryRoot, { force: true, recursive: true });
   }
+});
+
+test("reports canonical native Git hooks from the installer registry", () => {
+  const report = auditHooks({ repositoryRoot });
+  assert.deepEqual(
+    report.knownGitRegistrations.map(({ target }) => target),
+    ["git:pre-commit", "git:pre-push", "git:post-commit"],
+  );
+  assert.equal(report.summary.knownGitHookCount, 3);
 });
 
 test("keeps each hosted matcher as narrow as its roster", () => {
@@ -161,6 +201,7 @@ test("classifies installed-only targets", () => {
       catalogPath,
       homeDirectory: fixture.homeDirectory,
       includeInstalled: true,
+      requireNonblocking: true,
       repositoryRoot: temporaryRoot,
     });
     const missingTargets = new Set(
@@ -266,6 +307,46 @@ test("reports missing installed dispatcher targets", () => {
   }
 });
 
+test("rejects an installed-only registration without nonblocking lifecycle", () => {
+  const fixture = createAuditFixture({
+    claudeHooks: {
+      hooks: {
+        SessionStart: [{
+          hooks: [{ command: "node cleanup.mjs", type: "command" }],
+        }],
+      },
+    },
+  });
+  const catalogPath = path.join(fixture.fixtureRoot, "lifecycle.json");
+  writeJson(catalogPath, {
+    hooks: {
+      "external:cleanup.mjs": {
+        lifecycle: "delete",
+        reason: "The installed entry is retired.",
+        replacement: null,
+      },
+    },
+  });
+  try {
+    const report = auditHooks({
+      catalogPath,
+      homeDirectory: fixture.homeDirectory,
+      includeInstalled: true,
+      requireNonblocking: true,
+      repositoryRoot: fixture.fixtureRoot,
+    });
+    assert.equal(report.registrationEligibility.status, "ineligible");
+    assert.equal(
+      report.findings.some(({ code, target }) =>
+        code === "NONBLOCKING_LIFECYCLE_MISMATCH" && target === "external:cleanup.mjs",
+      ),
+      true,
+    );
+  } finally {
+    rmSync(fixture.fixtureRoot, { force: true, recursive: true });
+  }
+});
+
 test("checks canonical managed parity for Codex registrations", () => {
   const fixture = createAuditFixture({
     canonicalHooks: {
@@ -355,6 +436,7 @@ test("finds default Git hooks from a worktree", () => {
     runGit(sourceRoot, ["commit", "--quiet", "--allow-empty", "-m", "fixture"], environment);
     runGit(sourceRoot, ["worktree", "add", "--quiet", worktreeRoot, "HEAD"], environment);
     writeHookFile(path.join(sourceRoot, ".git", "hooks"), "pre-commit");
+    writeHookFile(path.join(sourceRoot, ".git", "hooks"), "post-commit");
     const canonicalHooksRoot = path.join(worktreeRoot, "packages", "claude-dev-env", "hooks");
     const homeDirectory = path.join(sourceRoot, "home");
     mkdirSync(canonicalHooksRoot, { recursive: true });
@@ -366,9 +448,19 @@ test("finds default Git hooks from a worktree", () => {
     const report = auditHooks({
       homeDirectory,
       includeInstalled: true,
+      requireNonblocking: true,
       repositoryRoot: worktreeRoot,
     });
-    assert.deepEqual(report.gitRegistrations.map(({ target }) => target), ["git:pre-commit"]);
+    assert.deepEqual(report.gitRegistrations.map(({ target }) => target), [
+      "git:pre-commit",
+      "git:post-commit",
+    ]);
+    assert.equal(
+      report.findings.some(({ code, target }) =>
+        code === "NATIVE_GIT_BLOCKING_HOOK" && target === "git:pre-commit",
+      ),
+      true,
+    );
   } finally {
     if (previousGlobalConfig === undefined) delete process.env.GIT_CONFIG_GLOBAL;
     else process.env.GIT_CONFIG_GLOBAL = previousGlobalConfig;

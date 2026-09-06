@@ -26,7 +26,58 @@ SECRET_PATTERNS: frozenset[str] = frozenset({
 SQL_EXECUTE_PATTERN = re.compile(r"\.execute\s*\(\s*f['\"]|\.execute\s*\([^)]*\.format\(", re.IGNORECASE)
 
 
+def _normalize_metadata_name(metadata_text: str) -> str:
+    return "".join(
+        each_character for each_character in metadata_text.lower() if each_character.isalnum()
+    )
+
+
+def _is_schema_key_metadata(variable_name: str, literal_text: str) -> bool:
+    return variable_name == "token_key" and _normalize_metadata_name(literal_text) == "token"
+
+
+def _is_header_metadata(variable_name: str, literal_text: str) -> bool:
+    if not variable_name.endswith("_header"):
+        return False
+    header_name = variable_name.removesuffix("_header")
+    return _normalize_metadata_name(literal_text) == _normalize_metadata_name(header_name)
+
+
+def _is_endpoint_template_metadata(variable_name: str, literal_text: str) -> bool:
+    if not variable_name.endswith("_endpoint_template"):
+        return False
+    endpoint_template_pattern = re.compile(r"^/[A-Za-z0-9_{}./-]+$")
+    if endpoint_template_pattern.fullmatch(literal_text) is None or "{" not in literal_text:
+        return False
+    endpoint_name = variable_name.removesuffix("_endpoint_template")
+    normalized_endpoint = _normalize_metadata_name(literal_text)
+    return all(each_word in normalized_endpoint for each_word in endpoint_name.split("_"))
+
+
+def _is_resource_name_metadata(variable_name: str, literal_text: str) -> bool:
+    if not variable_name.endswith("_resource_name"):
+        return False
+    all_label_words = literal_text.lower().split()
+    resource_name = variable_name.removesuffix("_resource_name")
+    return (
+        len(all_label_words) > 1
+        and all(each_word.isalpha() for each_word in all_label_words)
+        and _normalize_metadata_name(all_label_words[-1]) == _normalize_metadata_name(resource_name)
+    )
+
+
+def _is_secret_metadata(variable_name: str, literal_text: str) -> bool:
+    if _is_schema_key_metadata(variable_name, literal_text):
+        return True
+    if _is_header_metadata(variable_name, literal_text):
+        return True
+    if _is_endpoint_template_metadata(variable_name, literal_text):
+        return True
+    return _is_resource_name_metadata(variable_name, literal_text)
+
+
 def check_hardcoded_secrets(tree: ast.AST, filename: str) -> List[Violation]:
+    MINIMUM_SECRET_LENGTH = 3
     violations: List[Violation] = []
 
     for node in ast.walk(tree):
@@ -35,8 +86,12 @@ def check_hardcoded_secrets(tree: ast.AST, filename: str) -> List[Violation]:
                 if isinstance(target, ast.Name):
                     var_name = target.id.lower()
                     if any(pattern in var_name for pattern in SECRET_PATTERNS):
-                        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
-                            if len(node.value.value) > 3:
+                        if isinstance(node.value, ast.Constant) and isinstance(
+                            node.value.value, str
+                        ):
+                            if len(node.value.value) > MINIMUM_SECRET_LENGTH and not _is_secret_metadata(
+                                var_name, node.value.value
+                            ):
                                 violations.append(
                                     Violation(
                                         filename,

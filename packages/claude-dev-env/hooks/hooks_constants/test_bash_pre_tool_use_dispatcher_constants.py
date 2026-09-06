@@ -1,11 +1,4 @@
-"""Tests for the Bash and PowerShell dispatcher hosted-hook roster.
-
-The roster order and per-hook applicable-tool sets fix the firing sequence and
-tool coverage the dispatcher must reproduce, so these tests pin both against the
-registration order the standalone chain used.
-"""
-
-from __future__ import annotations
+"""Tests for the Bash and PowerShell dispatcher hosted-hook roster."""
 
 from pathlib import Path
 from runpy import run_path
@@ -13,64 +6,8 @@ from runpy import run_path
 ALL_CONSTANT_BINDINGS = run_path(
     str(Path(__file__).with_name("bash_pre_tool_use_dispatcher_constants.py"))
 )
-ALL_BASH_AND_POWERSHELL_TOOL_NAMES = ALL_CONSTANT_BINDINGS["ALL_BASH_AND_POWERSHELL_TOOL_NAMES"]
 ALL_BASH_HOSTED_HOOK_ENTRIES = ALL_CONSTANT_BINDINGS["ALL_BASH_HOSTED_HOOK_ENTRIES"]
-BASH_TOOL_NAME = ALL_CONSTANT_BINDINGS["BASH_TOOL_NAME"]
-POWERSHELL_TOOL_NAME = ALL_CONSTANT_BINDINGS["POWERSHELL_TOOL_NAME"]
-
-_EXPECTED_BASH_ORDER = (
-    "blocking/destructive_command_blocker.py",
-    "blocking/shell_substitution_blocker.py",
-    "blocking/piped_pytest_blocker.py",
-    "blocking/cursor_cli_python_misfire_blocker.py",
-    "blocking/unscoped_search_blocker.py",
-    "blocking/nas_ssh_binary_enforcer.py",
-    "blocking/pii_prevention_blocker.py",
-    "blocking/block_main_commit.py",
-    "blocking/session_edit_stage_gate.py",
-    "blocking/windows_rmtree_blocker.py",
-)
-
-_POWERSHELL_APPLICABLE = (
-    "blocking/cursor_cli_python_misfire_blocker.py",
-    "blocking/unscoped_search_blocker.py",
-    "blocking/pii_prevention_blocker.py",
-)
 
 
-def test_roster_lists_all_bash_hooks_in_registration_order() -> None:
-    """The roster reproduces the standalone Bash chain order exactly."""
-    actual_order = tuple(
-        each_entry.script_relative_path for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES
-    )
-    assert actual_order == _EXPECTED_BASH_ORDER
-
-
-def test_every_hook_applies_to_the_bash_tool() -> None:
-    """Every hosted hook runs on a Bash tool call."""
-    for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES:
-        assert BASH_TOOL_NAME in each_entry.applicable_tool_names
-
-
-def test_powershell_applicable_hooks_include_the_shared_gates() -> None:
-    """PowerShell runs the shared unscoped-search and PII gates."""
-    powershell_hooks = tuple(
-        each_entry.script_relative_path
-        for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES
-        if POWERSHELL_TOOL_NAME in each_entry.applicable_tool_names
-    )
-    assert powershell_hooks == _POWERSHELL_APPLICABLE
-
-
-def test_powershell_hooks_carry_the_shared_tool_set() -> None:
-    """The PowerShell-applicable hooks name both Bash and PowerShell."""
-    for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES:
-        if each_entry.script_relative_path in _POWERSHELL_APPLICABLE:
-            assert each_entry.applicable_tool_names == ALL_BASH_AND_POWERSHELL_TOOL_NAMES
-
-
-def test_every_roster_path_points_at_an_existing_hook() -> None:
-    """Each roster path names a hook script present on disk, catching a typo."""
-    hooks_root = Path(__file__).resolve().parent.parent
-    for each_entry in ALL_BASH_HOSTED_HOOK_ENTRIES:
-        assert (hooks_root / each_entry.script_relative_path).is_file()
+def test_roster_has_no_blocking_hooks() -> None:
+    assert ALL_BASH_HOSTED_HOOK_ENTRIES == ()

@@ -1266,6 +1266,35 @@ test('retired hook registrations stay managed so reinstall removes them', () => 
         'session/untracked_repo_detector.py',
         'session/gh_pr_author_session_cleanup.py',
         'observability/pr_description_writer_spawn_tracker.py',
+        'blocking/plain_language_blocker.py',
+        'lifecycle/config_change_guard.py',
+        'blocking/docstring_rule_gate_count_blocker.py',
+        'blocking/write_existing_file_blocker.py',
+        'blocking/sensitive_file_protector.py',
+        'blocking/pii_prevention_blocker.py',
+        'blocking/duplicate_rmtree_helper_blocker.py',
+        'blocking/claude_md_orphan_file_blocker.py',
+        'blocking/package_inventory_stale_blocker.py',
+        'blocking/env_var_table_code_drift_blocker.py',
+        'blocking/pytest_testpaths_orphan_blocker.py',
+        'blocking/destructive_command_blocker.py',
+        'blocking/shell_substitution_blocker.py',
+        'blocking/piped_pytest_blocker.py',
+        'blocking/cursor_cli_python_misfire_blocker.py',
+        'blocking/unscoped_search_blocker.py',
+        'blocking/nas_ssh_binary_enforcer.py',
+        'blocking/block_main_commit.py',
+        'blocking/session_edit_stage_gate.py',
+        'blocking/bash_pre_tool_use_dispatcher.py',
+        'blocking/stop_dispatcher.py',
+        'blocking/bot_mention_comment_blocker.py',
+        'blocking/fable_spawn_gate.py',
+        'blocking/luna_fast_mode_gate.py',
+        'blocking/orchestrator_refresh_reschedule_gate.py',
+        'blocking/ask_user_question_shape_blocker.py',
+        'blocking/send_user_file_open_locally_blocker.py',
+        'blocking/question_to_user_enforcer.py',
+        'blocking/session_handoff_blocker.py',
     ]);
     const shippedHooks = JSON.parse(
         readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')
@@ -1417,7 +1446,7 @@ test('mergeHooksIntoSettings is idempotent when run twice against an already-upd
 });
 
 
-test('shipped hooks.json matches the dispatcher design: dispatchers registered, run_all_validators retained, no folded hook standalone', () => {
+test('shipped hooks.json keeps only nonblocking policy handlers and lifecycle hooks', () => {
     const shippedHooksConfig = JSON.parse(
         readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')
     );
@@ -1429,8 +1458,8 @@ test('shipped hooks.json matches the dispatcher design: dispatchers registered, 
 
     assert.equal(
         countManagedRunAllValidatorsHooks(shippedHooksConfig),
-        1,
-        'shipped hooks.json must retain the inline run_all_validators runner on the write path',
+        0,
+        'shipped hooks.json must retire the inline run_all_validators runner from the write path',
     );
 
     const allPostToolUseGroups = shippedHooksConfig.hooks.PostToolUse || [];
@@ -1438,6 +1467,12 @@ test('shipped hooks.json matches the dispatcher design: dispatchers registered, 
         .flatMap(group => group.hooks.map(hook => hook.command))
         .filter(cmd => cmd.includes('post_tool_use_dispatcher.py'));
     assert.equal(postDispatcherCommands.length, 1, 'shipped hooks.json must register the PostToolUse dispatcher exactly once');
+    const allCommands = Object.values(shippedHooksConfig.hooks).flatMap(matcherGroups => (
+        matcherGroups.flatMap(matcherGroup => matcherGroup.hooks.map(hook => hook.command))
+    ));
+    for (const retiredPath of RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS) {
+        assert.ok(allCommands.every(command => !command.includes(retiredPath)), retiredPath);
+    }
 
     const allSessionStartCommands = (shippedHooksConfig.hooks.SessionStart || [])
         .flatMap(group => group.hooks.map(hook => hook.command));
