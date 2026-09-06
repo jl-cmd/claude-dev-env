@@ -37,6 +37,9 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
     ): frozenset(
         {
             PurePosixPath(
+                "packages/claude-dev-env/scripts/tests/test_automatic_advisory_window_flags.py"
+            ),
+            PurePosixPath(
                 "packages/claude-dev-env/scripts/tests/test_automatic_advisory.py"
             ),
         }
@@ -45,6 +48,9 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
         "packages/claude-dev-env/scripts/automatic_advisory/cli.py"
     ): frozenset(
         {
+            PurePosixPath(
+                "packages/claude-dev-env/scripts/tests/test_automatic_advisory_window_flags.py"
+            ),
             PurePosixPath(
                 "packages/claude-dev-env/scripts/tests/test_automatic_advisory_recovery.py"
             ),
@@ -67,6 +73,9 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
     ): frozenset(
         {
             PurePosixPath(
+                "packages/claude-dev-env/scripts/tests/test_automatic_advisory_window_flags.py"
+            ),
+            PurePosixPath(
                 "packages/claude-dev-env/scripts/tests/test_automatic_advisory.py"
             ),
             PurePosixPath(
@@ -81,6 +90,9 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
         "packages/claude-dev-env/scripts/automatic_advisory/git.py"
     ): frozenset(
         {
+            PurePosixPath(
+                "packages/claude-dev-env/scripts/tests/test_automatic_advisory_window_flags.py"
+            ),
             PurePosixPath(
                 "packages/claude-dev-env/scripts/tests/test_automatic_advisory_repairs.py"
             ),
@@ -137,6 +149,15 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
         {
             PurePosixPath(
                 "packages/claude-dev-env/scripts/tests/test_closed_pr_label.py"
+            ),
+        }
+    ),
+    PurePosixPath(
+        "packages/claude-dev-env/scripts/automatic_advisory/window_flags.py"
+    ): frozenset(
+        {
+            PurePosixPath(
+                "packages/claude-dev-env/scripts/tests/test_automatic_advisory_window_flags.py"
             ),
         }
     ),

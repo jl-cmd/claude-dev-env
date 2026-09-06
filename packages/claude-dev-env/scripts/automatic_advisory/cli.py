@@ -20,9 +20,6 @@ from pr_verification.lock import SupervisorLock, SupervisorLockError
 from pr_verification.model import RepositorySettings
 
 from automatic_advisory.config.constants import (
-    CREATE_NEW_PROCESS_GROUP_ATTRIBUTE,
-    CREATE_NO_WINDOW_ATTRIBUTE,
-    DETACHED_PROCESS_ATTRIBUTE,
     REPORT_NEWLINE,
     STATE_STATUS_KEY,
     STATE_STATUS_NEVER_RUN,
@@ -36,6 +33,7 @@ from automatic_advisory.runner import (
     AdvisoryGitHub,
     AutomaticAdvisoryRunner,
 )
+from automatic_advisory.window_flags import detached_poller_creation_flags
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -125,7 +123,7 @@ def start_polling(settings_path: Path) -> int:
     Returns:
         Zero after the child process starts.
     """
-    process_flags = _detached_process_flags()
+    process_flags = detached_poller_creation_flags()
     resolved_settings_path = settings_path.resolve()
     subprocess.Popen(
         (
@@ -143,21 +141,6 @@ def start_polling(settings_path: Path) -> int:
         start_new_session=True,
     )
     return SUCCESS_EXIT_CODE
-
-
-def _detached_process_flags() -> int:
-    all_flag_names = (
-        DETACHED_PROCESS_ATTRIBUTE,
-        CREATE_NEW_PROCESS_GROUP_ATTRIBUTE,
-        CREATE_NO_WINDOW_ATTRIBUTE,
-    )
-    return (
-        0
-        if sys.platform != "win32"
-        else sum(
-            getattr(subprocess, each_flag_name, 0) for each_flag_name in all_flag_names
-        )
-    )
 
 
 def _build_runner(

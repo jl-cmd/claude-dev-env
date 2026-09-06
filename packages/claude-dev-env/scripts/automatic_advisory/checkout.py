@@ -10,6 +10,7 @@ from .config.constants import (
     GIT_EXECUTABLE,
 )
 from .model import AdvisoryRegistration, LocalCheckout
+from .window_flags import hidden_window_creation_flags
 
 
 def read_local_checkout(checkout_path: Path) -> LocalCheckout:
@@ -42,6 +43,7 @@ def _run_git_command(
         capture_output=True,
         check=False,
         text=True,
+        creationflags=hidden_window_creation_flags(),
     )
 
 

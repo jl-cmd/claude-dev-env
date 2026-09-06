@@ -17,6 +17,7 @@ from .config.constants import (
 )
 from .config.timing import GIT_FETCH_TIMEOUT_SECONDS
 from .model import AdvisoryRegistration
+from .window_flags import hidden_window_creation_flags
 
 
 def _fetch_base(
@@ -38,6 +39,7 @@ def _fetch_base(
             capture_output=True,
             check=False,
             env=_build_git_environment(),
+            creationflags=hidden_window_creation_flags(),
             timeout=GIT_FETCH_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:

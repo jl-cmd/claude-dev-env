@@ -26,6 +26,7 @@ from .config.constants import (
 )
 from .config.timing import CHILD_CLEANUP_TIMEOUT_SECONDS
 from .model import AdvisoryRegistration, ChildOutcome
+from .window_flags import hidden_window_creation_flags
 from .windows_job import (
     _assign_process,
     _close_handle,
@@ -216,7 +217,8 @@ def _spawn_windows_process_host(
             stderr=subprocess.PIPE,
             text=True,
             env=all_child_environment,
-            creationflags=getattr(subprocess, WINDOWS_PRIORITY_CLASS_ATTRIBUTE, 0),
+            creationflags=hidden_window_creation_flags()
+            | getattr(subprocess, WINDOWS_PRIORITY_CLASS_ATTRIBUTE, 0),
         )
     except OSError:
         return None

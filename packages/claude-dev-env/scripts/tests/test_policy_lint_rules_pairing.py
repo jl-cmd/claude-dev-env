@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path, PurePosixPath
 
 from policy_lint import adapters
+from policy_lint.config.approved_test_pairs import (
+    APPROVED_TEST_PATHS_BY_PRODUCTION_PATH,
+)
 from policy_lint.model import (
     ContentOrigin,
     Diagnostic,
@@ -54,6 +57,17 @@ def _pairing_diagnostics(
 ) -> tuple[Diagnostic, ...]:
     document_set = DocumentSet((changed_document,), SelectionKind.BASE, temporary_path)
     return adapters.test_pairing_diagnostics(document_set)
+
+
+def test_approved_pairs_name_files_that_exist() -> None:
+    repository_root = Path(__file__).resolve().parents[4]
+    for (
+        production_path,
+        all_test_paths,
+    ) in APPROVED_TEST_PATHS_BY_PRODUCTION_PATH.items():
+        assert (repository_root / production_path).is_file(), production_path
+        for each_test_path in all_test_paths:
+            assert (repository_root / each_test_path).is_file(), each_test_path
 
 
 def test_pairing_ignores_python_docstring_only_changes(tmp_path: Path) -> None:
