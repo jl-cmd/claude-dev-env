@@ -22,7 +22,7 @@ test('buildVerificationPaths keeps the driver and evidence paths inside the repo
     const paths = buildVerificationPaths('C:/workspace');
     assert.equal(
         paths.driverPath.replaceAll('\\', '/'),
-        'C:/workspace/packages/claude-dev-env/.agents/skills/run-claude-dev-env/driver.mjs',
+        'C:/workspace/.cursor/skills/verify-claude-dev-env/scripts/driver.mjs',
     );
     assert.equal(
         paths.transcriptPath.replaceAll('\\', '/'),

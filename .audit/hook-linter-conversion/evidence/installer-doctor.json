@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-05T10:47:04.413Z",
+  "generatedAt": "2026-09-06T10:56:28.608Z",
   "isReady": true,
   "checks": {
     "driverExists": true,
@@ -12,7 +12,7 @@
   "gitVersion": "git version 2.50.1.windows.1",
   "pythonVersion": "Python 3.13.5",
   "paths": {
-    "driver": "packages/claude-dev-env/.agents/skills/run-claude-dev-env/driver.mjs",
+    "driver": ".cursor/skills/verify-claude-dev-env/scripts/driver.mjs",
     "package": "packages/claude-dev-env"
   }
 }
