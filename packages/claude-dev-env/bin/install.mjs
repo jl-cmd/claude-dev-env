@@ -1719,6 +1719,149 @@ export function pruneRetiredHookEntriesFromSettings(settingsPath, retiredHookRel
     return removedCount;
 }
 
+const RETIRED_HOOK_STAND_IN_MARKER = 'claude-dev-env retired hook stand-in';
+
+const RETIRED_HOOK_STAND_IN_SOURCE = `"""${RETIRED_HOOK_STAND_IN_MARKER}.
+
+This install retired the hook that stood here and removed its settings.json
+registration. A session that started before the install still holds the old
+registration and runs this path on every matching tool call, so the path keeps an
+inert module: it does nothing and exits 0, which the harness reads as "allow".
+Restart the session to pick up the new registration. A later install removes this
+file once no registration names it.
+"""
+`;
+
+const PYTHON_HOOK_SUFFIX = '.py';
+
+
+/**
+ * List every hook command a settings object holds, across every event type.
+ *
+ * Reading the commands through one walk lets each caller ask its own question of
+ * the same shape rules the prune already applies: a group carrying no hooks array
+ * contributes nothing, and an entry whose command is absent or is not a string
+ * reaches the caller as-is.
+ *
+ * @param {object} settings The parsed settings.json object.
+ * @returns {unknown[]} Every hook entry's command, in the order settings holds them.
+ */
+function settingsHookCommands(settings) {
+    const allCommands = [];
+    for (const matcherGroups of Object.values(settings.hooks ?? {})) {
+        if (!Array.isArray(matcherGroups)) continue;
+        for (const group of matcherGroups) {
+            for (const hook of groupHookEntries(group) ?? []) allCommands.push(hook?.command);
+        }
+    }
+    return allCommands;
+}
+
+
+/**
+ * Read the hook commands a settings.json holds, or none when it cannot be read.
+ *
+ * Take this reading before the run mutates anything. The hook merge rewrites
+ * settings.json early and drops every entry naming a script the package no longer
+ * ships, so by the time the prunes run the file no longer says what a session
+ * started before this install still invokes. This reading does.
+ *
+ * @param {string} settingsPath The absolute settings.json path.
+ * @returns {unknown[]} Every hook command the file holds.
+ */
+export function settingsHookCommandsAtPath(settingsPath) {
+    if (!existsSync(settingsPath)) return [];
+    let settings;
+    try {
+        settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    } catch {
+        return [];
+    }
+    if (!settings?.hooks || typeof settings.hooks !== 'object') return [];
+    return settingsHookCommands(settings);
+}
+
+
+/**
+ * Name the retired hook scripts a hook command still runs.
+ *
+ * The commands come from the reading taken before the run mutated settings.json,
+ * so the answer is the set of paths a session started before this install keeps
+ * invoking until it restarts. That is what decides where a stand-in belongs.
+ *
+ * @param {unknown[]} allCommands Hook commands read before the run mutated settings.
+ * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
+ * @returns {Set<string>} The retired paths a command names.
+ */
+export function retiredHookPathsNamedByCommands(allCommands, retiredHookRelativePaths) {
+    const namedPaths = new Set();
+    for (const relativePath of retiredHookRelativePaths) {
+        const onePathSet = new Set([relativePath]);
+        if (allCommands.some(command => commandReferencesRetiredHook(command, onePathSet))) {
+            namedPaths.add(relativePath);
+        }
+    }
+    return namedPaths;
+}
+
+
+/**
+ * Leave an inert Python module at each retired hook path a stale registration runs.
+ *
+ * Deleting a registered hook script is what breaks a live session: `python3` on a
+ * missing file exits 2, and the harness reads a PreToolUse exit 2 as a block, so
+ * every tool call the matcher covers is denied until the session restarts. A
+ * module holding one docstring exits 0 with no output, which the harness reads as
+ * "allow", so the same stale registration becomes harmless.
+ *
+ * A path that still holds a file keeps it. The stale-file prune moves the retired
+ * script out ahead of this call, so a file standing here is one that prune could
+ * not move, and writing over it would destroy content no backup holds.
+ *
+ * The caller records each written path in the manifest, which is what retires the
+ * stand-in later: the next full install writes no such file, so the manifest diff
+ * names it retired, and it survives that run only while a registration still
+ * names it.
+ *
+ * @param {string} hooksRoot The absolute installed hooks directory.
+ * @param {Set<string>} registeredRetiredRelativePaths Retired paths a registration names.
+ * @returns {string[]} The absolute paths this run wrote a stand-in to.
+ */
+export function writeRetiredHookStandIns(hooksRoot, registeredRetiredRelativePaths) {
+    const writtenPaths = [];
+    for (const relativePath of registeredRetiredRelativePaths) {
+        if (!relativePath.endsWith(PYTHON_HOOK_SUFFIX)) continue;
+        const standInPath = join(hooksRoot, ...relativePath.split('/'));
+        if (existsSync(standInPath)) continue;
+        mkdirSync(dirname(standInPath), { recursive: true });
+        writeFileSync(standInPath, RETIRED_HOOK_STAND_IN_SOURCE);
+        writtenPaths.push(standInPath);
+    }
+    return writtenPaths;
+}
+
+
+/**
+ * Print the one-line restart notice naming the registrations this run retired.
+ *
+ * The line names each path rather than counting them, so a reader can match the
+ * notice against the hook that stopped running in a session they still have open.
+ *
+ * @param {string} hooksRoot The absolute installed hooks directory.
+ * @param {string[]} standInPaths The stand-ins this run wrote.
+ * @returns {void}
+ */
+function reportRetiredHookStandIns(hooksRoot, standInPaths) {
+    if (standInPaths.length === 0) return;
+    const allNames = standInPaths
+        .map(standInPath => relative(hooksRoot, standInPath).replace(/\\/g, '/'))
+        .sort();
+    console.log(
+        `  Restart open sessions: this install retired ${allNames.join(', ')} and left an inert stand-in at each path, so a session started before it keeps working until you restart it.`,
+    );
+}
+
+
 /**
  * Load ~/.claude/settings.json for an in-place merge, or `{}` when absent/empty.
  *
@@ -2033,6 +2176,13 @@ function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalled
  * start invoke a missing script, so the reference leaves first and the script
  * follows.
  *
+ * The stand-ins go last, after the move has emptied the paths they fill. Which
+ * paths those are comes from `priorSettingsHookCommands`, read before the run
+ * mutated anything, because the hook merge already rewrote settings.json and the
+ * file no longer names what a session started before this install still invokes.
+ * The caller records the written paths in the manifest, so a later run reads them
+ * as retired and drops each one no registration names any more.
+ *
  * Both prunes report how much content reached the run's backup root, and their sum
  * is what backup retention answers to: the sweep of older recovery points runs
  * only once this run holds one of its own.
@@ -2041,29 +2191,39 @@ function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalled
  * @param {string[]|null} priorManifestSkills The prior manifest's skill names, or null.
  * @param {string[]|null} priorManifestFiles The prior manifest's file list, or null.
  * @param {string[]} installedFiles Every file this run copied.
- * @returns {{prunedCount: number, skillsPrunedCount: number, failedPaths: string[]}}
- *   The stale files moved across all roots, the skills root's share, and every
- *   path whose move failed.
+ * @param {unknown[]} priorSettingsHookCommands Hook commands read before this run mutated settings.
+ * @returns {{prunedCount: number, skillsPrunedCount: number, failedPaths: string[],
+ *   standInPaths: string[]}} The stale files moved across all roots, the skills
+ *   root's share, every path whose move failed, and every stand-in written.
  */
 function runFullInstallPrunes(
-    copiedSkillNames, priorManifestSkills, priorManifestFiles, installedFiles,
+    copiedSkillNames,
+    priorManifestSkills,
+    priorManifestFiles,
+    installedFiles,
+    priorSettingsHookCommands,
 ) {
+    const hooksRoot = join(CLAUDE_HOME, MANAGED_HOOKS_DIRECTORY_NAME);
+    const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
     const retiredSkillMovedCount = pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
-    const removedHookEntryCount = pruneRetiredHookEntriesFromSettings(
-        join(CLAUDE_HOME, SETTINGS_FILE_NAME),
-        retiredManagedHookRelativePaths(
-            priorManifestFiles, installedFiles, join(CLAUDE_HOME, MANAGED_HOOKS_DIRECTORY_NAME),
-        ),
+    const retiredHookPaths = retiredManagedHookRelativePaths(
+        priorManifestFiles, installedFiles, hooksRoot,
     );
+    const registeredRetiredPaths = retiredHookPathsNamedByCommands(
+        priorSettingsHookCommands, retiredHookPaths,
+    );
+    const removedHookEntryCount = pruneRetiredHookEntriesFromSettings(settingsPath, retiredHookPaths);
     if (removedHookEntryCount > 0) {
         console.log(`  Hook entries: ${removedHookEntryCount} retired entry(s) removed from settings.json`);
     }
     const staleOutcome = pruneStaleFilesAcrossManagedRoots(
         priorManifestFiles, installedFiles, currentRunBackupRoot(),
     );
+    const standInPaths = writeRetiredHookStandIns(hooksRoot, registeredRetiredPaths);
+    reportRetiredHookStandIns(hooksRoot, standInPaths);
     const didRunMoveContent = retiredSkillMovedCount + staleOutcome.prunedCount > 0;
     retainNewestRunBackupOnly(currentRunBackupRoot(), didRunMoveContent);
-    return staleOutcome;
+    return { ...staleOutcome, standInPaths };
 }
 
 /**
@@ -2164,6 +2324,9 @@ function executeInstallPlan(plan) {
  */
 function executeInstallPlanMutations(plan, transactionHelpers) {
     const { throwIfFault, syncWrittenPaths } = transactionHelpers;
+    const priorSettingsHookCommands = settingsHookCommandsAtPath(
+        join(CLAUDE_HOME, SETTINGS_FILE_NAME),
+    );
     const selectedGroups = plan.selectedGroups;
     const priorManifestFiles = plan.priorManifest.files;
     const priorManifestSkills = plan.priorManifest.skills;
@@ -2511,11 +2674,16 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     if (didPruneRun) {
         try {
             const prunes = runFullInstallPrunes(
-                copiedSkillNames, priorManifestSkills, priorManifestFiles, allInstalledFiles,
+                copiedSkillNames,
+                priorManifestSkills,
+                priorManifestFiles,
+                allInstalledFiles,
+                priorSettingsHookCommands,
             );
             summary.skills.pruned = prunes.skillsPrunedCount;
             stalePrunedTotal = prunes.prunedCount;
             failedPrunePaths = prunes.failedPaths;
+            allInstalledFiles.push(...prunes.standInPaths);
             didPruneFinish = true;
         } catch (pruneError) {
             console.warn(

@@ -42,6 +42,10 @@ import {
     caseOnlyRenameSourceName,
     retiredManagedHookRelativePaths,
     pruneRetiredHookEntriesFromSettings,
+    settingsHookCommandsAtPath,
+    retiredHookPathsNamedByCommands,
+    writeRetiredHookStandIns,
+    detectPython,
     retainNewestRunBackupOnly,
     refreshInstalledPstackPluginManifest,
 } from './install.mjs';
@@ -2435,6 +2439,148 @@ test('pruneRetiredHookEntriesFromSettings leaves settings.json byte-identical wh
             readFileSync(settingsPath, 'utf8'),
             bytesBefore,
             'the file keeps its own formatting, so a run that retires nothing writes nothing',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+const SECOND_RETIRED_HOOK_RELATIVE_PATH = 'blocking/retired_second_gate.py';
+
+
+/**
+ * Build a sandbox holding a ~/.claude/hooks root and a settings.json beside it.
+ *
+ * @param {object} settings The settings object to serialize.
+ * @returns {{sandboxRoot: string, hooksRoot: string, settingsPath: string}} The sandbox paths.
+ */
+function createRetiredHookSandbox(settings) {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-retired-hook-stand-in-'));
+    const hooksRoot = join(sandboxRoot, '.claude', 'hooks');
+    mkdirSync(hooksRoot, { recursive: true });
+    const settingsPath = join(sandboxRoot, 'settings.json');
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+    return { sandboxRoot, hooksRoot, settingsPath };
+}
+
+
+/**
+ * Build a settings fixture registering one retired hook command.
+ *
+ * @param {string} relativePath The retired hook path the registration runs.
+ * @returns {object} A settings object holding that registration and a user entry.
+ */
+function settingsRegistering(relativePath) {
+    return {
+        hooks: {
+            PreToolUse: [{
+                matcher: 'AskUserQuestion',
+                hooks: [
+                    { type: 'command', command: `python3 "$HOME/.claude/hooks/${relativePath}"` },
+                    { type: 'command', command: 'python3 my_own_gate.py --user-authored' },
+                ],
+            }],
+        },
+    };
+}
+
+
+test('retiredHookPathsNamedByCommands names only the retired scripts a live registration runs', () => {
+    const { sandboxRoot, settingsPath } = createRetiredHookSandbox(
+        settingsRegistering(RETIRED_HOOK_RELATIVE_PATH),
+    );
+    try {
+        const namedPaths = retiredHookPathsNamedByCommands(
+            settingsHookCommandsAtPath(settingsPath),
+            new Set([RETIRED_HOOK_RELATIVE_PATH, SECOND_RETIRED_HOOK_RELATIVE_PATH]),
+        );
+
+        assert.deepEqual(
+            [...namedPaths],
+            [RETIRED_HOOK_RELATIVE_PATH],
+            'the registered retired script is named and the unregistered one is left out',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('settingsHookCommandsAtPath reads no command from a settings file it cannot use', () => {
+    const { sandboxRoot, settingsPath } = createRetiredHookSandbox({ hooks: {} });
+    try {
+        writeFileSync(settingsPath, '{ this is not JSON');
+
+        assert.deepEqual(
+            settingsHookCommandsAtPath(settingsPath),
+            [],
+            'settings the installer cannot parse hold no command',
+        );
+        assert.deepEqual(
+            settingsHookCommandsAtPath(join(sandboxRoot, 'absent.json')),
+            [],
+            'a settings file that is not there holds no command',
+        );
+        assert.equal(
+            retiredHookPathsNamedByCommands([], new Set([RETIRED_HOOK_RELATIVE_PATH])).size,
+            0,
+            'with no command to read, no retired script is named',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('a stale registration keeps working because the retired hook leaves an inert stand-in behind', () => {
+    const { sandboxRoot, hooksRoot, settingsPath } = createRetiredHookSandbox(
+        settingsRegistering(RETIRED_HOOK_RELATIVE_PATH),
+    );
+    try {
+        const namedPaths = retiredHookPathsNamedByCommands(
+            settingsHookCommandsAtPath(settingsPath),
+            new Set([RETIRED_HOOK_RELATIVE_PATH, SECOND_RETIRED_HOOK_RELATIVE_PATH]),
+        );
+
+        const standInPaths = writeRetiredHookStandIns(hooksRoot, namedPaths);
+
+        const standInPath = join(hooksRoot, ...RETIRED_HOOK_RELATIVE_PATH.split('/'));
+        assert.deepEqual(standInPaths, [standInPath], 'one stand-in is written, for the registered path');
+        assert.equal(
+            existsSync(join(hooksRoot, ...SECOND_RETIRED_HOOK_RELATIVE_PATH.split('/'))),
+            false,
+            'a retired path no registration names gets no stand-in',
+        );
+
+        const standInRun = spawnSync(detectPython(), [standInPath], { encoding: 'utf8' });
+
+        assert.equal(standInRun.status, 0, 'the stand-in exits 0, so a stale registration allows the tool');
+        assert.equal(standInRun.stdout, '', 'the stand-in writes nothing to stdout');
+        assert.equal(standInRun.stderr, '', 'the stand-in writes nothing to stderr');
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('writeRetiredHookStandIns leaves a hook file the prune could not move exactly as it stands', () => {
+    const { sandboxRoot, hooksRoot } = createRetiredHookSandbox({ hooks: {} });
+    try {
+        const survivingPath = join(hooksRoot, ...RETIRED_HOOK_RELATIVE_PATH.split('/'));
+        mkdirSync(dirname(survivingPath), { recursive: true });
+        const survivingContents = 'raise SystemExit(2)\n';
+        writeFileSync(survivingPath, survivingContents);
+
+        const standInPaths = writeRetiredHookStandIns(
+            hooksRoot, new Set([RETIRED_HOOK_RELATIVE_PATH]),
+        );
+
+        assert.deepEqual(standInPaths, [], 'a path still holding a file gets no stand-in');
+        assert.equal(
+            readFileSync(survivingPath, 'utf8'),
+            survivingContents,
+            'the file a failed prune left behind keeps its own bytes',
         );
     } finally {
         rmSync(sandboxRoot, { recursive: true, force: true });
