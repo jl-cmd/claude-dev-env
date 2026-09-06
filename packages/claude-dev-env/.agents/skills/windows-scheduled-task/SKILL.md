@@ -125,7 +125,7 @@ $Info.NextRunTime
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 ```
 
-Ship this command in the same document that describes the task, so one step ends the schedule.
+Put this command in the same document that describes the task.
 
 ## Self-modification warning
 

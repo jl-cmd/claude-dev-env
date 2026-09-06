@@ -25,7 +25,7 @@ On a host where a subagent returns one message to its parent, that message is al
 parent receives. Working notes, tool output, and text the child printed along the way do
 not travel.
 
-So every pstack prompt that asks a child for a list, a set of findings, or a verdict also
+Every pstack prompt that asks a child for a list, a set of findings, or a verdict also
 asks for the whole thing, word for word, in the final message. A prompt without that line
 gets back a summary such as "findings reported above", and the findings are gone. The
 parent then reruns the child, which costs the full run a second time.

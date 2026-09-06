@@ -21,7 +21,7 @@ User-level rule: applies to **every** git repo that uses GitHub with `gh`. Small
 back the body of its own merged pull request to decide it owns that merge. Rewriting the
 body, or trimming its header or footer, makes the bot treat the merge as somebody else's
 work: it cuts no tag, the publish job skips, and it opens one more release pull request on
-the next run. Every release lands in the repository and reaches no user.
+the next run. The merge stays in the repository. No tag is cut and the package never publishes.
 
 Spot one by its head branch, which starts `release-please--branches--`, or by a body that
 opens with the bot's own marker line. The description rules in this file, the

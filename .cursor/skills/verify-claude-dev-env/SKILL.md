@@ -29,7 +29,7 @@ Continue only when the command prints `Doctor command: ready`.
 
 ## Drive
 
-`run` covers the installer lifecycle only. It calls `.cursor/skills/verify-claude-dev-env/scripts/driver.mjs`, the harness this skill owns.
+`run` covers the installer lifecycle only. It calls `.cursor/skills/verify-claude-dev-env/scripts/driver.mjs`.
 
 For other changes, use the matching file in [features](features/README.md). Exercise each changed feature before you verify.
 

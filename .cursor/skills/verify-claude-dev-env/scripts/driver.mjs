@@ -18,9 +18,9 @@
  * share), while the installer's `git config --global core.hooksPath` write
  * still lands only in the sandbox config.
  *
- * It runs the three lifecycle commands an agent cares about — `--help`, a full
- * install, and `--uninstall` — and asserts the observable result of each
- * against the sandbox tree. Exit code 0 means every assertion held.
+ * It runs `--help`, a full install, and `--uninstall`, and asserts the
+ * observable result of each against the sandbox tree. Exit code 0 means
+ * every assertion held.
  *
  * Usage: node .cursor/skills/verify-claude-dev-env/scripts/driver.mjs
  */
