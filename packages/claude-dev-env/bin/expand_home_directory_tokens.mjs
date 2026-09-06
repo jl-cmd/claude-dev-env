@@ -1,9 +1,8 @@
 /**
- * Install-time expansion of $HOME / ${HOME} / ~/ in settings.json commands.
+ * Expand $HOME, ${HOME}, and ~/ in settings.json commands at install time.
  *
- * Hosts that require referenced env vars at hook load time (for example a third-party host)
- * skip the hook when HOME is unset — common on Windows — so the installer
- * rewrites residual tokens to absolute home paths.
+ * Some hosts skip a hook when HOME is unset, which is common on Windows.
+ * The installer rewrites leftover tokens to absolute home paths.
  */
 
 /**
@@ -34,7 +33,7 @@ export function expandHomeDirectoryTokens(commandString, homeDirectory) {
         () => normalizedHome,
     );
     expandedCommand = expandedCommand.replace(
-        /(^|[\s"'=])~\//g,
+        /(^|[\s"'=;(])~\//g,
         (_fullMatch, boundary) => `${boundary}${normalizedHome}/`,
     );
     return expandedCommand;

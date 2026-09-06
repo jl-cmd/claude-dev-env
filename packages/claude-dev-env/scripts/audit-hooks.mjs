@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
-const expectedCounts = Object.freeze({ direct: 32, dispatchers: 5, hosted: 43 });
+import { KNOWN_GIT_HOOK_NAMES } from "../bin/git_hooks_installer.mjs";
+
 const dispatcherSpecs = Object.freeze([
   ["script:blocking/pre_tool_use_dispatcher.py", "hooks_constants/pre_tool_use_dispatcher_constants.py", "ALL_HOSTED_HOOK_ENTRIES"],
   ["script:blocking/bash_pre_tool_use_dispatcher.py", "hooks_constants/bash_pre_tool_use_dispatcher_constants.py", "ALL_BASH_HOSTED_HOOK_ENTRIES"],
@@ -19,6 +20,8 @@ const lifecycleNames = new Set([
   "move_to_explicit_command",
   "move_to_linter",
 ]);
+const nonblockingLifecycle = "keep_nonblocking_automation";
+const blockingGitEvents = new Set(["pre-commit", "pre-push"]);
 
 function normalizeMatcher(rawMatcher) {
   return typeof rawMatcher === "string" && rawMatcher
@@ -269,6 +272,55 @@ function lifecycleFindings(records, lifecycle) {
   ];
 }
 
+function nonblockingFindings(records, lifecycle) {
+  const lifecycleByTarget = new Map(
+    lifecycle.map(({ target, lifecycle: lifecycleName }) => [target, lifecycleName]),
+  );
+  const uniqueTargets = [...new Set(records.map(({ target }) => target))];
+  const lifecycleMismatches = uniqueTargets
+    .filter((target) => !target.startsWith("git:") && lifecycleByTarget.has(target))
+    .filter((target) => lifecycleByTarget.get(target) !== nonblockingLifecycle)
+    .map((target) => ({
+      code: "NONBLOCKING_LIFECYCLE_MISMATCH",
+      message: "The registration is not eligible for nonblocking automation.",
+      scope: "catalog",
+      severity: "error",
+      target,
+    }));
+  const blockingGitFindings = records
+    .filter(({ event, scope }) => scope === "git" && blockingGitEvents.has(event))
+    .map(({ target }) => ({
+      code: "NATIVE_GIT_BLOCKING_HOOK",
+      message: "A native Git blocking hook remains active.",
+      scope: "git",
+      severity: "error",
+      target,
+    }));
+  return [...lifecycleMismatches, ...blockingGitFindings];
+}
+
+function registrationEligibility(records, lifecycle, isRequired) {
+  if (!isRequired) {
+    return { status: "not_checked", runtimeProof: "not_assessed" };
+  }
+  const lifecycleByTarget = new Map(
+    lifecycle.map(({ target, lifecycle: lifecycleName }) => [target, lifecycleName]),
+  );
+  const uniqueTargets = [...new Set(records.map(({ target }) => target))];
+  const hasUnclassifiedTarget = uniqueTargets.some((target) => !lifecycleByTarget.has(target));
+  const hasIneligibleTarget = uniqueTargets.some(
+    (target) => lifecycleByTarget.get(target) && lifecycleByTarget.get(target) !== nonblockingLifecycle,
+  );
+  const hasBlockingGitHook = records.some(
+    ({ event, scope }) => scope === "git" && blockingGitEvents.has(event),
+  );
+  const isEligible = !hasUnclassifiedTarget && !hasIneligibleTarget && !hasBlockingGitHook;
+  return {
+    status: isEligible ? "eligible" : "ineligible",
+    runtimeProof: "not_assessed",
+  };
+}
+
 function readInstalled(configPath, hooksRoot, scope) {
   if (!existsSync(configPath)) return { findings: [], logical: [], records: [] };
   const records = readDirect(configPath, scope);
@@ -295,7 +347,7 @@ function activeGitHooks(repositoryRoot) {
   const hooksPath = gitQuery.stdout?.trim();
   if (!hooksPath) return [];
   const hooksRoot = path.isAbsolute(hooksPath) ? hooksPath : path.resolve(repositoryRoot, hooksPath);
-  return ["pre-commit", "pre-push", "post-commit"]
+  return KNOWN_GIT_HOOK_NAMES
     .filter((name) => existsSync(path.join(hooksRoot, name)))
     .map((name, ordinal) => ({
       event: name,
@@ -308,17 +360,16 @@ function activeGitHooks(repositoryRoot) {
     }));
 }
 
-function countFindings(directCount, dispatcherCount, hostedCount) {
-  const actual = { direct: directCount, dispatchers: dispatcherCount, hosted: hostedCount };
-  return Object.entries(expectedCounts)
-    .filter(([name, expected]) => actual[name] !== expected)
-    .map(([name, expected]) => ({
-      code: `${name.toUpperCase()}_COUNT_DRIFT`,
-      message: `Expected ${expected} entries and found ${actual[name]}.`,
-      scope: "canonical",
-      severity: "error",
-      target: null,
-    }));
+function knownGitHooks() {
+  return KNOWN_GIT_HOOK_NAMES.map((event, ordinal) => ({
+    event,
+    matcher: "*",
+    ordinal,
+    role: "native",
+    scope: "git",
+    target: `git:${event}`,
+    timeoutSeconds: null,
+  }));
 }
 
 export function auditHooks(options) {
@@ -327,16 +378,18 @@ export function auditHooks(options) {
   const direct = readDirect(path.join(hooksRoot, "hooks.json"), "canonical");
   const hosted = expandHosted(direct, hooksRoot);
   const logical = logicalRecords(direct, hosted);
+  const knownGit = knownGitHooks();
   const lifecycle = readLifecycle(options.catalogPath);
   const dispatcherCount = direct.filter(({ role }) => role === "dispatcher").length;
   const installed = options.includeInstalled
     ? installedAudit(options.homeDirectory ?? homedir(), repositoryRoot, logical)
     : { claudeCount: 0, codexCount: 0, findings: [], git: [], logical: [], records: [] };
   const allLogical = [...logical, ...installed.logical, ...installed.git];
+  const isNonblockingRequired = options.requireNonblocking === true;
   const findings = [
-    ...countFindings(direct.length, dispatcherCount, hosted.length),
     ...duplicateFindings(logical, "canonical"),
-    ...(options.catalogPath ? lifecycleFindings(allLogical, lifecycle) : []),
+    ...(options.catalogPath || isNonblockingRequired ? lifecycleFindings(allLogical, lifecycle) : []),
+    ...(isNonblockingRequired ? nonblockingFindings(allLogical, lifecycle) : []),
     ...installed.findings,
   ].sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
   const targets = new Set(allLogical.map(({ target }) => target));
@@ -348,6 +401,7 @@ export function auditHooks(options) {
     installedRegistrations: installed.records.sort(recordSort),
     installedLogicalRegistrations: installed.logical.sort(recordSort),
     gitRegistrations: installed.git,
+    knownGitRegistrations: knownGit,
     lifecycle,
     logicalRegistrations: logical,
     schemaVersion: 1,
@@ -359,13 +413,15 @@ export function auditHooks(options) {
       effectiveCount: hosted.length,
       findingCount: findings.length,
       gitHookCount: installed.git.length,
+      knownGitHookCount: knownGit.length,
       lifecycleCount: lifecycle.length,
       logicalAssociationCount: logical.length,
-      unclassifiedCount: options.catalogPath
+      unclassifiedCount: options.catalogPath || isNonblockingRequired
         ? [...targets].filter((target) => !classified.has(target)).length
         : 0,
       uniqueTargetCount: targets.size,
     },
+    registrationEligibility: registrationEligibility(allLogical, lifecycle, isNonblockingRequired),
   };
 }
 

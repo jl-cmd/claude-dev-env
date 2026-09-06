@@ -11,6 +11,7 @@ function parseArguments(argv) {
     homeDirectory: null,
     includeInstalled: false,
     outputPath: null,
+    requireNonblocking: false,
     repositoryRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.."),
   };
   for (let offset = 0; offset < argv.length; offset += 1) {
@@ -20,6 +21,7 @@ function parseArguments(argv) {
     else if (argument === "--format") options.format = argv[++offset];
     else if (argument === "--home") options.homeDirectory = argv[++offset];
     else if (argument === "--output") options.outputPath = argv[++offset];
+    else if (argument === "--require-nonblocking") options.requireNonblocking = true;
     else if (argument === "--repository-root") options.repositoryRoot = argv[++offset];
     else throw new Error(`unknown argument ${argument}`);
   }
@@ -37,6 +39,9 @@ function renderText(report) {
     `installed Claude direct: ${summary.claudeDirectCount}`,
     `installed Codex direct: ${summary.codexDirectCount}`,
     `active native Git hooks: ${summary.gitHookCount}`,
+    `known native Git hooks: ${summary.knownGitHookCount}`,
+    `registration eligibility: ${report.registrationEligibility.status}`,
+    "runtime proof: separate verification required",
     `findings: ${summary.findingCount}`,
   ].join("\n");
 }

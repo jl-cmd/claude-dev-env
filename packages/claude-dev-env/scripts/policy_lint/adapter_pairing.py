@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import ast
 from pathlib import PurePosixPath
 
 from . import adapter_support
 from .config import constants
+from .config.approved_test_pairs import APPROVED_TEST_PATHS_BY_PRODUCTION_PATH
 from .model import Diagnostic, Document, DocumentSet, Location, SelectionKind, Severity
 
 
@@ -26,6 +28,47 @@ def _is_constants_only_python_document(
         return False
     analysis_module = load_module("blocking.tdd_enforcer_parts.content_analysis")
     return analysis_module._is_constants_only_python_content(document.text)
+
+
+def _is_docstring_statement(statement: ast.stmt) -> bool:
+    return (
+        isinstance(statement, ast.Expr)
+        and isinstance(statement.value, ast.Constant)
+        and isinstance(statement.value.value, str)
+    )
+
+
+def _remove_docstrings(parsed_tree: ast.AST) -> None:
+    if (
+        isinstance(
+            parsed_tree,
+            (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef),
+        )
+        and parsed_tree.body
+        and _is_docstring_statement(parsed_tree.body[0])
+    ):
+        parsed_tree.body.pop(0)
+    for each_child in ast.iter_child_nodes(parsed_tree):
+        _remove_docstrings(each_child)
+
+
+def _ast_without_docstrings(source_text: str) -> str | None:
+    try:
+        parsed_tree = ast.parse(source_text)
+    except SyntaxError:
+        return None
+    _remove_docstrings(parsed_tree)
+    return ast.dump(parsed_tree, include_attributes=False)
+
+
+def _is_docstring_only_python_document(document: Document) -> bool:
+    if document.path.suffix.lower() != constants.PYTHON_SUFFIX:
+        return False
+    if document.prior_text is None:
+        return False
+    current_ast = _ast_without_docstrings(document.text)
+    prior_ast = _ast_without_docstrings(document.prior_text)
+    return current_ast is not None and current_ast == prior_ast
 
 
 def _candidate_test_names(path: PurePosixPath) -> frozenset[str]:
@@ -76,10 +119,22 @@ def _is_grouped_test_match(
     return _family_tokens(production_path) == _family_tokens(test_path)
 
 
+def _has_changed_approved_test(
+    production_path: PurePosixPath,
+    all_changed_test_paths: frozenset[PurePosixPath],
+) -> bool:
+    all_approved_test_paths = APPROVED_TEST_PATHS_BY_PRODUCTION_PATH.get(
+        production_path, frozenset()
+    )
+    return not all_approved_test_paths.isdisjoint(all_changed_test_paths)
+
+
 def _has_changed_test(
     production_path: PurePosixPath,
     all_changed_test_paths: frozenset[PurePosixPath],
 ) -> bool:
+    if _has_changed_approved_test(production_path, all_changed_test_paths):
+        return True
     all_candidate_names = _candidate_test_names(production_path)
     return any(
         each_test_path.name.lower() in all_candidate_names
@@ -99,6 +154,8 @@ def _is_unpaired_production(
     if _is_test_path(production_path):
         return False
     if _is_constants_only_python_document(production_document, load_module):
+        return False
+    if _is_docstring_only_python_document(production_document):
         return False
     return not _has_changed_test(production_path, all_changed_test_paths)
 
@@ -139,7 +196,5 @@ def test_pairing_diagnostics(
     return tuple(
         _pairing_diagnostic(each_document)
         for each_document in document_set.documents
-        if _is_unpaired_production(
-            each_document, all_changed_test_paths, load_module
-        )
+        if _is_unpaired_production(each_document, all_changed_test_paths, load_module)
     )

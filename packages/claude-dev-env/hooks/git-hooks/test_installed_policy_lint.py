@@ -10,8 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from test_pre_commit import ALL_RULE_FIXTURES, _git, _stage
-from test_pre_commit import repository_root as repository_root
+from test_native_hook_support import run_git
 
 ALL_RETIRED_HOOK_PATHS = (
     "blocking/code_rules_enforcer.py",
@@ -21,8 +20,53 @@ ALL_RETIRED_HOOK_PATHS = (
     "blocking/subprocess_budget_completeness.py",
     "blocking/hook_prose_detector_consistency.py",
     "blocking/workflow_substitution_slot_blocker.py",
+    "validation/hook_format_validator.py",
+    "blocking/open_questions_in_plans_blocker.py",
+    "blocking/docstring_rule_gate_count_blocker.py",
+    "blocking/plain_language_blocker.py",
+    "lifecycle/config_change_guard.py",
 )
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+ALL_RULE_FIXTURES = (
+    ("code-rules", "src/worker.py", "from typing import Any\n\ndef worker() -> Any:\n    return None\n"),
+    ("test-pairing", "src/feature.py", "def work() -> None:\n    pass\n"),
+    ("state-description", "docs/config.md", "# Config\n\nPreviously set via env var.\n"),
+    ("subprocess-budget", "src/timing.py", "import subprocess\nPYTHON_FORMAT_TIMEOUT_SECONDS = 12\nGIT_CHECK_TIMEOUT_SECONDS = 5\ndef worst_case_python_format_seconds() -> int:\n    fix_phase_seconds = PYTHON_FORMAT_TIMEOUT_SECONDS\n    format_phase_seconds = PYTHON_FORMAT_TIMEOUT_SECONDS\n    return fix_phase_seconds + format_phase_seconds\ndef is_untracked_in_git(file_path: str) -> bool:\n    git_check = subprocess.run(['git', 'ls-files', file_path], timeout=GIT_CHECK_TIMEOUT_SECONDS)\n    return git_check.returncode != 0\ndef run_format(file_path: str) -> None:\n    subprocess.run(['ruff', 'format', file_path], timeout=PYTHON_FORMAT_TIMEOUT_SECONDS)\ndef main(file_path: str) -> None:\n    if is_untracked_in_git(file_path):\n        return\n    run_format(file_path)\n"),
+    ("hook-prose-consistency", "hooks/hooks_constants/probe_constants.py", 'CORRECTIVE_MESSAGE = "appears as a path or output-key segment"\n'),
+    ("workflow-substitution", "scripts/sample.workflow.js", "For EACH candidate i, build a bible dir cand_i per the contract.\n   & ${PY} compose.py --out ${args.work_dir}\\\\cand_i\\\\sample.png --glow <candidate glow_hex>\nReturn: {key: \"cand_i\", name, sample_png}\n"),
+)
+
+
+def _git(repository_path: Path, *arguments: str) -> str:
+    return run_git(repository_path, *arguments).stdout.strip()
+
+
+def _stage(repository_path: Path, relative_path: str, content: str) -> Path:
+    file_path = repository_path / relative_path
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(content, encoding="utf-8")
+    _git(repository_path, "add", "--", relative_path)
+    return file_path
+
+
+@pytest.fixture()
+def repository_root(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
+    temporary_root = tmp_path_factory.mktemp("policy-fixture")
+    home_directory = temporary_root / "home"
+    home_directory.mkdir()
+    monkeypatch.setenv("HOME", str(home_directory))
+    monkeypatch.setenv("USERPROFILE", str(home_directory))
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    repository_path = temporary_root / "repository"
+    repository_path.mkdir()
+    _git(repository_path, "init")
+    _git(repository_path, "config", "core.hooksPath", str(temporary_root / "disabled-fixture-hooks"))
+    _git(repository_path, "config", "user.name", "Fixture")
+    _git(repository_path, "config", "user.email", "fixture@example.com")
+    _git(repository_path, "commit", "--allow-empty", "-m", "fixture base")
+    monkeypatch.chdir(repository_path)
+    return repository_path
 
 
 def _legacy_settings_bytes(managed_root: Path, foreign_command: str) -> bytes:
@@ -115,7 +159,7 @@ def managed_installation(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.mark.parametrize(("rule_id", "relative_path", "content"), ALL_RULE_FIXTURES)
-def test_installed_native_commit_catches_each_retired_file_rule(
+def test_installed_linter_reports_each_retired_file_rule_before_soft_commit(
     managed_installation: Path,
     repository_root: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -128,13 +172,18 @@ def test_installed_native_commit_catches_each_retired_file_rule(
     monkeypatch.setenv("CODE_RULES_GATE_PATH", str(repository_root / "missing-old-gate.py"))
     before = _git(repository_root, "rev-parse", "HEAD")
     _stage(repository_root, relative_path, content)
+    lint_completed = subprocess.run(
+        [sys.executable, str(managed_installation / "scripts/cde_lint.py"), "--staged", "--format", "json"],
+        cwd=repository_root, capture_output=True, text=True, check=False, timeout=240,
+    )
+    assert lint_completed.returncode != 0
+    assert rule_id in lint_completed.stdout + lint_completed.stderr
     completed = subprocess.run(
         ["git", "commit", "-m", "invalid fixture"],
         cwd=repository_root, capture_output=True, text=True, check=False, timeout=240,
     )
-    assert completed.returncode != 0
-    assert rule_id in completed.stdout + completed.stderr
-    assert _git(repository_root, "rev-parse", "HEAD") == before
+    assert completed.returncode == 0
+    assert _git(repository_root, "rev-parse", "HEAD") != before
 
 
 def test_installed_linter_and_native_commit_allow_valid_changes(

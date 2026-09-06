@@ -6,6 +6,7 @@ import { join } from 'node:path';
 export const KNOWN_GIT_HOOK_NAMES = Object.freeze([
     'pre-commit',
     'pre-push',
+    'post-commit',
 ]);
 
 export const SHIM_DOCSTRING = (
@@ -72,6 +73,12 @@ function deriveModuleNameFromGitNativeHookName(gitNativeHookName) {
 
 function buildShimContent(pythonModuleName) {
     const shimContentHeader = '#!/usr/bin/env python3\n';
+    const failureMessage = JSON.stringify(
+        `claude-dev-env: advisory hook ${pythonModuleName} failed: `,
+    );
+    const nonzeroMessage = JSON.stringify(
+        `claude-dev-env: advisory hook ${pythonModuleName} returned non-zero: `,
+    );
     return (
         shimContentHeader
         + `"""${SHIM_DOCSTRING}"""\n`
@@ -82,9 +89,21 @@ function buildShimContent(pythonModuleName) {
         + 'if str(shim_directory) not in sys.path:\n'
         + '    sys.path.insert(0, str(shim_directory))\n'
         + '\n'
-        + `import ${pythonModuleName}\n`
-        + '\n'
-        + `sys.exit(${pythonModuleName}.main())\n`
+        + 'try:\n'
+        + `    import ${pythonModuleName}\n`
+        + `    advisory_exit_code = ${pythonModuleName}.main()\n`
+        + 'except SystemExit as advisory_system_exit:\n'
+        + '    if advisory_system_exit.code == 130:\n'
+        + '        raise\n'
+        + '    if advisory_system_exit.code not in (None, 0):\n'
+        + `        print(${failureMessage} + str(advisory_system_exit), file=sys.stderr)\n`
+        + '    sys.exit(0)\n'
+        + 'except Exception as advisory_error:\n'
+        + `    print(${failureMessage} + str(advisory_error), file=sys.stderr)\n`
+        + '    sys.exit(0)\n'
+        + 'if advisory_exit_code:\n'
+        + `    print(${nonzeroMessage} + str(advisory_exit_code), file=sys.stderr)\n`
+        + 'sys.exit(0)\n'
     );
 }
 

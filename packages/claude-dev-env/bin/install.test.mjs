@@ -42,14 +42,17 @@ import {
     caseOnlyRenameSourceName,
     retiredManagedHookRelativePaths,
     pruneRetiredHookEntriesFromSettings,
+    settingsHookCommandsAtPath,
+    retiredHookPathsNamedByCommands,
+    writeRetiredHookStandIns,
+    ownedHookRootComparisonKeys,
+    commandNamesOwnedHookScript,
+    hookCommandComparisonSpelling,
+    detectPython,
     retainNewestRunBackupOnly,
     refreshInstalledPstackPluginManifest,
 } from './install.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
-import {
-    expandHomeDirectoryTokens,
-    expandHomeDirectoryTokensInSettings,
-} from './expand_home_directory_tokens.mjs';
 
 
 test('installer reports the authoritative Git hook names', () => {
@@ -344,115 +347,6 @@ test('interpreterCommandFromPath quotes an interpreter path that contains a spac
     assert.equal(
         interpreterCommandFromPath('C:\\Program Files\\Python313\\python.exe'),
         '"C:/Program Files/Python313/python.exe"',
-    );
-});
-
-
-test('expandHomeDirectoryTokens expands $HOME, ${HOME}, and ~/', () => {
-    assert.equal(
-        expandHomeDirectoryTokens(
-            'python $HOME/.claude/hooks/session/fix_worktree_hookspath.py',
-            'C:\\Users\\x',
-        ),
-        'python C:/Users/x/.claude/hooks/session/fix_worktree_hookspath.py',
-    );
-    assert.equal(
-        expandHomeDirectoryTokens('python ${HOME}/.claude/hooks/a.py', '/home/x'),
-        'python /home/x/.claude/hooks/a.py',
-    );
-    assert.equal(
-        expandHomeDirectoryTokens('python ~/.claude/hooks/a.py', '/home/x'),
-        'python /home/x/.claude/hooks/a.py',
-    );
-    assert.equal(
-        expandHomeDirectoryTokens('echo $HOMEPATH', 'C:/Users/x'),
-        'echo $HOMEPATH',
-    );
-});
-
-
-test('expandHomeDirectoryTokens inserts dollar characters in home paths literally', () => {
-    const homeWithReplaceMetacharacters = 'C:/Users/$&evil$1';
-    assert.equal(
-        expandHomeDirectoryTokens('python $HOME/.claude/a.py', homeWithReplaceMetacharacters),
-        'python C:/Users/$&evil$1/.claude/a.py',
-    );
-    assert.equal(
-        expandHomeDirectoryTokens('python ${HOME}/.claude/a.py', homeWithReplaceMetacharacters),
-        'python C:/Users/$&evil$1/.claude/a.py',
-    );
-    assert.equal(
-        expandHomeDirectoryTokens('python ~/.claude/a.py', homeWithReplaceMetacharacters),
-        'python C:/Users/$&evil$1/.claude/a.py',
-    );
-});
-
-
-test('expandHomeDirectoryTokens expands ${HOME} before $HOME so braces stay intact', () => {
-    assert.equal(
-        expandHomeDirectoryTokens('python ${HOME}/.claude/a.py', '/home/x'),
-        'python /home/x/.claude/a.py',
-    );
-});
-
-
-test('expandHomeDirectoryTokens strips trailing slashes from the home directory', () => {
-    assert.equal(
-        expandHomeDirectoryTokens('python $HOME/.claude/a.py', 'C:/Users/x/'),
-        'python C:/Users/x/.claude/a.py',
-    );
-});
-
-
-test('expandHomeDirectoryTokensInSettings skips non-array hook event values', () => {
-    const settings = {
-        hooks: {
-            SessionStart: 'not-an-array',
-            PreToolUse: [
-                {
-                    matcher: 'Write',
-                    hooks: [{ type: 'command', command: 'python $HOME/.claude/hooks/a.py' }],
-                },
-            ],
-        },
-    };
-    expandHomeDirectoryTokensInSettings(settings, 'C:/Users/x');
-    assert.equal(settings.hooks.SessionStart, 'not-an-array');
-    assert.equal(
-        settings.hooks.PreToolUse[0].hooks[0].command,
-        'python C:/Users/x/.claude/hooks/a.py',
-    );
-});
-
-
-test('expandHomeDirectoryTokensInSettings rewrites hooks and statusLine', () => {
-    const settings = {
-        hooks: {
-            SessionStart: [
-                {
-                    matcher: '',
-                    hooks: [
-                        {
-                            type: 'command',
-                            command: 'python $HOME/.claude/hooks/session/fix_worktree_hookspath.py',
-                        },
-                    ],
-                },
-            ],
-        },
-        statusLine: {
-            type: 'command',
-            command: 'python "$HOME/.claude/statusline-command.py"',
-        },
-    };
-    expandHomeDirectoryTokensInSettings(settings, 'C:/Users/x');
-    assert.equal(
-        settings.hooks.SessionStart[0].hooks[0].command,
-        'python C:/Users/x/.claude/hooks/session/fix_worktree_hookspath.py',
-    );
-    assert.equal(
-        settings.statusLine.command,
-        'python "C:/Users/x/.claude/statusline-command.py"',
     );
 });
 
@@ -920,6 +814,19 @@ test('commandReferencesManagedHook matches a managed script followed by a whites
 });
 
 
+test('commandReferencesManagedHook matches a shipped script name under a hooks root this installer never writes', () => {
+    const managedPaths = new Set(['blocking/code_rules_enforcer.py']);
+
+    assert.ok(
+        commandReferencesManagedHook(
+            'python3 "/other-tool/.claude/hooks/blocking/code_rules_enforcer.py"',
+            managedPaths,
+        ),
+        'the merge matcher reads the /.claude/hooks/ tail alone, so another tool\'s copy of a shipped script name is inside the managed set',
+    );
+});
+
+
 test('commandReferencesManagedHook matches the rewritten inline validators-runner hook that carries no script tail', () => {
     const managedPaths = new Set(['blocking/code_rules_enforcer.py']);
     const rewrittenInlineCommand =
@@ -1266,6 +1173,35 @@ test('retired hook registrations stay managed so reinstall removes them', () => 
         'session/untracked_repo_detector.py',
         'session/gh_pr_author_session_cleanup.py',
         'observability/pr_description_writer_spawn_tracker.py',
+        'blocking/plain_language_blocker.py',
+        'lifecycle/config_change_guard.py',
+        'blocking/docstring_rule_gate_count_blocker.py',
+        'blocking/write_existing_file_blocker.py',
+        'blocking/sensitive_file_protector.py',
+        'blocking/pii_prevention_blocker.py',
+        'blocking/duplicate_rmtree_helper_blocker.py',
+        'blocking/claude_md_orphan_file_blocker.py',
+        'blocking/package_inventory_stale_blocker.py',
+        'blocking/env_var_table_code_drift_blocker.py',
+        'blocking/pytest_testpaths_orphan_blocker.py',
+        'blocking/destructive_command_blocker.py',
+        'blocking/shell_substitution_blocker.py',
+        'blocking/piped_pytest_blocker.py',
+        'blocking/cursor_cli_python_misfire_blocker.py',
+        'blocking/unscoped_search_blocker.py',
+        'blocking/nas_ssh_binary_enforcer.py',
+        'blocking/block_main_commit.py',
+        'blocking/session_edit_stage_gate.py',
+        'blocking/bash_pre_tool_use_dispatcher.py',
+        'blocking/stop_dispatcher.py',
+        'blocking/bot_mention_comment_blocker.py',
+        'blocking/fable_spawn_gate.py',
+        'blocking/luna_fast_mode_gate.py',
+        'blocking/orchestrator_refresh_reschedule_gate.py',
+        'blocking/ask_user_question_shape_blocker.py',
+        'blocking/send_user_file_open_locally_blocker.py',
+        'blocking/question_to_user_enforcer.py',
+        'blocking/session_handoff_blocker.py',
     ]);
     const shippedHooks = JSON.parse(
         readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')
@@ -1417,7 +1353,7 @@ test('mergeHooksIntoSettings is idempotent when run twice against an already-upd
 });
 
 
-test('shipped hooks.json matches the dispatcher design: dispatchers registered, run_all_validators retained, no folded hook standalone', () => {
+test('shipped hooks.json keeps only nonblocking policy handlers and lifecycle hooks', () => {
     const shippedHooksConfig = JSON.parse(
         readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')
     );
@@ -1429,8 +1365,8 @@ test('shipped hooks.json matches the dispatcher design: dispatchers registered, 
 
     assert.equal(
         countManagedRunAllValidatorsHooks(shippedHooksConfig),
-        1,
-        'shipped hooks.json must retain the inline run_all_validators runner on the write path',
+        0,
+        'shipped hooks.json must retire the inline run_all_validators runner from the write path',
     );
 
     const allPostToolUseGroups = shippedHooksConfig.hooks.PostToolUse || [];
@@ -1438,6 +1374,12 @@ test('shipped hooks.json matches the dispatcher design: dispatchers registered, 
         .flatMap(group => group.hooks.map(hook => hook.command))
         .filter(cmd => cmd.includes('post_tool_use_dispatcher.py'));
     assert.equal(postDispatcherCommands.length, 1, 'shipped hooks.json must register the PostToolUse dispatcher exactly once');
+    const allCommands = Object.values(shippedHooksConfig.hooks).flatMap(matcherGroups => (
+        matcherGroups.flatMap(matcherGroup => matcherGroup.hooks.map(hook => hook.command))
+    ));
+    for (const retiredPath of RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS) {
+        assert.ok(allCommands.every(command => !command.includes(retiredPath)), retiredPath);
+    }
 
     const allSessionStartCommands = (shippedHooksConfig.hooks.SessionStart || [])
         .flatMap(group => group.hooks.map(hook => hook.command));
@@ -2184,6 +2126,22 @@ function createSettingsFixture(settings, indentWidth) {
 }
 
 
+/**
+ * Build the ownership one sandbox's own ~/.claude/hooks root supplies.
+ *
+ * A retirement walk that falls back to its own defaults reads the installed hook
+ * roots and the home directory of the machine running the test, so the answer
+ * changes with the host. Handing every walk a sandbox ownership keeps the test
+ * reading the fixture it wrote and nothing else.
+ *
+ * @param {string} sandboxRoot The sandbox home the `$HOME` and `~` spellings expand to.
+ * @returns {{allOwnedHookRootKeys: Set<string>, homeDirectory: string}} The ownership.
+ */
+function sandboxClaudeHooksOwnership(sandboxRoot) {
+    return sandboxHookOwnership(sandboxRoot, [join(sandboxRoot, '.claude', 'hooks')]);
+}
+
+
 test('pruneRetiredHookEntriesFromSettings removes the retired entry and keeps the user-authored one', () => {
     const retiredCommand = `python3 "$HOME/.claude/hooks/${RETIRED_HOOK_RELATIVE_PATH}"`;
     const userCommand = 'python3 my_own_gate.py --user-authored';
@@ -2206,7 +2164,9 @@ test('pruneRetiredHookEntriesFromSettings removes the retired entry and keeps th
     }, 4);
     try {
         const removedCount = pruneRetiredHookEntriesFromSettings(
-            settingsPath, new Set([RETIRED_HOOK_RELATIVE_PATH]),
+            settingsPath,
+            new Set([RETIRED_HOOK_RELATIVE_PATH]),
+            sandboxClaudeHooksOwnership(sandboxRoot),
         );
 
         assert.equal(removedCount, 2, 'both entries running the retired script are removed');
@@ -2251,7 +2211,9 @@ test('pruneRetiredHookEntriesFromSettings keeps every settings shape the install
     }, 4);
     try {
         const removedCount = pruneRetiredHookEntriesFromSettings(
-            settingsPath, new Set([RETIRED_HOOK_RELATIVE_PATH]),
+            settingsPath,
+            new Set([RETIRED_HOOK_RELATIVE_PATH]),
+            sandboxClaudeHooksOwnership(sandboxRoot),
         );
 
         assert.equal(removedCount, 1, 'the one entry running the retired script is the only removal');
@@ -2392,7 +2354,9 @@ test('pruneRetiredHookEntriesFromSettings leaves settings.json byte-identical wh
         const bytesBefore = readFileSync(settingsPath, 'utf8');
 
         const removedCount = pruneRetiredHookEntriesFromSettings(
-            settingsPath, new Set([RETIRED_HOOK_RELATIVE_PATH]),
+            settingsPath,
+            new Set([RETIRED_HOOK_RELATIVE_PATH]),
+            sandboxClaudeHooksOwnership(sandboxRoot),
         );
 
         assert.equal(removedCount, 0, 'no entry runs a retired script');
@@ -2404,6 +2368,361 @@ test('pruneRetiredHookEntriesFromSettings leaves settings.json byte-identical wh
     } finally {
         rmSync(sandboxRoot, { recursive: true, force: true });
     }
+});
+
+
+const ALL_HOST_CONFIGURATION_INDENT_WIDTHS = [2, 4];
+
+
+/**
+ * Build a settings fixture whose one matcher group registers a retired hook
+ * beside a user-authored entry, so a prune removes one entry and rewrites the file.
+ *
+ * @param {string} relativePath The retired hook path the registration runs.
+ * @returns {object} A settings object holding both entries.
+ */
+function settingsRegisteringRetiredAndUserHooks(relativePath) {
+    return {
+        hooks: {
+            PreToolUse: [{
+                matcher: 'Write|Edit',
+                hooks: [
+                    { type: 'command', command: `python3 "$HOME/.claude/hooks/${relativePath}"` },
+                    { type: 'command', command: 'python3 my_own_gate.py --user-authored' },
+                ],
+            }],
+        },
+    };
+}
+
+
+test('pruneRetiredHookEntriesFromSettings writes back the indentation the host configuration file already used', () => {
+    for (const indentWidth of ALL_HOST_CONFIGURATION_INDENT_WIDTHS) {
+        const { settingsPath, sandboxRoot } = createSettingsFixture(
+            settingsRegisteringRetiredAndUserHooks(RETIRED_HOOK_RELATIVE_PATH), indentWidth,
+        );
+        try {
+            const removedCount = pruneRetiredHookEntriesFromSettings(
+                settingsPath,
+                new Set([RETIRED_HOOK_RELATIVE_PATH]),
+                sandboxClaudeHooksOwnership(sandboxRoot),
+            );
+
+            assert.equal(removedCount, 1, `the retired entry leaves the ${indentWidth}-space file`);
+            const settingsText = readFileSync(settingsPath, 'utf8');
+            assert.equal(
+                settingsText,
+                JSON.stringify(JSON.parse(settingsText), null, indentWidth) + '\n',
+                `a file written with ${indentWidth} spaces is handed back with ${indentWidth} spaces`,
+            );
+        } finally {
+            rmSync(sandboxRoot, { recursive: true, force: true });
+        }
+    }
+});
+
+
+const SECOND_RETIRED_HOOK_RELATIVE_PATH = 'blocking/retired_second_gate.py';
+
+
+/**
+ * Build a sandbox holding a ~/.claude/hooks root and a settings.json beside it.
+ *
+ * @param {object} settings The settings object to serialize.
+ * @returns {{sandboxRoot: string, hooksRoot: string, settingsPath: string}} The sandbox paths.
+ */
+function createRetiredHookSandbox(settings) {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-retired-hook-stand-in-'));
+    const hooksRoot = join(sandboxRoot, '.claude', 'hooks');
+    mkdirSync(hooksRoot, { recursive: true });
+    const settingsPath = join(sandboxRoot, 'settings.json');
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+    return { sandboxRoot, hooksRoot, settingsPath };
+}
+
+
+/**
+ * Build a settings fixture registering one retired hook command.
+ *
+ * @param {string} relativePath The retired hook path the registration runs.
+ * @returns {object} A settings object holding that registration and a user entry.
+ */
+function settingsRegistering(relativePath) {
+    return {
+        hooks: {
+            PreToolUse: [{
+                matcher: 'AskUserQuestion',
+                hooks: [
+                    { type: 'command', command: `python3 "$HOME/.claude/hooks/${relativePath}"` },
+                    { type: 'command', command: 'python3 my_own_gate.py --user-authored' },
+                ],
+            }],
+        },
+    };
+}
+
+
+test('retiredHookPathsNamedByCommands names only the retired scripts a live registration runs', () => {
+    const { sandboxRoot, settingsPath } = createRetiredHookSandbox(
+        settingsRegistering(RETIRED_HOOK_RELATIVE_PATH),
+    );
+    try {
+        const namedPaths = retiredHookPathsNamedByCommands(
+            settingsHookCommandsAtPath(settingsPath),
+            new Set([RETIRED_HOOK_RELATIVE_PATH, SECOND_RETIRED_HOOK_RELATIVE_PATH]),
+            sandboxClaudeHooksOwnership(sandboxRoot),
+        );
+
+        assert.deepEqual(
+            [...namedPaths],
+            [RETIRED_HOOK_RELATIVE_PATH],
+            'the registered retired script is named and the unregistered one is left out',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('settingsHookCommandsAtPath reads no command from a settings file it cannot use', () => {
+    const { sandboxRoot, settingsPath } = createRetiredHookSandbox({ hooks: {} });
+    try {
+        writeFileSync(settingsPath, '{ this is not JSON');
+
+        assert.deepEqual(
+            settingsHookCommandsAtPath(settingsPath),
+            [],
+            'settings the installer cannot parse hold no command',
+        );
+        assert.deepEqual(
+            settingsHookCommandsAtPath(join(sandboxRoot, 'absent.json')),
+            [],
+            'a settings file that is not there holds no command',
+        );
+        assert.equal(
+            retiredHookPathsNamedByCommands(
+                [],
+                new Set([RETIRED_HOOK_RELATIVE_PATH]),
+                sandboxClaudeHooksOwnership(sandboxRoot),
+            ).size,
+            0,
+            'with no command to read, no retired script is named',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('a stale registration keeps working because the retired hook leaves an inert stand-in behind', () => {
+    const { sandboxRoot, hooksRoot, settingsPath } = createRetiredHookSandbox(
+        settingsRegistering(RETIRED_HOOK_RELATIVE_PATH),
+    );
+    try {
+        const namedPaths = retiredHookPathsNamedByCommands(
+            settingsHookCommandsAtPath(settingsPath),
+            new Set([RETIRED_HOOK_RELATIVE_PATH, SECOND_RETIRED_HOOK_RELATIVE_PATH]),
+            sandboxClaudeHooksOwnership(sandboxRoot),
+        );
+
+        const standInPaths = writeRetiredHookStandIns(hooksRoot, namedPaths);
+
+        const standInPath = join(hooksRoot, ...RETIRED_HOOK_RELATIVE_PATH.split('/'));
+        assert.deepEqual(standInPaths, [standInPath], 'one stand-in is written, for the registered path');
+        assert.equal(
+            existsSync(join(hooksRoot, ...SECOND_RETIRED_HOOK_RELATIVE_PATH.split('/'))),
+            false,
+            'a retired path no registration names gets no stand-in',
+        );
+
+        const standInRun = spawnSync(detectPython(), [standInPath], { encoding: 'utf8' });
+
+        assert.equal(standInRun.status, 0, 'the stand-in exits 0, so a stale registration allows the tool');
+        assert.equal(standInRun.stdout, '', 'the stand-in writes nothing to stdout');
+        assert.equal(standInRun.stderr, '', 'the stand-in writes nothing to stderr');
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('writeRetiredHookStandIns leaves a hook file the prune could not move exactly as it stands', () => {
+    const { sandboxRoot, hooksRoot } = createRetiredHookSandbox({ hooks: {} });
+    try {
+        const survivingPath = join(hooksRoot, ...RETIRED_HOOK_RELATIVE_PATH.split('/'));
+        mkdirSync(dirname(survivingPath), { recursive: true });
+        const survivingContents = 'raise SystemExit(2)\n';
+        writeFileSync(survivingPath, survivingContents);
+
+        const standInPaths = writeRetiredHookStandIns(
+            hooksRoot, new Set([RETIRED_HOOK_RELATIVE_PATH]),
+        );
+
+        assert.deepEqual(standInPaths, [], 'a path still holding a file gets no stand-in');
+        assert.equal(
+            readFileSync(survivingPath, 'utf8'),
+            survivingContents,
+            'the file a failed prune left behind keeps its own bytes',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+const AGENTS_HOOKS_ROOT_SEGMENTS = ['.agents', 'hooks'];
+const CODEX_HOOKS_ROOT_SEGMENTS = ['.codex', 'hooks'];
+const FOREIGN_HOOKS_ROOT_SEGMENTS = ['other-tool', '.claude', 'hooks'];
+
+
+/**
+ * Build the ownership one retirement walk reads for one sandbox.
+ *
+ * @param {string} sandboxRoot The sandbox home the `$HOME` spelling expands to.
+ * @param {string[]} allHookRootPaths The hooks directories the installer owns there.
+ * @returns {{allOwnedHookRootKeys: Set<string>, homeDirectory: string}} The ownership.
+ */
+function sandboxHookOwnership(sandboxRoot, allHookRootPaths) {
+    return {
+        allOwnedHookRootKeys: ownedHookRootComparisonKeys(allHookRootPaths),
+        homeDirectory: sandboxRoot,
+    };
+}
+
+
+/**
+ * Build the command one hook registration runs for a script under a hooks root.
+ *
+ * @param {string} hooksRoot The hooks directory the registration names.
+ * @param {string} relativePath The script path under that directory.
+ * @returns {string} The registration command.
+ */
+function hookCommandUnder(hooksRoot, relativePath) {
+    const scriptPath = join(hooksRoot, ...relativePath.split('/')).replace(/\\/g, '/');
+    return `python3 "${scriptPath}"`;
+}
+
+
+test('a retired registration spelled under the agents hooks root is named, because both roots are owned', () => {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-owned-hook-roots-'));
+    try {
+        const claudeHooksRoot = join(sandboxRoot, '.claude', 'hooks');
+        const agentsHooksRoot = join(sandboxRoot, ...AGENTS_HOOKS_ROOT_SEGMENTS);
+        const codexHooksRoot = join(sandboxRoot, ...CODEX_HOOKS_ROOT_SEGMENTS);
+
+        const namedPaths = retiredHookPathsNamedByCommands(
+            [
+                hookCommandUnder(agentsHooksRoot, RETIRED_HOOK_RELATIVE_PATH),
+                hookCommandUnder(codexHooksRoot, SECOND_RETIRED_HOOK_RELATIVE_PATH),
+            ],
+            new Set([RETIRED_HOOK_RELATIVE_PATH, SECOND_RETIRED_HOOK_RELATIVE_PATH]),
+            sandboxHookOwnership(
+                sandboxRoot, [claudeHooksRoot, agentsHooksRoot, codexHooksRoot],
+            ),
+        );
+
+        assert.deepEqual(
+            [...namedPaths].sort(),
+            [RETIRED_HOOK_RELATIVE_PATH, SECOND_RETIRED_HOOK_RELATIVE_PATH].sort(),
+            'a registration under any owned hooks root names its retired script',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('a retired registration reaching an owned root through a junction is named', () => {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-owned-hook-junction-'));
+    try {
+        const agentsHooksRoot = join(sandboxRoot, ...AGENTS_HOOKS_ROOT_SEGMENTS);
+        const claudeHooksRoot = join(sandboxRoot, '.claude', 'hooks');
+        mkdirSync(agentsHooksRoot, { recursive: true });
+        mkdirSync(dirname(claudeHooksRoot), { recursive: true });
+        symlinkSync(agentsHooksRoot, claudeHooksRoot, 'junction');
+
+        const namedPaths = retiredHookPathsNamedByCommands(
+            [hookCommandUnder(agentsHooksRoot, RETIRED_HOOK_RELATIVE_PATH)],
+            new Set([RETIRED_HOOK_RELATIVE_PATH]),
+            sandboxHookOwnership(sandboxRoot, [claudeHooksRoot]),
+        );
+
+        assert.deepEqual(
+            [...namedPaths],
+            [RETIRED_HOOK_RELATIVE_PATH],
+            'the junction and the directory it reaches are one owned hooks root',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('a registration under a hooks root the installer does not own is never named or pruned', () => {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-foreign-hook-root-'));
+    try {
+        const claudeHooksRoot = join(sandboxRoot, '.claude', 'hooks');
+        const foreignHooksRoot = join(sandboxRoot, ...FOREIGN_HOOKS_ROOT_SEGMENTS);
+        const foreignCommand = hookCommandUnder(foreignHooksRoot, RETIRED_HOOK_RELATIVE_PATH);
+        const settingsPath = join(sandboxRoot, 'settings.json');
+        writeFileSync(settingsPath, JSON.stringify({
+            hooks: {
+                PreToolUse: [{
+                    matcher: '*',
+                    hooks: [{ type: 'command', command: foreignCommand }],
+                }],
+            },
+        }, null, 4) + '\n');
+        const ownership = sandboxHookOwnership(sandboxRoot, [claudeHooksRoot]);
+
+        const namedPaths = retiredHookPathsNamedByCommands(
+            [foreignCommand], new Set([RETIRED_HOOK_RELATIVE_PATH]), ownership,
+        );
+        const removedCount = pruneRetiredHookEntriesFromSettings(
+            settingsPath, new Set([RETIRED_HOOK_RELATIVE_PATH]), ownership,
+        );
+
+        assert.equal(namedPaths.size, 0, 'a foreign registration earns no stand-in');
+        assert.equal(removedCount, 0, 'a foreign registration is never pruned');
+        assert.equal(
+            JSON.parse(readFileSync(settingsPath, 'utf8')).hooks.PreToolUse[0].hooks[0].command,
+            foreignCommand,
+            'the foreign entry stays exactly as the other tool wrote it',
+        );
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});
+
+
+const SANDBOX_HOME_DIRECTORY = process.platform === 'win32'
+    ? 'c:/cdev-sandbox-home'
+    : '/cdev-sandbox-home';
+
+
+test('a hook command spelled with a leading tilde expands to the home directory the tilde stands for', () => {
+    const tildeCommand = `python3 ~/.claude/hooks/${RETIRED_HOOK_RELATIVE_PATH}`;
+
+    const comparisonSpelling = hookCommandComparisonSpelling(
+        tildeCommand, SANDBOX_HOME_DIRECTORY,
+    );
+
+    assert.equal(
+        comparisonSpelling,
+        `python3 ${SANDBOX_HOME_DIRECTORY}/.claude/hooks/${RETIRED_HOOK_RELATIVE_PATH}`,
+        'the home directory replaces the tilde rather than following it',
+    );
+    assert.ok(
+        commandNamesOwnedHookScript(
+            tildeCommand,
+            RETIRED_HOOK_RELATIVE_PATH,
+            sandboxHookOwnership(
+                SANDBOX_HOME_DIRECTORY,
+                [join(SANDBOX_HOME_DIRECTORY, '.claude', 'hooks')],
+            ),
+        ),
+        'the expanded command reaches the owned hooks root',
+    );
 });
 
 
@@ -2617,3 +2936,25 @@ test('the help output states that the installer reads only flags', () => {
     assert.match(helpRun.stdout, /bare path argument carries no meaning/i);
 });
 
+
+
+test('pruneRetiredHookEntriesFromSettings warns and returns 0 when the host configuration file cannot be read', () => {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-unreadable-host-configuration-'));
+    const unreadableConfigurationPath = join(sandboxRoot, 'hooks.json');
+    mkdirSync(unreadableConfigurationPath);
+    try {
+        const { returnedValue, allWarnings } = captureWarnings(() => (
+            pruneRetiredHookEntriesFromSettings(
+                unreadableConfigurationPath,
+                new Set([RETIRED_HOOK_RELATIVE_PATH]),
+                sandboxClaudeHooksOwnership(sandboxRoot),
+            )
+        ));
+
+        assert.equal(returnedValue, 0, 'an unreadable file removes no entry and ends the walk of that file');
+        assert.equal(allWarnings.length, 1, 'the unreadable file is reported once');
+        assert.match(allWarnings[0], /hooks\.json/, 'the warning names the file it left alone');
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});

@@ -914,7 +914,11 @@ def validate_proposed_file(
         temporary_file = _temporary_path_preserving_directory_signal(
             Path(temporary_directory), file_path
         )
-        temporary_file.write_text(proposed_content, encoding="utf-8")
+        temporary_file.write_text(
+            proposed_content,
+            encoding="utf-8",
+            newline="",
+        )
         resolved_config_source_path = (
             config_source_path
             if config_source_path is not None
