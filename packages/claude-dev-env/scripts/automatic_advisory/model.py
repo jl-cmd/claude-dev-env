@@ -7,6 +7,7 @@ from pr_verification.model import PullRequestCandidate, RepositorySettings
 
 from .config.constants import (
     ALL_TERMINAL_STATUSES,
+    POLL_ERROR_LOG_FILE_NAME,
     POLL_LOCK_DIRECTORY_NAME,
     SELECTED_MANIFEST_SUFFIX,
 )
@@ -51,6 +52,10 @@ class AdvisorySettings:
     @property
     def poll_lock_root(self) -> Path:
         return self.registrations[0].state_path.parent / POLL_LOCK_DIRECTORY_NAME
+
+    @property
+    def poll_error_log_path(self) -> Path:
+        return self.registrations[0].state_path.parent / POLL_ERROR_LOG_FILE_NAME
 
 
 @dataclass(frozen=True)

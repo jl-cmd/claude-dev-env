@@ -11,7 +11,10 @@ import {
     KNOWN_GIT_HOOK_NAMES,
 } from './git_hooks_installer.mjs';
 import { installMypyIniForClaudeHooks } from './install_mypy_ini.mjs';
-import { expandHomeDirectoryTokensInSettings } from './expand_home_directory_tokens.mjs';
+import {
+    expandHomeDirectoryTokens,
+    expandHomeDirectoryTokensInSettings,
+} from './expand_home_directory_tokens.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 import {
     managedDenyEntriesFromPackageSettings,
@@ -1656,17 +1659,21 @@ export function ownedHookRootComparisonKeys(allHookRootPaths) {
  * Rewrite the home-directory spellings a hook command can carry into one absolute
  * path, so an owned root is recognized however the registration wrote it.
  *
+ * `$HOME`, `${HOME}` and `~/` go through expandHomeDirectoryTokens, the helper the
+ * settings rewrite already uses, so one tested expansion serves both callers.
+ * `%USERPROFILE%` stays here: this comparison reads a spelling, while the settings
+ * rewrite changes the command a host runs, and that spelling is not its to rewrite.
+ *
  * @param {string} normalizedCommand Forward-slash-normalized hook command.
  * @param {string} homeDirectory The absolute home directory to substitute.
  * @returns {string} The command with each home reference expanded.
  */
 function expandHomeReferencesInCommand(normalizedCommand, homeDirectory) {
     const normalizedHome = homeDirectory.replace(/\\/g, '/').replace(/\/+$/, '');
-    return normalizedCommand
-        .replace(/\$\{HOME\}/g, () => normalizedHome)
-        .replace(/\$HOME(?![A-Za-z0-9_])/g, () => normalizedHome)
-        .replace(/%USERPROFILE%/gi, () => normalizedHome)
-        .replace(/(^|[\s'"=;(])~(?=\/)/g, leadingText => `${leadingText}${normalizedHome}`);
+    const userProfileExpanded = normalizedCommand.replace(
+        /%USERPROFILE%/gi, () => normalizedHome,
+    );
+    return expandHomeDirectoryTokens(userProfileExpanded, homeDirectory);
 }
 
 /**
@@ -1677,7 +1684,7 @@ function expandHomeReferencesInCommand(normalizedCommand, homeDirectory) {
  * @param {string} homeDirectory The absolute home directory to substitute.
  * @returns {string} The command spelling the owned-root test reads.
  */
-function hookCommandComparisonSpelling(commandString, homeDirectory) {
+export function hookCommandComparisonSpelling(commandString, homeDirectory) {
     const forwardSlashCommand = commandString.replace(/\\/g, '/');
     const expandedCommand = expandHomeReferencesInCommand(forwardSlashCommand, homeDirectory);
     return isCaseInsensitiveFilesystem() ? expandedCommand.toLowerCase() : expandedCommand;
@@ -1824,6 +1831,25 @@ function stripRetiredHookEntries(settings, retiredHookRelativePaths, ownership) 
     return removedCount;
 }
 
+const DEFAULT_HOST_CONFIGURATION_INDENT = '  ';
+
+/**
+ * Read the indent one host configuration file already uses, so a prune hands the
+ * file back in the shape its writer left it.
+ *
+ * The installer writes ~/.claude/settings.json with four spaces and the Codex
+ * companion writes ~/.codex/hooks.json with two, so a fixed indent rewrites every
+ * line of one of the two files for a change that touched one entry. The first
+ * indented line carries the answer, tabs included.
+ *
+ * @param {string} settingsText The host configuration file as it stands on disk.
+ * @returns {string} The indent one nesting level uses.
+ */
+function hostConfigurationIndent(settingsText) {
+    const firstIndentedLine = /\n([ \t]+)\S/.exec(settingsText);
+    return firstIndentedLine ? firstIndentedLine[1] : DEFAULT_HOST_CONFIGURATION_INDENT;
+}
+
 /**
  * Remove every entry of one host hook configuration file that runs a retired
  * managed hook script, writing the file only when an entry left it.
@@ -1845,9 +1871,10 @@ export function pruneRetiredHookEntriesFromSettings(
 ) {
     if (retiredHookRelativePaths.size === 0) return 0;
     if (!existsSync(settingsPath)) return 0;
+    const settingsText = readFileSync(settingsPath, 'utf8');
     let settings;
     try {
-        settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+        settings = JSON.parse(settingsText);
     } catch (parseError) {
         console.warn(`  Warning: leaving ${basename(settingsPath)} as it stands — the file holds JSON the installer cannot read (${parseError.message})`);
         return 0;
@@ -1857,7 +1884,8 @@ export function pruneRetiredHookEntriesFromSettings(
         settings, retiredHookRelativePaths, retiredHookOwnership(options),
     );
     if (removedCount === 0) return 0;
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+    const settingsIndent = hostConfigurationIndent(settingsText);
+    writeFileSync(settingsPath, JSON.stringify(settings, null, settingsIndent) + '\n');
     return removedCount;
 }
 

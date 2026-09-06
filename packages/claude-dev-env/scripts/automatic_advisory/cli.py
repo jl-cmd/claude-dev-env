@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -21,9 +22,12 @@ from pr_verification.model import RepositorySettings
 
 from automatic_advisory.config.constants import (
     POLL_ERROR_KEY,
+    POLL_ERROR_LOG_LINE_LIMIT,
     REPORT_NEWLINE,
+    STATE_FILE_SUFFIX,
     STATE_STATUS_KEY,
     STATE_STATUS_NEVER_RUN,
+    UTF8_ENCODING,
 )
 from automatic_advisory.configuration import (
     AdvisoryConfigurationError,
@@ -112,7 +116,13 @@ def _run_selected_mode(
         write_states(advisory_runner.run_once(parsed_arguments.rerun), stdout)
         return SUCCESS_EXIT_CODE
     with SupervisorLock(settings.poll_lock_root):
-        return run_polling(advisory_runner, settings.poll_seconds, stdout, sleeper)
+        return run_polling(
+            advisory_runner,
+            settings.poll_seconds,
+            stdout,
+            settings.poll_error_log_path,
+            sleeper,
+        )
 
 
 def start_polling(settings_path: Path) -> int:
@@ -176,6 +186,7 @@ def run_polling(
     advisory_runner: AutomaticAdvisoryRunner,
     poll_seconds: float,
     stdout: TextIO,
+    poll_error_log_path: Path,
     sleeper: Callable[[float], None],
 ) -> int:
     """Run advisory checks until the caller interrupts polling.
@@ -184,10 +195,14 @@ def run_polling(
     JSON error line and the next cycle runs, so a manual run beside the poller
     never ends the poller.
 
+    A detached poller reads its own stdout into DEVNULL, so the same line also
+    goes to the log file beside the state files, where a person can read it.
+
     Args:
         advisory_runner: Runner for explicit checkout and pull request pairs.
         poll_seconds: Delay between completed cycles.
         stdout: Stream for each persisted state and each failed cycle.
+        poll_error_log_path: Log file receiving each failed cycle line.
         sleeper: Delay function used between cycles.
 
     Returns:
@@ -195,7 +210,7 @@ def run_polling(
     """
     try:
         while True:
-            _run_one_poll_cycle(advisory_runner, stdout)
+            _run_one_poll_cycle(advisory_runner, stdout, poll_error_log_path)
             sleeper(poll_seconds)
     except KeyboardInterrupt:
         return SUCCESS_EXIT_CODE
@@ -204,18 +219,63 @@ def run_polling(
 def _run_one_poll_cycle(
     advisory_runner: AutomaticAdvisoryRunner,
     stdout: TextIO,
+    poll_error_log_path: Path,
 ) -> None:
     try:
         write_states(advisory_runner.run_once(), stdout)
     except (OSError, SupervisorLockError) as cycle_error:
-        _write_poll_error(cycle_error, stdout)
+        _write_poll_error(cycle_error, stdout, poll_error_log_path)
 
 
-def _write_poll_error(cycle_error: Exception, stdout: TextIO) -> None:
-    stdout.write(
+def _write_poll_error(
+    cycle_error: Exception,
+    stdout: TextIO,
+    poll_error_log_path: Path,
+) -> None:
+    error_line = (
         json.dumps({POLL_ERROR_KEY: str(cycle_error)}, sort_keys=True) + REPORT_NEWLINE
     )
+    stdout.write(error_line)
     stdout.flush()
+    _append_poll_error_line(poll_error_log_path, error_line)
+
+
+def _append_poll_error_line(poll_error_log_path: Path, error_line: str) -> None:
+    """Add one failed-cycle line to the log, keeping the newest lines only.
+
+    A file error here reaches the caller inside the handler that keeps the
+    poller alive, so an unwritable log would end the run the log exists to
+    explain. The line already reached stdout, so an unwritable log is skipped.
+
+    Args:
+        poll_error_log_path: Log file receiving the line.
+        error_line: JSON error line, newline included.
+    """
+    try:
+        _replace_poll_error_log(poll_error_log_path, error_line)
+    except OSError:
+        return
+
+
+def _replace_poll_error_log(poll_error_log_path: Path, error_line: str) -> None:
+    poll_error_log_path.parent.mkdir(parents=True, exist_ok=True)
+    all_lines = _poll_error_log_lines(poll_error_log_path)
+    all_lines.append(error_line)
+    temporary_log_path = poll_error_log_path.with_name(
+        poll_error_log_path.name + STATE_FILE_SUFFIX
+    )
+    temporary_log_path.write_text(
+        "".join(all_lines[-POLL_ERROR_LOG_LINE_LIMIT:]), encoding=UTF8_ENCODING
+    )
+    os.replace(temporary_log_path, poll_error_log_path)
+
+
+def _poll_error_log_lines(poll_error_log_path: Path) -> list[str]:
+    if not poll_error_log_path.exists():
+        return []
+    return poll_error_log_path.read_text(encoding=UTF8_ENCODING).splitlines(
+        keepends=True
+    )
 
 
 def write_states(

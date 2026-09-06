@@ -34,6 +34,16 @@ def _label_page_endpoint(
     )
 
 
+def _issue_label_endpoint(
+    repository: RepositorySettings, pull_request_number: int, label: str
+) -> str:
+    return ISSUE_LABEL_ENDPOINT_TEMPLATE.format(
+        repository=repository.slug,
+        pull_number=pull_request_number,
+        label=urllib.parse.quote(label, safe=""),
+    )
+
+
 def _label_is_on_any_page(
     read_labels_page: ReadLabelsPage,
     repository: RepositorySettings,
@@ -76,10 +86,4 @@ def remove_label_if_present(
         read_labels_page, repository, pull_request_number, label
     ):
         return
-    delete_label(
-        ISSUE_LABEL_ENDPOINT_TEMPLATE.format(
-            repository=repository.slug,
-            pull_number=pull_request_number,
-            label=urllib.parse.quote(label, safe=""),
-        )
-    )
+    delete_label(_issue_label_endpoint(repository, pull_request_number, label))

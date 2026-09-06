@@ -398,3 +398,16 @@ def test_configuration_rejects_nonfinite_timing(
         match=f"{field_name} must be positive",
     ):
         advisory_configuration.load_advisory_settings(settings_path)
+
+
+def test_poll_error_log_sits_beside_the_registration_state_file(tmp_path: Path) -> None:
+    checkout_path = tmp_path / "checkout"
+    checkout_path.mkdir()
+    registration = _build_registration(tmp_path, checkout_path)
+    settings = _build_settings(registration)
+
+    assert (
+        settings.poll_error_log_path
+        == registration.state_path.parent / "poll-errors.log"
+    )
+    assert settings.poll_error_log_path.parent == settings.poll_lock_root.parent
