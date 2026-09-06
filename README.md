@@ -103,7 +103,7 @@ This package centralizes all general-purpose Claude Code config. Project-specifi
 
 ## What's Included
 
-### Rules (40)
+### Rules
 
 Behavioral rules loaded into every session. These shape how Claude approaches work before any code is written.
 
@@ -158,7 +158,7 @@ Starlark `*.rules` files Codex loads from `~/.codex/rules`. The package ships `c
 
 The installer runs `sync_to_cursor.py` so each Claude `rules/*.md` file becomes `~/.cursor/rules/<stem>.mdc` with Cursor frontmatter (`alwaysApply` or a `globs` list from Claude `paths:`). Inventory files `CLAUDE.md` and `AGENTS.md` stay out of that folder.
 
-### Docs (13)
+### Docs
 
 Reference documents that rules and agents point to for detailed standards.
 
@@ -201,9 +201,9 @@ Slash commands for common workflows.
 |---------|---------|
 | `/sr-loop` | Loop /simplify then /code-review --fix until each pass is clean |
 
-### Skills (22)
+### Skills
 
-Shipped skills install under the agents home, with a directory pointer at `~/.claude/skills`.
+Each skill lands under the agents home, with a directory pointer at `~/.claude/skills`.
 A declared dependency package can add more; `node bin/install.mjs --help` names the groups
 that carry them.
 
@@ -223,6 +223,7 @@ that carry them.
 | `pull-request` | Validate and publish GitHub pull request actions |
 | `recovering-codex-startup` | Diagnose Windows Codex startup with fresh read-only process evidence |
 | `repairing-hook-boundaries` | Repair Claude and Codex hook failures at the first failing boundary |
+| `session-continuity` | Carry session context forward for a clean pickup |
 | `skill-builder` | Author a skill package to the house conventions |
 | `source-command-logifix` | Restore the Logitech Gaming Software tray icon on Windows |
 | `syncing-submodules` | Record a submodule's current commit in its parent repository |
