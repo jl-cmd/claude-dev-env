@@ -215,12 +215,27 @@ def _collect_referenced_identifiers(source: str) -> set[str]:
     return all_referenced_identifiers
 
 
+def _sibling_test_paths(stem_test_path: Path) -> list[Path]:
+    """Return the capped, sorted test files beside the stem test, stem excluded."""
+    suite_directory = stem_test_path.parent
+    stem_path_key = os.path.normcase(str(stem_test_path.resolve()))
+    all_sibling_paths: list[Path] = []
+    for each_glob in ALL_TEST_FILENAME_GLOBS:
+        all_sibling_paths.extend(
+            each_path
+            for each_path in sorted(suite_directory.glob(each_glob))
+            if os.path.normcase(str(each_path.resolve())) != stem_path_key
+        )
+    return all_sibling_paths[:MAX_TEST_FILES_SCANNED]
+
+
 def _suite_referenced_identifiers(stem_test_path: Path) -> set[str]:
     """Return identifiers referenced across every test file beside the stem test.
 
-    Scans every ``test_*.py`` and ``*_test.py`` file in the directory holding the
-    stem-matched test file, bounded by the scan cap, and unions the identifiers
-    each one references.
+    Reads the stem-matched test file first, then scans every other ``test_*.py``
+    and ``*_test.py`` file in its directory, bounded by the scan cap, and unions
+    the identifiers each one references. The stem test always counts, so a
+    directory with more test files than the cap cannot hide it.
 
     Args:
         stem_test_path: The stem-matched test file whose directory is scanned.
@@ -228,12 +243,9 @@ def _suite_referenced_identifiers(stem_test_path: Path) -> set[str]:
     Returns:
         The union of referenced identifiers across the scanned test files.
     """
-    suite_directory = stem_test_path.parent
-    all_test_file_paths: list[Path] = []
-    for each_glob in ALL_TEST_FILENAME_GLOBS:
-        all_test_file_paths.extend(sorted(suite_directory.glob(each_glob)))
+    all_test_file_paths = [stem_test_path, *_sibling_test_paths(stem_test_path)]
     all_referenced_identifiers: set[str] = set()
-    for each_test_file_path in all_test_file_paths[:MAX_TEST_FILES_SCANNED]:
+    for each_test_file_path in all_test_file_paths:
         try:
             test_source = each_test_file_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -364,16 +376,12 @@ def _production_stem_from_test_filename(test_filename: str) -> str | None:
     if test_filename.startswith(STEM_TEST_FILENAME_PREFIX) and test_filename.endswith(
         PYTHON_SOURCE_SUFFIX
     ):
-        production_stem = test_filename[
-            len(STEM_TEST_FILENAME_PREFIX) : -len(PYTHON_SOURCE_SUFFIX)
-        ]
+        production_stem = test_filename[len(STEM_TEST_FILENAME_PREFIX) : -len(PYTHON_SOURCE_SUFFIX)]
         return production_stem or None
     return None
 
 
-def _paired_production_module_path(
-    test_path: Path, production_stem: str
-) -> Path | None:
+def _paired_production_module_path(test_path: Path, production_stem: str) -> Path | None:
     """Return the production module a stem-matched test file pairs with, or None.
 
     Mirrors ``_stem_matched_test_path`` in reverse for the two common layouts: a
@@ -515,4 +523,3 @@ def check_test_file_omits_module_public_function(
         if len(all_omission_violations) >= MAX_PAIRED_TEST_COVERAGE_ISSUES:
             break
     return all_omission_violations
-

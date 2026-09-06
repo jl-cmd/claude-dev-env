@@ -19,6 +19,10 @@ _BLOCKING_DIRECTORY = Path(__file__).resolve().parent
 if str(_BLOCKING_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_BLOCKING_DIRECTORY))
 
+from hooks_constants.paired_test_coverage_constants import (  # noqa: E402
+    MAX_TEST_FILES_SCANNED,
+)
+
 from code_rules_paired_test import (  # noqa: E402
     check_public_function_missing_paired_test,
     check_test_file_omits_module_public_function,
@@ -26,9 +30,7 @@ from code_rules_paired_test import (  # noqa: E402
 
 _TWO_PUBLIC_FUNCTIONS = "def alpha():\n    return 1\n\n\ndef beta():\n    return 2\n"
 _THREE_PUBLIC_FUNCTIONS = (
-    "def alpha():\n    return 1\n\n\n"
-    "def beta():\n    return 2\n\n\n"
-    "def gamma():\n    return 3\n"
+    "def alpha():\n    return 1\n\n\ndef beta():\n    return 2\n\n\ndef gamma():\n    return 3\n"
 )
 
 
@@ -145,6 +147,28 @@ def test_counts_coverage_across_sibling_test_files(
     assert all_issues == []
 
 
+def test_reads_the_stem_test_when_the_suite_exceeds_the_scan_cap(
+    neutral_package_directory: Path,
+) -> None:
+    filler_body = "def test_nothing():\n    assert True\n"
+    _write_test_file(
+        neutral_package_directory,
+        "test_a0000.py",
+        "from pkg.mod import alpha\n\ndef test_alpha():\n    assert alpha() == 1\n",
+    )
+    for each_index in range(1, MAX_TEST_FILES_SCANNED + 1):
+        _write_test_file(neutral_package_directory, f"test_a{each_index:04d}.py", filler_body)
+    _write_test_file(
+        neutral_package_directory,
+        "test_mod.py",
+        "from pkg.mod import beta\n\ndef test_beta():\n    assert beta() == 2\n",
+    )
+    all_issues = check_public_function_missing_paired_test(
+        _TWO_PUBLIC_FUNCTIONS, str(neutral_package_directory / "mod.py")
+    )
+    assert all_issues == []
+
+
 def test_main_and_private_functions_are_never_required(
     neutral_package_directory: Path,
 ) -> None:
@@ -183,8 +207,7 @@ def _write_module(package_directory: Path, body: str) -> None:
 
 
 _SUITE_COVERS_ALPHA_BETA = (
-    "from pkg.mod import alpha, beta\n\n"
-    "def test_pair():\n    assert alpha() == 1 and beta() == 2\n"
+    "from pkg.mod import alpha, beta\n\ndef test_pair():\n    assert alpha() == 1 and beta() == 2\n"
 )
 
 
@@ -193,9 +216,7 @@ def test_flags_module_public_function_when_test_suite_omits_it(
 ) -> None:
     _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
     test_path = str(neutral_package_directory / "tests" / "test_mod.py")
-    all_issues = check_test_file_omits_module_public_function(
-        _SUITE_COVERS_ALPHA_BETA, test_path
-    )
+    all_issues = check_test_file_omits_module_public_function(_SUITE_COVERS_ALPHA_BETA, test_path)
     assert len(all_issues) == 1
     assert "gamma" in all_issues[0]
     assert "mod.py" in all_issues[0]
@@ -231,9 +252,7 @@ def test_skips_test_file_with_no_paired_production_module(
     neutral_package_directory: Path,
 ) -> None:
     test_path = str(neutral_package_directory / "tests" / "test_mod.py")
-    all_issues = check_test_file_omits_module_public_function(
-        _SUITE_COVERS_ALPHA_BETA, test_path
-    )
+    all_issues = check_test_file_omits_module_public_function(_SUITE_COVERS_ALPHA_BETA, test_path)
     assert all_issues == []
 
 
@@ -242,9 +261,7 @@ def test_ignores_a_non_stem_matched_written_file(
 ) -> None:
     _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
     helper_path = str(neutral_package_directory / "helper.py")
-    all_issues = check_test_file_omits_module_public_function(
-        _SUITE_COVERS_ALPHA_BETA, helper_path
-    )
+    all_issues = check_test_file_omits_module_public_function(_SUITE_COVERS_ALPHA_BETA, helper_path)
     assert all_issues == []
 
 
@@ -274,9 +291,7 @@ def test_judges_post_edit_content_over_stale_on_disk_test(
         "from pkg.mod import alpha, beta, gamma\n\n"
         "def test_all():\n    assert alpha() and beta() and gamma()\n"
     )
-    all_issues = check_test_file_omits_module_public_function(
-        post_edit_covers_all, test_path
-    )
+    all_issues = check_test_file_omits_module_public_function(post_edit_covers_all, test_path)
     assert all_issues == []
 
 
@@ -290,9 +305,7 @@ def test_counts_coverage_across_sibling_test_files_on_test_write(
         "from pkg.mod import gamma\n\ndef test_gamma():\n    assert gamma() == 3\n",
     )
     test_path = str(neutral_package_directory / "tests" / "test_mod.py")
-    all_issues = check_test_file_omits_module_public_function(
-        _SUITE_COVERS_ALPHA_BETA, test_path
-    )
+    all_issues = check_test_file_omits_module_public_function(_SUITE_COVERS_ALPHA_BETA, test_path)
     assert all_issues == []
 
 
@@ -301,9 +314,7 @@ def test_test_side_message_names_module_and_function_without_line_prefix(
 ) -> None:
     _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
     test_path = str(neutral_package_directory / "tests" / "test_mod.py")
-    all_issues = check_test_file_omits_module_public_function(
-        _SUITE_COVERS_ALPHA_BETA, test_path
-    )
+    all_issues = check_test_file_omits_module_public_function(_SUITE_COVERS_ALPHA_BETA, test_path)
     assert len(all_issues) == 1
     assert not all_issues[0].startswith("Line ")
     assert "mod.py" in all_issues[0]
@@ -315,9 +326,7 @@ def test_test_side_omission_blocks_on_any_test_file_edit(
 ) -> None:
     _write_module(neutral_package_directory, _THREE_PUBLIC_FUNCTIONS)
     test_path = str(neutral_package_directory / "tests" / "test_mod.py")
-    all_issues = check_test_file_omits_module_public_function(
-        _SUITE_COVERS_ALPHA_BETA, test_path
-    )
+    all_issues = check_test_file_omits_module_public_function(_SUITE_COVERS_ALPHA_BETA, test_path)
     assert len(all_issues) == 1
     assert "gamma" in all_issues[0]
 
@@ -333,7 +342,5 @@ def test_skips_when_paired_production_module_is_exempt(
         "from pkg import alpha, beta, gamma\n\n"
         "def test_all():\n    assert alpha() and beta() and gamma()\n"
     )
-    all_issues = check_test_file_omits_module_public_function(
-        suite_covers_all, beside_test_path
-    )
+    all_issues = check_test_file_omits_module_public_function(suite_covers_all, beside_test_path)
     assert all_issues == []
