@@ -1,7 +1,6 @@
 ---
 name: session-continuity
-description: Preserve user-scoped task requirements and named skills in a host-session record. Loaded by the separate Poteto companion hook or explicitly invoked as session-continuity.
-disable-model-invocation: true
+description: Preserve user-scoped task requirements and named skills in a host-session record. Loaded by the separate Poteto companion hook or explicitly invoked as session-continuity. triggers with poteto-mode, poteto, /poteto-mode, /poteto.
 ---
 
 # Session continuity
