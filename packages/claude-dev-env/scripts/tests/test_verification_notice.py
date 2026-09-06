@@ -159,10 +159,8 @@ def test_notice_matches_remote_formats_and_quotes_paths(tmp_path: Path) -> None:
         assert f"Current SHA: {current_head}" in completed_notice.stdout
         assert "State: pending" in completed_notice.stdout
         assert "python '" in completed_notice.stdout
-        assert (
-            ".github\\ci\\local_verify.py' --base origin/main"
-            in completed_notice.stdout
-        )
+        wrapper_suffix = str(Path(".github") / "ci" / "local_verify.py")
+        assert f"{wrapper_suffix}' --base origin/main" in completed_notice.stdout
         assert "--executor '" in completed_notice.stdout
         assert "--output '" in completed_notice.stdout
         assert repository_path.name in completed_notice.stdout

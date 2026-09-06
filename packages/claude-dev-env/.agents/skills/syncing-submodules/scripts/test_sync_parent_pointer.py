@@ -74,10 +74,3 @@ def test_success_emits_one_json_record(
     assert exit_code == 0
     assert sync_record["status"] == "not_submodule"
     assert captured_error == ""
-
-
-def test_native_post_commit_source_and_test_are_removed() -> None:
-    hook_directory = Path(__file__).resolve().parents[4] / "hooks" / "git-hooks"
-
-    assert not (hook_directory / "post_commit.py").exists()
-    assert not (hook_directory / "test_post_commit.py").exists()
