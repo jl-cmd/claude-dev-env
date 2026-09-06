@@ -190,19 +190,7 @@ def lint_durable_post(
     body_text: str | None,
     head_branch: str | None = None,
 ) -> tuple[DurablePostFinding, ...]:
-    """Return content findings for one locally valid GitHub post request.
-
-    Args:
-        action: The durable post action the caller performs.
-        title: The post title, when the action carries one.
-        body_text: The post body, when the action carries one.
-        head_branch: The head branch the post targets. A release automation
-            branch carries a body the automation reads back, so that body keeps
-            its generated text and skips the house heading requirement.
-
-    Returns:
-        The content findings for the request.
-    """
+    """Return content findings for one locally valid GitHub post request."""
     _validate_request_shape(action, title, body_text)
     return (
         *_title_findings(title),
