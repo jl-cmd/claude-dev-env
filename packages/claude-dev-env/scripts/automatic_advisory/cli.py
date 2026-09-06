@@ -253,10 +253,8 @@ def _write_poll_error(
 def _append_poll_error_line(poll_error_log_path: Path, error_line: str) -> None:
     """Append one failed-cycle JSON line, keeping the newest 200 lines.
 
-    A file error here reaches the caller inside the handler that keeps the
-    poller alive, so a log the run cannot read or write would end the run the
-    log exists to explain. A decode failure raises ValueError, so both that and
-    OSError end here. The line already reached stdout, so the log is skipped.
+    Skip the log on OSError or ValueError. A raise here would stop the poller.
+    The line already reached stdout. Undecodable bytes are replaced on read.
 
     Args:
         poll_error_log_path: Log file receiving the line.

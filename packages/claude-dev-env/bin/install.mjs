@@ -1838,13 +1838,10 @@ function hostConfigurationIndent(settingsText) {
  * Remove every entry of one host hook configuration file that runs a retired
  * managed hook script, writing the file only when an entry left it.
  *
- * Claude Code's settings.json and Codex's hooks.json hold the same hook shape and
- * name scripts under the same installed hooks directory, so one walk serves both.
- *
- * A run that retires no hook leaves the file byte-identical, so an install touches
- * a user's configuration for a reason a reader can name. A file the installer
- * cannot read or cannot parse is left alone with a warning, and the prune carries
- * on with the other host's configuration file.
+ * Claude settings.json and Codex hooks.json share this hook shape. A run that
+ * retires no hook leaves the file byte-identical. A file the installer cannot
+ * read or cannot parse is left alone with a warning, and the prune continues
+ * with the other host configuration file.
  *
  * @param {string} settingsPath The absolute host configuration path.
  * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
