@@ -1,8 +1,8 @@
-"""Windows creation flags that keep the advisory poller and its children off the screen.
+"""Windows creation flags that hide the advisory poller and its children.
 
-A poller that owns no console makes each git call and each check it starts
-open a fresh console window for a moment. A poller that owns a hidden console
-passes that hidden console down to every descendant, and nothing appears.
+A poller with no console makes each git call and each check open a fresh
+console window. A hidden console is inherited by descendants, so those
+children stay off the screen.
 """
 
 from __future__ import annotations

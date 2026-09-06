@@ -61,11 +61,11 @@ def main(
     sleeper: Callable[[float], None] = time.sleep,
 ) -> int:
     """Run the selected automatic advisory command.
+
     Args:
         all_arguments: Command arguments after the executable name.
         stdout: Stream for state output.
         stderr: Stream for configuration and runtime errors.
-        runner_builder: Optional runner factory used by focused callers.
         sleeper: Delay function used by polling mode.
 
     Returns:
