@@ -34,7 +34,6 @@ Only want specific tools? Use the `--only` flag with one or more groups:
 
 ```bash
 npx claude-dev-env --only prompts           # prompt-generator, agent-prompt + workflow hooks
-npx claude-dev-env --only journal           # session-log, session-tidy
 npx claude-dev-env --only research          # deep-research, research-mode
 npx claude-dev-env --only core             # dev standards, hooks, agents, commands
 npx claude-dev-env --only prompts,research  # combine groups
@@ -44,7 +43,6 @@ npx claude-dev-env --only prompts,research  # combine groups
 |-------|----------------|
 | `core` | Rules, docs, commands, agents, all hooks, Codex exec-policy files |
 | `prompts` | prompt-generator, agent-prompt, prompt-workflow hooks and rules |
-| `journal` | session-log, session-tidy |
 | `research` | deep-research, research-mode |
 
 ### Verify
@@ -164,7 +162,7 @@ Slash commands for common workflows.
 |---------|---------|
 | `/sr-loop` | Loop /simplify then /code-review --fix until each pass is clean |
 
-### Skills (27)
+### Skills
 
 **Prompt Engineering (`--only prompts`):**
 
@@ -172,13 +170,6 @@ Slash commands for common workflows.
 |-------|---------|
 | `prompt-generator` | Write, refine, and structure prompts for Claude with emotion-informed framing |
 | `agent-prompt` | Craft structured agent prompts and spawn background agents after approval |
-
-**Session & Memory (`--only journal`):**
-
-| Skill | Purpose |
-|-------|---------|
-| `session-log` | Log session reports to Obsidian vault with decisions and outcomes |
-| `session-tidy` | Clean up and organize session folder structure |
 
 **Research (`--only research`):**
 
@@ -274,7 +265,7 @@ claude plugin install anthropics/claude-code-workflows      # Official: python-d
 claude plugin install jl-cmd/claude-workflow                # Workflow definitions with YAML schemas
 ```
 
-Note: prompt-generator, journal, and deep-research skills are all included in claude-dev-env. Use `--only prompts`, `--only journal`, or `--only research` if you only want a subset.
+Use `--only core` to install the core tools.
 
 GSD (project management) is available as an npm package:
 ```bash
