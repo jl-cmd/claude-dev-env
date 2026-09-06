@@ -16,6 +16,7 @@ from durable_post_lint_config.config.constants import (
     ALL_PATH_ANCHORED_VOLATILE_PATH_MARKERS,
     ALL_POST_ACTIONS,
     ALL_PR_DESCRIPTION_ACTIONS,
+    ALL_RELEASE_BODY_MARKERS,
     ALL_REQUIRED_PR_DESCRIPTION_HEADINGS,
     ALL_TITLE_ACTIONS,
     BODY_FILE_ENCODING,
@@ -35,6 +36,9 @@ from durable_post_lint_config.config.constants import (
     MISSING_HEADING_MESSAGE_TEMPLATE,
     PATH_ANCHOR_CHARACTER,
     PATH_SEGMENT_START_CHARACTERS,
+    RELEASE_BRANCH_PREFIX,
+    REWRITTEN_RELEASE_BODY_CODE,
+    REWRITTEN_RELEASE_BODY_MESSAGE,
     TITLE_NOT_ALLOWED_MESSAGE,
     TITLE_REQUIRED_MESSAGE,
     VOLATILE_PATH_CODE,
@@ -136,9 +140,25 @@ def _title_findings(title: str | None) -> list[DurablePostFinding]:
     return [DurablePostFinding(code=INVALID_TITLE_CODE, message=INVALID_TITLE_MESSAGE)]
 
 
+def _is_release_automation_branch(head_branch: str | None) -> bool:
+    return head_branch is not None and head_branch.startswith(RELEASE_BRANCH_PREFIX)
+
+
+def _release_body_findings(body_text: str) -> list[DurablePostFinding]:
+    if all(each_marker in body_text for each_marker in ALL_RELEASE_BODY_MARKERS):
+        return []
+    return [
+        DurablePostFinding(
+            code=REWRITTEN_RELEASE_BODY_CODE,
+            message=REWRITTEN_RELEASE_BODY_MESSAGE,
+        )
+    ]
+
+
 def _body_findings(
     action: str,
     body_text: str | None,
+    head_branch: str | None = None,
 ) -> list[DurablePostFinding]:
     if body_text is None:
         return []
@@ -150,7 +170,9 @@ def _body_findings(
                 message=BODY_MUST_NOT_BE_EMPTY_MESSAGE,
             )
         )
-    if action in ALL_PR_DESCRIPTION_ACTIONS:
+    if _is_release_automation_branch(head_branch):
+        all_findings.extend(_release_body_findings(body_text))
+    elif action in ALL_PR_DESCRIPTION_ACTIONS:
         all_findings.extend(_description_heading_findings(body_text))
     if find_volatile_path_marker(body_text) is not None:
         all_findings.append(
@@ -166,10 +188,26 @@ def lint_durable_post(
     action: str,
     title: str | None,
     body_text: str | None,
+    head_branch: str | None = None,
 ) -> tuple[DurablePostFinding, ...]:
-    """Return content findings for one locally valid GitHub post request."""
+    """Return content findings for one locally valid GitHub post request.
+
+    Args:
+        action: The durable post action the caller performs.
+        title: The post title, when the action carries one.
+        body_text: The post body, when the action carries one.
+        head_branch: The head branch the post targets. A release automation
+            branch carries a body the automation reads back, so that body keeps
+            its generated text and skips the house heading requirement.
+
+    Returns:
+        The content findings for the request.
+    """
     _validate_request_shape(action, title, body_text)
-    return (*_title_findings(title), *_body_findings(action, body_text))
+    return (
+        *_title_findings(title),
+        *_body_findings(action, body_text, head_branch),
+    )
 
 
 def _parse_arguments(all_arguments: Sequence[str]) -> argparse.Namespace:
@@ -177,6 +215,7 @@ def _parse_arguments(all_arguments: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--action", required=True)
     parser.add_argument("--title")
     parser.add_argument("--body-file", type=Path)
+    parser.add_argument("--head-branch")
     return parser.parse_args(list(all_arguments))
 
 
@@ -193,6 +232,7 @@ def main(all_arguments: Sequence[str]) -> int:
             action=arguments.action,
             title=arguments.title,
             body_text=body_text,
+            head_branch=arguments.head_branch,
         )
     except (DurablePostInputError, DurablePostUsageError) as error:
         sys.stderr.write(f"{error}\n")

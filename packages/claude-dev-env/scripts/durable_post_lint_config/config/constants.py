@@ -94,3 +94,13 @@ TITLE_NOT_ALLOWED_MESSAGE = "this action does not accept a title"
 TITLE_REQUIRED_MESSAGE = "pr-create requires a title"
 VOLATILE_PATH_CODE = "volatile-local-path"
 VOLATILE_PATH_MESSAGE = "body contains a volatile local artifact path"
+RELEASE_BRANCH_PREFIX = "release-please--branches--"
+ALL_RELEASE_BODY_MARKERS: tuple[str, ...] = (
+    ":robot: I have created a release",
+    "This PR was generated with [Release Please]",
+)
+REWRITTEN_RELEASE_BODY_CODE = "rewritten-release-body"
+REWRITTEN_RELEASE_BODY_MESSAGE = (
+    "release automation reads this body back to recognize its own merge; "
+    "keep the generated text whole"
+)
