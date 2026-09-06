@@ -246,7 +246,9 @@ def test_failed_report_removes_pass_label_and_posts_failure(tmp_path: Path) -> N
     assert outcome.status == StatusState.FAILURE
     assert outcome.publishable is False
     _assert_request_methods(requester, "GET GET GET DELETE POST")
-    assert requester.all_requests[2][1].endswith("/issues/7/labels")
+    assert requester.all_requests[2][1].endswith(
+        "/issues/7/labels?per_page=100&page=1"
+    )
     assert requester.all_requests[3][1].endswith(
         "/issues/7/labels/local-checks%3Apassed"
     )

@@ -207,11 +207,23 @@ def run_polling(
         Zero after a user interrupt.
     """
     try:
-        while True:
-            _run_one_poll_cycle(advisory_runner, stdout, poll_error_log_path)
-            sleeper(poll_seconds)
+        _repeat_poll_cycles(
+            advisory_runner, poll_seconds, stdout, poll_error_log_path, sleeper
+        )
     except KeyboardInterrupt:
         return SUCCESS_EXIT_CODE
+
+
+def _repeat_poll_cycles(
+    advisory_runner: AutomaticAdvisoryRunner,
+    poll_seconds: float,
+    stdout: TextIO,
+    poll_error_log_path: Path,
+    sleeper: Callable[[float], None],
+) -> None:
+    while True:
+        _run_one_poll_cycle(advisory_runner, stdout, poll_error_log_path)
+        sleeper(poll_seconds)
 
 
 def _run_one_poll_cycle(
