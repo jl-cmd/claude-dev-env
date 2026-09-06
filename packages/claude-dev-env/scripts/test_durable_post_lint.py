@@ -330,3 +330,100 @@ def test_cli_has_no_inline_body_flag() -> None:
     )
     assert completed_process.returncode == 2
     assert "unrecognized arguments" in completed_process.stderr
+
+
+RELEASE_BRANCH = "release-please--branches--main--components--claude-dev-env"
+RELEASE_BODY = """:robot: I have created a release *beep* *boop*
+---
+
+
+## [7.0.0](https://example.invalid/compare/v6.0.0...v7.0.0) (2026-01-01)
+
+
+### Features
+
+* a shipped change
+
+---
+This PR was generated with [Release Please](https://example.invalid/release-please).
+"""
+
+
+def should_accept_a_release_body_without_the_house_headings() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-edit",
+        title=None,
+        body_text=RELEASE_BODY,
+        head_branch=RELEASE_BRANCH,
+    )
+    assert all_findings == ()
+
+
+@pytest.mark.parametrize(
+    "damaged_body",
+    [
+        RELEASE_BODY.replace(":robot: I have created a release *beep* *boop*", ""),
+        RELEASE_BODY.replace("This PR was generated with [Release Please]", ""),
+    ],
+)
+def should_report_a_release_body_that_lost_a_marker(damaged_body: str) -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-edit",
+        title=None,
+        body_text=damaged_body,
+        head_branch=RELEASE_BRANCH,
+    )
+    assert [each_finding.code for each_finding in all_findings] == [
+        "rewritten-release-body"
+    ]
+
+
+def should_report_a_release_body_rewritten_into_house_prose() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-edit",
+        title=None,
+        body_text="This pull request publishes claude-dev-env 2.37.0.",
+        head_branch=RELEASE_BRANCH,
+    )
+    assert [each_finding.code for each_finding in all_findings] == [
+        "rewritten-release-body"
+    ]
+
+
+def should_keep_the_house_headings_for_an_ordinary_branch() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-create",
+        title="fix(cli): tighten input handling",
+        body_text="Body without the required headings.",
+        head_branch="fix/ordinary-branch",
+    )
+    assert MISSING_HEADING_CODE_NAME in {
+        each_finding.code for each_finding in all_findings
+    }
+
+
+MISSING_HEADING_CODE_NAME = "missing-pr-description-heading"
+
+
+def should_report_a_rewritten_release_body_through_the_command_line(
+    tmp_path: Path,
+) -> None:
+    body_path = tmp_path / "body.md"
+    body_path.write_text("This pull request publishes the package.", encoding="utf-8")
+    completed_process = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--action",
+            "pr-edit",
+            "--body-file",
+            str(body_path),
+            "--head-branch",
+            RELEASE_BRANCH,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed_process.returncode == 1
+    assert "keep the generated text whole" in completed_process.stderr

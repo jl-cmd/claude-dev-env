@@ -98,6 +98,8 @@ def _linter_arguments(
         all_arguments.extend(["--title", arguments.title])
     if getattr(arguments, "body_file", None) is not None:
         all_arguments.extend(["--body-file", str(arguments.body_file)])
+    if getattr(arguments, "head", None) is not None:
+        all_arguments.extend(["--head-branch", arguments.head])
     return all_arguments
 
 
