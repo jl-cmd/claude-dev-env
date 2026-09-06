@@ -265,8 +265,6 @@ claude plugin install anthropics/claude-code-workflows      # Official: python-d
 claude plugin install jl-cmd/claude-workflow                # Workflow definitions with YAML schemas
 ```
 
-Use `--only core` to install the core tools.
-
 GSD (project management) is available as an npm package:
 ```bash
 npx get-shit-done-cc
