@@ -26,24 +26,25 @@ That's it. The installer will:
 6. Copy Codex exec-policy files into `~/.codex/rules` (`CODEX_HOME/rules` when that variable is set)
 7. Generate Cursor `.mdc` files into `~/.cursor/rules` from the installed Claude rules
 
-The `--only prompts` group sources the prompt-generator skill, the agent-prompt skill, and the prompt-workflow hooks from [@jl-cmd/prompt-generator](https://github.com/jl-cmd/prompt-generator) — a standalone npm package that claude-dev-env declares as a runtime dependency. No separate installation is required; `npx claude-dev-env` installs it transparently.
-
 ### Selective Install
 
 Only want specific tools? Use the `--only` flag with one or more groups:
 
 ```bash
-npx claude-dev-env --only prompts           # prompt-generator, agent-prompt + workflow hooks
-npx claude-dev-env --only research          # deep-research, research-mode
 npx claude-dev-env --only core             # dev standards, hooks, agents, commands
-npx claude-dev-env --only prompts,research  # combine groups
 ```
 
 | Group | What's included |
 |-------|----------------|
 | `core` | Rules, docs, commands, agents, all hooks, Codex exec-policy files |
-| `prompts` | prompt-generator, agent-prompt, prompt-workflow hooks and rules |
-| `research` | deep-research, research-mode |
+
+Run `node bin/install.mjs --help` for the live group list, which also carries any group a
+declared dependency package contributes.
+
+The install target comes from the managed root, so the installer reads only flags. A bare
+path argument such as `npx claude-dev-env .` carries no meaning: the run lands in
+`~/.claude` the same way. Select another root with `--target DIR`, `--profile ID`, or the
+`CLAUDE_CONFIG_DIR` environment variable.
 
 ### Verify
 
@@ -102,23 +103,52 @@ This package centralizes all general-purpose Claude Code config. Project-specifi
 
 ## What's Included
 
-### Rules (10)
+### Rules (40)
 
 Behavioral rules loaded into every session. These shape how Claude approaches work before any code is written.
 
-
 | Rule | What it does |
 |------|-------------|
-| `code-standards` | References CODE_RULES.md for all code generation |
-| `conservative-action` | Research first, act only when explicitly asked |
-| `explore-thoroughly` | Read before proposing, map patterns before committing |
-| `research-mode` | Anti-hallucination: cite sources, say "I don't know", use direct quotes |
-| `parallel-tools` | Independent tool calls run simultaneously |
-| `agent-spawn-protocol` | Context sufficiency check before delegating to agents |
-| `git-workflow` | Draft PRs, stacked PR patterns, review-response protocol |
-| `testing` | Complete mocks, reference TEST_QUALITY.md |
-| `context7` | Fetch current docs through Context7 MCP |
+| `agent-spawn-protocol` | Check context sufficiency before delegating to an agent |
+| `anti-corollary-tests` | Each test carries information; skip corollary matrices |
+| `asd-ste100-language` | Plain word choice, sentence style, and tone for user-facing text |
+| `ask-user-question-required` | Route every user-directed question through AskUserQuestion |
+| `bdd` | Discovery, illustration, and should-style specifications around the TDD loop |
+| `claims-as-quotes` | A claim about existing code travels with its path, lines, and quote |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |
+| `code-standards` | Point at CODE_RULES.md for review and code generation |
+| `confirm-implementation-forks` | Ask which path at a fork that changes scope or a hard-to-reverse contract |
+| `destructive-commands` | Allowed removal forms, and destructive literals kept out of command strings |
+| `doc-inventory-integrity` | A doc that inventories code stays in step with the directory |
+| `docstring-prose-matches-implementation` | A docstring's enumeration covers every behavior the body applies |
+| `durable-post-artifacts` | Keep volatile local paths out of GitHub posts |
+| `explore-thoroughly` | Read before proposing, map patterns before committing |
+| `failure-blast-radius` | Name what a raise stops: the run, or one member of a batch |
+| `falsify-before-green` | A check's green counts once that check ran red on a named break |
+| `file-global-constants` | A module-level constant earns its place with two consumers |
+| `filesystem-search` | Every filesystem search names a scope |
+| `gh-cli-conventions` | Body content travels by file; paginated reads slurp before they filter |
+| `git-workflow` | Draft PRs, stacked PR patterns, review-response protocol |
+| `hedging-claims` | State a claim with its evidence, or name it unverified |
+| `long-horizon-autonomy` | Carry a long or unwatched run to completion |
+| `measurement-denominators` | Every count names what it scanned |
+| `nas-ssh-invocation` | Reach the NAS through its runner script |
+| `no-cross-skill-duplicate-helpers` | A helper copied between two skill folders is a deliberate choice |
+| `orphan-css-class` | Every class name in generated markup has a matching selector |
+| `paired-test-coverage` | Every public function in an established suite carries a behavioral test |
+| `plain-illustrative-docstrings` | Docstring narrative reads plainly on the first pass |
+| `prompt-workflow-context-controls` | Prompt workflows stay low-context |
+| `pstack-models` | Portable role requirements for pstack delegation |
+| `re-stage-before-commit` | Stage this session's edits right before the commit |
+| `research-mode` | Cite sources, say "I don't know", use direct quotes |
+| `shell-invocation` | Use pwsh, and keep shell substitution out of Bash commands |
+| `testing` | Complete mocks, reference TEST_QUALITY.md |
+| `vault-context` | Search prior sessions and decisions before substantive project work |
+| `verify-before-asking` | Answer with a tool what a tool can answer |
+| `verify-runtime-state` | A runtime verdict rests on a live probe from this session |
+| `windows-filesystem-safe` | Safe tree removal for read-only Windows files |
+| `workers-done-before-complete` | A task stays open while a worker it spawned still runs |
+| `workflow-substitution-slots` | Mark every per-call value in a workflow template |
 
 ### Codex exec-policy files
 
@@ -128,7 +158,7 @@ Starlark `*.rules` files Codex loads from `~/.codex/rules`. The package ships `c
 
 The installer runs `sync_to_cursor.py` so each Claude `rules/*.md` file becomes `~/.cursor/rules/<stem>.mdc` with Cursor frontmatter (`alwaysApply` or a `globs` list from Claude `paths:`). Inventory files `CLAUDE.md` and `AGENTS.md` stay out of that folder.
 
-### Docs (5)
+### Docs (13)
 
 Reference documents that rules and agents point to for detailed standards.
 
@@ -138,6 +168,15 @@ Reference documents that rules and agents point to for detailed standards.
 | `TEST_QUALITY.md` | Test writing standards, mock completeness, assertion patterns |
 | `REACT_PATTERNS.md` | Component architecture, hooks, state management conventions |
 | `DJANGO_PATTERNS.md` | Model patterns, view architecture, ORM best practices |
+| `BDD_DISCOVERY_PROTOCOL.md` | Example Mapping to find test ideas before code |
+| `BDD_SCENARIO_QUALITY.md` | Seven patterns for clear, focused scenarios |
+| `BDD_TEST_LAYOUT.md` | Describe, when, and should layout for readable suites |
+| `agent-spawn-protocol.md` | Full protocol behind the agent-spawn rule |
+| `codex-compatibility.md` | The bridge from this source tree to Codex-compatible output |
+| `host-pool-health-monitor.md` | Kernel pool counters and handle pressure on a Windows host |
+| `nas-ssh-invocation.md` | Full detail behind the NAS ssh rule |
+| `worker-completion-gate.md` | Full detail behind the worker completion rule |
+| `wsl-docker-cowork-starter-matrix.md` | Host memory attribution under WSL2 and Docker Desktop |
 
 ### Agents (8)
 
@@ -162,48 +201,36 @@ Slash commands for common workflows.
 |---------|---------|
 | `/sr-loop` | Loop /simplify then /code-review --fix until each pass is clean |
 
-### Skills
+### Skills (22)
 
-**Prompt Engineering (`--only prompts`):**
-
-| Skill | Purpose |
-|-------|---------|
-| `prompt-generator` | Write, refine, and structure prompts for Claude with emotion-informed framing |
-| `agent-prompt` | Craft structured agent prompts and spawn background agents after approval |
-
-**Research (`--only research`):**
+Shipped skills install under the agents home, with a directory pointer at `~/.claude/skills`.
+A declared dependency package can add more; `node bin/install.mjs --help` names the groups
+that carry them.
 
 | Skill | Purpose |
 |-------|---------|
-| `deep-research` | Iterative multi-source research with citations and Obsidian reports |
-| `research-mode` | Anti-hallucination constraints with citation requirements |
-
-**Core (`--only core`):**
-
-| Skill | Purpose |
-|-------|---------|
-| `pr-review-responder` | Systematic PR review response: fetch comments, checklist, fix, reply, commit |
-| `orchestrator` | Turns the session into the advisor-orchestrator (the user's sole interface): it spawns executor subagents to do all code edits and test runs, and answers a blocked executor with a plan, correction, or stop; caps consultations and reuses warm agents before spawning new ones |
-| `orchestrator-refresh` | Sub-skill fired by the `/orchestrator` loop about every 20 minutes to re-assert the executor-advisor discipline mid-run |
-| `anthropic-plan` | Readonly codebase exploration before code changes, produces a plan file |
-| `everything-search` | Fast Windows file search via Everything (voidtools) es.exe |
-| `windows-scheduled-task` | Register a repeating headless Windows task: endless repetition, S4U or Interactive principal, absolute action paths, placement outside installer-managed directories, and a teardown command |
-| `recall` | Retrieve prior session context and decisions from Obsidian vault |
-| `remember` | Save decisions, gotchas, and architectural choices to Obsidian vault |
-| `task-build` | Gather every open task in the session and register each on the task list via TaskCreate |
-| `issue-tracker` | One consistent way to create, update in place, and close GitHub issues for a work-stream: one epic parent with native sub-issues, dedup-first against open and closed issues, marker-delimited body sections edited in place, and an epic checklist mirroring the children; the `issue-tracker` agent runs one op per call, this skill is the fallback |
-| `closeout` | Harvest session obstacles into quoted, user-approved GitHub issues at session end, then delegate filing to the `issue-tracker` agent (skill fallback) so each runs the full tracker path; print a computed cloud handoff prompt |
-| `verified-build` | Runs a code task through the two-phase verified workflow — coders write, a fresh-context verifier grades, and git commit/push open only on a clean verdict. |
-| `findbugs` | Single-shot clean-room code-quality audit on the current PR diff (zero conversation context, returns P0/P1/P2 findings with file:line evidence) |
-| `fixbugs` | Recover the most recent `/findbugs` findings, package them as a goal, and hand off to `/agent-prompt` to spawn a background sonnet clean-coder fix agent |
-| `bugteam` | Autonomous audit-and-fix loop using Claude Code's agent teams feature (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and v2.1.32+); fresh teammates per loop, 10-loop cap, scoped permission grant/revoke wrapping the cycle |
-| `reviewer-gates` | Availability gates for PR-loop reviewers: CLAUDE_REVIEWS_DISABLED opt-out parse, once-per-run Copilot quota pre-check, and the Cursor Bugbot trigger/acknowledge/CI-detect flow |
-| `pr-scope-resolve` | Resolves a PR-loop skill's audit/fix target (owner, repo, number, refs, head SHA) through one MCP-first ladder with a single canonical refusal line |
-| `pr-fix-protocol` | Applies reviewer findings as verified fixes and drives unresolved threads to zero: executor choice, the shared 13-step fix sequence, atomic reply-and-resolve, and post-push state resets |
-| `post-audit-findings` | Publishes an audit pass as one GitHub PR review via post_audit_thread.py: findings-JSON mapping, anchored/unanchored partition, self-PR reviewer toggle, and thread-id harvest for the fix loop |
-| `pr-loop-lifecycle` | Opens and closes a PR-loop run: permission grant with auto-mode escalation, worktree preflight, then teardown, PR description rewrite, always-run revoke, and the final report |
-| `pr-loop-cloud-transport` | Six-step transport workflow that lets any PR-loop skill run in a Claude Code session whose `gh` CLI is absent or cannot act on the PR (unauthenticated, or the wrong account): MCP schema load, origin/HEAD fix, live-identity review rules, the gh-to-MCP substitution matrix, the Copilot status rule, and the post self-check |
-| `eli5` | Beginner-friendly presentation with large visuals, minimal text, one stable self-contained HTML artifact, update-in-place continuity, and sharing |
+| `cert-classification-rule` | Add or change a Samsung cert-failure classification rule |
+| `e-code-review` | Max-recall code review at a selectable effort level |
+| `e-simplify` | Cleanup pass on the current diff for reuse, simplification, and efficiency |
+| `eli5` | Beginner-friendly presentation with large visuals and minimal text |
+| `everything-search` | Fast Windows file search through the Everything es.exe tool |
+| `fresh-branch` | Fresh branch from origin/main in an isolated worktree |
+| `grok-spawn` | Spawn headless grok worker fleets through preflight and batch spawn |
+| `issue-tracker` | File, update, and close GitHub work as one epic with native sub-issues |
+| `orchestrator` | Turn the session into an advisor-orchestrator that spawns executor subagents |
+| `orchestrator-refresh` | Re-assert orchestrator discipline on a delayed wake |
+| `privacy-hygiene` | Full-repo sweep for personal data and secrets before a commit or post |
+| `pull-request` | Validate and publish GitHub pull request actions |
+| `recovering-codex-startup` | Diagnose Windows Codex startup with fresh read-only process evidence |
+| `repairing-hook-boundaries` | Repair Claude and Codex hook failures at the first failing boundary |
+| `skill-builder` | Author a skill package to the house conventions |
+| `source-command-logifix` | Restore the Logitech Gaming Software tray icon on Windows |
+| `syncing-submodules` | Record a submodule's current commit in its parent repository |
+| `task-build` | Gather open session tasks and register them on the task list |
+| `team-advisor` | Standing reviewer for a session and the subagents it spawns |
+| `test-runner` | Run pytest or Playwright through the repository's test command |
+| `usage-pause` | Pause until the usage window resets |
+| `windows-scheduled-task` | Register a repeating headless Windows task with a documented teardown |
 
 ### Hooks
 
@@ -265,6 +292,8 @@ claude plugin install anthropics/claude-code-plugins        # Official: frontend
 claude plugin install anthropics/claude-code-workflows      # Official: python-dev, ui-design, unit-testing, context-management, agent-teams, and more
 claude plugin install jl-cmd/claude-workflow                # Workflow definitions with YAML schemas
 ```
+
+Run `node bin/install.mjs --help` for the group list this build defines.
 
 GSD (project management) is available as an npm package:
 ```bash
