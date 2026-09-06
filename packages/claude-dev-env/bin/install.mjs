@@ -175,7 +175,6 @@ export const CORE_INCLUDE_DIRECTORIES = [
 export const CORE_SKILLS = [
     'orchestrator', 'orchestrator-refresh', 'team-advisor',
     'grok-spawn',
-    'pr-small-cl',
     'everything-search',
     'test-runner',
     'privacy-hygiene',
@@ -320,10 +319,6 @@ export const INSTALL_GROUPS = {
         includeDirectories: CORE_INCLUDE_DIRECTORIES,
         includeAllHooks: true,
         includeCodexRules: true,
-    },
-    journal: {
-        description: 'Session logging and memory',
-        skills: ['session-log', 'session-tidy'],
     },
     ...dependencyDiscovery.groups,
 };
@@ -2835,7 +2830,6 @@ ${groupLines}
 
 Examples:
   npx ${PACKAGE_NAME} --only core
-  npx ${PACKAGE_NAME} --only core,journal
   npx ${PACKAGE_NAME} --profile editor --only core
   npx ${PACKAGE_NAME} --profiles editor,mel --only core
 

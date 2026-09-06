@@ -286,7 +286,7 @@ test('installer fault after_file_staging restores prior managed installation', (
             'utf8',
         );
 
-        const failedRun = runInstaller(homeDirectory, ['--only', 'journal'], {
+        const failedRun = runInstaller(homeDirectory, ['--only', 'core'], {
             faultPhase: FAULT_PHASES.AFTER_FILE_STAGING,
         });
         assert.notEqual(failedRun.status, 0, failedRun.stdout + failedRun.stderr);
@@ -333,7 +333,7 @@ test('installer fault after_manifest_write restores prior manifest', () => {
             'utf8',
         );
 
-        const failedRun = runInstaller(homeDirectory, ['--only', 'journal'], {
+        const failedRun = runInstaller(homeDirectory, ['--only', 'core'], {
             faultPhase: FAULT_PHASES.AFTER_MANIFEST_WRITE,
         });
         assert.notEqual(failedRun.status, 0, failedRun.stdout + failedRun.stderr);
@@ -387,7 +387,7 @@ test('successful install after prior install leaves one manifest and no fault', 
     const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-txn-e2e-ok-'));
     try {
         seedPriorInstall(homeDirectory);
-        const okRun = runInstaller(homeDirectory, ['--only', 'journal']);
+        const okRun = runInstaller(homeDirectory, ['--only', 'core']);
         assert.equal(okRun.status, 0, okRun.stdout + okRun.stderr);
         const manifestPath = join(homeDirectory, '.claude', '.claude-dev-env-manifest.json');
         assert.equal(existsSync(manifestPath), true);

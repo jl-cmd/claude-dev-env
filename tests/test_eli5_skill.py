@@ -62,5 +62,5 @@ def test_core_install_and_readme_use_eli5_presentation() -> None:
     readme_text = _read(README_PATH)
 
     assert "'eli5'" in installer_text
-    assert "### Skills (27)" in readme_text
+    assert "### Skills" in readme_text.splitlines()
     assert "| `eli5` |" in readme_text
