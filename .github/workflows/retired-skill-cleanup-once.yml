@@ -1,0 +1,144 @@
+name: Prepare skill-link cleanup
+on:
+  push:
+    branches: [fix/retired-skill-install-links]
+    paths: [.github/workflows/retired-skill-cleanup-once.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: e660140950aa972190a6718a10763e457f7945bc
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply exact cleanup
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib
+          import re
+
+          expected = {
+              'README.md': 'e9c96f641a754260a3d10bcac6bc942088d5c1d5',
+              'packages/claude-dev-env/bin/install.mjs': '9818d781fe213b637ca4104a85fa33eab431d1be',
+              'packages/claude-dev-env/bin/install.codex-rules.test.mjs': '8e8fde234d4c4ac1ef5db53962aa900dd0177283',
+              'packages/claude-dev-env/bin/install.cursor-rules.test.mjs': '2d18f507bc62b15621f4fbbdda8b714ce126ade1',
+              'packages/claude-dev-env/bin/install.transaction.test.mjs': 'd8f418e527990675c72c3a631c4657d341f33559',
+              'packages/claude-dev-env/rules/vault-context.md': '50c6f895646037360201baad8b57320b144842b1',
+          }
+          for name, expected_sha in expected.items():
+              data = Path(name).read_bytes()
+              actual = hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest()
+              assert actual == expected_sha, (name, actual)
+
+          def replace_once(path, before, after):
+              text = path.read_text()
+              assert text.count(before) == 1, (str(path), before)
+              path.write_text(text.replace(before, after))
+
+          installer = Path('packages/claude-dev-env/bin/install.mjs')
+          replace_once(installer, "    'pr-small-cl',\n", '')
+          replace_once(installer, "    journal: {\n        description: 'Session logging and memory',\n        skills: ['session-log', 'session-tidy'],\n    },\n", '')
+          replace_once(installer, '  npx ${PACKAGE_NAME} --only core,journal\n', '')
+          readme = Path('README.md')
+          replace_once(readme, 'npx claude-dev-env --only journal           # session-log, session-tidy\n', '')
+          replace_once(readme, '| `journal` | session-log, session-tidy |\n', '')
+          replace_once(readme, '**Session & Memory (`--only journal`):**\n\n| Skill | Purpose |\n|-------|---------|\n| `session-log` | Log session reports to Obsidian vault with decisions and outcomes |\n| `session-tidy` | Clean up and organize session folder structure |\n\n', '')
+          replace_once(readme, '### Skills (27)', '### Skills')
+          replace_once(readme, 'Note: prompt-generator, journal, and deep-research skills are all included in claude-dev-env. Use `--only prompts`, `--only journal`, or `--only research` if you only want a subset.', 'Use `--only core` to install the core tools.')
+          Path('packages/claude-dev-env/rules/vault-context.md').write_text('# Obsidian vault context\n\nAn Obsidian vault holds session reports (`sessions/`), decisions (`decisions/`), and research (`Research/`) across projects, reached through the obsidian MCP tools.\n\nBefore substantive project work, use the obsidian MCP tools to search the vault for prior sessions and decisions on the current project. Search by `project` frontmatter first, then by keyword. Search again when touching a component with known history, or when a task might repeat or reverse a prior decision.\n')
+          transaction = Path('packages/claude-dev-env/bin/install.transaction.test.mjs')
+          text = transaction.read_text()
+          assert text.count("['--only', 'journal']") == 3
+          transaction.write_text(text.replace("['--only', 'journal']", "['--only', 'core']"))
+          for suffix, title in [('codex-rules', '--only journal is rejected before Codex rules change; --only core copies them'), ('cursor-rules', '--only journal is rejected before Cursor rules change; --only core writes them')]:
+              path = Path(f'packages/claude-dev-env/bin/install.{suffix}.test.mjs')
+              text = path.read_text()
+              text, count = re.subn(r"test\('--only journal[^\n]+", f"test('{title}', () => {{", text)
+              assert count == 1
+              before = "        runInstaller(homeDirectory, ['--only', 'journal']);"
+              assert text.count(before) == 1
+              text = text.replace(before, "        assert.throws(\n            () => runInstaller(homeDirectory, ['--only', 'journal']),\n            error => error.status === 1 && /Unknown group\\(s\\): journal/.test(error.stderr),\n        );")
+              path.write_text(text)
+          test_file = Path('packages/claude-dev-env/bin/install.skill-selection.test.mjs')
+          assert not test_file.exists()
+          test_file.write_text('''import assert from 'node:assert/strict';
+          import { existsSync, readFileSync } from 'node:fs';
+          import { fileURLToPath } from 'node:url';
+          import { join } from 'node:path';
+          import test from 'node:test';
+          import { CORE_SKILLS, INSTALL_GROUPS } from './install.mjs';
+          import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
+          import { resolvePackageManagedDirectory } from './resolve-package-managed-directory.mjs';
+
+          const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
+          const RETIRED_SKILLS = ['pr-small-cl', 'session-log', 'session-tidy'];
+
+          test('each core skill has a shipped entry point', () => {
+              const skillsRoot = resolvePackageManagedDirectory(PACKAGE_ROOT, 'skills');
+              for (const skillName of CORE_SKILLS) {
+                  assert.ok(existsSync(join(skillsRoot, skillName, 'SKILL.md')), skillName);
+              }
+          });
+
+          test('retired skills leave install groups and stay in the cleanup registry', () => {
+              const selectedSkills = Object.values(INSTALL_GROUPS).flatMap(group => group.skills ?? []);
+              assert.equal(Object.hasOwn(INSTALL_GROUPS, 'journal'), false);
+              for (const skillName of RETIRED_SKILLS) {
+                  assert.equal(selectedSkills.includes(skillName), false, skillName);
+                  assert.ok(EVER_SHIPPED_SKILL_NAMES.has(skillName), skillName);
+              }
+          });
+
+          test('README and vault guidance use current session tools', () => {
+              const readme = readFileSync(new URL('../../../README.md', import.meta.url), 'utf8');
+              const vaultRule = readFileSync(new URL('../rules/vault-context.md', import.meta.url), 'utf8');
+              assert.doesNotMatch(readme, /--only journal|session-log|session-tidy/);
+              assert.doesNotMatch(vaultRule, /`session-log`|`recall`/);
+              assert.match(vaultRule, /obsidian MCP tools/);
+              assert.match(vaultRule, /project.*frontmatter/);
+          });
+          ''')
+      - name: Test selectors, installs, and rollback
+        run: node --test packages/claude-dev-env/bin/install.skill-selection.test.mjs packages/claude-dev-env/bin/install.codex-rules.test.mjs packages/claude-dev-env/bin/install.cursor-rules.test.mjs packages/claude-dev-env/bin/install.transaction.test.mjs
+      - name: Store checked Git objects
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import base64
+          import json
+          import os
+          import subprocess
+          import urllib.request
+          from pathlib import Path
+
+          names = ['README.md', 'packages/claude-dev-env/bin/install.mjs', 'packages/claude-dev-env/bin/install.codex-rules.test.mjs', 'packages/claude-dev-env/bin/install.cursor-rules.test.mjs', 'packages/claude-dev-env/bin/install.transaction.test.mjs', 'packages/claude-dev-env/bin/install.skill-selection.test.mjs', 'packages/claude-dev-env/rules/vault-context.md']
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          untracked = set(subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard'], text=True).splitlines())
+          assert changed | untracked == set(names), (changed, untracked)
+          subprocess.run(['git', 'diff', '--check'], check=True)
+
+          def post(resource, payload):
+              request = urllib.request.Request('https://api.github.com/repos/jl-cmd/claude-dev-env/git/' + resource, data=json.dumps(payload).encode(), headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'}, method='POST')
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          entries = []
+          for name in names:
+              data = Path(name).read_bytes()
+              blob = post('blobs', {'content': base64.b64encode(data).decode(), 'encoding': 'base64'})
+              record = subprocess.check_output(['git', 'ls-tree', 'HEAD', '--', name], text=True)
+              mode = record.split()[0] if record else '100644'
+              entries.append({'path': name, 'mode': mode, 'type': 'blob', 'sha': blob['sha']})
+          tree = post('trees', {'base_tree': '14392bcd2c3beb4c1036eacf0dada6636cf9c265', 'tree': entries})
+          print('CHECKED_CLEANUP_TREE=' + tree['sha'])
+          print(json.dumps(entries, indent=2))
