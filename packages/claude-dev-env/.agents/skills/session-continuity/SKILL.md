@@ -24,7 +24,7 @@ Before dependent work on each later user turn, review the new `user_evidence`, s
 
 Record a named skill as `{"kind":"skill","name":"Name","source":"/absolute/path/SKILL.md","scope":"task","duration":"until this task is complete"}`. Record a user rule as `{"kind":"rule","text":"the user's rule","scope":"session","duration":"this session"}`. Keep authority at user level. Record later skills through this same update-and-load workflow, even when a host has no skill-invocation event.
 
-Replace superseded requirements rather than adding contradictory copies. Narrow scopes when requested. End turn requirements after the turn and task requirements when their task finishes. Before compaction, a handoff, an intentional restart, and each completed work unit, update the checkpoint and remaining work. A crash preserves the last committed checkpoint; unwritten progress is not recoverable. Never imply otherwise.
+Replace superseded requirements rather than adding contradictory copies. Narrow scopes when requested. End turn requirements after the turn and task requirements when their task finishes. Before compaction, a handoff, an intentional restart, and each completed work unit, update the checkpoint and remaining work. A crash preserves the last committed checkpoint; unwritten progress is not recoverable.
 
 ## End and transfer
 
@@ -34,4 +34,4 @@ A restart or compaction with the same native identity discovers its own record. 
 
 ## Limits
 
-Claude Code and Codex hooks inject this body synchronously on the documented activation events. Agent source-reading and compliance still require installed-host verification. Cursor's adapter delivers instructions through first-tool denial feedback, not a native skill event. A prompt-only turn, a Custom Mode selection without a recognized prompt, or an unsupported lifecycle cannot establish equivalent activation. Report those limits rather than claim full three-host support.
+Claude Code and Codex hooks inject this body synchronously on the documented activation events. Agent source-reading and compliance still require installed-host verification. Cursor's adapter delivers instructions through first-tool denial feedback, not a native skill event. A prompt-only turn, a Custom Mode selection without a recognized prompt, or an unsupported lifecycle cannot establish equivalent activation. Report those limits.

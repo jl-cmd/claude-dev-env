@@ -31,7 +31,7 @@ def encode(value: object) -> str:
 
 
 def invocation(prompt: str, host: str) -> str | None:
-    """Recognize a complete direct first-line directive, never embedded prose."""
+    """Recognize a complete direct first-line directive."""
     lines = [line for line in prompt.splitlines() if line.strip()]
     if not lines or lines[0].startswith(("    ", "\t")):
         return None
