@@ -28,7 +28,7 @@ That's it. The installer will:
 
 ### Selective Install
 
-Only want specific tools? Use the `--only` flag with one or more groups:
+Use `--only` with one or more groups:
 
 ```bash
 npx claude-dev-env --only core             # dev standards, hooks, agents, commands
@@ -38,13 +38,12 @@ npx claude-dev-env --only core             # dev standards, hooks, agents, comma
 |-------|----------------|
 | `core` | Rules, docs, commands, agents, all hooks, Codex exec-policy files |
 
-Run `node bin/install.mjs --help` for the live group list, which also carries any group a
+Run `node bin/install.mjs --help` for the group list, including any group a
 declared dependency package contributes.
 
-The install target comes from the managed root, so the installer reads only flags. A bare
-path argument such as `npx claude-dev-env .` carries no meaning: the run lands in
-`~/.claude` the same way. Select another root with `--target DIR`, `--profile ID`, or the
-`CLAUDE_CONFIG_DIR` environment variable.
+The installer reads only flags. A bare path argument such as `npx claude-dev-env .`
+carries no meaning: the run lands in `~/.claude` the same way. Select another root
+with `--target DIR`, `--profile ID`, or the `CLAUDE_CONFIG_DIR` environment variable.
 
 ### Verify
 
@@ -105,7 +104,7 @@ This package centralizes all general-purpose Claude Code config. Project-specifi
 
 ### Rules
 
-Behavioral rules loaded into every session. These shape how Claude approaches work before any code is written.
+Behavioral rules loaded into every session.
 
 | Rule | What it does |
 |------|-------------|
