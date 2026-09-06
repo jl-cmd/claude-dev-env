@@ -19,10 +19,10 @@ export function continuityHookConfiguration(host, script) {
 
 export function mergeContinuityHooks(existing, host, script) {
     const additions = continuityHookConfiguration(host, script);
-    const result = structuredClone(existing);
-    result.hooks ||= {};
+    const mergedConfiguration = structuredClone(existing);
+    mergedConfiguration.hooks ||= {};
     for (const [event, groups] of Object.entries(additions)) {
-        const current = result.hooks[event] || [];
+        const current = mergedConfiguration.hooks[event] || [];
         for (const group of current) {
             for (const hook of group.hooks || []) {
                 if (hook.command?.includes('/session-continuity/continuity.mjs') && hook.command !== groups[0].hooks[0].command) {
@@ -34,9 +34,9 @@ export function mergeContinuityHooks(existing, host, script) {
             const hooks = (group.hooks || []).filter(hook => hook.command !== groups[0].hooks[0].command);
             return hooks.length ? [{ ...group, hooks }] : [];
         });
-        result.hooks[event] = kept.concat(groups);
+        mergedConfiguration.hooks[event] = kept.concat(groups);
     }
-    return result;
+    return mergedConfiguration;
 }
 
 async function main() {

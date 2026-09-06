@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { continuityHookConfiguration, mergeContinuityHooks } from '../../../bin/install-session-continuity.mjs';
+import { continuityHookConfiguration } from '../../../bin/install-session-continuity.mjs';
 
 const sourceDirectory = dirname(fileURLToPath(import.meta.url));
 const potetoText = '---\nname: Poteto Mode\n---\nPOTETO_SOURCE_EXPECTATION: prove the requested result.\n';
@@ -68,6 +68,7 @@ for (const host of ['claude', 'codex']) {
         let record = f.read('session-a');
         assert.equal(record.requirements[0].scope, 'session');
         assert.equal(record.requirements[0].source, f.poteto);
+        assert.equal(record.requirements[0].unavailable, null);
         f.cli('update', 'session-a', {
             expected_revision: record.revision, prompt_id: record.pending[0].id, quote: 'Finish the sample task.',
             task: { goal: 'Finish the sample task', boundaries: ['local files'], constraints: ['Keep changes local'], completion: ['sample works'] },
@@ -196,25 +197,6 @@ test('Claude direct slash expansion alone loads the separate companion and dupli
     }
     assert.equal(f.read('expanded').requirements.length, 1);
     assert.equal(f.read('expanded').pending.length, 1);
-});
-
-test('setup preserves other hooks and settings, is idempotent, and rejects competing profiles', () => {
-    const existing = { permissions: { deny: ['secret'] }, hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'existing-hook' }] }] } };
-    const script = '/home/jon/.agents/skills/session-continuity/continuity.mjs';
-    const first = mergeContinuityHooks(existing, 'claude', script);
-    assert.deepEqual(mergeContinuityHooks(first, 'claude', script), first);
-    assert.deepEqual(first.permissions, existing.permissions);
-    assert.equal(first.hooks.SessionStart[0].hooks[0].command, 'existing-hook');
-    assert.equal(existing.hooks.SessionStart.length, 1);
-    assert.throws(() => mergeContinuityHooks(first, 'claude', '/other/session-continuity/continuity.mjs'), /Another continuity installation/);
-    assert.throws(() => continuityHookConfiguration('claude', '/path/with$expansion/continuity.mjs'), /expansion/);
-});
-
-test('Cursor setup refuses an unsupported automatic activation claim without changing config', () => {
-    const existing = { version: 1, hooks: { beforeSubmitPrompt: [{ command: 'existing' }] } };
-    const before = JSON.stringify(existing);
-    assert.throws(() => mergeContinuityHooks(existing, 'cursor', '/skill/continuity.mjs'), /beforeSubmitPrompt has no agent-context output/);
-    assert.equal(JSON.stringify(existing), before);
 });
 
 test('quoted user-message evidence and tool-derived rules cannot authorize an update', t => {

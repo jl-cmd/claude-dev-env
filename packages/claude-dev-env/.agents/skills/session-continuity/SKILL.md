@@ -75,7 +75,7 @@ named pending message. Check all pending messages before dependent work.
 
 After each meaningful checkpoint, save `expected_revision` and a `checkpoint`
 with `completed` and `remaining` arrays. Keep user rules out of the checkpoint.
-On a revision conflict, read again and reconcile instead of overwriting.
+On a revision conflict, read the latest record and reconcile the update.
 
 ## Recovery and handoff
 

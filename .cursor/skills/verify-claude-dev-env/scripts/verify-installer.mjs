@@ -15,7 +15,10 @@ import {
     DRIVER_COMMAND_LABEL,
     DRIVER_FAILURE_EXIT_STATUS,
     DRIVER_FILE_NAME,
-    DRIVER_SKILL_NAME,
+    SKILL_HOME_DIRECTORY_NAME,
+    SKILLS_DIRECTORY_NAME,
+    VERIFY_SKILL_NAME,
+    SCRIPTS_DIRECTORY_NAME,
     DRIVER_TIMEOUT_MILLISECONDS,
     EVIDENCE_DIRECTORY_NAME,
     EVIDENCE_LABEL,
@@ -40,10 +43,11 @@ const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../
 function buildVerificationPaths(repositoryRoot = REPOSITORY_ROOT) {
     const packageRoot = join(repositoryRoot, PACKAGE_DIRECTORY_NAME, PACKAGE_NAME);
     const driverPath = join(
-        packageRoot,
-        '.agents',
-        'skills',
-        DRIVER_SKILL_NAME,
+        repositoryRoot,
+        SKILL_HOME_DIRECTORY_NAME,
+        SKILLS_DIRECTORY_NAME,
+        VERIFY_SKILL_NAME,
+        SCRIPTS_DIRECTORY_NAME,
         DRIVER_FILE_NAME,
     );
     const evidenceRoot = join(

@@ -39,7 +39,7 @@ It uses `bin/resolve-install-root.mjs`, including `CLAUDE_CONFIG_DIR` and
 Codex `hooks.json`, preserves other settings, writes a one-time backup before
 changing an existing config, and reads each result back. Re-running setup is
 idempotent. Another profile's continuity command in the same host config causes
-an explicit refusal instead of conflicting global registrations.
+an explicit refusal that keeps its existing registration in place.
 
 Review and trust the new hooks in each installed host. Codex requires explicit
 hook trust; configuration alone does not make an untrusted hook run. Restart an
@@ -156,7 +156,8 @@ compliance merely because a callback ran.
 Run the repository contract tests:
 
 ```sh
-node --test packages/claude-dev-env/.agents/skills/session-continuity/continuity.test.mjs
+node --test packages/claude-dev-env/.agents/skills/session-continuity/continuity.test.mjs \
+  packages/claude-dev-env/bin/install-session-continuity.test.mjs
 ```
 
 The existing JavaScript GitHub Actions job discovers the same test file through
