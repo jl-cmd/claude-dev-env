@@ -1383,9 +1383,6 @@ function commandTailEndsAtManagedHook(normalizedCommand, relativePath) {
  * Report whether a command holds one path spelling that ends at a path boundary:
  * end of string, or an argument separator (whitespace, quote, or semicolon).
  *
- * Anchoring the end keeps a command whose path is the one under test plus a
- * suffix (`code_rules_enforcer.py.bak`, `a.py/extra/thing.py`) outside the match.
- *
  * @param {string} normalizedCommand Forward-slash-normalized hook command.
  * @param {string} pathText The path spelling to look for.
  * @returns {boolean} True when the command holds that path at a boundary.
@@ -1619,7 +1616,7 @@ const CODEX_HOOKS_CONFIGURATION_PATH = join(
 );
 
 /**
- * Resolve a path through every link on it, or answer null when it is not there.
+ * Resolve a path through every link on it, or return null when it is missing.
  *
  * @param {string} filesystemPath The absolute path to resolve.
  * @returns {string|null} The real path, or null when nothing stands there.
@@ -1633,13 +1630,10 @@ function realPathOrNull(filesystemPath) {
 }
 
 /**
- * Name every spelling of a hooks directory this installer owns.
+ * Return comparison keys for each owned hooks directory, including its real path.
  *
- * ~/.claude/hooks, the agents home's hooks directory and ~/.codex/hooks are
- * pointers this install publishes, so one script answers to three paths. Owning a
- * registration by the directory it reaches rather than by the spelling it carries
- * is what lets one retirement reach all three. A command reaching no owned
- * directory belongs to another tool, so nothing this installer does touches it.
+ * ~/.claude/hooks, the agents-home hooks directory, and ~/.codex/hooks can
+ * point at one directory. Both the given path and its resolved path are keys.
  *
  * @param {string[]} allHookRootPaths The hooks directories this installer writes.
  * @returns {Set<string>} The comparison key of every owned spelling.
@@ -1656,13 +1650,11 @@ export function ownedHookRootComparisonKeys(allHookRootPaths) {
 }
 
 /**
- * Rewrite the home-directory spellings a hook command can carry into one absolute
- * path, so an owned root is recognized however the registration wrote it.
+ * Expand `$HOME`, `${HOME}`, `~/`, and `%USERPROFILE%` in a hook command.
  *
- * `$HOME`, `${HOME}` and `~/` go through expandHomeDirectoryTokens, the helper the
- * settings rewrite already uses, so one tested expansion serves both callers.
- * `%USERPROFILE%` stays here: this comparison reads a spelling, while the settings
- * rewrite changes the command a host runs, and that spelling is not its to rewrite.
+ * `$HOME`, `${HOME}`, and `~/` go through expandHomeDirectoryTokens, the helper
+ * the settings rewrite already uses, so a tilde is not left in front of home.
+ * `%USERPROFILE%` stays here because this comparison only reads a spelling.
  *
  * @param {string} normalizedCommand Forward-slash-normalized hook command.
  * @param {string} homeDirectory The absolute home directory to substitute.
@@ -1728,18 +1720,12 @@ function retiredHookOwnership(options = {}) {
 }
 
 /**
- * Report whether a host hook command runs one of the retired managed scripts.
+ * Report whether a host hook command runs a retired managed script under an
+ * owned hooks directory.
  *
- * Ownership decides the answer: the command has to reach a script under a hooks
- * directory this installer writes, so a command whose path is a retired path plus
- * a suffix, and a command under another tool's tree, both stay outside the set.
- * The inline validators-runner shape sits outside this test on purpose: it names
- * no script, so no manifest record can retire it, and the merge writes it fresh
- * on every run.
- *
- * A command that is not a string belongs to an entry this installer never wrote,
- * a hand-edited configuration or a third-party entry carrying another shape, so
- * it names no retired script and its entry stays.
+ * A path-plus-suffix, a command under another tool's tree, a non-string
+ * command, and the inline validators-runner shape (no script name) are left
+ * in place. The merge rewrites the validators-runner entry on every run.
  *
  * @param {unknown} commandString The hook command from a host configuration file.
  * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
@@ -1834,13 +1820,11 @@ function stripRetiredHookEntries(settings, retiredHookRelativePaths, ownership) 
 const DEFAULT_HOST_CONFIGURATION_INDENT = '  ';
 
 /**
- * Read the indent one host configuration file already uses, so a prune hands the
- * file back in the shape its writer left it.
+ * Read the indent the host configuration file already uses.
  *
- * The installer writes ~/.claude/settings.json with four spaces and the Codex
- * companion writes ~/.codex/hooks.json with two, so a fixed indent rewrites every
- * line of one of the two files for a change that touched one entry. The first
- * indented line carries the answer, tabs included.
+ * ~/.claude/settings.json uses four spaces and ~/.codex/hooks.json uses two.
+ * Forcing four spaces would rewrite every line of one of those files. The first
+ * indented line supplies the indent, tabs included.
  *
  * @param {string} settingsText The host configuration file as it stands on disk.
  * @returns {string} The indent one nesting level uses.
@@ -1854,12 +1838,9 @@ function hostConfigurationIndent(settingsText) {
  * Remove every entry of one host hook configuration file that runs a retired
  * managed hook script, writing the file only when an entry left it.
  *
- * Claude Code's settings.json and Codex's hooks.json hold the same hook shape and
- * name scripts under the same installed hooks directory, so one walk serves both.
- *
- * A run that retires no hook leaves the file byte-identical, so an install touches
- * a user's configuration for a reason a reader can name. A file the installer
- * cannot parse is left alone with a warning.
+ * Claude settings.json and Codex hooks.json share this hook shape. A run that
+ * retires no hook leaves the file byte-identical. Unreadable JSON is left
+ * alone with a warning.
  *
  * @param {string} settingsPath The absolute host configuration path.
  * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
@@ -1908,10 +1889,8 @@ const PYTHON_HOOK_SUFFIX = '.py';
 /**
  * List every hook command a settings object holds, across every event type.
  *
- * Reading the commands through one walk lets each caller ask its own question of
- * the same shape rules the prune already applies: a group carrying no hooks array
- * contributes nothing, and an entry whose command is absent or is not a string
- * reaches the caller as-is.
+ * A group with no hooks array contributes nothing. An entry whose command is
+ * absent or is not a string still reaches the caller.
  *
  * @param {object} settings The parsed settings.json object.
  * @returns {unknown[]} Every hook entry's command, in the order settings holds them.
@@ -1930,13 +1909,11 @@ function settingsHookCommands(settings) {
 
 /**
  * Read the hook commands one host configuration file holds, or none when it
- * cannot be read. Claude Code's settings.json and Codex's hooks.json share the
- * shape this walk reads.
+ * cannot be read. Claude settings.json and Codex hooks.json share this shape.
  *
- * Take this reading before the run mutates anything. The hook merge rewrites
- * settings.json early and drops every entry naming a script the package no longer
- * ships, so by the time the prunes run the file no longer says what a session
- * started before this install still invokes. This reading does.
+ * Call this before the run mutates settings. The hook merge rewrites
+ * settings.json early, and by prune time the file no longer names what a
+ * session started before this install still invokes.
  *
  * @param {string} settingsPath The absolute host configuration path.
  * @returns {unknown[]} Every hook command the file holds.
@@ -1955,11 +1932,10 @@ export function settingsHookCommandsAtPath(settingsPath) {
 
 
 /**
- * Name the retired hook scripts a hook command still runs.
+ * Name the retired hook scripts a stale registration still runs.
  *
- * The commands come from the reading taken before the run mutated settings.json,
- * so the answer is the set of paths a session started before this install keeps
- * invoking until it restarts. That is what decides where a stand-in belongs.
+ * The commands come from the reading taken before the run mutated settings.json.
+ * Those paths are where a stand-in belongs.
  *
  * @param {unknown[]} allCommands Hook commands read before the run mutated settings.
  * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
@@ -1982,22 +1958,17 @@ export function retiredHookPathsNamedByCommands(
 
 
 /**
- * Leave an inert Python module at each retired hook path a stale registration runs.
+ * Write an inert Python module at each retired hook path a stale registration
+ * still runs.
  *
- * Deleting a registered hook script is what breaks a live session: `python3` on a
- * missing file exits 2, and the harness reads a PreToolUse exit 2 as a block, so
- * every tool call the matcher covers is denied until the session restarts. A
- * module holding one docstring exits 0 with no output, which the harness reads as
- * "allow", so the same stale registration becomes harmless.
+ * Deleting a registered script makes python3 exit 2. The harness treats a
+ * PreToolUse exit 2 as a block, so every matching tool call is denied until
+ * the session restarts. An inert module with one docstring exits 0, which the
+ * harness treats as allow.
  *
- * A path that still holds a file keeps it. The stale-file prune moves the retired
- * script out ahead of this call, so a file standing here is one that prune could
- * not move, and writing over it would destroy content no backup holds.
- *
- * The caller records each written path in the manifest, which is what retires the
- * stand-in later: the next full install writes no such file, so the manifest diff
- * names it retired, and it survives that run only while a registration still
- * names it.
+ * An existing file is left in place. Each written path is recorded in the
+ * manifest so a later install removes the stand-in once no registration names
+ * it.
  *
  * @param {string} hooksRoot The absolute installed hooks directory.
  * @param {Set<string>} registeredRetiredRelativePaths Retired paths a registration names.
@@ -2018,15 +1989,10 @@ export function writeRetiredHookStandIns(hooksRoot, registeredRetiredRelativePat
 
 
 /**
- * List the hooks directories a stand-in run writes into, one per real directory.
+ * List owned hooks directories that exist, one path per distinct real directory.
  *
- * The three roots are pointers to one directory on a healthy install, so writing
- * through each spelling would write the same file three times. Keying on the real
- * path collapses them, and keeps one write per directory on a host where a pointer
- * could not be published and the roots stand apart.
- *
- * A root nothing stands at is left out: no session can register a script under a
- * directory this install never made.
+ * On a healthy install the three roots are pointers to one directory. Keying
+ * on the real path writes the stand-in once. A missing root is skipped.
  *
  * @param {string[]} allHookRootPaths The hooks directories this installer writes.
  * @returns {string[]} One path per distinct hooks directory that exists.
@@ -2085,9 +2051,6 @@ function standInRegistrationNames(allHookRootPaths, standInPaths) {
 
 /**
  * Print the one-line restart notice naming the registrations this run retired.
- *
- * The line names each path rather than counting them, so a reader can match the
- * notice against the hook that stopped running in a session they still have open.
  *
  * @param {string[]} allHookRootPaths The hooks directories this installer writes.
  * @param {string[]} standInPaths The stand-ins this run wrote.
@@ -2437,21 +2400,11 @@ function pruneRetiredHookRegistrations(settingsPath, retiredHookPaths) {
  * Run every prune a full install performs, in the order that keeps ~/.claude
  * consistent at each step.
  *
- * The settings entries of retired hooks go before the file move: a settings.json
- * naming a hook script that has already left ~/.claude/hooks makes every session
- * start invoke a missing script, so the reference leaves first and the script
- * follows.
- *
- * Writing an inert module at each retired path runs last, after the move has
- * emptied those paths. Which paths they are comes from `priorSettingsHookCommands`,
- * read before the run mutated anything, because the hook merge already rewrote
- * settings.json and the file no longer names what a session started before this
- * install still invokes. The caller records each written path in the manifest, so
- * a later run reads them as retired and drops each one no registration names.
- *
- * Both prunes report how much content reached the run's backup root, and their sum
- * is what backup retention answers to: the sweep of older recovery points runs
- * only once this run holds one of its own.
+ * Retired hook entries leave settings before the script is moved, so a live
+ * session does not invoke a missing file. Stand-ins are written last, after
+ * the move has emptied those paths. Paths come from `priorSettingsHookCommands`,
+ * read before the run mutated settings. The caller records each stand-in in
+ * the manifest so a later install removes it once no registration names it.
  *
  * @param {Set<string>} copiedSkillNames Skill directory names this run wrote.
  * @param {string[]|null} priorManifestSkills The prior manifest's skill names, or null.

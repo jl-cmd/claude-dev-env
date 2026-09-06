@@ -191,12 +191,10 @@ def run_polling(
 ) -> int:
     """Run advisory checks until the caller interrupts polling.
 
-    A cycle that fails on a held supervisor lock or a file error writes one
-    JSON error line and the next cycle runs, so a manual run beside the poller
-    never ends the poller.
-
-    A detached poller reads its own stdout into DEVNULL, so the same line also
-    goes to the log file beside the state files, where a person can read it.
+    A SupervisorLockError or OSError in a cycle writes one poll_error JSON
+    line to stdout and to poll-errors.log, newest 200 lines, then the next
+    cycle runs. A detached poller sends stdout to DEVNULL, so the log file
+    beside the state files is the readable copy.
 
     Args:
         advisory_runner: Runner for explicit checkout and pull request pairs.
@@ -241,11 +239,10 @@ def _write_poll_error(
 
 
 def _append_poll_error_line(poll_error_log_path: Path, error_line: str) -> None:
-    """Add one failed-cycle line to the log, keeping the newest lines only.
+    """Append one failed-cycle JSON line, keeping the newest 200 lines.
 
-    A file error here reaches the caller inside the handler that keeps the
-    poller alive, so an unwritable log would end the run the log exists to
-    explain. The line already reached stdout, so an unwritable log is skipped.
+    An unwritable log is skipped. The line already reached stdout, and a
+    raise here would stop the poller.
 
     Args:
         poll_error_log_path: Log file receiving the line.

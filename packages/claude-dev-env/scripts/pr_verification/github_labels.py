@@ -69,11 +69,10 @@ def remove_label_if_present(
     pull_request_number: int,
     label: str,
 ) -> None:
-    """Delete one label from a pull request when a label page still carries it.
+    """Delete one label from a pull request when a labels page still carries it.
 
-    GitHub returns labels one page at a time, so a pull request carrying more
-    labels than one page holds can keep the label on a later page. The walk reads
-    pages until it finds the label or reads a short page.
+    Pages /issues/{n}/labels at per_page=100 until the label is found or a
+    short page ends the walk.
 
     Args:
         read_labels_page: Reads one labels endpoint and returns its parsed body.
