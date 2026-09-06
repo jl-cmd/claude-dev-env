@@ -17,6 +17,18 @@ User-level rule: applies to **every** git repo that uses GitHub with `gh`. Small
 
 **ALWAYS create PRs as DRAFT:** Use `gh pr create --draft` for ALL PRs
 
+**A release bot's PR body is machine input. Leave it alone.** Release automation reads
+back the body of its own merged pull request to decide it owns that merge. Rewriting the
+body, or trimming its header or footer, makes the bot treat the merge as somebody else's
+work: it cuts no tag, the publish job skips, and it opens one more release pull request on
+the next run. Every release lands in the repository and reaches no user.
+
+Spot one by its head branch, which starts `release-please--branches--`, or by a body that
+opens with the bot's own marker line. The description rules in this file, the
+`pr-description-writer` agent, and the house wording style all step aside for it. The
+failure signature in the release job log reads
+`could not parse pull request body as a release PR`.
+
 Use the `pr-description-writer` agent before creating a pull request or
 rewriting its full description. Publish its title and body file through
 `.agents/skills/pull-request/scripts/pull_request.py`.
