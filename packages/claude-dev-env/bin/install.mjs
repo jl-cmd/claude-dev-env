@@ -1838,9 +1838,13 @@ function hostConfigurationIndent(settingsText) {
  * Remove every entry of one host hook configuration file that runs a retired
  * managed hook script, writing the file only when an entry left it.
  *
- * Claude settings.json and Codex hooks.json share this hook shape. A run that
- * retires no hook leaves the file byte-identical. Unreadable JSON is left
- * alone with a warning.
+ * Claude Code's settings.json and Codex's hooks.json hold the same hook shape and
+ * name scripts under the same installed hooks directory, so one walk serves both.
+ *
+ * A run that retires no hook leaves the file byte-identical, so an install touches
+ * a user's configuration for a reason a reader can name. A file the installer
+ * cannot read or cannot parse is left alone with a warning, and the prune carries
+ * on with the other host's configuration file.
  *
  * @param {string} settingsPath The absolute host configuration path.
  * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
@@ -1852,12 +1856,13 @@ export function pruneRetiredHookEntriesFromSettings(
 ) {
     if (retiredHookRelativePaths.size === 0) return 0;
     if (!existsSync(settingsPath)) return 0;
-    const settingsText = readFileSync(settingsPath, 'utf8');
+    let settingsText;
     let settings;
     try {
+        settingsText = readFileSync(settingsPath, 'utf8');
         settings = JSON.parse(settingsText);
-    } catch (parseError) {
-        console.warn(`  Warning: leaving ${basename(settingsPath)} as it stands — the file holds JSON the installer cannot read (${parseError.message})`);
+    } catch (readError) {
+        console.warn(`  Warning: leaving ${basename(settingsPath)} as it stands — the installer cannot read the file as JSON (${readError.message})`);
         return 0;
     }
     if (!settings.hooks || typeof settings.hooks !== 'object') return 0;

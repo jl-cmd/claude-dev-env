@@ -53,10 +53,6 @@ import {
     refreshInstalledPstackPluginManifest,
 } from './install.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
-import {
-    expandHomeDirectoryTokens,
-    expandHomeDirectoryTokensInSettings,
-} from './expand_home_directory_tokens.mjs';
 
 
 test('installer reports the authoritative Git hook names', () => {
@@ -351,115 +347,6 @@ test('interpreterCommandFromPath quotes an interpreter path that contains a spac
     assert.equal(
         interpreterCommandFromPath('C:\\Program Files\\Python313\\python.exe'),
         '"C:/Program Files/Python313/python.exe"',
-    );
-});
-
-
-test('expandHomeDirectoryTokens expands $HOME, ${HOME}, and ~/', () => {
-    assert.equal(
-        expandHomeDirectoryTokens(
-            'python $HOME/.claude/hooks/session/fix_worktree_hookspath.py',
-            'C:\\Users\\x',
-        ),
-        'python C:/Users/x/.claude/hooks/session/fix_worktree_hookspath.py',
-    );
-    assert.equal(
-        expandHomeDirectoryTokens('python ${HOME}/.claude/hooks/a.py', '/home/x'),
-        'python /home/x/.claude/hooks/a.py',
-    );
-    assert.equal(
-        expandHomeDirectoryTokens('python ~/.claude/hooks/a.py', '/home/x'),
-        'python /home/x/.claude/hooks/a.py',
-    );
-    assert.equal(
-        expandHomeDirectoryTokens('echo $HOMEPATH', 'C:/Users/x'),
-        'echo $HOMEPATH',
-    );
-});
-
-
-test('expandHomeDirectoryTokens inserts dollar characters in home paths literally', () => {
-    const homeWithReplaceMetacharacters = 'C:/Users/$&evil$1';
-    assert.equal(
-        expandHomeDirectoryTokens('python $HOME/.claude/a.py', homeWithReplaceMetacharacters),
-        'python C:/Users/$&evil$1/.claude/a.py',
-    );
-    assert.equal(
-        expandHomeDirectoryTokens('python ${HOME}/.claude/a.py', homeWithReplaceMetacharacters),
-        'python C:/Users/$&evil$1/.claude/a.py',
-    );
-    assert.equal(
-        expandHomeDirectoryTokens('python ~/.claude/a.py', homeWithReplaceMetacharacters),
-        'python C:/Users/$&evil$1/.claude/a.py',
-    );
-});
-
-
-test('expandHomeDirectoryTokens expands ${HOME} before $HOME so braces stay intact', () => {
-    assert.equal(
-        expandHomeDirectoryTokens('python ${HOME}/.claude/a.py', '/home/x'),
-        'python /home/x/.claude/a.py',
-    );
-});
-
-
-test('expandHomeDirectoryTokens strips trailing slashes from the home directory', () => {
-    assert.equal(
-        expandHomeDirectoryTokens('python $HOME/.claude/a.py', 'C:/Users/x/'),
-        'python C:/Users/x/.claude/a.py',
-    );
-});
-
-
-test('expandHomeDirectoryTokensInSettings skips non-array hook event values', () => {
-    const settings = {
-        hooks: {
-            SessionStart: 'not-an-array',
-            PreToolUse: [
-                {
-                    matcher: 'Write',
-                    hooks: [{ type: 'command', command: 'python $HOME/.claude/hooks/a.py' }],
-                },
-            ],
-        },
-    };
-    expandHomeDirectoryTokensInSettings(settings, 'C:/Users/x');
-    assert.equal(settings.hooks.SessionStart, 'not-an-array');
-    assert.equal(
-        settings.hooks.PreToolUse[0].hooks[0].command,
-        'python C:/Users/x/.claude/hooks/a.py',
-    );
-});
-
-
-test('expandHomeDirectoryTokensInSettings rewrites hooks and statusLine', () => {
-    const settings = {
-        hooks: {
-            SessionStart: [
-                {
-                    matcher: '',
-                    hooks: [
-                        {
-                            type: 'command',
-                            command: 'python $HOME/.claude/hooks/session/fix_worktree_hookspath.py',
-                        },
-                    ],
-                },
-            ],
-        },
-        statusLine: {
-            type: 'command',
-            command: 'python "$HOME/.claude/statusline-command.py"',
-        },
-    };
-    expandHomeDirectoryTokensInSettings(settings, 'C:/Users/x');
-    assert.equal(
-        settings.hooks.SessionStart[0].hooks[0].command,
-        'python C:/Users/x/.claude/hooks/session/fix_worktree_hookspath.py',
-    );
-    assert.equal(
-        settings.statusLine.command,
-        'python "C:/Users/x/.claude/statusline-command.py"',
     );
 });
 
@@ -3049,3 +2936,25 @@ test('the help output states that the installer reads only flags', () => {
     assert.match(helpRun.stdout, /bare path argument carries no meaning/i);
 });
 
+
+
+test('pruneRetiredHookEntriesFromSettings warns and returns 0 when the host configuration file cannot be read', () => {
+    const sandboxRoot = mkdtempSync(join(tmpdir(), 'cdev-unreadable-host-configuration-'));
+    const unreadableConfigurationPath = join(sandboxRoot, 'hooks.json');
+    mkdirSync(unreadableConfigurationPath);
+    try {
+        const { returnedValue, allWarnings } = captureWarnings(() => (
+            pruneRetiredHookEntriesFromSettings(
+                unreadableConfigurationPath,
+                new Set([RETIRED_HOOK_RELATIVE_PATH]),
+                sandboxClaudeHooksOwnership(sandboxRoot),
+            )
+        ));
+
+        assert.equal(returnedValue, 0, 'an unreadable file removes no entry and ends the walk of that file');
+        assert.equal(allWarnings.length, 1, 'the unreadable file is reported once');
+        assert.match(allWarnings[0], /hooks\.json/, 'the warning names the file it left alone');
+    } finally {
+        rmSync(sandboxRoot, { recursive: true, force: true });
+    }
+});

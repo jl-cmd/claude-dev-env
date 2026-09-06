@@ -34,7 +34,7 @@ export function expandHomeDirectoryTokens(commandString, homeDirectory) {
         () => normalizedHome,
     );
     expandedCommand = expandedCommand.replace(
-        /(^|[\s"'=])~\//g,
+        /(^|[\s"'=;(])~\//g,
         (_fullMatch, boundary) => `${boundary}${normalizedHome}/`,
     );
     return expandedCommand;

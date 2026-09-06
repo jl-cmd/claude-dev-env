@@ -241,8 +241,10 @@ def _write_poll_error(
 def _append_poll_error_line(poll_error_log_path: Path, error_line: str) -> None:
     """Append one failed-cycle JSON line, keeping the newest 200 lines.
 
-    An unwritable log is skipped. The line already reached stdout, and a
-    raise here would stop the poller.
+    A file error here reaches the caller inside the handler that keeps the
+    poller alive, so a log the run cannot read or write would end the run the
+    log exists to explain. A decode failure raises ValueError, so both that and
+    OSError end here. The line already reached stdout, so the log is skipped.
 
     Args:
         poll_error_log_path: Log file receiving the line.
@@ -250,7 +252,7 @@ def _append_poll_error_line(poll_error_log_path: Path, error_line: str) -> None:
     """
     try:
         _replace_poll_error_log(poll_error_log_path, error_line)
-    except OSError:
+    except (OSError, ValueError):
         return
 
 
@@ -270,9 +272,9 @@ def _replace_poll_error_log(poll_error_log_path: Path, error_line: str) -> None:
 def _poll_error_log_lines(poll_error_log_path: Path) -> list[str]:
     if not poll_error_log_path.exists():
         return []
-    return poll_error_log_path.read_text(encoding=UTF8_ENCODING).splitlines(
-        keepends=True
-    )
+    return poll_error_log_path.read_text(
+        encoding=UTF8_ENCODING, errors="replace"
+    ).splitlines(keepends=True)
 
 
 def write_states(

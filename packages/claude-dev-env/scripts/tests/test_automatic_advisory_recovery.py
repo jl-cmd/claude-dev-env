@@ -431,11 +431,20 @@ def test_polling_logs_the_failed_cycle_line_beside_the_state_files(
     ]
 
 
+class _NumberedFailuresRunner:
+    def __init__(self) -> None:
+        self.all_cycles: list[str] = []
+
+    def run_once(self, should_rerun: bool = False) -> tuple[AdvisoryState, ...]:
+        self.all_cycles.append("cycle")
+        raise OSError(f"state file is unavailable on cycle {len(self.all_cycles)}")
+
+
 def test_poll_error_log_keeps_the_newest_two_hundred_lines(tmp_path: Path) -> None:
     poll_error_log_path = tmp_path / "poll-errors.log"
 
     advisory_cli.run_polling(
-        _EveryCycleFailsRunner(OSError("state file is temporarily unavailable")),
+        _NumberedFailuresRunner(),
         0.0,
         io.StringIO(),
         poll_error_log_path,
@@ -443,10 +452,55 @@ def test_poll_error_log_keeps_the_newest_two_hundred_lines(tmp_path: Path) -> No
     )
 
     all_lines = poll_error_log_path.read_text(encoding="utf-8").splitlines()
-    assert len(all_lines) == 200
-    assert json.loads(all_lines[0]) == {
-        "poll_error": "state file is temporarily unavailable"
-    }
+    assert [json.loads(each_line)["poll_error"] for each_line in all_lines] == [
+        f"state file is unavailable on cycle {each_cycle}"
+        for each_cycle in range(51, 251)
+    ]
+
+
+def test_poll_error_log_holding_non_utf8_bytes_leaves_the_poller_running(
+    tmp_path: Path,
+) -> None:
+    poll_error_log_path = tmp_path / "poll-errors.log"
+    poll_error_log_path.write_bytes(b"\xff\xfe not a utf-8 line\n")
+    advisory_runner = _EveryCycleFailsRunner(OSError("state file is unavailable"))
+
+    exit_code = advisory_cli.run_polling(
+        advisory_runner,
+        0.0,
+        io.StringIO(),
+        poll_error_log_path,
+        _stop_polling_after(1),
+    )
+
+    assert exit_code == 0
+    assert advisory_runner.all_cycles == ["cycle"]
+    all_lines = poll_error_log_path.read_text(
+        encoding="utf-8", errors="replace"
+    ).splitlines()
+    assert json.loads(all_lines[-1]) == {"poll_error": "state file is unavailable"}
+
+
+def test_poll_error_log_line_read_value_error_leaves_the_poller_running(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_value_error(poll_error_log_path: Path) -> list[str]:
+        raise ValueError("the log holds bytes no decoder accepts")
+
+    monkeypatch.setattr(advisory_cli, "_poll_error_log_lines", raise_value_error)
+    advisory_runner = _EveryCycleFailsRunner(OSError("state file is unavailable"))
+
+    exit_code = advisory_cli.run_polling(
+        advisory_runner,
+        0.0,
+        io.StringIO(),
+        tmp_path / "poll-errors.log",
+        _stop_polling_after(2),
+    )
+
+    assert exit_code == 0
+    assert advisory_runner.all_cycles == ["cycle", "cycle"]
 
 
 def test_poll_error_log_that_cannot_be_written_leaves_the_poller_running(
