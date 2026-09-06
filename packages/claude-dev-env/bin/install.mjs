@@ -2839,6 +2839,9 @@ Named profiles resolve under LLM_SETTINGS_PROFILES_ROOT or ~/.claude-profiles/<d
 Codex exec-policy files copy into ~/.codex/rules, or CODEX_HOME/rules when CODEX_HOME is set.
 Cursor rule files generate into ~/.cursor/rules as stem-named mdc files, one per Claude rule.
 
+The installer reads only flags. A bare path argument carries no meaning, so
+npx ${PACKAGE_NAME} . lands in the same root as a run with no argument.
+
 Root precedence: --target > CLAUDE_CONFIG_DIR > ~/.claude
 Profile selection (--profile/--profiles) is mutually exclusive with --target.
 Target selection finishes before any mutation. Each target writes its own manifest

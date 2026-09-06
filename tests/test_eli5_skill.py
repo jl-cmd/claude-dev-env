@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-SKILL_PATH = REPOSITORY_ROOT / "packages" / "claude-dev-env" / ".agents" / "skills" / "eli5" / "SKILL.md"
+SHIPPED_SKILLS_PATH = REPOSITORY_ROOT / "packages" / "claude-dev-env" / ".agents" / "skills"
+SKILL_PATH = SHIPPED_SKILLS_PATH / "eli5" / "SKILL.md"
 INSTALLER_PATH = REPOSITORY_ROOT / "packages" / "claude-dev-env" / "bin" / "install.mjs"
 README_PATH = REPOSITORY_ROOT / "README.md"
 
@@ -64,3 +65,21 @@ def test_core_install_and_readme_use_eli5_presentation() -> None:
     assert "'eli5'" in installer_text
     assert "### Skills" in readme_text.splitlines()
     assert "| `eli5` |" in readme_text
+
+
+def should_give_every_shipped_skill_a_readme_row() -> None:
+    readme_text = _read(README_PATH)
+    all_shipped_skill_names = sorted(
+        each_path.name
+        for each_path in SHIPPED_SKILLS_PATH.iterdir()
+        if (each_path / "SKILL.md").is_file()
+    )
+
+    all_missing_names = [
+        each_name
+        for each_name in all_shipped_skill_names
+        if f"| `{each_name}` |" not in readme_text
+    ]
+
+    assert all_shipped_skill_names
+    assert all_missing_names == []

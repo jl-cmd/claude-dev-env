@@ -14,7 +14,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
     collectPackageSourceConflicts,
@@ -2604,3 +2604,16 @@ test('README and vault guidance use current session tools', () => {
     assert.match(vaultRule, /obsidian MCP tools/);
     assert.match(vaultRule, /project.*frontmatter/);
 });
+
+test('the help output states that the installer reads only flags', () => {
+    const helpRun = spawnSync(
+        process.execPath,
+        [fileURLToPath(new URL('./install.mjs', import.meta.url)), '--help'],
+        { encoding: 'utf8', env: process.env },
+    );
+
+    assert.equal(helpRun.status, 0, helpRun.stderr);
+    assert.match(helpRun.stdout, /reads only flags/i);
+    assert.match(helpRun.stdout, /bare path argument carries no meaning/i);
+});
+

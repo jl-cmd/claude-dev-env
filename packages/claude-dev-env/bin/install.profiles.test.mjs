@@ -244,6 +244,16 @@ test('install.mjs --help documents profile target selection', () => {
     assert.match(result.stdout, /targetIdentity|target identity|per target/i);
 });
 
+test('install.mjs --help states that a positional path argument carries no meaning', () => {
+    const result = spawnSync(process.execPath, [INSTALL_MODULE_PATH, '--help'], {
+        encoding: 'utf8',
+        env: process.env,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /reads only flags/i);
+    assert.match(result.stdout, /path argument/i);
+});
+
 test('install.mjs wires select-install-targets for multi-profile entry', () => {
     const source = readFileSync(INSTALL_MODULE_PATH, 'utf8');
     assert.match(source, /select-install-targets\.mjs/);
