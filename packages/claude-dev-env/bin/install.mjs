@@ -175,7 +175,6 @@ export const CORE_INCLUDE_DIRECTORIES = [
 export const CORE_SKILLS = [
     'orchestrator', 'orchestrator-refresh', 'team-advisor',
     'grok-spawn',
-    'pr-small-cl',
     'everything-search',
     'test-runner',
     'privacy-hygiene',
@@ -320,10 +319,6 @@ export const INSTALL_GROUPS = {
         includeDirectories: CORE_INCLUDE_DIRECTORIES,
         includeAllHooks: true,
         includeCodexRules: true,
-    },
-    journal: {
-        description: 'Session logging and memory',
-        skills: ['session-log', 'session-tidy'],
     },
     ...dependencyDiscovery.groups,
 };
@@ -2864,7 +2859,6 @@ ${groupLines}
 
 Examples:
   npx ${PACKAGE_NAME} --only core
-  npx ${PACKAGE_NAME} --only core,journal
   npx ${PACKAGE_NAME} --profile editor --only core
   npx ${PACKAGE_NAME} --profiles editor,mel --only core
 
@@ -2873,6 +2867,9 @@ Skills and agents live under ~/.agents (sibling of ~/.claude). ~/.claude/skills 
 Named profiles resolve under LLM_SETTINGS_PROFILES_ROOT or ~/.claude-profiles/<directoryName>.
 Codex exec-policy files copy into ~/.codex/rules, or CODEX_HOME/rules when CODEX_HOME is set.
 Cursor rule files generate into ~/.cursor/rules as stem-named mdc files, one per Claude rule.
+
+The installer reads only flags. A bare path argument carries no meaning, so
+npx ${PACKAGE_NAME} . lands in the same root as a run with no argument.
 
 Root precedence: --target > CLAUDE_CONFIG_DIR > ~/.claude
 Profile selection (--profile/--profiles) is mutually exclusive with --target.

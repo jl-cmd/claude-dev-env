@@ -184,6 +184,11 @@ def test_actions_run_exact_linter_then_gh_arguments(
         all_cli_arguments, all_environment={}, command_runner=command_runner
     )
     title_arguments = ["--title", PR_TITLE] if "--title" in all_cli_arguments else []
+    head_arguments = (
+        ["--head-branch", all_cli_arguments[all_cli_arguments.index("--head") + 1]]
+        if "--head" in all_cli_arguments
+        else []
+    )
     expected_linter = [
         sys.executable,
         str(LINTER_PATH),
@@ -192,6 +197,7 @@ def test_actions_run_exact_linter_then_gh_arguments(
         *title_arguments,
         "--body-file",
         BODY_FILENAME,
+        *head_arguments,
     ]
     assert exit_code == 0
     assert _calls(command_runner) == [expected_linter, expected_gh]
@@ -394,3 +400,31 @@ def test_cli_rejects_inline_body(capsys: pytest.CaptureFixture[str]) -> None:
     assert raised_exit.value.code == 2
     assert "--body-file" in captured.err
     command_runner.assert_not_called()
+
+
+def should_hand_the_head_branch_to_the_linter_on_create(body_file: Path) -> None:
+    command_runner = Mock(side_effect=[_completion([]), _completion([])])
+    exit_code = pull_request.main(
+        [
+            "create",
+            "--repo",
+            "owner/repo",
+            "--base",
+            "main",
+            "--head",
+            "release-please--branches--main--components--package",
+            "--title",
+            PR_TITLE,
+            "--body-file",
+            str(body_file),
+        ],
+        all_environment={},
+        command_runner=command_runner,
+    )
+    linter_command = _calls(command_runner)[0]
+    assert exit_code == 0
+    assert "--head-branch" in linter_command
+    assert (
+        linter_command[linter_command.index("--head-branch") + 1]
+        == "release-please--branches--main--components--package"
+    )

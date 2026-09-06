@@ -100,7 +100,7 @@ test('a full install writes stem-named Cursor rules and leaves a local extra mdc
     }
 });
 
-test('--only journal skips Cursor rule generation; --only core writes them', () => {
+test('--only journal is rejected before Cursor rules change; --only core writes them', () => {
     const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-cursor-groups-'));
     try {
         const generatedPath = join(
@@ -115,7 +115,10 @@ test('--only journal skips Cursor rule generation; --only core writes them', () 
             'rules',
             'pstack-model-preferences.codex.json',
         );
-        runInstaller(homeDirectory, ['--only', 'journal']);
+        assert.throws(
+            () => runInstaller(homeDirectory, ['--only', 'journal']),
+            error => error.status === 1 && /Unknown group\(s\): journal/.test(error.stderr),
+        );
         assert.equal(existsSync(generatedPath), false);
         assert.equal(existsSync(preferencePath), false);
 

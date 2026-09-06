@@ -185,7 +185,7 @@ test('the shipped Codex rules file has no production-scanner home-path findings'
     );
 });
 
-test('--only journal skips Codex rules; --only core copies them', () => {
+test('--only journal is rejected before Codex rules change; --only core copies them', () => {
     const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-codex-groups-'));
     try {
         const installedRulesPath = join(
@@ -194,7 +194,10 @@ test('--only journal skips Codex rules; --only core copies them', () => {
             CODEX_RULES_DIRECTORY_NAME,
             CODEX_RULES_SHIPPED_FILE_NAME,
         );
-        runInstaller(homeDirectory, ['--only', 'journal']);
+        assert.throws(
+            () => runInstaller(homeDirectory, ['--only', 'journal']),
+            error => error.status === 1 && /Unknown group\(s\): journal/.test(error.stderr),
+        );
         assert.equal(existsSync(installedRulesPath), false);
 
         runInstaller(homeDirectory, ['--only', 'core']);
