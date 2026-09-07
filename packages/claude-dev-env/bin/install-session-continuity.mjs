@@ -2,13 +2,15 @@ import { existsSync, readFileSync, realpathSync, renameSync, writeFileSync } fro
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const supportedHosts = ['claude', 'codex', 'cursor'];
+
 export function continuityHookConfiguration(host, script) {
-    if (host === 'cursor') {
-        throw new Error('Cursor automatic activation is unsupported: beforeSubmitPrompt has no agent-context output, sessionStart is fire-and-forget, and preCompact is observational. No Cursor settings changed.');
-    }
-    if (!['claude', 'codex'].includes(host)) throw new Error(`Unsupported host ${host}`);
+    if (!supportedHosts.includes(host)) throw new Error(`Unsupported host ${host}`);
     if (/[\r\n"`$%]/.test(script)) throw new Error('Hook script path contains shell expansion characters');
     const command = `node "${script.replace(/\\/g, '/')}" hook ${host}`;
+    if (host === 'cursor') {
+        return Object.fromEntries(['sessionStart', 'beforeSubmitPrompt', 'preCompact', 'postToolUse'].map(event => [event, [{ command }]]));
+    }
     const events = host === 'claude' ? ['UserPromptSubmit', 'UserPromptExpansion', 'SessionStart'] : ['UserPromptSubmit', 'SessionStart'];
     return Object.fromEntries(events.map(event => [event, [{
         ...(event === 'SessionStart' ? { matcher: host === 'claude' ? 'startup|resume|compact|clear|fork' : 'startup|resume|compact|clear' } : {}),
@@ -20,19 +22,22 @@ export function continuityHookConfiguration(host, script) {
 export function mergeContinuityHooks(existing, host, script) {
     const additions = continuityHookConfiguration(host, script);
     const mergedConfiguration = structuredClone(existing);
+    if (host === 'cursor') mergedConfiguration.version = 1;
     mergedConfiguration.hooks ||= {};
     for (const [event, groups] of Object.entries(additions)) {
         const current = mergedConfiguration.hooks[event] || [];
-        for (const group of current) {
-            for (const hook of group.hooks || []) {
-                if (hook.command?.includes('/session-continuity/continuity.mjs') && hook.command !== groups[0].hooks[0].command) {
+        const command = host === 'cursor' ? groups[0].command : groups[0].hooks[0].command;
+        for (const entry of current) {
+            for (const hook of entry.hooks || [entry]) {
+                if (hook.command?.includes('/session-continuity/continuity.mjs') && hook.command !== command) {
                     throw new Error('Another continuity installation owns this host config. Select its profile or remove that installation explicitly.');
                 }
             }
         }
-        const kept = current.flatMap(group => {
-            const hooks = (group.hooks || []).filter(hook => hook.command !== groups[0].hooks[0].command);
-            return hooks.length ? [{ ...group, hooks }] : [];
+        const kept = current.flatMap(entry => {
+            if (host === 'cursor') return entry.command === command ? [] : [entry];
+            const hooks = (entry.hooks || []).filter(hook => hook.command !== command);
+            return hooks.length ? [{ ...entry, hooks }] : [];
         });
         mergedConfiguration.hooks[event] = kept.concat(groups);
     }
@@ -41,15 +46,20 @@ export function mergeContinuityHooks(existing, host, script) {
 
 async function main() {
     const requested = process.argv.slice(2);
-    const selected = requested.length ? requested : ['claude', 'codex'];
-    if (selected.some(host => !['claude', 'codex'].includes(host))) continuityHookConfiguration(selected.find(host => !['claude', 'codex'].includes(host)), '');
+    const selected = requested.length ? requested : supportedHosts;
+    const unsupported = selected.find(host => !supportedHosts.includes(host));
+    if (unsupported) throw new Error(`Unsupported host ${unsupported}`);
     const { resolveInstallRoot } = await import('./resolve-install-root.mjs');
     const roots = resolveInstallRoot();
     const script = join(roots.skillsInstallDirectory, 'session-continuity', 'continuity.mjs');
     if (!existsSync(script) || !existsSync(join(dirname(script), 'SKILL.md'))) {
         throw new Error('Run the full claude-dev-env installer from this checkout first so the companion is in the canonical agents home.');
     }
-    const paths = { claude: join(roots.managedRoot, 'settings.json'), codex: join(dirname(roots.codexRulesInstallDirectory), 'hooks.json') };
+    const paths = {
+        claude: join(roots.managedRoot, 'settings.json'),
+        codex: join(dirname(roots.codexRulesInstallDirectory), 'hooks.json'),
+        cursor: join(roots.cursorInstallDirectory, 'hooks.json'),
+    };
     const plans = selected.map(host => {
         const path = paths[host];
         if (!existsSync(dirname(path))) throw new Error(`Host config directory is absent: ${dirname(path)}`);
@@ -70,7 +80,7 @@ async function main() {
         if (readFileSync(plan.path, 'utf8') !== plan.content) throw new Error(`Config read-back mismatch: ${plan.path}`);
         console.log(`Configured and read back: ${plan.path}`);
     }
-    console.log('Review and trust the new hooks in each host. Cursor remains unsupported; no Cursor settings changed.');
+    console.log('Review and trust the new hooks in each host.');
 }
 
 if (process.argv[1] && resolve(realpathSync(process.argv[1])) === fileURLToPath(import.meta.url)) {

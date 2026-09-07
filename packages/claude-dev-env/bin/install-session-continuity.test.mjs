@@ -14,11 +14,24 @@ test('setup preserves other hooks and settings, is idempotent, and rejects compe
     assert.throws(() => continuityHookConfiguration('claude', '/path/with$expansion/continuity.mjs'), /expansion/);
 });
 
-test('Cursor setup refuses an unsupported automatic activation claim without changing config', () => {
-    const existing = { version: 1, hooks: { beforeSubmitPrompt: [{ command: 'existing' }] } };
-    const before = JSON.stringify(existing);
-    assert.throws(() => mergeContinuityHooks(existing, 'cursor', '/skill/continuity.mjs'), /beforeSubmitPrompt has no agent-context output/);
-    assert.equal(JSON.stringify(existing), before);
+test('Cursor setup keeps other hooks, sets the file version, and stays idempotent', () => {
+    const existing = { hooks: { beforeShellExecution: [{ command: 'existing' }] } };
+    const script = '/home/jon/.agents/skills/session-continuity/continuity.mjs';
+    const first = mergeContinuityHooks(existing, 'cursor', script);
+    assert.equal(first.version, 1);
+    assert.equal(first.hooks.beforeShellExecution[0].command, 'existing');
+    assert.deepEqual(mergeContinuityHooks(first, 'cursor', script), first);
+    assert.equal(existing.hooks.beforeShellExecution.length, 1);
+    assert.throws(() => mergeContinuityHooks(first, 'cursor', '/other/session-continuity/continuity.mjs'), /Another continuity installation/);
+});
+
+test('Cursor setup registers only documented context-carrying events', () => {
+    const configuration = continuityHookConfiguration('cursor', '/home/jon/.agents/skills/session-continuity/continuity.mjs');
+    assert.deepEqual(Object.keys(configuration), ['sessionStart', 'beforeSubmitPrompt', 'preCompact', 'postToolUse']);
+    for (const entries of Object.values(configuration)) {
+        assert.equal(entries.length, 1);
+        assert.equal(entries[0].command, 'node "/home/jon/.agents/skills/session-continuity/continuity.mjs" hook cursor');
+    }
 });
 
 for (const host of ['claude', 'codex']) {
