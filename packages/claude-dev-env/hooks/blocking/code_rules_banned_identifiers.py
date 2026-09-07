@@ -30,6 +30,7 @@ from code_rules_shared import (  # noqa: E402
 from hooks_constants.banned_identifiers_constants import (  # noqa: E402
     ALL_BANNED_IDENTIFIERS,
     ALL_BANNED_NOUN_WORDS,
+    ALL_BLAST_RADIUS_EXCEPTION_SUFFIXES,
     BANNED_IDENTIFIER_MESSAGE_SUFFIX,
     BANNED_IDENTIFIER_SKIP_ADVISORY,
     BANNED_NOUN_COMPATIBILITY_COMMENT,
@@ -226,8 +227,11 @@ def _find_banned_noun_word(identifier: str) -> str | None:
     Returns:
         The lowercased banned noun word that appears as a word part inside the
         identifier (e.g., ``'result'`` for ``'HolidayPeakResult'``). Returns
-        ``None`` when no banned noun word is present.
+        ``None`` when no banned noun word is present, and when the identifier
+        ends with a suffix in ``ALL_BLAST_RADIUS_EXCEPTION_SUFFIXES``.
     """
+    if identifier.endswith(ALL_BLAST_RADIUS_EXCEPTION_SUFFIXES):
+        return None
     for each_word in _identifier_word_parts(identifier):
         if each_word in ALL_BANNED_NOUN_WORDS:
             return each_word
@@ -365,7 +369,8 @@ def check_banned_noun_word_boundary(
     Skips test files, config files, hook infrastructure, workflow registries,
     and migrations. Identifiers that exactly match ``ALL_BANNED_IDENTIFIERS``
     are skipped because they are already reported by
-    ``check_banned_identifiers``.
+    ``check_banned_identifiers``. Identifiers that end with a suffix in
+    ``ALL_BLAST_RADIUS_EXCEPTION_SUFFIXES`` are skipped before word splitting.
 
     Scoping mirrors ``check_function_length`` and
     ``check_tests_use_isolated_filesystem_paths`` through the shared

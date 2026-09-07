@@ -43,7 +43,7 @@ Before writing ANY constant: search `config/` for the exact value → semantic m
 
 ## 5. NO ABBREVIATIONS
 
-Full words only (`context`, not `ctx`). Exceptions: `i`/`j`/`k` in loops, `e` for exception. Naming patterns: loop vars `each_*`; booleans `is_/has_/should_/can_/was_/did_`; collections `all_*`; maps `X_by_Y`; preposition params (`from_path=`, `to=`, `into=`). Banned names: `result`, `data`, `output`, `response`, `value`, `item`, `temp`. Banned prefixes: `handle`, `process`, `manage`, `do`. Name a component for what it IS — `Overlay`, `Validator`, `InvoicePreview`.
+Full words only (`context`, not `ctx`). Exceptions: `i`/`j`/`k` in loops, `e` for exception. Naming patterns: loop vars `each_*`; booleans `is_/has_/should_/can_/was_/did_`; collections `all_*`; maps `X_by_Y`; preposition params (`from_path=`, `to=`, `into=`). Banned names: `result`, `data`, `output`, `response`, `value`, `item`, `temp`. Banned prefixes: `handle`, `process`, `manage`, `do`. Name a component for what it IS — `Overlay`, `Validator`, `InvoicePreview`. An identifier that ends in `ItemBlocked` or `RunFatal` is exempt from the banned-noun word check because those suffixes are mandated by the failure-blast-radius rule.
 
 ### Public compatibility definitions
 
