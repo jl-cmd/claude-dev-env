@@ -77,7 +77,7 @@ prompt remain unverified. The adapter's recognition is not proof that every host
 resolves every form as a native skill invocation.
 
 Automatic activation records one session-scope skill requirement carrying the
-`automatic` flag. A later explicit invocation replaces that entry with the
+`automatic` flag. A later explicit invocation writes the entry again with the
 user's own evidence quote and scope. An explicit deactivation stops automatic
 recovery for the same host session; a Claude or Codex `clear` starts a fresh
 automatic set under the reused session id.
@@ -135,7 +135,7 @@ messages and source comparison snapshots and stay outside the repository.
 | Claude/Codex compaction | `SessionStart` with source `compact` reloads the same record and sources |
 | Cursor compaction | `preCompact` marks the record for reload; the next `postToolUse` returns the record and sources as `additional_context` |
 | New unrelated conversation | A new id starts a fresh automatic set and inherits no task, rule, or pending message |
-| Clear | The same-id record is replaced by a fresh automatic set |
+| Clear | The same-id record holds a fresh automatic set |
 | Explicit handoff | The source command binds a snapshot to a known destination host/id; its next supported start callback discovers that record |
 | Explicit deactivation | An inactive tombstone suppresses recovery until another explicit invocation creates a fresh active set |
 

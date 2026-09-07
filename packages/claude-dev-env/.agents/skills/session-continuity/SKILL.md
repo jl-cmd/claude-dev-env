@@ -17,7 +17,7 @@ Each supported host runs this companion when a session starts and when it
 resumes after compaction. With no saved record, the hook writes one holding a
 session-scope `pstack:poteto-mode` requirement marked `automatic`, then returns
 the current Poteto Mode source. Treat that source as the mode the user asked for
-at session scope. A later explicit invocation replaces the automatic entry with
+at session scope. A later explicit invocation writes the entry again with
 the user's own quote and scope. An explicit deactivation stops the automatic
 recovery for that host session.
 
