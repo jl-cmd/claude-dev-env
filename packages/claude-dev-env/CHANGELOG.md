@@ -1,5 +1,48 @@
 # Changelog
 
+## [7.1.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.0.0...claude-dev-env-v7.1.0) (2026-09-07)
+
+
+### Features
+
+* add a separate Poteto session continuity companion ([e5f2fcb](https://github.com/jl-cmd/claude-dev-env/commit/e5f2fcb7a427d6c706439ffa9f0476f8f6654338))
+* add a separate session continuity companion ([c636b00](https://github.com/jl-cmd/claude-dev-env/commit/c636b0058fcc1e03b7cb50dcae04208f513a594d))
+* **hooks:** exempt the blast-radius exception suffixes from the banned-noun check ([c2131af](https://github.com/jl-cmd/claude-dev-env/commit/c2131afe19eb254ece1dc64a0735967bf849afdf))
+* **hooks:** let ItemBlocked and RunFatal names pass the banned-noun check ([40a094f](https://github.com/jl-cmd/claude-dev-env/commit/40a094f463e75c7ccfeae996d5d4b488d9f92fb7))
+* **hooks:** replace blocking policy hooks with advisory verification ([b2493f0](https://github.com/jl-cmd/claude-dev-env/commit/b2493f0f12cf1883213f3c745dc4d3d19c727e9a))
+* **hooks:** replace blocking policy hooks with advisory verification ([0f21faf](https://github.com/jl-cmd/claude-dev-env/commit/0f21faf8e44ab08cb26e40110668cf14df793cba))
+* **lint:** hold a release bot pull request body whole ([b4dd7a2](https://github.com/jl-cmd/claude-dev-env/commit/b4dd7a276563b159b6f05df7bb0d180bd206ca72))
+* **lint:** keep a release automation pull request body whole ([3b17d94](https://github.com/jl-cmd/claude-dev-env/commit/3b17d947d67d25824e6f5214cd83da01c6707fa0))
+* **skills:** add the windows-scheduled-task skill ([fd602b2](https://github.com/jl-cmd/claude-dev-env/commit/fd602b201c163c26c317798cf0dffae602fa2ab2))
+
+
+### Bug Fixes
+
+* **advisory:** keep the poller alive and own hook registrations by root ([9d47765](https://github.com/jl-cmd/claude-dev-env/commit/9d47765ef232fbfed0e3bc6b963c14d9065b6f7f))
+* **advisory:** keep the poller and its children off the screen on Windows ([8418abb](https://github.com/jl-cmd/claude-dev-env/commit/8418abb6809d9b021a5427f78a4bc60207d49e08))
+* **install:** cover the new skill in the ever-shipped name set ([4b36c57](https://github.com/jl-cmd/claude-dev-env/commit/4b36c575cae87973399ec136f3081845f7623d0e))
+* **install:** expand a tilde hook path and keep host config formatting ([904f72c](https://github.com/jl-cmd/claude-dev-env/commit/904f72c0cc3ff94da8d8df7828dd22a6e544f8c1))
+* **install:** keep open sessions working when an install retires a hook ([aaea47e](https://github.com/jl-cmd/claude-dev-env/commit/aaea47eb98a29b8327797c18734ba43fc28c2f56))
+* **install:** keep the prune alive on an unreadable host config and widen the tilde boundary ([4422a13](https://github.com/jl-cmd/claude-dev-env/commit/4422a131c2c0302e5c87f933dc638baa57773d1e))
+* **install:** remove retired skill names and journal links ([1e7efdc](https://github.com/jl-cmd/claude-dev-env/commit/1e7efdc2d3a6c401f98a3a453da89ffa6e142f3d))
+* **install:** remove retired skill names and journal links ([c3702fe](https://github.com/jl-cmd/claude-dev-env/commit/c3702fec480fad2c14a82af128578b0a19966afb))
+* register the companion and satisfy repository checks ([8249918](https://github.com/jl-cmd/claude-dev-env/commit/824991884228207c9ea669b6d4714ff0e56f7dda))
+* **verify:** the verify skill finds its driver and the run passes ([ebdabba](https://github.com/jl-cmd/claude-dev-env/commit/ebdabba3a614b2815df94c072021ef68c6108b1d))
+
+
+### Documentation
+
+* **readme:** match the inventory tables to the package ([5aa88c9](https://github.com/jl-cmd/claude-dev-env/commit/5aa88c906f9eb7588b91721da9a34fbb03236f68))
+* **readme:** match the inventory tables to the package and state that the installer reads only flags ([d1b634c](https://github.com/jl-cmd/claude-dev-env/commit/d1b634ca87393822a8b8b78d3710c5c46483929e))
+* **rules:** ground release claims in artifacts and protect bot PR bodies ([ce9970c](https://github.com/jl-cmd/claude-dev-env/commit/ce9970c96fd004c776fd4af57a1ca4066aeedf48))
+
+
+### Tests
+
+* **advisory:** keep the CI gates green after the label paging change ([bfdd436](https://github.com/jl-cmd/claude-dev-env/commit/bfdd4368c697637fd25bd8f59a1e4acfce6d8830))
+* **hooks:** retire stale blocking expectations the Ubuntu run exposed ([02c1ac5](https://github.com/jl-cmd/claude-dev-env/commit/02c1ac52865ff349a48f41a140e41812a0f9cec9))
+* **install:** pair cleanup checks and drop stale skill count ([0814359](https://github.com/jl-cmd/claude-dev-env/commit/08143591b31dd9dfff6b4360d4504a6c591f7701))
+
 ## [7.0.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v6.0.0...claude-dev-env-v7.0.0) (2026-09-06)
 
 
