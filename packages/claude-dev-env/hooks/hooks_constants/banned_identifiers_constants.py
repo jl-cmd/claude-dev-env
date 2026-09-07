@@ -2,6 +2,10 @@
 
 import re
 
+from hooks_constants.blast_radius_constants import ALL_BLAST_RADIUS_SUFFIXES
+
+ALL_BLAST_RADIUS_EXCEPTION_SUFFIXES: tuple[str, ...] = ALL_BLAST_RADIUS_SUFFIXES
+
 ALL_BANNED_IDENTIFIERS: frozenset[str] = frozenset(
     {
         "result",
