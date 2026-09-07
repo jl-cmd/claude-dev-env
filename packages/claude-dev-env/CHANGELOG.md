@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.2.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.1.0...claude-dev-env-v7.2.0) (2026-09-07)
+
+
+### Features
+
+* **session-continuity:** activate Poteto Mode on session start and after compaction ([1f80dd0](https://github.com/jl-cmd/claude-dev-env/commit/1f80dd0ddf994ec54d9aa5f601fbda78fde26b45))
+* **session-continuity:** activate Poteto Mode on session start and after compaction ([6ec00c7](https://github.com/jl-cmd/claude-dev-env/commit/6ec00c70f3358e3f6f43ac5d0c4bed556bf01234))
+
+
+### Documentation
+
+* **session-continuity:** state present behavior in the companion docs ([23606f5](https://github.com/jl-cmd/claude-dev-env/commit/23606f506d02c8ab79992041a41fc05d4b439411))
+
 ## [7.1.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.0.0...claude-dev-env-v7.1.0) (2026-09-07)
 
 
