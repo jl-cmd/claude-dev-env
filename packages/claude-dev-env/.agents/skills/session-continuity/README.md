@@ -1,9 +1,12 @@
 # Session continuity companion
 
-Status: draft implementation. Claude and Codex adapters have repository-level
-contract tests. Installed-host activation, reload, and agent compliance remain
-unverified. Cursor automatic activation is unsupported by this implementation.
-All three hosts remain part of the requested outcome.
+Status: draft implementation. Claude, Codex, and Cursor adapters have
+repository-level contract tests. Installed-host activation, reload, and agent
+compliance remain unverified.
+
+Every supported host activates Poteto Mode automatically when a session starts
+and when the host resumes the conversation after compaction. An explicit
+invocation still works and still records the user's own scope.
 
 ## The persistence failure
 
@@ -11,6 +14,10 @@ A skill invocation can remain only in conversation context. Compaction can then
 lose its duration, later corrections, or the instruction to reload it. This
 companion saves user-scoped requirements under a stable host-session key and
 returns the current skill contents during supported recovery callbacks.
+
+Automatic activation removes the first half of that failure. A session that
+never carried an explicit invocation still starts with Poteto Mode loaded, so
+the mode does not depend on the user retyping it after each restart.
 
 ## Ownership and setup
 
@@ -33,7 +40,8 @@ The existing selective `--only core` list does not include the companion in this
 draft. Use the full install above. Plugin-only installations need the same
 canonical installed skill before this setup can run.
 
-The setup defaults to `claude codex`. Pass either host name to configure it alone.
+The setup defaults to `claude codex cursor`. Pass one or more host names to
+configure that subset alone.
 It uses `bin/resolve-install-root.mjs`, including `CLAUDE_CONFIG_DIR` and
 `CODEX_HOME`. It merges only its own hook groups into Claude `settings.json` and
 Codex `hooks.json`, preserves other settings, writes a one-time backup before
@@ -51,10 +59,13 @@ that has not been tested. Use builds exposing the documented events below.
 
 | Host | Adapter input | Forms recognized by the companion |
 | --- | --- | --- |
+| Claude Code | `SessionStart` with source `startup`, `resume`, `compact`, `clear`, or `fork` | Automatic session-scope activation, no user text needed |
 | Claude Code | `UserPromptExpansion`, `expansion_type=slash_command` | Existing `poteto-mode` and `pstack:poteto-mode` command names |
 | Claude Code | `UserPromptSubmit` | A leading `/poteto-mode` or `/pstack:poteto-mode`; exact natural forms below |
+| Codex | `SessionStart` with source `startup`, `resume`, `compact`, or `clear` | Automatic session-scope activation, no user text needed |
 | Codex | `UserPromptSubmit` | A leading `$poteto-mode`, `$pstack:poteto-mode`, or `[$pstack:poteto-mode](path)` skill reference; exact natural forms below |
-| Cursor | No automatic adapter installed | The inspected prompt and lifecycle hooks do not establish the required timing |
+| Cursor | `sessionStart` | Automatic session-scope activation, returned as `additional_context` |
+| Cursor | `beforeSubmitPrompt` | The same leading command and natural forms; the prompt is never blocked |
 
 Natural forms include bare `poteto`, `Use Poteto Mode`, `Activate Poteto Mode`,
 `Invoke Poteto Mode`, and `Poteto Mode applies for this entire session`. Exact
@@ -64,6 +75,12 @@ scope; the agent records more complex user scope through the update workflow.
 Free-form style requests and host UI forms that omit the skill token from the
 prompt remain unverified. The adapter's recognition is not proof that every host
 resolves every form as a native skill invocation.
+
+Automatic activation records one session-scope skill requirement carrying the
+`automatic` flag. A later explicit invocation writes the entry again with the
+user's own evidence quote and scope. An explicit deactivation stops automatic
+recovery for the same host session; a Claude or Codex `clear` starts a fresh
+automatic set under the reused session id.
 
 The companion does not define a `/potato-mode` alias or rename `poteto-mode`.
 Quotations, fenced examples, indented code, discussion, imported transcripts, and
@@ -111,12 +128,14 @@ messages and source comparison snapshots and stay outside the repository.
 
 | Situation | Discovery and restoration |
 | --- | --- |
-| First recognized invocation | Hook creates the record, returns its exact path and read-back, and includes the complete companion instructions |
+| Session start with no record | Hook creates an active record holding a session-scope Poteto Mode requirement and returns its path, read-back, and current source |
+| First recognized invocation | Hook creates or updates the record, returns its exact path and read-back, and includes the complete companion instructions |
 | Later user prompt | Same session key; pending evidence is saved and the companion directs the agent to reconcile it before dependent work |
 | Claude/Codex startup or resume | `SessionStart` with the same id finds the active record and reads current active skill sources |
 | Claude/Codex compaction | `SessionStart` with source `compact` reloads the same record and sources |
-| New unrelated conversation | A new id has no record and inherits nothing |
-| Clear | The same-id record is deactivated; a new id starts empty |
+| Cursor compaction | `preCompact` marks the record for reload; the next `postToolUse` returns the record and sources as `additional_context` |
+| New unrelated conversation | A new id starts a fresh automatic set and inherits no task, rule, or pending message |
+| Clear | The same-id record holds a fresh automatic set |
 | Explicit handoff | The source command binds a snapshot to a known destination host/id; its next supported start callback discovers that record |
 | Explicit deactivation | An inactive tombstone suppresses recovery until another explicit invocation creates a fresh active set |
 
@@ -136,15 +155,20 @@ host-truncated source in full before dependent work. Missing sources produce an
 explicit unavailable message. Changed sources include current contents and a
 bounded before/after comparison. Stored snapshots are for comparison only.
 
-Cursor's `beforeSubmitPrompt` returns `continue` and a blocked-user message, not
-agent context. Its `preToolUse` can send agent context by denying a pending tool,
-and `postToolUse` can inject context after a tool runs. That does not cover a
-reply-only invocation before dependent work. `sessionStart` is fire-and-forget
-when a composer conversation is created; `preCompact` cannot block or modify
-compaction. Startup reminders, first-tool-only gates, or stop-hook follow-ups
-would weaken the requested contract. This draft installs none of those as a
-substitute. Shared storage accepts a `cursor` namespace for explicit operations;
-that is not automatic Cursor support.
+Cursor's documented `sessionStart` output carries `additional_context`, so the
+Cursor adapter loads the record and the current sources when a composer
+conversation is created. Cursor has no post-compaction event that returns agent
+context: `preCompact` runs before compaction and returns only a user message.
+The adapter therefore marks the record during `preCompact` and returns the
+record and sources through the next `postToolUse`, whose documented output
+includes `additional_context`. On Cursor the reload lands with the agent's first
+tool result after compaction rather than before it, which is the earliest
+documented delivery point.
+
+Cursor's `beforeSubmitPrompt` output carries `continue` and a user message, not
+agent context. The adapter uses it to save pending user evidence and to mark an
+explicit invocation for the next reload. It always returns `continue: true`, so
+a companion failure never blocks the user's prompt.
 
 Automatic prompt capture and source emission are code paths. Selecting actual
 user rules, checkpointing, loading shortened sources, and following instructions
@@ -153,7 +177,7 @@ compliance merely because a callback ran.
 
 ## Validation and remaining installed-host proof
 
-Run the repository contract tests:
+Run the repository contract tests, which cover all three host adapters:
 
 ```sh
 node --test packages/claude-dev-env/.agents/skills/session-continuity/continuity.test.mjs \
@@ -177,10 +201,10 @@ real compaction and a same-conversation restart, supply no record path, and
 capture discovery plus source reload before dependent work. Repeat with a later
 correction, a new skill, changed/missing sources, simultaneous sessions,
 quoted-only mentions, explicit handoff, deactivation, and reactivation. Keep
-Poteto's source hash unchanged throughout. Cursor needs a supported pre-work
-loading mechanism before equivalent installed-host acceptance can be run.
+Poteto's source hash unchanged throughout. On Cursor, also capture the tool call
+whose `postToolUse` result carries the reload after a compaction.
 
-## Primary references checked on 2026-09-06
+## Primary references checked on 2026-09-07
 
 - [Pstack Poteto Mode source](https://github.com/cursor/plugins/blob/main/pstack/skills/poteto-mode/SKILL.md)
 - [Claude Code hooks](https://code.claude.com/docs/en/hooks)

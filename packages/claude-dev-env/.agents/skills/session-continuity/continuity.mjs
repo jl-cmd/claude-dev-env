@@ -7,6 +7,9 @@ const skillDirectory = dirname(fileURLToPath(import.meta.url));
 const hosts = new Set(['claude', 'codex', 'cursor']);
 const potetoNames = new Set(['poteto-mode', 'pstack:poteto-mode']);
 const companionNames = new Set(['session-continuity', 'claude-dev-env:session-continuity']);
+const cursorEvents = new Set(['sessionStart', 'beforeSubmitPrompt', 'preCompact', 'postToolUse']);
+const automaticQuote = 'Automatic activation configured in the installed host hook';
+const automaticDuration = 'This host session, including its resumes and compactions';
 const digest = value => createHash('sha256').update(value).digest('hex');
 const encode = value => JSON.stringify(value, null, 2);
 const stateRoot = () => resolve(process.env.CDE_CONTINUITY_ROOT || join(skillDirectory, '..', '..', 'state', 'session-continuity'));
@@ -116,16 +119,31 @@ function sourceSnapshot(source) {
 
 function promptEvidence(payload) {
     const text = requireText(payload.prompt, 'user prompt');
-    return { id: digest(`${payload.turn_id || ''}\0${text}`), text, authority: 'user-message-evidence' };
+    return { id: digest(`${payload.turn_id || payload.generation_id || ''}\0${text}`), text, authority: 'user-message-evidence' };
 }
 
-function activate(previous, host, session, payload, trigger) {
-    const record = previous?.status === 'active' ? previous : {
+function emptyRecord(host, session, payload) {
+    return {
         schema: 1, host, session_id: session, status: 'active', revision: 0,
-        workspace: payload.cwd || '',
+        workspace: payload.cwd || (payload.workspace_roots || [])[0] || '',
         task: { id: randomUUID(), goal: '', boundaries: [], constraints: [], completion: [], completed: false },
         requirements: [], pending: [], checkpoint: { completed: [], remaining: [] },
     };
+}
+
+function automaticRecord(host, session, payload) {
+    const record = emptyRecord(host, session, payload);
+    record.requirements.push({
+        id: 'skill:pstack:poteto-mode', kind: 'skill', name: 'pstack:poteto-mode', active: true,
+        scope: 'session', task_id: null, duration: automaticDuration, automatic: true,
+        evidence: { prompt_id: null, quote: automaticQuote },
+        ...sourceSnapshot(potetoSource()),
+    });
+    return record;
+}
+
+function activate(previous, host, session, payload, trigger) {
+    const record = previous?.status === 'active' ? previous : emptyRecord(host, session, payload);
     if (record.task.completed) {
         record.requirements.forEach(requirement => { if (requirement.scope === 'task') requirement.active = false; });
         record.task = { id: randomUUID(), goal: '', boundaries: [], constraints: [], completion: [], completed: false };
@@ -141,7 +159,7 @@ function activate(previous, host, session, payload, trigger) {
             ? { source: current.source, sha256: current.sha256, comparison_text: current.comparison_text }
             : sourceSnapshot(selectedSource);
         const entry = {
-            id, kind: 'skill', name: 'pstack:poteto-mode', active: true,
+            id, kind: 'skill', name: 'pstack:poteto-mode', active: true, automatic: false,
             scope, task_id: scope === 'task' ? record.task.id : null,
             duration: trigger.scope ? trigger.text : current?.duration || 'Current task, until completed or explicitly changed by the user',
             evidence: { prompt_id: evidence.id, quote: trigger.text },
@@ -200,8 +218,61 @@ function render(record, path, loadSources) {
     return sections.join('\n\n');
 }
 
+const deactivationRequest = prompt => /^(?:[/$](?:claude-dev-env:)?session-continuity off|deactivate session continuity)[.!]?\s*$/i.test(prompt || '');
+
+function sessionOpening(host, session, path, previous, payload, reset) {
+    if (!reset && previous) {
+        if (previous.status !== 'active') return {};
+        return { context: render(previous, path, true) };
+    }
+    try {
+        const saved = transact(host, session, () => automaticRecord(host, session, payload));
+        return { message: `Activated Poteto Mode for this session and read the record back: ${saved.path}`,
+            context: render(saved.record, saved.path, true) };
+    } catch (error) {
+        return { message: `Session continuity did not activate Poteto Mode automatically: ${error.message}` };
+    }
+}
+
+function cursorHook(payload) {
+    const event = payload.hook_event_name;
+    if (!cursorEvents.has(event) || payload.agent_id) return {};
+    const session = requireText(payload.conversation_id || payload.session_id, 'host session id');
+    const path = recordPath('cursor', session);
+    const previous = readRecord(path, 'cursor', session);
+    if (event === 'sessionStart') {
+        const opening = sessionOpening('cursor', session, path, previous, payload, false);
+        return { ...(opening.context ? { additional_context: opening.context } : {}), ...(opening.message ? { user_message: opening.message } : {}) };
+    }
+    if (event === 'preCompact') {
+        if (previous?.status !== 'active') return {};
+        transact('cursor', session, record => ({ ...record, reload_pending: true }));
+        return { user_message: 'Poteto Mode and the saved session record reload on the next tool result after this compaction.' };
+    }
+    if (event === 'postToolUse') {
+        if (previous?.status !== 'active' || !previous.reload_pending) return {};
+        const saved = transact('cursor', session, record => ({ ...record, reload_pending: false }));
+        return { additional_context: render(saved.record, saved.path, true) };
+    }
+    if (deactivationRequest(payload.prompt)) {
+        if (previous?.status !== 'active') return { continue: true };
+        const saved = transact('cursor', session, record => ({ ...record, status: 'inactive', reload_pending: false, pending: [] }));
+        return { continue: true, user_message: `Session continuity deactivated at ${saved.path}. Poteto Mode is unchanged.` };
+    }
+    const trigger = invocation(payload.prompt);
+    if (!trigger && previous?.status !== 'active') return { continue: true };
+    const saved = transact('cursor', session, record => {
+        if (trigger) return { ...activate(record, 'cursor', session, payload, trigger), reload_pending: true };
+        if (record?.status !== 'active') throw new Error('Record deactivated during prompt processing; retry');
+        const evidence = promptEvidence(payload);
+        if (!record.pending.some(requirement => requirement.id === evidence.id)) record.pending.push(evidence);
+        return record;
+    });
+    return { continue: true, user_message: `Session continuity recorded this message at ${saved.path}. Revision ${saved.record.revision}.` };
+}
+
 function hook(host, payload) {
-    if (host === 'cursor') throw new Error('Cursor automatic activation is unsupported. beforeSubmitPrompt cannot inject agent context; sessionStart is fire-and-forget and preCompact is observational. No automatic hooks installed.');
+    if (host === 'cursor') return cursorHook(payload);
     const event = payload.hook_event_name;
     if (payload.agent_id || (payload.role && payload.role !== 'user')) return {};
     const accepted = ['SessionStart', 'UserPromptSubmit'];
@@ -211,16 +282,13 @@ function hook(host, payload) {
     const path = recordPath(host, session);
     const previous = readRecord(path, host, session);
     if (event === 'SessionStart') {
-        if (payload.source === 'clear' && previous?.status === 'active') {
-            transact(host, session, record => ({ ...record, status: 'inactive', pending: [] }));
-            return { systemMessage: `Session continuity ended by clear: ${path}` };
-        }
         const sources = host === 'claude' ? ['startup', 'resume', 'compact', 'clear', 'fork'] : ['startup', 'resume', 'compact', 'clear'];
         if (!sources.includes(payload.source)) return {};
-        if (!previous || previous.status !== 'active') return {};
-        return { hookSpecificOutput: { hookEventName: event, additionalContext: render(previous, path, true) } };
+        const opening = sessionOpening(host, session, path, previous, payload, payload.source === 'clear');
+        return { ...(opening.message ? { systemMessage: opening.message } : {}),
+            ...(opening.context ? { hookSpecificOutput: { hookEventName: event, additionalContext: opening.context } } : {}) };
     }
-    if (/^(?:[/$](?:claude-dev-env:)?session-continuity off|deactivate session continuity)[.!]?\s*$/i.test(payload.prompt || '')) {
+    if (deactivationRequest(payload.prompt)) {
         if (!previous || previous.status !== 'active') return {};
         const saved = transact(host, session, record => ({ ...record, status: 'inactive', pending: [] }));
         return { systemMessage: `Session continuity deactivated at ${saved.path}. Poteto Mode is unchanged.`,
@@ -364,12 +432,16 @@ try {
 } catch (error) {
     if (command === 'hook') {
         const message = `Session continuity failed: ${error.message}`;
-        console.log(encode({
-            ...(['UserPromptSubmit', 'UserPromptExpansion'].includes(hookEvent) ? { decision: 'block', reason: message } : {}),
-            systemMessage: message,
-            ...(['SessionStart', 'UserPromptSubmit', 'UserPromptExpansion'].includes(hookEvent)
-                ? { hookSpecificOutput: { hookEventName: hookEvent, additionalContext: `${message}. Stop dependent work until recovery succeeds.` } } : {}),
-        }));
+        const guidance = `${message}. Stop dependent work until recovery succeeds.`;
+        console.log(encode(cursorEvents.has(hookEvent)
+            ? { ...(hookEvent === 'beforeSubmitPrompt' ? { continue: true } : {}), user_message: message,
+                ...(['sessionStart', 'postToolUse'].includes(hookEvent) ? { additional_context: guidance } : {}) }
+            : {
+                ...(['UserPromptSubmit', 'UserPromptExpansion'].includes(hookEvent) ? { decision: 'block', reason: message } : {}),
+                systemMessage: message,
+                ...(['SessionStart', 'UserPromptSubmit', 'UserPromptExpansion'].includes(hookEvent)
+                    ? { hookSpecificOutput: { hookEventName: hookEvent, additionalContext: guidance } } : {}),
+            }));
     } else console.error(error.message);
     process.exitCode = command === 'hook' ? 0 : 1;
 }

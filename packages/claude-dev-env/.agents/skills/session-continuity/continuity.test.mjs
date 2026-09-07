@@ -26,7 +26,7 @@ function fixture(t, host) {
     writeFileSync(second, secondText);
     const script = join(skill, 'continuity.mjs');
     const configPath = join(root, host === 'claude' ? 'settings.json' : 'hooks.json');
-    writeFileSync(configPath, JSON.stringify({ hooks: continuityHookConfiguration(host, script) }));
+    writeFileSync(configPath, JSON.stringify({ ...(host === 'cursor' ? { version: 1 } : {}), hooks: continuityHookConfiguration(host, script) }));
     const env = { ...process.env };
     delete env.CDE_CONTINUITY_ROOT;
     delete env.CDE_POTETO_SOURCE;
@@ -37,11 +37,11 @@ function fixture(t, host) {
         return expectedStatus ? result.stderr : JSON.parse(result.stdout);
     };
     const fire = (event, session, fields = {}) => {
-        const payload = { hook_event_name: event, session_id: session, cwd: root, ...fields };
+        const payload = { hook_event_name: event, cwd: root, ...(host === 'cursor' ? { conversation_id: session } : { session_id: session }), ...fields };
         const config = JSON.parse(readFileSync(configPath, 'utf8'));
         const groups = config.hooks[event] || [];
         const matching = groups.filter(group => !group.matcher || new RegExp(group.matcher).test(event === 'SessionStart' ? fields.source : fields.command_name));
-        return matching.flatMap(group => group.hooks.map(handler => {
+        return matching.flatMap(group => (group.hooks || [group]).map(handler => {
             const result = spawnSync(handler.command, { shell: true, input: JSON.stringify(payload), encoding: 'utf8', env });
             assert.equal(result.status, 0, result.stderr);
             return JSON.parse(result.stdout);
@@ -55,7 +55,6 @@ function fixture(t, host) {
 for (const host of ['claude', 'codex']) {
     test(`${host}: configured invocation emits complete instructions, writes and reads back, restores without a path`, t => {
         const f = fixture(t, host);
-        assert.deepEqual(f.fire('SessionStart', 'session-a', { source: 'startup' }), [{}]);
         assert.equal(existsSync(f.pathFor('session-a')), false);
         const prefix = host === 'codex' ? '$pstack:poteto-mode' : '/pstack:poteto-mode';
         const prompt = `${prefix} for this entire session\nFinish the sample task. Keep changes local. Use second-skill for this task.`;
@@ -86,7 +85,9 @@ for (const host of ['claude', 'codex']) {
         assert.equal(readFileSync(f.poteto, 'utf8'), potetoText);
         record = f.read('session-a');
         assert.equal(record.pending.length, 0);
-        assert.deepEqual(f.fire('SessionStart', 'unrelated-session', { source: 'startup' }), [{}]);
+        const unrelated = f.fire('SessionStart', 'unrelated-session', { source: 'startup' })[0].hookSpecificOutput.additionalContext;
+        assert.equal(unrelated.includes('build sample'), false);
+        assert.equal(unrelated.includes(secondText), false);
     });
 
     test(`${host}: quoting, discussion, tool output and subagent input do not activate`, t => {
@@ -247,12 +248,81 @@ test('a busy record blocks prompt processing, preserves state, and supports a sa
     assert.equal(f.read('busy').pending.length, 2);
 });
 
-test('clear deactivates a reused host id rather than inheriting an unrelated task', t => {
+test('clear drops a reused host id rather than inheriting an unrelated task', t => {
     const f = fixture(t, 'claude');
-    f.submit('clear', '/poteto-mode for this entire session');
+    f.submit('clear', '/poteto-mode for this entire session\nKeep the sample local.');
+    const before = f.read('clear');
     f.fire('SessionStart', 'clear', { source: 'clear' });
-    assert.equal(f.read('clear').status, 'inactive');
-    assert.deepEqual(f.fire('SessionStart', 'clear', { source: 'startup' }), [{}]);
+    const record = f.read('clear');
+    assert.equal(record.status, 'active');
+    assert.notEqual(record.task.id, before.task.id);
+    assert.deepEqual(record.pending, []);
+    assert.deepEqual(record.requirements.map(entry => entry.id), ['skill:pstack:poteto-mode']);
+    assert.equal(record.requirements[0].automatic, true);
+});
+
+for (const host of ['claude', 'codex']) {
+    test(`${host}: session start and compaction activate Poteto Mode with no explicit invocation`, t => {
+        const f = fixture(t, host);
+        const started = f.fire('SessionStart', 'auto', { source: 'startup' })[0];
+        assert.ok(started.systemMessage.includes(f.pathFor('auto')));
+        assert.ok(started.hookSpecificOutput.additionalContext.includes(potetoText));
+        const record = f.read('auto');
+        assert.equal(record.requirements.length, 1);
+        assert.equal(record.requirements[0].scope, 'session');
+        assert.equal(record.requirements[0].automatic, true);
+        assert.equal(record.requirements[0].source, f.poteto);
+        assert.deepEqual(record.pending, []);
+        for (const source of ['compact', 'resume']) {
+            const later = f.fire('SessionStart', 'auto', { source })[0].hookSpecificOutput.additionalContext;
+            assert.ok(later.includes(potetoText));
+        }
+        assert.equal(f.read('auto').revision, record.revision);
+        f.submit('auto', '/session-continuity off');
+        assert.deepEqual(f.fire('SessionStart', 'auto', { source: 'compact' }), [{}]);
+        assert.deepEqual(f.fire('SessionStart', 'auto', { source: 'startup' }), [{}]);
+    });
+
+    test(`${host}: an unavailable Poteto source stops automatic activation without writing a record`, t => {
+        const f = fixture(t, host);
+        writeFileSync(f.poteto, '---\nname: Something Else\n---\n');
+        const started = f.fire('SessionStart', 'broken', { source: 'startup' })[0];
+        assert.match(started.systemMessage, /did not activate Poteto Mode/);
+        assert.equal(existsSync(f.pathFor('broken')), false);
+    });
+}
+
+test('cursor: session start injects Poteto Mode and compaction reloads it on the next tool result', t => {
+    const f = fixture(t, 'cursor');
+    const started = f.fire('sessionStart', 'cursor-a', { session_id: 'composer-1', composer_mode: 'agent' })[0];
+    assert.ok(started.additional_context.includes(potetoText));
+    assert.equal(f.read('cursor-a').requirements[0].automatic, true);
+    assert.deepEqual(f.fire('postToolUse', 'cursor-a', { tool_name: 'Shell' }), [{}]);
+    const compacting = f.fire('preCompact', 'cursor-a', { trigger: 'auto' })[0];
+    assert.ok(compacting.user_message.includes('Poteto Mode'));
+    assert.equal(f.read('cursor-a').reload_pending, true);
+    const reloaded = f.fire('postToolUse', 'cursor-a', { tool_name: 'Shell' })[0];
+    assert.ok(reloaded.additional_context.includes(potetoText));
+    assert.ok(reloaded.additional_context.includes(f.pathFor('cursor-a')));
+    assert.equal(f.read('cursor-a').reload_pending, false);
+    assert.deepEqual(f.fire('postToolUse', 'cursor-a', { tool_name: 'Shell' }), [{}]);
+});
+
+test('cursor: a prompt records evidence, never blocks submission, and reloads named skills after a tool result', t => {
+    const f = fixture(t, 'cursor');
+    f.fire('sessionStart', 'cursor-b', { session_id: 'composer-2' });
+    const submitted = f.fire('beforeSubmitPrompt', 'cursor-b', { prompt: 'Finish the sample task.', generation_id: 'gen-1' })[0];
+    assert.equal(submitted.continue, true);
+    assert.equal(f.read('cursor-b').pending.length, 1);
+    const invoked = f.fire('beforeSubmitPrompt', 'cursor-b', { prompt: '/poteto-mode for this entire session', generation_id: 'gen-2' })[0];
+    assert.equal(invoked.continue, true);
+    assert.equal(f.read('cursor-b').reload_pending, true);
+    assert.ok(f.fire('postToolUse', 'cursor-b', { tool_name: 'Read' })[0].additional_context.includes(potetoText));
+    const off = f.fire('beforeSubmitPrompt', 'cursor-b', { prompt: '/session-continuity off', generation_id: 'gen-3' })[0];
+    assert.equal(off.continue, true);
+    assert.equal(f.read('cursor-b').status, 'inactive');
+    assert.deepEqual(f.fire('sessionStart', 'cursor-b', { session_id: 'composer-2' }), [{}]);
+    assert.deepEqual(f.fire('preCompact', 'cursor-b', { trigger: 'manual' }), [{}]);
 });
 
 test('missing host identity and corrupt records produce visible recovery failures', t => {

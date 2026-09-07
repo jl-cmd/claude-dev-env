@@ -1,6 +1,6 @@
 ---
 name: session-continuity
-description: Preserve user-scoped task requirements and named skills in a host-session record. Loaded by the separate Poteto companion hook or explicitly invoked as session-continuity. triggers with poteto-mode, poteto, /poteto-mode, /poteto.
+description: Preserve user-scoped task requirements and named skills in a host-session record, and activate Poteto Mode automatically at session start and after compaction. Loaded by the separate Poteto companion hook or explicitly invoked as session-continuity. triggers with poteto-mode, poteto, /poteto-mode, /poteto.
 ---
 
 # Session continuity
@@ -10,6 +10,16 @@ description: Preserve user-scoped task requirements and named skills in a host-s
 Preserve the user's instructions at their actual scope. Restore the saved record
 and the current skill sources before work that depends on them. Keep Poteto Mode
 and its invocation unchanged.
+
+## Automatic activation
+
+Each supported host runs this companion when a session starts and when it
+resumes after compaction. With no saved record, the hook writes one holding a
+session-scope `pstack:poteto-mode` requirement marked `automatic`, then returns
+the current Poteto Mode source. Treat that source as the mode the user asked for
+at session scope. A later explicit invocation writes the entry again with
+the user's own quote and scope. An explicit deactivation stops the automatic
+recovery for that host session.
 
 ## On activation or recovery
 
@@ -102,13 +112,14 @@ authoritative location is restored or the user changes the requirement.
 `/session-continuity off` or `Deactivate session continuity.` deactivates the
 companion record. This does not change Poteto Mode. A later explicit Poteto or
 companion invocation starts a new active set in the same record location.
-Deactivated requirements stay out of recovery.
+Deactivated requirements stay out of recovery, and automatic activation stays
+off for that host session until an explicit invocation or a `clear` arrives.
 
 ## Verification limits
 
-Read `README.md` for setup and supported trigger forms. Claude and Codex have
-repository-tested hook adapters. Installed-host delivery, source loading, and
-agent compliance require separate live evidence. Cursor automatic activation
-and recovery are not implemented because the inspected prompt and lifecycle
-hooks do not establish the required pre-work delivery contract. A manual storage
-command is not evidence of automatic activation in any host.
+Read `README.md` for setup and supported trigger forms. Claude, Codex, and
+Cursor have repository-tested hook adapters. Installed-host delivery, source
+loading, and agent compliance require separate live evidence. On Cursor the
+post-compaction reload arrives with the first tool result after compaction,
+because Cursor documents no post-compaction event that returns agent context.
+A manual storage command is not evidence of automatic activation in any host.
