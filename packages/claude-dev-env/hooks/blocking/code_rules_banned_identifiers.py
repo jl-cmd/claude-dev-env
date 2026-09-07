@@ -227,8 +227,7 @@ def _find_banned_noun_word(identifier: str) -> str | None:
     Returns:
         The lowercased banned noun word that appears as a word part inside the
         identifier (e.g., ``'result'`` for ``'HolidayPeakResult'``). Returns
-        ``None`` when no banned noun word is present, and when the identifier
-        ends with a suffix in ``ALL_BLAST_RADIUS_EXCEPTION_SUFFIXES``.
+        ``None`` when no banned noun word is present.
     """
     if identifier.endswith(ALL_BLAST_RADIUS_EXCEPTION_SUFFIXES):
         return None
@@ -369,8 +368,7 @@ def check_banned_noun_word_boundary(
     Skips test files, config files, hook infrastructure, workflow registries,
     and migrations. Identifiers that exactly match ``ALL_BANNED_IDENTIFIERS``
     are skipped because they are already reported by
-    ``check_banned_identifiers``. Identifiers that end with a suffix in
-    ``ALL_BLAST_RADIUS_EXCEPTION_SUFFIXES`` are skipped before word splitting.
+    ``check_banned_identifiers``.
 
     Scoping mirrors ``check_function_length`` and
     ``check_tests_use_isolated_filesystem_paths`` through the shared

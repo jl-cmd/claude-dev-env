@@ -1,5 +1,3 @@
-"""Tests for blast-radius suffix exemption on the banned-noun word check."""
-
 from __future__ import annotations
 
 from code_rules_banned_identifiers import (
