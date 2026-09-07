@@ -30,6 +30,7 @@ from code_rules_shared import (  # noqa: E402
 from hooks_constants.banned_identifiers_constants import (  # noqa: E402
     ALL_BANNED_IDENTIFIERS,
     ALL_BANNED_NOUN_WORDS,
+    ALL_BLAST_RADIUS_EXCEPTION_SUFFIXES,
     BANNED_IDENTIFIER_MESSAGE_SUFFIX,
     BANNED_IDENTIFIER_SKIP_ADVISORY,
     BANNED_NOUN_COMPATIBILITY_COMMENT,
@@ -228,6 +229,8 @@ def _find_banned_noun_word(identifier: str) -> str | None:
         identifier (e.g., ``'result'`` for ``'HolidayPeakResult'``). Returns
         ``None`` when no banned noun word is present.
     """
+    if identifier.endswith(ALL_BLAST_RADIUS_EXCEPTION_SUFFIXES):
+        return None
     for each_word in _identifier_word_parts(identifier):
         if each_word in ALL_BANNED_NOUN_WORDS:
             return each_word
