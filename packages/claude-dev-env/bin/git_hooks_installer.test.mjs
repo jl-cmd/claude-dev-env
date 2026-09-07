@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync, statSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -58,16 +59,16 @@ test('writeAllGitHookShims creates one shim per known hook name', () => {
 });
 
 
-test('known git hooks exclude post-commit', () => {
-    assert.equal(KNOWN_GIT_HOOK_NAMES.includes('post-commit'), false);
+test('known git hooks include post-commit for current-head notices', () => {
+    assert.deepEqual(KNOWN_GIT_HOOK_NAMES, ['pre-commit', 'pre-push', 'post-commit']);
 });
 
 
-test('writeAllGitHookShims does not create a post-commit shim', () => {
+test('writeAllGitHookShims creates the post-commit shim', () => {
     const { temporaryRoot, gitHooksDirectory } = makeTemporaryGitHooksDirectory();
     try {
         writeAllGitHookShims({ gitHooksDirectory });
-        assert.equal(existsSync(join(gitHooksDirectory, 'post-commit')), false);
+        assert.equal(existsSync(join(gitHooksDirectory, 'post-commit')), true);
     } finally {
         rmSync(temporaryRoot, { recursive: true, force: true });
     }
@@ -221,3 +222,156 @@ test('writeGitHookShim rejects hooks directory that is a symlink (loopP5c-5)', (
     }
 });
 
+
+test('generated advisory shims keep temporary Git commit and push available after module failure', () => {
+    const { temporaryRoot, gitHooksDirectory } = makeTemporaryGitHooksDirectory();
+    const repositoryRoot = join(temporaryRoot, 'repository');
+    const bareRepositoryRoot = join(temporaryRoot, 'remote.git');
+    const targetRemote = 'https://github.com/JonEcho/python-automation.git';
+    try {
+        writeFileSync(
+            join(gitHooksDirectory, 'broken_advisory.py'),
+            'def main():\n    raise RuntimeError("advisory failure")\n',
+        );
+        writeGitHookShim({
+            gitHooksDirectory,
+            gitNativeHookName: 'pre-commit',
+            pythonModuleName: 'broken_advisory',
+        });
+        writeGitHookShim({
+            gitHooksDirectory,
+            gitNativeHookName: 'pre-push',
+            pythonModuleName: 'broken_advisory',
+        });
+        mkdirSync(repositoryRoot);
+        execFileSync('git', ['init', '--initial-branch=main', '--quiet'], { cwd: repositoryRoot });
+        execFileSync('git', ['config', 'user.email', 'test@example.invalid'], { cwd: repositoryRoot });
+        execFileSync('git', ['config', 'user.name', 'Verification Test'], { cwd: repositoryRoot });
+        execFileSync('git', ['config', 'core.hooksPath', gitHooksDirectory], { cwd: repositoryRoot });
+        writeFileSync(join(repositoryRoot, 'README.md'), 'check\n');
+        execFileSync('git', ['add', 'README.md'], { cwd: repositoryRoot });
+
+        const commitResult = spawnSync('git', ['commit', '-m', 'initial'], {
+            cwd: repositoryRoot,
+            encoding: 'utf8',
+        });
+        assert.equal(commitResult.status, 0);
+        assert.match(commitResult.stderr, /advisory hook broken_advisory failed: advisory failure/);
+
+        execFileSync('git', ['init', '--bare', '--quiet', bareRepositoryRoot], { cwd: temporaryRoot });
+        execFileSync('git', ['remote', 'add', 'origin', targetRemote], { cwd: repositoryRoot });
+        execFileSync('git', ['config', `url.${bareRepositoryRoot}.insteadOf`, targetRemote], {
+            cwd: repositoryRoot,
+        });
+        const pushResult = spawnSync('git', ['push', 'origin', 'main'], {
+            cwd: repositoryRoot,
+            encoding: 'utf8',
+        });
+        assert.equal(pushResult.status, 0);
+        assert.match(pushResult.stderr, /advisory hook broken_advisory failed: advisory failure/);
+    } finally {
+        rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+});
+
+
+test('generated advisory shim turns a nonzero module return into a success with a warning', () => {
+    const { temporaryRoot, gitHooksDirectory } = makeTemporaryGitHooksDirectory();
+    try {
+        writeFileSync(
+            join(gitHooksDirectory, 'nonzero_advisory.py'),
+            'def main():\n    return 1\n',
+        );
+        const shimPath = writeGitHookShim({
+            gitHooksDirectory,
+            gitNativeHookName: 'pre-commit',
+            pythonModuleName: 'nonzero_advisory',
+        });
+        const shimResult = spawnSync('python', [shimPath], {
+            encoding: 'utf8',
+        });
+        assert.equal(shimResult.status, 0);
+        assert.match(shimResult.stderr, /advisory hook nonzero_advisory returned non-zero: 1/);
+    } finally {
+        rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+});
+
+
+function runGeneratedAdvisoryModule(pythonModuleName, moduleSource) {
+    const { temporaryRoot, gitHooksDirectory } = makeTemporaryGitHooksDirectory();
+    try {
+        if (moduleSource !== null) {
+            writeFileSync(join(gitHooksDirectory, pythonModuleName + '.py'), moduleSource);
+        }
+        const shimPath = writeGitHookShim({
+            gitHooksDirectory,
+            gitNativeHookName: 'pre-commit',
+            pythonModuleName,
+        });
+        return spawnSync('python', [shimPath], {
+            encoding: 'utf8',
+        });
+    } finally {
+        rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+}
+
+
+test('generated advisory shim reports a missing module and succeeds', () => {
+    const shimResult = runGeneratedAdvisoryModule('missing_advisory', null);
+    assert.equal(shimResult.status, 0);
+    assert.match(shimResult.stderr, /advisory hook missing_advisory failed: No module named/);
+});
+
+
+test('generated advisory shim reports a syntax error and succeeds', () => {
+    const shimResult = runGeneratedAdvisoryModule(
+        'broken_syntax',
+        'def main(:\n    return 1\n',
+    );
+    assert.equal(shimResult.status, 0);
+    assert.match(shimResult.stderr, /advisory hook broken_syntax failed:/);
+});
+
+
+test('generated advisory shim reports ordinary SystemExit and succeeds', () => {
+    const shimResult = runGeneratedAdvisoryModule(
+        'ordinary_exit',
+        'def main():\n    raise SystemExit(1)\n',
+    );
+    assert.equal(shimResult.status, 0);
+    assert.match(shimResult.stderr, /advisory hook ordinary_exit failed: 1/);
+});
+
+
+test('generated advisory shim treats successful SystemExit as silent success', () => {
+    for (const [pythonModuleName, moduleSource] of [
+        ['zero_exit', 'def main():\n    raise SystemExit(0)\n'],
+        ['empty_exit', 'def main():\n    raise SystemExit()\n'],
+    ]) {
+        const shimResult = runGeneratedAdvisoryModule(pythonModuleName, moduleSource);
+        assert.equal(shimResult.status, 0);
+        assert.equal(shimResult.stderr, '');
+    }
+});
+
+
+test('generated advisory shim preserves cancellation SystemExit 130', () => {
+    const shimResult = runGeneratedAdvisoryModule(
+        'cancelled_exit',
+        'def main():\n    raise SystemExit(130)\n',
+    );
+    assert.equal(shimResult.status, 130);
+    assert.doesNotMatch(shimResult.stderr, /advisory hook cancelled_exit/);
+});
+
+
+test('generated advisory shim preserves KeyboardInterrupt cancellation', () => {
+    const shimResult = runGeneratedAdvisoryModule(
+        'keyboard_cancel',
+        'def main():\n    raise KeyboardInterrupt()\n',
+    );
+    assert.notEqual(shimResult.status, 0);
+    assert.match(shimResult.stderr, /KeyboardInterrupt/);
+});

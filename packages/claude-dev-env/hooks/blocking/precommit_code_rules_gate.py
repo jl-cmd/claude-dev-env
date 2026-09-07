@@ -1,11 +1,8 @@
-"""Library helper: resolve a directory's Git repository root.
+"""Library helper that resolves a directory to its Git repository root.
 
-``pii_prevention_blocker.py`` and ``pii_payload_scan.py`` import
-``resolve_repository_root`` to find the repository a staged-commit scan
-targets, and ``session_edit_stage_gate.py`` imports it to find the
-repository a commit's unstaged-edit check targets. This module carries no
-hook entry point of its own; the native ``git-hooks/pre_commit.py`` runs
-the real commit-time CODE_RULES enforcement.
+``pii_payload_scan.py`` imports ``resolve_repository_root`` for staged scans.
+This module has no hook entry point. Native ``git-hooks/pre_commit.py`` shows
+the local verification advisory and does not enforce CODE_RULES.
 """
 
 import subprocess

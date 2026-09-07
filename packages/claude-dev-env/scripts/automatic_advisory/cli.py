@@ -1,0 +1,334 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+from collections.abc import Callable, Sequence
+from dataclasses import asdict
+from pathlib import Path
+from typing import TextIO
+
+scripts_directory = Path(__file__).resolve().parents[1]
+if str(scripts_directory) not in sys.path:
+    sys.path.insert(0, str(scripts_directory))
+
+from pr_verification.config.constants import INCOMPLETE_EXIT_CODE, SUCCESS_EXIT_CODE
+from pr_verification.github import GitHubAppAuthenticator
+from pr_verification.lock import SupervisorLock, SupervisorLockError
+from pr_verification.model import RepositorySettings
+
+from automatic_advisory.config.constants import (
+    POLL_ERROR_KEY,
+    POLL_ERROR_LOG_LINE_LIMIT,
+    REPORT_NEWLINE,
+    STATE_FILE_SUFFIX,
+    STATE_STATUS_KEY,
+    STATE_STATUS_NEVER_RUN,
+    UTF8_ENCODING,
+)
+from automatic_advisory.configuration import (
+    AdvisoryConfigurationError,
+    load_advisory_settings,
+)
+from automatic_advisory.model import AdvisorySettings, AdvisoryState
+from automatic_advisory.runner import (
+    AdvisoryGitHub,
+    AutomaticAdvisoryRunner,
+)
+from automatic_advisory.window_flags import detached_poller_creation_flags
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the automatic advisory command parser.
+
+    Returns:
+        Parser for status, one-shot, and polling modes.
+    """
+    parser = argparse.ArgumentParser(prog="cde automatic-advisory")
+    parser.add_argument("--settings", type=Path, required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--once", action="store_true")
+    mode.add_argument("--poll", action="store_true")
+    mode.add_argument("--status", action="store_true")
+    mode.add_argument("--start", action="store_true")
+    parser.add_argument("--rerun", action="store_true")
+    return parser
+
+
+def main(
+    all_arguments: Sequence[str],
+    *,
+    stdout: TextIO = sys.stdout,
+    stderr: TextIO = sys.stderr,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> int:
+    """Run the selected automatic advisory command.
+
+    Args:
+        all_arguments: Command arguments after the executable name.
+        stdout: Stream for state output.
+        stderr: Stream for configuration and runtime errors.
+        sleeper: Delay function used by polling mode.
+
+    Returns:
+        Zero for a completed command or three for an incomplete run.
+    """
+    return _run_main_command(all_arguments, stdout, stderr, sleeper)
+
+
+def _run_main_command(
+    all_arguments: Sequence[str],
+    stdout: TextIO,
+    stderr: TextIO,
+    sleeper: Callable[[float], None],
+) -> int:
+    try:
+        parsed_arguments, settings = _load_command_inputs(all_arguments)
+        return _run_selected_mode(parsed_arguments, settings, stdout, sleeper)
+    except (AdvisoryConfigurationError, OSError, SupervisorLockError) as error:
+        stderr.write(f"{error}{REPORT_NEWLINE}")
+        return INCOMPLETE_EXIT_CODE
+
+
+def _load_command_inputs(
+    all_arguments: Sequence[str],
+) -> tuple[argparse.Namespace, AdvisorySettings]:
+    parsed_arguments = build_parser().parse_args(list(all_arguments))
+    return parsed_arguments, load_advisory_settings(parsed_arguments.settings)
+
+
+def _run_selected_mode(
+    parsed_arguments: argparse.Namespace,
+    settings: AdvisorySettings,
+    stdout: TextIO,
+    sleeper: Callable[[float], None],
+) -> int:
+    if parsed_arguments.status:
+        write_status(settings, stdout)
+        return SUCCESS_EXIT_CODE
+    if parsed_arguments.start:
+        return start_polling(parsed_arguments.settings)
+    advisory_runner = _build_runner(settings)
+    if parsed_arguments.once:
+        write_states(advisory_runner.run_once(parsed_arguments.rerun), stdout)
+        return SUCCESS_EXIT_CODE
+    with SupervisorLock(settings.poll_lock_root):
+        return run_polling(
+            advisory_runner,
+            settings.poll_seconds,
+            stdout,
+            settings.poll_error_log_path,
+            sleeper,
+        )
+
+
+def start_polling(settings_path: Path) -> int:
+    """Start one detached polling process and return without waiting.
+
+    Args:
+        settings_path: JSON settings passed to the detached process.
+
+    Returns:
+        Zero after the child process starts.
+    """
+    process_flags = detached_poller_creation_flags()
+    resolved_settings_path = settings_path.resolve()
+    subprocess.Popen(
+        (
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "--settings",
+            str(resolved_settings_path),
+            "--poll",
+        ),
+        cwd=Path(__file__).resolve().parents[1],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=process_flags,
+        start_new_session=True,
+    )
+    return SUCCESS_EXIT_CODE
+
+
+def _build_runner(
+    settings: AdvisorySettings,
+) -> AutomaticAdvisoryRunner:
+    authenticator = GitHubAppAuthenticator(
+        settings.api_url,
+        settings.app_id,
+        settings.installation_id,
+        settings.private_key_path,
+    )
+    return AutomaticAdvisoryRunner(
+        settings,
+        None,
+        github_factory=lambda repository: _issue_repository_api(
+            authenticator, repository
+        ),
+    )
+
+
+def _issue_repository_api(
+    authenticator: GitHubAppAuthenticator,
+    repository: RepositorySettings,
+) -> AdvisoryGitHub:
+    return authenticator.issue_repository_api(
+        repository,
+        should_write_issue_labels=True,
+    )
+
+
+def run_polling(
+    advisory_runner: AutomaticAdvisoryRunner,
+    poll_seconds: float,
+    stdout: TextIO,
+    poll_error_log_path: Path,
+    sleeper: Callable[[float], None],
+) -> int:
+    """Run advisory checks until the caller interrupts polling.
+
+    A SupervisorLockError or OSError in a cycle writes one poll_error JSON
+    line to stdout and to poll-errors.log, newest 200 lines, then the next
+    cycle runs. A detached poller sends stdout to DEVNULL, so the log file
+    beside the state files is the readable copy.
+
+    Args:
+        advisory_runner: Runner for explicit checkout and pull request pairs.
+        poll_seconds: Delay between completed cycles.
+        stdout: Stream for each persisted state and each failed cycle.
+        poll_error_log_path: Log file receiving each failed cycle line.
+        sleeper: Delay function used between cycles.
+
+    Returns:
+        Zero after a user interrupt.
+    """
+    try:
+        _repeat_poll_cycles(
+            advisory_runner, poll_seconds, stdout, poll_error_log_path, sleeper
+        )
+    except KeyboardInterrupt:
+        return SUCCESS_EXIT_CODE
+
+
+def _repeat_poll_cycles(
+    advisory_runner: AutomaticAdvisoryRunner,
+    poll_seconds: float,
+    stdout: TextIO,
+    poll_error_log_path: Path,
+    sleeper: Callable[[float], None],
+) -> None:
+    while True:
+        _run_one_poll_cycle(advisory_runner, stdout, poll_error_log_path)
+        sleeper(poll_seconds)
+
+
+def _run_one_poll_cycle(
+    advisory_runner: AutomaticAdvisoryRunner,
+    stdout: TextIO,
+    poll_error_log_path: Path,
+) -> None:
+    try:
+        write_states(advisory_runner.run_once(), stdout)
+    except (OSError, SupervisorLockError) as cycle_error:
+        _write_poll_error(cycle_error, stdout, poll_error_log_path)
+
+
+def _write_poll_error(
+    cycle_error: Exception,
+    stdout: TextIO,
+    poll_error_log_path: Path,
+) -> None:
+    error_line = (
+        json.dumps({POLL_ERROR_KEY: str(cycle_error)}, sort_keys=True) + REPORT_NEWLINE
+    )
+    stdout.write(error_line)
+    stdout.flush()
+    _append_poll_error_line(poll_error_log_path, error_line)
+
+
+def _append_poll_error_line(poll_error_log_path: Path, error_line: str) -> None:
+    """Append one failed-cycle JSON line, keeping the newest 200 lines.
+
+    Skip the log on OSError or ValueError. A raise here would stop the poller.
+    The line already reached stdout. Undecodable bytes are replaced on read.
+
+    Args:
+        poll_error_log_path: Log file receiving the line.
+        error_line: JSON error line, newline included.
+    """
+    try:
+        _replace_poll_error_log(poll_error_log_path, error_line)
+    except (OSError, ValueError):
+        return
+
+
+def _replace_poll_error_log(poll_error_log_path: Path, error_line: str) -> None:
+    poll_error_log_path.parent.mkdir(parents=True, exist_ok=True)
+    all_lines = _poll_error_log_lines(poll_error_log_path)
+    all_lines.append(error_line)
+    temporary_log_path = poll_error_log_path.with_name(
+        poll_error_log_path.name + STATE_FILE_SUFFIX
+    )
+    temporary_log_path.write_text(
+        "".join(all_lines[-POLL_ERROR_LOG_LINE_LIMIT:]), encoding=UTF8_ENCODING
+    )
+    os.replace(temporary_log_path, poll_error_log_path)
+
+
+def _poll_error_log_lines(poll_error_log_path: Path) -> list[str]:
+    if not poll_error_log_path.exists():
+        return []
+    return poll_error_log_path.read_text(
+        encoding=UTF8_ENCODING, errors="replace"
+    ).splitlines(keepends=True)
+
+
+def write_states(
+    all_states: tuple[AdvisoryState, ...],
+    stdout: TextIO,
+) -> None:
+    """Write one JSON state line for each registration.
+
+    Args:
+        all_states: Persisted registration states.
+        stdout: Stream receiving each JSON state line.
+    """
+    stdout.writelines(
+        json.dumps(asdict(each_state), sort_keys=True) + REPORT_NEWLINE
+        for each_state in all_states
+    )
+    stdout.flush()
+
+
+def write_status(settings: AdvisorySettings, stdout: TextIO) -> None:
+    """Write the latest state or never-run marker for each registration.
+
+    Args:
+        settings: Explicit advisory registrations to inspect.
+        stdout: Stream receiving one JSON record per registration.
+    """
+    for each_registration in settings.registrations:
+        state_path = each_registration.state_path
+        if not state_path.is_file():
+            stdout.write(
+                json.dumps(
+                    {
+                        "repository": each_registration.repository.slug,
+                        "pull_request": each_registration.pull_request_number,
+                        STATE_STATUS_KEY: STATE_STATUS_NEVER_RUN,
+                    },
+                    sort_keys=True,
+                )
+                + REPORT_NEWLINE
+            )
+            continue
+        stdout.write(state_path.read_text(encoding="utf-8"))
+    stdout.flush()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

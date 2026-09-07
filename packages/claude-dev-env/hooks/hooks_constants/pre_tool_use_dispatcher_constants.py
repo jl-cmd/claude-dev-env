@@ -26,7 +26,6 @@ __all__ = [
     "ALL_WRITE_AND_EDIT_TOOL_NAMES",
     "ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES",
     "ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES",
-    "ALL_IMMEDIATE_HARM_SCRIPT_PATHS",
     "STATE_DESCRIPTION_BLOCKER_MODULE_NAME",
     "SYSTEM_MESSAGE_JOIN_SEPARATOR",
     "HostedHookEntry",
@@ -56,11 +55,6 @@ ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES: frozenset[str] = frozenset(
     ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES | {APPLY_PATCH_TOOL_NAME}
 )
 
-ALL_IMMEDIATE_HARM_SCRIPT_PATHS: tuple[str, ...] = (
-    "blocking/pii_prevention_blocker.py",
-    "blocking/sensitive_file_protector.py",
-    "blocking/write_existing_file_blocker.py",
-)
 
 
 STATE_DESCRIPTION_BLOCKER_MODULE_NAME = "state_description_blocker"
@@ -89,50 +83,6 @@ class HostedHookEntry:
 
 
 ALL_HOSTED_HOOK_ENTRIES: tuple[HostedHookEntry, ...] = (
-    HostedHookEntry(
-        script_relative_path="blocking/write_existing_file_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/sensitive_file_protector.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/pii_prevention_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="validation/hook_format_validator.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/duplicate_rmtree_helper_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/claude_md_orphan_file_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/package_inventory_stale_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/env_var_table_code_drift_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/pytest_testpaths_orphan_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/open_questions_in_plans_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
-    HostedHookEntry(
-        script_relative_path="blocking/docstring_rule_gate_count_blocker.py",
-        applicable_tool_names=ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES,
-    ),
     HostedHookEntry(
         script_relative_path="advisory/refactor_guard.py",
         applicable_tool_names=frozenset({EDIT_TOOL_NAME, MULTI_EDIT_TOOL_NAME}),

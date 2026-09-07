@@ -1,14 +1,8 @@
 """Golden differential and failure-mode tests for the PreToolUse dispatcher.
 
-Each golden differential test runs a payload through every applicable hosted
-hook as its own subprocess (the production path), records each hook's
-allow-or-deny and messages, computes the expected aggregate, then runs the
-dispatcher on the same payload and asserts equal decision and equal message
-union.
-
-The failure-mode tests cover one row each from spec/failure-modes.md:
-early-exit-then-later-deny, multi-deny, context-survival, blocking-hook crash,
-fail-open malformed input.
+The live roster carries only nonblocking edit advisors. These tests keep the
+aggregator contract and prove retired policy registrations fail open while
+explicit standalone checks remain callable.
 """
 
 from __future__ import annotations
@@ -31,7 +25,6 @@ if str(_HOOKS_ROOT) not in sys.path:
 
 from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: E402, I001
     ALL_HOSTED_HOOK_ENTRIES,
-    ALL_IMMEDIATE_HARM_SCRIPT_PATHS,
     APPLY_PATCH_TOOL_NAME,
     BLOCKING_CRASH_DENY_REASON,
     BLOCKING_CRASH_EXIT_CODE,
@@ -407,53 +400,6 @@ def test_write_existing_file_blocker_allows_multi_edit_to_an_existing_path(
     _assert_dispatcher_matches_individual_hooks(payload_text, MULTI_EDIT_TOOL_NAME)
 
 
-def test_context_survives_alongside_deny_reason(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """A non-denying hook's additional context survives in the dispatcher output.
-
-    This tests that hooks whose output is additional-context (not a deny) still
-    have their output preserved when another hook denies.
-    """
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    sensitive_path = str(Path.home() / ".env")
-    payload_text = _write_payload(sensitive_path, "SECRET=abc")
-    dispatcher_result = _run_dispatcher(payload_text)
-    is_deny, _reason = _parse_hook_decision(dispatcher_result)
-    assert is_deny, (
-        "sensitive_file_protector should deny a write to .env — "
-        "if it did not, check whether the path is on the sensitive list"
-    )
-    assert dispatcher_result.stdout.strip(), "Dispatcher must emit output when denying"
-
-
-def test_all_deny_reasons_present_when_multiple_hooks_deny(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
-) -> None:
-    """Preserve every deny reason from the retained file-boundary checks."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    existing_sensitive_path = tmp_path / ".env"
-    existing_sensitive_path.write_text("VALUE=fixture\n", encoding="utf-8")
-    payload_text = _write_payload(str(existing_sensitive_path), "VALUE=changed\n")
-    _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
-    dispatcher_result = _run_dispatcher(payload_text)
-    dispatcher_is_deny, dispatcher_reason = _parse_hook_decision(dispatcher_result)
-    assert dispatcher_is_deny
-    all_expected_deny_reasons: list[str] = []
-    for each_entry in _applicable_entries_for_tool(WRITE_TOOL_NAME):
-        completed_process = _run_hook_subprocess(each_entry.script_relative_path, payload_text)
-        is_deny, reason_text = _parse_hook_decision(completed_process)
-        if is_deny and reason_text:
-            all_expected_deny_reasons.append(reason_text)
-    assert len(all_expected_deny_reasons) >= 2, (
-        "Existing-file and sensitive-file checks must both deny the fixture"
-    )
-    for each_reason in all_expected_deny_reasons:
-        assert each_reason in dispatcher_reason
-
-
 def test_aggregate_exit_code_two_signals_deny() -> None:
     """A HostedHookResult with exit_code 2 and did_crash False signals deny.
 
@@ -672,81 +618,6 @@ def test_emit_allow_preserves_system_message_and_additional_context(
     assert parsed["systemMessage"] == "system-a\nsystem-b"
 
 
-def test_later_hook_deny_survives_early_hook_exit(tmp_path: Path) -> None:
-    """A retained document-reference denial survives earlier successful checks."""
-    payload_text = _orphan_claude_md_payload(tmp_path)
-    _assert_dispatcher_matches_individual_hooks(payload_text, WRITE_TOOL_NAME)
-    is_deny, reason = _parse_hook_decision(_run_dispatcher(payload_text))
-    assert is_deny, reason
-
-
-def test_dispatcher_write_applies_both_groups() -> None:
-    """Write tool triggers both Group A and Group B hooks through the dispatcher.
-
-    Verifies that the set of applicable entries for Write includes entries from
-    both ALL_WRITE_AND_EDIT_TOOL_NAMES (Group A) and ALL_WRITE_EDIT_MULTI_EDIT_TOOL_NAMES
-    (Group B) in the constants.
-    """
-    all_write_entries = _applicable_entries_for_tool(WRITE_TOOL_NAME)
-    all_write_script_paths = {each_entry.script_relative_path for each_entry in all_write_entries}
-    assert "blocking/write_existing_file_blocker.py" in all_write_script_paths, (
-        "write_existing_file_blocker (Group A) must be in Write applicable set"
-    )
-    assert len(all_write_entries) == 11, (
-        f"Write tool must apply to the 11 retained write hooks, got {len(all_write_entries)}"
-    )
-
-
-def test_dispatcher_edit_applies_both_groups() -> None:
-    """Edit triggers Group A, Group B, and the Edit-scoped entry through the
-    dispatcher.
-    """
-    all_edit_entries = _applicable_entries_for_tool(EDIT_TOOL_NAME)
-    all_edit_script_paths = {each_entry.script_relative_path for each_entry in all_edit_entries}
-    assert "blocking/stale_comment_reference_blocker.py" not in all_edit_script_paths
-    assert "advisory/refactor_guard.py" in all_edit_script_paths, (
-        "refactor_guard is Edit-scoped and hosted, so it belongs in the Edit applicable set"
-    )
-    assert len(all_edit_entries) == 13, (
-        f"expected 13 retained Edit entries, got {len(all_edit_entries)}"
-    )
-
-
-def test_dispatcher_multi_edit_reaches_the_sensitive_protector() -> None:
-    """A MultiEdit onto a sensitive path meets the same gate a Write does.
-
-    test_edit_and_multi_edit_applicable_sets_are_equal in the constants suite
-    holds the Edit and MultiEdit rosters equal, so this pins the one hook whose
-    absence would let a secret through a MultiEdit.
-    """
-    all_multi_edit_entries = _applicable_entries_for_tool(MULTI_EDIT_TOOL_NAME)
-    all_multi_edit_script_paths = {
-        each_entry.script_relative_path for each_entry in all_multi_edit_entries
-    }
-    assert "blocking/sensitive_file_protector.py" in all_multi_edit_script_paths, (
-        "sensitive_file_protector belongs in the MultiEdit applicable set"
-    )
-
-
-def test_dispatcher_apply_patch_applies_immediate_harm_hooks() -> None:
-    """apply_patch applies to exactly the immediate-harm roster.
-
-    apply_patch reaches only the retained immediate-harm roster the constants
-    module names, not the full Write/Edit/MultiEdit lint surface.
-    """
-    all_apply_patch_entries = _applicable_entries_for_tool(APPLY_PATCH_TOOL_NAME)
-    all_apply_patch_script_paths = {
-        each_entry.script_relative_path for each_entry in all_apply_patch_entries
-    }
-    assert "blocking/sensitive_file_protector.py" in all_apply_patch_script_paths, (
-        "sensitive_file_protector belongs in the apply_patch applicable set"
-    )
-    assert all_apply_patch_script_paths == set(ALL_IMMEDIATE_HARM_SCRIPT_PATHS), (
-        "apply_patch must apply to exactly the immediate-harm roster, got: "
-        f"{sorted(all_apply_patch_script_paths)}"
-    )
-
-
 def _assert_roster_names_no_run_all_validators_entry() -> None:
     """Assert no hosted-roster ``script_relative_path`` names run_all_validators."""
     all_roster_script_paths = {
@@ -807,40 +678,6 @@ def _orphan_claude_md_payload(tmp_path: Path) -> str:
         "| `file_that_does_not_exist_anywhere.py` | a missing file |\n"
     )
     return _write_payload(claude_md_path, orphan_table)
-
-
-def test_runpy_deny_preserves_additional_context_and_suppress_output(tmp_path: Path) -> None:
-    """A runpy-hosted deny carries its additionalContext and suppressOutput through the dispatcher.
-
-    claude_md_orphan_file_blocker emits hookSpecificOutput.additionalContext and a
-    top-level suppressOutput flag on a deny. The dispatcher must preserve both so
-    the dispatched denial matches the standalone hook's deny shape.
-
-    Args:
-        tmp_path: Pytest temp directory hosting the throwaway CLAUDE.md.
-    """
-    payload_text = _orphan_claude_md_payload(tmp_path)
-
-    standalone_result = _run_hook_subprocess(
-        "blocking/claude_md_orphan_file_blocker.py", payload_text
-    )
-    standalone_payload = json.loads(standalone_result.stdout.strip())
-    standalone_hook_specific = standalone_payload["hookSpecificOutput"]
-    expected_additional_context = standalone_hook_specific["additionalContext"]
-
-    dispatcher_result = _run_dispatcher(payload_text)
-    dispatcher_payload = json.loads(dispatcher_result.stdout.strip())
-    dispatcher_hook_specific = dispatcher_payload.get("hookSpecificOutput", {})
-    assert isinstance(dispatcher_hook_specific, dict)
-    assert dispatcher_hook_specific.get("additionalContext") == expected_additional_context, (
-        "Dispatcher must preserve the runpy hook's additionalContext.\n"
-        f"Expected: {expected_additional_context!r}\n"
-        f"Got: {dispatcher_hook_specific.get('additionalContext')!r}"
-    )
-    assert dispatcher_payload.get("suppressOutput") is True, (
-        "Dispatcher must preserve the runpy hook's suppressOutput flag.\n"
-        f"Got: {dispatcher_payload.get('suppressOutput')!r}"
-    )
 
 
 def _parse_hook_allow(completed_process: subprocess.CompletedProcess[str]) -> bool:
@@ -996,72 +833,6 @@ def _codex_add_patch(relative_file_path: str, file_body: str) -> str:
     )
 
 
-def test_dispatcher_denies_apply_patch_add_with_hardcoded_secret(
-    tmp_path: Path,
-    init_bare_git_repo: Callable[[Path], None],
-    synthetic_github_token: str,
-) -> None:
-    """The dispatcher denies an apply_patch "add" that writes a hardcoded token.
-
-    Proves Done-when scenario 1 (hardcoded secret/PII denied) reaches apply_patch
-    through the real dispatcher subprocess, not only the standalone
-    pii_prevention_blocker test.
-    """
-    repository_root = tmp_path / "repo"
-    init_bare_git_repo(repository_root)
-    patch_command = _codex_add_patch("leaked.py", f"token is {synthetic_github_token}\n")
-    payload_text = _apply_patch_payload(str(repository_root), patch_command)
-
-    dispatcher_result = _run_dispatcher(payload_text)
-    is_deny, reason_text = _parse_hook_decision(dispatcher_result)
-    assert is_deny, (
-        "dispatcher must deny an apply_patch add carrying a hardcoded secret, "
-        f"got stdout {dispatcher_result.stdout.strip()!r}"
-    )
-    assert reason_text, "a deny must carry a non-empty reason"
-
-
-def test_dispatcher_denies_apply_patch_targeting_a_sensitive_path(tmp_path: Path) -> None:
-    """The dispatcher denies an apply_patch "add" that targets a sensitive file.
-
-    Proves Done-when scenario 2 (sensitive path denied) reaches apply_patch
-    through the real dispatcher subprocess.
-    """
-    patch_command = _codex_add_patch(".env", "SECRET_KEY=irrelevant\n")
-    payload_text = _apply_patch_payload(str(tmp_path), patch_command)
-
-    dispatcher_result = _run_dispatcher(payload_text)
-    is_deny, reason_text = _parse_hook_decision(dispatcher_result)
-    assert is_deny, (
-        "dispatcher must deny an apply_patch add targeting a sensitive path, "
-        f"got stdout {dispatcher_result.stdout.strip()!r}"
-    )
-    assert reason_text, "a deny must carry a non-empty reason"
-
-
-def test_dispatcher_denies_apply_patch_add_onto_an_existing_path(tmp_path: Path) -> None:
-    """The dispatcher denies an apply_patch "add" that targets a path already on disk.
-
-    Proves Done-when scenario 3 (overwrite-without-reading denied) reaches
-    apply_patch: a Codex "add" operation onto an existing path is caught by
-    code_rules_enforcer's codex-patch reading, blocking/codex_apply_patch.py's
-    _codex_read_patch_file, which raises CodexPatchError for an add already on
-    disk, reported through the dispatcher's aggregate.
-    """
-    existing_target = tmp_path / "already_here.py"
-    existing_target.write_text("value = 1\n", encoding="utf-8")
-    patch_command = _codex_add_patch("already_here.py", "value = 2\n")
-    payload_text = _apply_patch_payload(str(tmp_path), patch_command)
-
-    dispatcher_result = _run_dispatcher(payload_text)
-    is_deny, reason_text = _parse_hook_decision(dispatcher_result)
-    assert is_deny, (
-        "dispatcher must deny an apply_patch add onto an already-existing path, "
-        f"got stdout {dispatcher_result.stdout.strip()!r}"
-    )
-    assert reason_text, "a deny must carry a non-empty reason"
-
-
 def test_dispatcher_allows_clean_apply_patch_add(tmp_path: Path) -> None:
     """A clean patch can proceed before the staged linter evaluates test pairing."""
     patch_command = _codex_add_patch(
@@ -1074,21 +845,11 @@ def test_dispatcher_allows_clean_apply_patch_add(tmp_path: Path) -> None:
 
 
 ALL_RETAINED_PATHS = {
-    "blocking/write_existing_file_blocker.py",
-    "blocking/sensitive_file_protector.py",
-    "blocking/pii_prevention_blocker.py",
-    "validation/hook_format_validator.py",
-    "blocking/duplicate_rmtree_helper_blocker.py",
-    "blocking/claude_md_orphan_file_blocker.py",
-    "blocking/package_inventory_stale_blocker.py",
-    "blocking/env_var_table_code_drift_blocker.py",
-    "blocking/pytest_testpaths_orphan_blocker.py",
-    "blocking/open_questions_in_plans_blocker.py",
-    "blocking/docstring_rule_gate_count_blocker.py",
     "advisory/refactor_guard.py",
     "advisory/migration_safety_advisor.py",
 }
 ALL_RETIRED_PATHS = {
+    "validation/hook_format_validator.py",
     "blocking/code_rules_enforcer.py",
     "blocking/tdd_enforcer.py",
     "blocking/windows_rmtree_blocker.py",
@@ -1096,10 +857,15 @@ ALL_RETIRED_PATHS = {
     "blocking/subprocess_budget_completeness.py",
     "blocking/hook_prose_detector_consistency.py",
     "blocking/workflow_substitution_slot_blocker.py",
+    "blocking/open_questions_in_plans_blocker.py",
+    "blocking/docstring_rule_gate_count_blocker.py",
+    "blocking/duplicate_rmtree_helper_blocker.py",
+    "blocking/env_var_table_code_drift_blocker.py",
+    "blocking/pytest_testpaths_orphan_blocker.py",
 }
 
 def test_hosted_hook_set_retains_boundaries_and_excludes_replaced_file_checks() -> None:
-    """Keep unresolved controls and exclude the seven staged-linter replacements."""
+    """Keep boundary controls and exclude every registry-backed policy hook."""
     all_hosted_script_paths = {
         each_entry.script_relative_path for each_entry in ALL_HOSTED_HOOK_ENTRIES
     }

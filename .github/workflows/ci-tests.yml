@@ -102,6 +102,7 @@ jobs:
       - name: Install Python test dependencies
         run: |
           pip install -e packages/claude-dev-env/ \
+            -r packages/claude-dev-env/scripts/pr_verification/requirements.txt \
             pytest \
             pytest-xdist \
             pyyaml \
@@ -334,7 +335,7 @@ jobs:
           if ($selectedCount -ne $expectedSelectedCount) {
             throw "selected count ($selectedCount) != expected non-comment line count ($expectedSelectedCount)"
           }
-          $expectedWindowsSemanticsCount = 8
+          $expectedWindowsSemanticsCount = 4
           if ($selectedCount -ne $expectedWindowsSemanticsCount) {
             throw "selected count ($selectedCount) != expected windows-semantics count ($expectedWindowsSemanticsCount)"
           }

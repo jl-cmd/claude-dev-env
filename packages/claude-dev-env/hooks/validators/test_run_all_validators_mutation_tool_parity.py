@@ -12,17 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from hooks_constants.pre_tool_use_dispatcher_constants import (
-    ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES,
-)
-
 from .run_all_validators import run_validators_entrypoint_subprocess
 
 pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
 
 HOOKS_JSON_PATH = Path(__file__).resolve().parents[1] / "hooks.json"
 VALIDATORS_RUNNER_COMMAND_MARKER = "validators.run_all_validators"
-MATCHER_TOOL_NAME_SEPARATOR = "|"
 DENY_DECISION_FRAGMENT = '"permissionDecision": "deny"'
 MAGIC_VALUE_VALIDATOR_NAME = "Magic Values"
 
@@ -91,7 +86,7 @@ def write_clean_module(target_directory: Path, module_name: str) -> Path:
 
 
 class TestMutationToolRegistration:
-    def test_validators_gate_is_registered_on_every_mutation_tool(self) -> None:
+    def test_validators_gate_has_no_live_mutation_registration(self) -> None:
         hooks_document = json.loads(HOOKS_JSON_PATH.read_text(encoding="utf-8"))
         all_matchers = [
             each_group["matcher"]
@@ -99,11 +94,8 @@ class TestMutationToolRegistration:
             for each_hook in each_group.get("hooks", [])
             if VALIDATORS_RUNNER_COMMAND_MARKER in each_hook.get("command", "")
         ]
-        assert len(all_matchers) == 1, all_matchers
-        assert (
-            set(all_matchers[0].split(MATCHER_TOOL_NAME_SEPARATOR))
-            == ALL_WRITE_EDIT_MULTI_EDIT_APPLY_PATCH_TOOL_NAMES
-        )
+        assert all_matchers == [], all_matchers
+
 
 
 class TestMultiEditPayloadLane:

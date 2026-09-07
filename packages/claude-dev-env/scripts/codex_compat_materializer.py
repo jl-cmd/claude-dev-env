@@ -615,7 +615,7 @@ def _resolved_codex_enforcer_command(config: MaterializerConfig) -> str:
 
 def _source_codex_enforcer_hook(
     all_source_manifest: dict[str, object], command: str
-) -> dict[str, object]:
+) -> dict[str, object] | None:
     """Read the source enforcer hook shape and resolve its target command."""
     all_events = all_source_manifest.get("hooks")
     if not isinstance(all_events, dict):
@@ -637,11 +637,7 @@ def _source_codex_enforcer_hook(
             resolved_hook = dict(each_hook)
             resolved_hook[codex_hook_command_field_name] = command
             return resolved_hook
-    return {
-        "type": "command",
-        codex_hook_command_field_name: command,
-        "timeout": codex_hook_timeout_seconds,
-    }
+    return None
 
 
 def _hook_records(raw_hooks: object) -> list[dict[str, object]]:
@@ -666,6 +662,72 @@ def _is_code_rules_enforcer_hook(all_hook_record: dict[str, object]) -> bool:
         or each_token.endswith(codex_enforcer_path_suffix)
         for each_token in all_command_tokens
     )
+
+
+def _is_managed_codex_enforcer_hook(
+    all_hook_record: dict[str, object], managed_command: str
+) -> bool:
+    """Report whether a hook record is the materializer's target command."""
+    command = all_hook_record.get(codex_hook_command_field_name)
+    if not isinstance(command, str):
+        return False
+    normalized_command = command.replace("\\", path_separator)
+    normalized_managed_command = managed_command.replace("\\", path_separator)
+    if os.name == "nt":
+        return normalized_command.casefold() == normalized_managed_command.casefold()
+    return normalized_command == normalized_managed_command
+
+
+def _without_managed_codex_enforcer(
+    entry: object, managed_command: str
+) -> object | None:
+    """Remove the managed enforcer while preserving every other hook record."""
+    if not isinstance(entry, dict):
+        return entry
+    if entry.get("matcher") != codex_hook_matcher:
+        return entry
+    copied_entry = dict(entry)
+    all_hook_records = copied_entry.get(codex_hook_records_field_name)
+    if not isinstance(all_hook_records, list):
+        return copied_entry
+    all_retained_hooks = [
+        each_hook
+        for each_hook in all_hook_records
+        if not isinstance(each_hook, dict)
+        or not _is_managed_codex_enforcer_hook(each_hook, managed_command)
+    ]
+    if all_retained_hooks == all_hook_records:
+        return copied_entry
+    if not all_retained_hooks:
+        return None
+    copied_entry[codex_hook_records_field_name] = all_retained_hooks
+    return copied_entry
+
+
+def _remove_managed_codex_enforcer(
+    all_target_manifest: dict[str, object], managed_command: str
+) -> dict[str, object]:
+    """Remove the retired managed enforcer from the target manifest."""
+    all_events = all_target_manifest.get(codex_hook_records_field_name, {})
+    if not isinstance(all_events, dict):
+        raise MaterializerError("Codex hook manifest requires a hooks object")
+    all_pre_tool_use = all_events.get(codex_hook_event_name)
+    if all_pre_tool_use is None:
+        return _prune_retired_codex_hooks(all_target_manifest)
+    if not isinstance(all_pre_tool_use, list):
+        raise MaterializerError("Codex hook manifest requires a PreToolUse list")
+    all_retained_entries: list[object] = []
+    for each_entry in all_pre_tool_use:
+        maybe_retained_entry = _without_managed_codex_enforcer(
+            each_entry, managed_command
+        )
+        if maybe_retained_entry is not None:
+            all_retained_entries.append(maybe_retained_entry)
+    merged_events = dict(all_events)
+    merged_events[codex_hook_event_name] = all_retained_entries
+    merged_manifest = dict(all_target_manifest)
+    merged_manifest[codex_hook_records_field_name] = merged_events
+    return _prune_retired_codex_hooks(merged_manifest)
 
 
 def _is_retired_codex_hook_command(command: object) -> bool:
@@ -764,13 +826,20 @@ def _has_modified_codex_enforcer_hook(
     current_hooks = _codex_enforcer_hooks(current_manifest)
     if not current_hooks:
         return False
-    return current_hooks != _codex_enforcer_hooks(planned_manifest)
+    planned_hooks = _codex_enforcer_hooks(planned_manifest)
+    if all(each_hook in current_hooks for each_hook in planned_hooks):
+        return False
+    return current_hooks != planned_hooks
 
 
 def _merge_codex_hook_manifest(
-    all_target_manifest: dict[str, object], all_focused_hook: dict[str, object]
+    all_target_manifest: dict[str, object],
+    all_focused_hook: dict[str, object] | None,
+    managed_command: str,
 ) -> dict[str, object]:
     """Preserve target hook order while merging one deterministic enforcer entry."""
+    if all_focused_hook is None:
+        return _remove_managed_codex_enforcer(all_target_manifest, managed_command)
     all_events = all_target_manifest.get(codex_hook_records_field_name, {})
     if not isinstance(all_events, dict):
         raise MaterializerError("Codex hook manifest requires a hooks object")
@@ -797,13 +866,17 @@ def _merge_codex_hook_manifest(
         if merged_apply_patch_entry is None:
             merged_apply_patch_entry = copied_entry
             merged_hooks = [
-                each_hook for each_hook in all_hook_records if not _is_code_rules_enforcer_hook(each_hook)
+                each_hook
+                for each_hook in all_hook_records
+                if not _is_managed_codex_enforcer_hook(each_hook, managed_command)
             ]
             merged_apply_patch_entry[codex_hook_records_field_name] = merged_hooks
             merged_pre_tool_use.append(merged_apply_patch_entry)
         else:
             merged_hooks.extend(
-                each_hook for each_hook in all_hook_records if not _is_code_rules_enforcer_hook(each_hook)
+                each_hook
+                for each_hook in all_hook_records
+                if not _is_managed_codex_enforcer_hook(each_hook, managed_command)
             )
     if merged_apply_patch_entry is None:
         merged_apply_patch_entry = {
@@ -831,10 +904,11 @@ def _build_codex_hook_projection(config: MaterializerConfig) -> PlannedFile | No
         if target_path.is_file()
         else {"hooks": {}}
     )
-    focused_hook = _source_codex_enforcer_hook(
-        source_manifest, _resolved_codex_enforcer_command(config)
+    managed_command = _resolved_codex_enforcer_command(config)
+    focused_hook = _source_codex_enforcer_hook(source_manifest, managed_command)
+    projected_manifest = _merge_codex_hook_manifest(
+        target_manifest, focused_hook, managed_command
     )
-    projected_manifest = _merge_codex_hook_manifest(target_manifest, focused_hook)
     projected_content = json.dumps(projected_manifest, ensure_ascii=False, indent=manifest_indentation_width) + line_separator
     return PlannedFile(
         codex_hook_manifest_source_path,
@@ -849,6 +923,8 @@ def _build_codex_hook_dependency_projection(
     config: MaterializerConfig,
 ) -> list[PlannedFile]:
     """Build the reviewed source files required by the target enforcer."""
+    if not _has_source_codex_enforcer(config):
+        return []
     all_dependencies: list[PlannedFile] = []
     for each_relative_path in codex_hook_dependency_manifest:
         source_path = _validated_source_file(
@@ -869,6 +945,16 @@ def _build_codex_hook_dependency_projection(
             )
         )
     return all_dependencies
+
+
+def _has_source_codex_enforcer(config: MaterializerConfig) -> bool:
+    """Report whether hooks.json registers the enforcer."""
+    source_path = _find_codex_hook_source(config)
+    if source_path is None:
+        return False
+    source_manifest = _read_json_object(source_path, "source Codex hook manifest")
+    managed_command = _resolved_codex_enforcer_command(config)
+    return _source_codex_enforcer_hook(source_manifest, managed_command) is not None
 
 
 def discover_agents(config: MaterializerConfig) -> list[ClaudeAgent]:

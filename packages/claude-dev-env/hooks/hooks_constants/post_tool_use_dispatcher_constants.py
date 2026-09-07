@@ -55,10 +55,6 @@ class PostHostedHookEntry:
 
 ALL_POST_HOSTED_HOOK_ENTRIES: tuple[PostHostedHookEntry, ...] = (
     PostHostedHookEntry(
-        script_relative_path="validation/mypy_validator.py",
-        is_blocking=True,
-    ),
-    PostHostedHookEntry(
         script_relative_path="workflow/auto_formatter.py",
         is_blocking=False,
     ),

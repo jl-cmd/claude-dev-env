@@ -100,17 +100,6 @@ def test_clean_command_yields_no_decision_matching_the_standalone_chain() -> Non
     assert dispatcher_decision == expected_decision
 
 
-def test_destructive_command_asks_matching_the_standalone_chain() -> None:
-    """A destructive command the chain asks on makes the dispatcher ask too."""
-    payload_text = _bash_payload("rm -rf /")
-    expected_decision = _expected_precedence(payload_text, BASH_TOOL_NAME)
-    dispatcher_decision, _reason = _decision_from_stdout(
-        _run_process(_DISPATCHER_SCRIPT, payload_text).stdout
-    )
-    assert dispatcher_decision == expected_decision
-    assert expected_decision == "ask"
-
-
 def test_dispatcher_exits_zero_on_a_clean_command() -> None:
     """The dispatcher exits zero for a command no hook decides on."""
     completed = _run_process(_DISPATCHER_SCRIPT, _bash_payload("echo hi"))
@@ -212,19 +201,6 @@ def test_additional_context_is_collected_from_deciding_hooks() -> None:
     assert aggregated.all_additional_context == ["see docs/runbook.md"]
 
 
-def test_powershell_selects_the_shared_hooks_in_registration_order() -> None:
-    """Selecting for PowerShell yields the shared hooks in registration order."""
-    powershell_paths = [
-        each_entry.script_relative_path
-        for each_entry in select_applicable_entries(POWERSHELL_TOOL_NAME)
-    ]
-    assert powershell_paths == [
-        "blocking/cursor_cli_python_misfire_blocker.py",
-        "blocking/unscoped_search_blocker.py",
-        "blocking/pii_prevention_blocker.py",
-    ]
-
-
 def test_dispatcher_imports_standalone_with_only_blocking_on_the_path() -> None:
     """The dispatcher's bootstrap resolves hooks_constants without hooks/ on PYTHONPATH."""
     subprocess_environment = {**os.environ, "PYTHONPATH": str(_BLOCKING_DIR)}
@@ -259,48 +235,3 @@ def test_emit_decision_re_emits_silent_deny_fields(
     assert hook_specific["additionalContext"] == "see docs/runbook.md"
     assert emitted_payload["systemMessage"] == "[gh-gate] blocked redirected gh pr create"
     assert emitted_payload["suppressOutput"] is True
-
-
-def test_dispatcher_denies_subshell_disguised_as_arithmetic_expansion() -> None:
-    """The dispatcher denies a `$((cd X) && Y)` subshell, not only the bare hook.
-
-    `echo $((cd /tmp) && pwd)` opens with a `$((` two-character lookahead
-    match, so a function-level test alone does not prove the block reaches
-    the live Bash tool path.
-    """
-    payload_text = _bash_payload("echo $((cd /tmp) && pwd)")
-    decision, _reason = _decision_from_stdout(_run_process(_DISPATCHER_SCRIPT, payload_text).stdout)
-    assert decision == "deny"
-
-
-def test_dispatch_emits_deny_immediately_and_skips_later_hooks(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """A mid-chain deny emits at once and does not invoke later hosted hooks."""
-    all_call_paths: list[str] = []
-
-    def _fake_run_hook(script_path: str, payload_text: str) -> HostedHookRun:
-        del payload_text
-        all_call_paths.append(script_path)
-        script_name = Path(script_path).name
-        if script_name == "destructive_command_blocker.py":
-            return HostedHookRun(
-                captured_stdout=_decision_json("deny", "blocked early"),
-                did_crash=False,
-            )
-        if script_name == "precommit_code_rules_gate.py":
-            raise AssertionError("later hooks must not run after an early deny")
-        return HostedHookRun(captured_stdout="", did_crash=False)
-
-    monkeypatch.setattr(
-        "bash_pre_tool_use_dispatcher.run_hook_capturing_output",
-        _fake_run_hook,
-    )
-    dispatch(_bash_payload("rm -rf /"), BASH_TOOL_NAME)
-    captured = capsys.readouterr()
-    decision, reason = _decision_from_stdout(captured.out)
-    assert decision == "deny"
-    assert "blocked early" in reason
-    assert any(path.endswith("destructive_command_blocker.py") for path in all_call_paths)
-    assert not any(path.endswith("precommit_code_rules_gate.py") for path in all_call_paths)

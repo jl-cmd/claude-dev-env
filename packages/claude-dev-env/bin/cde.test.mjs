@@ -7,6 +7,7 @@ import test from "node:test";
 
 import {
     buildLintCommand,
+    buildVerifyCommand,
     createHelpText,
     findPython,
     main,
@@ -43,6 +44,8 @@ test("help describes lint source modes", () => {
     assert.match(helpText, /--base/);
     assert.match(helpText, /--repository/);
     assert.match(helpText, /--text-as/);
+    assert.match(helpText, /cde verify/);
+    assert.match(helpText, /--manifest/);
 });
 
 
@@ -64,6 +67,51 @@ test("forwards lint arguments to the python command without a shell", () => {
     assert.equal(command.executable, "python-test");
     assert.equal(command.arguments[0], lintScriptPath);
     assert.deepEqual(command.arguments.slice(1), ["--files", "a.py", "--format", "json"]);
+});
+
+
+test("forwards verification arguments to the authoritative python command", () => {
+    const command = buildVerifyCommand("python-test", [
+        "--manifest",
+        "manifest with spaces.json",
+        "--repo",
+        "repo with spaces",
+        "--base",
+        "base-sha",
+        "--output",
+        "report.json",
+    ]);
+    assert.equal(command.executable, "python-test");
+    assert.match(command.arguments[0], /scripts[\\/]local_verification[\\/]cli\.py$/);
+    assert.deepEqual(command.arguments.slice(1), [
+        "--manifest",
+        "manifest with spaces.json",
+        "--repo",
+        "repo with spaces",
+        "--base",
+        "base-sha",
+        "--output",
+        "report.json",
+    ]);
+});
+
+
+test("dispatches verify without changing forwarded arguments", async () => {
+    let receivedCommand;
+    const exitCode = await main(
+        ["verify", "--python", "python-test", "--manifest", "manifest.json"],
+        {
+            findPython: async () => "unused-python",
+            runCommand: async (command) => {
+                receivedCommand = command;
+                return 0;
+            },
+        },
+    );
+    assert.equal(exitCode, 0);
+    assert.equal(receivedCommand.executable, "python-test");
+    assert.match(receivedCommand.arguments[0], /local_verification[\\/]cli\.py$/);
+    assert.deepEqual(receivedCommand.arguments.slice(1), ["--manifest", "manifest.json"]);
 });
 
 

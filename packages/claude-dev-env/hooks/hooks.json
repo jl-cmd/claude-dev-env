@@ -7,103 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"import sys; sys.path.insert(0, r'${CLAUDE_PLUGIN_ROOT}/hooks'); from validators.run_all_validators import main; sys.exit(main())\" --pre-tool-use",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit|MultiEdit|apply_patch",
-        "hooks": [
-          {
-            "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pre_tool_use_dispatcher.py",
             "timeout": 60
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/bash_pre_tool_use_dispatcher.py",
-            "timeout": 400
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__plugin_github_github__add_issue_comment",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/bot_mention_comment_blocker.py",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__plugin_github_github__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/pii_prevention_blocker.py",
-            "timeout": 20
-          }
-        ]
-      },
-      {
-        "matcher": "Agent|Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/fable_spawn_gate.py",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Agent|Task|multi_agent_v1__spawn_agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/luna_fast_mode_gate.py",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "ScheduleWakeup|CronCreate",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/orchestrator_refresh_reschedule_gate.py",
-            "timeout": 15
-          }
-        ]
-      },
-      {
-        "matcher": "AskUserQuestion",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/plain_language_blocker.py",
-            "timeout": 10
-          },
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/ask_user_question_shape_blocker.py",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "SendUserFile",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/send_user_file_open_locally_blocker.py",
-            "timeout": 10
           }
         ]
       },
@@ -172,18 +77,6 @@
         ]
       }
     ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/stop_dispatcher.py",
-            "timeout": 90
-          }
-        ]
-      }
-    ],
     "SessionEnd": [
       {
         "matcher": "",
@@ -196,18 +89,6 @@
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/session_edit_tracker_cleanup.py",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "ConfigChange": [
-      {
-        "matcher": "user_settings",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/lifecycle/config_change_guard.py",
             "timeout": 10
           }
         ]

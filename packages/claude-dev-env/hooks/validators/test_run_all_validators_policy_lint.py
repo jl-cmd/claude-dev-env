@@ -50,3 +50,39 @@ def test_validate_proposed_file_keeps_ruff_as_an_explicit_native_step(
     )
 
     assert "Ruff" in _result_names(all_results)
+
+
+def _mixed_newline_overlong_source() -> str:
+    all_line_endings = ("\r\n", "\n")
+    all_body_lines = "".join(
+        "    running_total = running_total + 1"
+        + all_line_endings[each_line_index % len(all_line_endings)]
+        for each_line_index in range(29)
+    )
+    return (
+        "def calculate_total(running_total: int) -> int:"
+        + all_line_endings[0]
+        + all_body_lines
+        + "    return running_total"
+        + all_line_endings[1]
+    )
+
+
+def test_validate_proposed_file_preserves_mixed_newline_diagnostics(
+    tmp_path: Path,
+) -> None:
+    all_results = run_all_validators.validate_proposed_file(
+        str(tmp_path / "probe.py"),
+        _mixed_newline_overlong_source(),
+        include_ruff=False,
+    )
+
+    code_quality_result = next(
+        each_result
+        for each_result in all_results
+        if each_result.name == "Code Quality"
+    )
+    assert code_quality_result.passed is False
+    assert "Function 'calculate_total' is 31 lines (max 30)" in (
+        code_quality_result.output
+    )

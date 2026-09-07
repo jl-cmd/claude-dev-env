@@ -29,6 +29,30 @@ def connect():
     return password
 '''
 
+METADATA_SOURCE_FIXTURE = '''
+AUTHORIZATION_HEADER = "Authorization"
+TOKEN_KEY = "token"
+INSTALLATION_TOKEN_ENDPOINT_TEMPLATE = "/app/installations/{installation_id}/access_tokens"
+TOKEN_RESOURCE_NAME = "installation token"
+'''
+
+HEADER_SOURCE_FIXTURE = '''
+AUTHORIZATION_HEADER = "actualsecret"
+'''
+
+ERROR_SOURCE_FIXTURE = '''
+PASSWORD_ERROR = "my secret password"
+'''
+
+UNSAFE_KEY_METADATA_SOURCE_FIXTURES = (
+    '''
+secret_key = "secret"
+''',
+    '''
+password_key = "password"
+''',
+)
+
 GOOD_PARAMETERIZED_SQL = '''
 def get_user(user_id):
     cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
@@ -73,6 +97,39 @@ class TestHardcodedSecrets:
 
     def test_hardcoded_password_fails(self) -> None:
         tree = ast.parse(BAD_HARDCODED_PASSWORD)
+        violations = check_hardcoded_secrets(tree, "test.py")
+        assert len(violations) == 1
+
+    def test_secret_metadata_passes(self) -> None:
+        tree = ast.parse(METADATA_SOURCE_FIXTURE)
+        violations = check_hardcoded_secrets(tree, "test.py")
+        assert violations == []
+
+    def test_authorization_header_value_fails(self) -> None:
+        tree = ast.parse(HEADER_SOURCE_FIXTURE)
+        violations = check_hardcoded_secrets(tree, "test.py")
+        assert len(violations) == 1
+
+    def test_password_error_fails(self) -> None:
+        tree = ast.parse(ERROR_SOURCE_FIXTURE)
+        violations = check_hardcoded_secrets(tree, "test.py")
+        assert len(violations) == 1
+
+    @pytest.mark.parametrize("source_fixture", UNSAFE_KEY_METADATA_SOURCE_FIXTURES)
+    def test_sensitive_key_values_fail(self, source_fixture: str) -> None:
+        tree = ast.parse(source_fixture)
+        violations = check_hardcoded_secrets(tree, "test.py")
+        assert len(violations) == 1
+
+    @pytest.mark.parametrize(
+        "endpoint",
+        (
+            "/tokens/{token_id}?access_token=actualsecret",
+            "/tokens/{token_id}#actualsecret",
+        ),
+    )
+    def test_token_endpoint_credentials_fail(self, endpoint: str) -> None:
+        tree = ast.parse(f'TOKEN_ENDPOINT_TEMPLATE = "{endpoint}"')
         violations = check_hardcoded_secrets(tree, "test.py")
         assert len(violations) == 1
 

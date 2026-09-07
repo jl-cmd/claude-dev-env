@@ -6,17 +6,19 @@ import path from "node:path";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const lintScriptPath = path.join(packageRoot, "scripts", "cde_lint.py");
+const verificationScriptPath = path.join(packageRoot, "scripts", "local_verification", "cli.py");
 const posixSignalStatusOffset = 128;
 const lintCommandName = "lint";
+const verifyCommandName = "verify";
 const pythonOptionName = "--python";
 const pythonEnvironmentName = "CDE_PYTHON";
 
 
 export function createHelpText() {
     return [
-        "Usage: cde lint [options]",
+        "Usage: cde <lint|verify> [options]",
         "",
-        "Run the policy linter. Source modes are mutually exclusive:",
+        "Run the policy linter with cde lint. Source modes are mutually exclusive:",
         "  --files PATH [PATH ...]  Current worktree files",
         "  --staged                 Staged index content",
         "  --base REVISION          Changes from a base revision",
@@ -28,6 +30,12 @@ export function createHelpText() {
         "Launcher options:",
         "  --python <command>       Python interpreter override",
         "  Exit 0 clean, 1 diagnostics, 2 invalid input or start failure, 3 failed rule",
+        "",
+        "Run the required-check manifest with cde verify:",
+        "  --manifest PATH           JSON required-check manifest",
+        "  --repo PATH               Candidate repository root",
+        "  --base SHA                Trusted base revision",
+        "  --output PATH             JSON verification report",
         "",
         "Python may also be selected with CDE_PYTHON.",
     ].join("\n");
@@ -55,6 +63,14 @@ export function buildLintCommand(interpreter, forwardedArguments) {
     return {
         executable: interpreter,
         arguments: [lintScriptPath, ...forwardedArguments],
+    };
+}
+
+
+export function buildVerifyCommand(interpreter, forwardedArguments) {
+    return {
+        executable: interpreter,
+        arguments: [verificationScriptPath, ...forwardedArguments],
     };
 }
 
@@ -110,7 +126,7 @@ function statusCodeForSignal(signalName) {
 }
 
 
-export function runLintCommand(command, dependencies = {}) {
+function runChildCommand(command, failureMessage, dependencies = {}) {
     const runChild = dependencies.runChild ?? spawn;
     const processEmitter = dependencies.processEmitter ?? process;
     return new Promise((resolve) => {
@@ -122,14 +138,14 @@ export function runLintCommand(command, dependencies = {}) {
                 windowsHide: true,
             });
         } catch {
-            processEmitter.stderr.write("Unable to start the policy linter.\n");
+            processEmitter.stderr.write(`${failureMessage}\n`);
             resolve(2);
             return;
         }
         const detachSignals = attachSignalForwarding(childProcess, processEmitter);
         childProcess.on("error", () => {
             detachSignals();
-            processEmitter.stderr.write("Unable to start the policy linter.\n");
+            processEmitter.stderr.write(`${failureMessage}\n`);
             resolve(2);
         });
         childProcess.on("close", (exitCode, signalName) => {
@@ -144,12 +160,22 @@ export function runLintCommand(command, dependencies = {}) {
 }
 
 
+export function runLintCommand(command, dependencies = {}) {
+    return runChildCommand(command, "Unable to start the policy linter.", dependencies);
+}
+
+
+export function runVerifyCommand(command, dependencies = {}) {
+    return runChildCommand(command, "Unable to start verification.", dependencies);
+}
+
+
 export async function main(argumentsList = process.argv.slice(2), dependencies = {}) {
     if (argumentsList.length === 0 || argumentsList.includes("--help") || argumentsList.includes("-h")) {
         process.stdout.write(`${createHelpText()}\n`);
         return 0;
     }
-    if (argumentsList[0] !== lintCommandName) {
+    if (![lintCommandName, verifyCommandName].includes(argumentsList[0])) {
         process.stderr.write(`${createHelpText()}\n`);
         return 2;
     }
@@ -164,8 +190,10 @@ export async function main(argumentsList = process.argv.slice(2), dependencies =
         process.stderr.write("No usable Python interpreter found. Use --python or CDE_PYTHON.\n");
         return 2;
     }
-    const command = buildLintCommand(interpreter, remainingArguments);
-    const runCommand = dependencies.runCommand ?? runLintCommand;
+    const buildCommand = argumentsList[0] === lintCommandName ? buildLintCommand : buildVerifyCommand;
+    const command = buildCommand(interpreter, remainingArguments);
+    const runCommand = dependencies.runCommand
+        ?? (argumentsList[0] === lintCommandName ? runLintCommand : runVerifyCommand);
     return await runCommand(command, dependencies);
 }
 

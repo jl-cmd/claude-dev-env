@@ -462,13 +462,35 @@ def _apply_source_agent(source_root: Path, target_root: Path, description: str) 
     return target_root / "Luna.toml"
 
 
-def _write_codex_hook_source(source_root: Path) -> None:
+def _register_source_codex_enforcer(hooks_path: Path) -> None:
+    all_manifest = cast(
+        dict[str, object], json.loads(hooks_path.read_text(encoding="utf-8"))
+    )
+    all_events = cast(dict[str, object], all_manifest["hooks"])
+    all_pre_tool_use = cast(list[object], all_events["PreToolUse"])
+    all_pre_tool_use.append(
+        {
+            "matcher": materializer.codex_hook_matcher,
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/code_rules_enforcer.py",
+                    "timeout": materializer.codex_hook_timeout_seconds,
+                }
+            ],
+        }
+    )
+    hooks_path.write_text(json.dumps(all_manifest), encoding="utf-8")
+
+
+def _write_codex_hook_source(source_root: Path, has_enforcer: bool) -> None:
     package_root = Path(__file__).parents[2]
     source_hooks = source_root / "hooks"
     source_hooks.mkdir(parents=True, exist_ok=True)
-    (source_hooks / "hooks.json").write_bytes(
-        (package_root / "hooks" / "hooks.json").read_bytes()
-    )
+    hooks_path = source_hooks / "hooks.json"
+    hooks_path.write_bytes((package_root / "hooks" / "hooks.json").read_bytes())
+    if has_enforcer:
+        _register_source_codex_enforcer(hooks_path)
     for each_relative_path in materializer.codex_hook_dependency_manifest:
         source_path = source_root / each_relative_path
         source_path.parent.mkdir(parents=True, exist_ok=True)
@@ -479,7 +501,7 @@ def test_build_plan_rejects_reparse_hook_dependencies(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "source"
-    _write_codex_hook_source(source)
+    _write_codex_hook_source(source, has_enforcer=True)
     dependency_path = source / materializer.codex_enforcer_script_relative_path
     outside_path = tmp_path / "outside.py"
     outside_path.write_text("secret", encoding="utf-8")
@@ -498,7 +520,7 @@ def test_publish_plan_preserves_modified_enforcer_hook_as_conflict(
 ) -> None:
     source = tmp_path / "source"
     target = tmp_path / "target"
-    _write_codex_hook_source(source)
+    _write_codex_hook_source(source, has_enforcer=True)
     target.mkdir()
     modified_command = f'python3 "{target / materializer.codex_enforcer_script_relative_path}" --custom'
     existing_manifest = {
@@ -892,6 +914,7 @@ def _prepare_projection_fixture(
         (Path(__file__).parents[2] / "hooks" / "hooks.json").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
+    _register_source_codex_enforcer(source_hooks)
     package_root = Path(__file__).parents[2]
     for each_relative_path in materializer.codex_hook_dependency_manifest:
         target_dependency = source / each_relative_path
@@ -1080,6 +1103,166 @@ def _assert_detached_enforcer_behavior(target: Path) -> None:
     assert deny_run.returncode == 0, deny_run.stderr
     assert json.loads(deny_run.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert target_entrypoint.is_file()
+
+
+def _managed_enforcer_hook(target: Path) -> dict[str, object]:
+    return {
+        "type": "command",
+        "command": (
+            f'python3 "{target / materializer.codex_enforcer_script_relative_path}"'
+        ),
+        "timeout": materializer.codex_hook_timeout_seconds,
+    }
+
+
+def _foreign_same_basename_hook() -> dict[str, object]:
+    return {
+        "type": "command",
+        "command": "python D:/custom/hooks/blocking/code_rules_enforcer.py",
+    }
+
+
+def _codex_hook_group(
+    *all_hook_records: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "matcher": materializer.codex_hook_matcher,
+        "hooks": list(all_hook_records),
+    }
+
+
+def _codex_hook_manifest(
+    *all_hook_groups: dict[str, object],
+) -> dict[str, object]:
+    return {"hooks": {"PreToolUse": list(all_hook_groups)}}
+
+
+def _write_current_source_without_enforcer(source: Path) -> None:
+    _write_codex_hook_source(source, has_enforcer=False)
+    source_manifest = json.loads(
+        (source / "hooks" / "hooks.json").read_text(encoding="utf-8")
+    )
+    all_source_commands = _hook_commands(source_manifest, "PreToolUse")
+    assert not any(
+        "code_rules_enforcer.py" in each_command
+        for each_command in all_source_commands
+    )
+
+
+def _publish_codex_hook_fixture(
+    source: Path, target: Path, target_manifest: dict[str, object]
+) -> tuple[dict[str, Any], MaterializationReport, list[PlannedFile]]:
+    target.mkdir()
+    target_hooks_path = target / materializer.codex_hook_manifest_target_path
+    target_hooks_path.write_text(json.dumps(target_manifest), encoding="utf-8")
+    config = MaterializerConfig(source, target, should_apply=True)
+    planned, report = build_plan(config, all_agents=[])
+    publication = publish_plan(config, planned, report)
+    projected_manifest = json.loads(target_hooks_path.read_text(encoding="utf-8"))
+    return projected_manifest, publication, planned
+
+
+def test_current_source_manifest_retires_the_managed_codex_enforcer(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _write_current_source_without_enforcer(source)
+    foreign_hook: dict[str, object] = {
+        "type": "command",
+        "command": "python foreign_advisory.py",
+    }
+    foreign_named_hook = _foreign_same_basename_hook()
+    target_manifest = _codex_hook_manifest(
+        _codex_hook_group(_managed_enforcer_hook(target)),
+        _codex_hook_group(foreign_hook, foreign_named_hook),
+    )
+
+    projected_manifest, _, planned = _publish_codex_hook_fixture(
+        source, target, target_manifest
+    )
+    assert projected_manifest["hooks"]["PreToolUse"] == [
+        {
+            "matcher": "apply_patch",
+            "hooks": [foreign_hook, foreign_named_hook],
+        }
+    ]
+    all_planned_paths = {each_file.target_relative_path for each_file in planned}
+    assert all_planned_paths.isdisjoint(materializer.codex_hook_dependency_manifest)
+
+
+def test_explicit_source_enforcer_preserves_foreign_same_basename_hook(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _write_codex_hook_source(source, has_enforcer=True)
+    managed_hook = _managed_enforcer_hook(target)
+    foreign_hook = _foreign_same_basename_hook()
+    target_manifest = _codex_hook_manifest(
+        _codex_hook_group(managed_hook, foreign_hook)
+    )
+    projected_manifest, publication, _ = _publish_codex_hook_fixture(
+        source, target, target_manifest
+    )
+    projected_hooks = projected_manifest["hooks"]["PreToolUse"][0]["hooks"]
+    assert publication.conflicted == 0
+    assert projected_hooks == [foreign_hook, managed_hook]
+
+
+@pytest.mark.parametrize("has_source_enforcer", [False, True])
+def test_posix_case_distinct_enforcer_path_remains_foreign(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    has_source_enforcer: bool,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    if has_source_enforcer:
+        _write_codex_hook_source(source, has_enforcer=True)
+    if not has_source_enforcer:
+        _write_current_source_without_enforcer(source)
+    managed_hook = _managed_enforcer_hook(target)
+    managed_command = cast(str, managed_hook["command"])
+    foreign_command = managed_command.replace(str(target), str(target).upper())
+    assert foreign_command != managed_command
+    assert foreign_command.casefold() == managed_command.casefold()
+    foreign_hook = {**managed_hook, "command": foreign_command}
+    target_manifest = _codex_hook_manifest(
+        _codex_hook_group(managed_hook, foreign_hook)
+    )
+    monkeypatch.setattr(materializer.os, "name", "posix")
+
+    projected_manifest, _, _ = _publish_codex_hook_fixture(
+        source, target, target_manifest
+    )
+
+    all_expected_commands = [foreign_command]
+    if has_source_enforcer:
+        all_expected_commands.append(managed_command)
+    assert _hook_commands(projected_manifest, "PreToolUse") == all_expected_commands
+
+
+def test_windows_case_variant_enforcer_path_is_managed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    _write_current_source_without_enforcer(source)
+    managed_hook = _managed_enforcer_hook(target)
+    managed_command = cast(str, managed_hook["command"])
+    case_variant_command = managed_command.replace(str(target), str(target).upper())
+    target_manifest = _codex_hook_manifest(
+        _codex_hook_group({**managed_hook, "command": case_variant_command})
+    )
+    monkeypatch.setattr(materializer.os, "name", "nt")
+
+    projected_manifest, _, _ = _publish_codex_hook_fixture(
+        source, target, target_manifest
+    )
+
+    assert projected_manifest["hooks"] == {}
 
 
 def test_exact_cli_publishes_instruction_and_additive_hook_projection(

@@ -17,7 +17,4 @@ BLOCK_DECISION = "block"
 DECISION_KEY = "decision"
 REASON_KEY = "reason"
 
-ALL_STOP_HOSTED_HOOK_PATHS: tuple[str, ...] = (
-    "blocking/question_to_user_enforcer.py",
-    "blocking/session_handoff_blocker.py",
-)
+ALL_STOP_HOSTED_HOOK_PATHS: tuple[str, ...] = ()

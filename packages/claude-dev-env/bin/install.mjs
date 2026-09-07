@@ -11,7 +11,10 @@ import {
     KNOWN_GIT_HOOK_NAMES,
 } from './git_hooks_installer.mjs';
 import { installMypyIniForClaudeHooks } from './install_mypy_ini.mjs';
-import { expandHomeDirectoryTokensInSettings } from './expand_home_directory_tokens.mjs';
+import {
+    expandHomeDirectoryTokens,
+    expandHomeDirectoryTokensInSettings,
+} from './expand_home_directory_tokens.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 import {
     managedDenyEntriesFromPackageSettings,
@@ -1231,6 +1234,35 @@ export const RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS = new Set([
     'session/untracked_repo_detector.py',
     'session/gh_pr_author_session_cleanup.py',
     'observability/pr_description_writer_spawn_tracker.py',
+    'blocking/plain_language_blocker.py',
+    'lifecycle/config_change_guard.py',
+    'blocking/docstring_rule_gate_count_blocker.py',
+    'blocking/write_existing_file_blocker.py',
+    'blocking/sensitive_file_protector.py',
+    'blocking/pii_prevention_blocker.py',
+    'blocking/duplicate_rmtree_helper_blocker.py',
+    'blocking/claude_md_orphan_file_blocker.py',
+    'blocking/package_inventory_stale_blocker.py',
+    'blocking/env_var_table_code_drift_blocker.py',
+    'blocking/pytest_testpaths_orphan_blocker.py',
+    'blocking/destructive_command_blocker.py',
+    'blocking/shell_substitution_blocker.py',
+    'blocking/piped_pytest_blocker.py',
+    'blocking/cursor_cli_python_misfire_blocker.py',
+    'blocking/unscoped_search_blocker.py',
+    'blocking/nas_ssh_binary_enforcer.py',
+    'blocking/block_main_commit.py',
+    'blocking/session_edit_stage_gate.py',
+    'blocking/bash_pre_tool_use_dispatcher.py',
+    'blocking/stop_dispatcher.py',
+    'blocking/bot_mention_comment_blocker.py',
+    'blocking/fable_spawn_gate.py',
+    'blocking/luna_fast_mode_gate.py',
+    'blocking/orchestrator_refresh_reschedule_gate.py',
+    'blocking/ask_user_question_shape_blocker.py',
+    'blocking/send_user_file_open_locally_blocker.py',
+    'blocking/question_to_user_enforcer.py',
+    'blocking/session_handoff_blocker.py',
 ]);
 
 /**
@@ -1344,15 +1376,26 @@ export function commandReferencesManagedHook(commandString, managedHookRelativeP
  * @returns {boolean} True when the managed tail ends at a path boundary.
  */
 function commandTailEndsAtManagedHook(normalizedCommand, relativePath) {
+    return commandHoldsPathAtBoundary(normalizedCommand, `/.claude/hooks/${relativePath}`);
+}
+
+/**
+ * Report whether a command holds one path spelling that ends at a path boundary:
+ * end of string, or an argument separator (whitespace, quote, or semicolon).
+ *
+ * @param {string} normalizedCommand Forward-slash-normalized hook command.
+ * @param {string} pathText The path spelling to look for.
+ * @returns {boolean} True when the command holds that path at a boundary.
+ */
+function commandHoldsPathAtBoundary(normalizedCommand, pathText) {
     const commandArgumentBoundary = /[\s'";]/;
-    const managedTail = `/.claude/hooks/${relativePath}`;
-    let searchStart = normalizedCommand.indexOf(managedTail);
+    let searchStart = normalizedCommand.indexOf(pathText);
     while (searchStart !== -1) {
-        const characterAfterTail = normalizedCommand[searchStart + managedTail.length];
-        if (characterAfterTail === undefined || commandArgumentBoundary.test(characterAfterTail)) {
+        const characterAfterPath = normalizedCommand[searchStart + pathText.length];
+        if (characterAfterPath === undefined || commandArgumentBoundary.test(characterAfterPath)) {
             return true;
         }
-        searchStart = normalizedCommand.indexOf(managedTail, searchStart + 1);
+        searchStart = normalizedCommand.indexOf(pathText, searchStart + 1);
     }
     return false;
 }
@@ -1559,29 +1602,139 @@ export function retiredManagedHookRelativePaths(
     return retiredRelativePaths;
 }
 
+const MANAGED_HOOK_ROOT_PATHS = [
+    join(CLAUDE_HOME, MANAGED_HOOKS_DIRECTORY_NAME),
+    join(AGENTS_HOME, MANAGED_HOOKS_DIRECTORY_NAME),
+    INSTALL_ROOT_RESOLUTION.codexHooksInstallDirectory,
+];
+
+const CODEX_HOOKS_CONFIGURATION_FILE_NAME = 'hooks.json';
+
+const CODEX_HOOKS_CONFIGURATION_PATH = join(
+    dirname(INSTALL_ROOT_RESOLUTION.codexHooksInstallDirectory),
+    CODEX_HOOKS_CONFIGURATION_FILE_NAME,
+);
+
 /**
- * Report whether a settings.json hook command runs one of the retired managed
- * hook scripts.
+ * Resolve a path through every link on it, or return null when it is missing.
  *
- * The anchored `/.claude/hooks/<relative>` tail is the same test the merge uses to
- * tell this installer's entries from a user's, so a command whose path is a
- * retired tail plus a suffix stays outside the set. The inline validators-runner
- * shape sits outside this test on purpose: it names no script, so no manifest
- * record can retire it, and the merge writes it fresh on every run.
+ * @param {string} filesystemPath The absolute path to resolve.
+ * @returns {string|null} The real path, or null when nothing stands there.
+ */
+function realPathOrNull(filesystemPath) {
+    try {
+        return realpathSync(filesystemPath);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Return comparison keys for each owned hooks directory, including its real path.
  *
- * A command that is not a string belongs to an entry this installer never wrote —
- * a hand-edited settings.json, or a third-party entry carrying another shape — so
- * it names no retired script and its entry stays.
+ * ~/.claude/hooks, the agents-home hooks directory, and ~/.codex/hooks can
+ * point at one directory. Both the given path and its resolved path are keys.
  *
- * @param {unknown} commandString The hook command from settings.json.
+ * @param {string[]} allHookRootPaths The hooks directories this installer writes.
+ * @returns {Set<string>} The comparison key of every owned spelling.
+ */
+export function ownedHookRootComparisonKeys(allHookRootPaths) {
+    const allRootKeys = new Set();
+    for (const hookRootPath of allHookRootPaths) {
+        if (!hookRootPath) continue;
+        allRootKeys.add(comparisonKeyForPath(hookRootPath));
+        const realHookRootPath = realPathOrNull(hookRootPath);
+        if (realHookRootPath) allRootKeys.add(comparisonKeyForPath(realHookRootPath));
+    }
+    return allRootKeys;
+}
+
+/**
+ * Expand `$HOME`, `${HOME}`, `~/`, and `%USERPROFILE%` in a hook command.
+ *
+ * `$HOME`, `${HOME}`, and `~/` go through expandHomeDirectoryTokens, the helper
+ * the settings rewrite already uses, so a tilde is not left in front of home.
+ * `%USERPROFILE%` stays here because this comparison only reads a spelling.
+ *
+ * @param {string} normalizedCommand Forward-slash-normalized hook command.
+ * @param {string} homeDirectory The absolute home directory to substitute.
+ * @returns {string} The command with each home reference expanded.
+ */
+function expandHomeReferencesInCommand(normalizedCommand, homeDirectory) {
+    const normalizedHome = homeDirectory.replace(/\\/g, '/').replace(/\/+$/, '');
+    const userProfileExpanded = normalizedCommand.replace(
+        /%USERPROFILE%/gi, () => normalizedHome,
+    );
+    return expandHomeDirectoryTokens(userProfileExpanded, homeDirectory);
+}
+
+/**
+ * Build the spelling a hook command is compared through: forward-slashed, home
+ * references expanded, and case-folded wherever the filesystem ignores case.
+ *
+ * @param {string} commandString The hook command from a host configuration file.
+ * @param {string} homeDirectory The absolute home directory to substitute.
+ * @returns {string} The command spelling the owned-root test reads.
+ */
+export function hookCommandComparisonSpelling(commandString, homeDirectory) {
+    const forwardSlashCommand = commandString.replace(/\\/g, '/');
+    const expandedCommand = expandHomeReferencesInCommand(forwardSlashCommand, homeDirectory);
+    return isCaseInsensitiveFilesystem() ? expandedCommand.toLowerCase() : expandedCommand;
+}
+
+/**
+ * Report whether a hook command runs one script under a hooks directory this
+ * installer owns.
+ *
+ * @param {unknown} commandString The hook command from a host configuration file.
+ * @param {string} relativePath The script path under a hooks directory.
+ * @param {{allOwnedHookRootKeys: Set<string>, homeDirectory: string}} ownership The owned roots.
+ * @returns {boolean} True when the command runs that script under an owned root.
+ */
+export function commandNamesOwnedHookScript(commandString, relativePath, ownership) {
+    if (typeof commandString !== 'string') return false;
+    const shouldFoldCase = isCaseInsensitiveFilesystem();
+    const comparisonCommand = hookCommandComparisonSpelling(
+        commandString, ownership.homeDirectory,
+    );
+    const comparisonRelativePath = shouldFoldCase ? relativePath.toLowerCase() : relativePath;
+    for (const ownedRootKey of ownership.allOwnedHookRootKeys) {
+        const ownedScriptPath = `${ownedRootKey}/${comparisonRelativePath}`;
+        if (commandHoldsPathAtBoundary(comparisonCommand, ownedScriptPath)) return true;
+    }
+    return false;
+}
+
+/**
+ * Build the ownership one retirement walk reads, filling in this run's own roots.
+ *
+ * @param {{allOwnedHookRootKeys?: Set<string>, homeDirectory?: string}} [options] Test overrides.
+ * @returns {{allOwnedHookRootKeys: Set<string>, homeDirectory: string}} The ownership.
+ */
+function retiredHookOwnership(options = {}) {
+    return {
+        allOwnedHookRootKeys: options.allOwnedHookRootKeys
+            ?? ownedHookRootComparisonKeys(MANAGED_HOOK_ROOT_PATHS),
+        homeDirectory: options.homeDirectory ?? homedir(),
+    };
+}
+
+/**
+ * Report whether a host hook command runs a retired managed script under an
+ * owned hooks directory.
+ *
+ * A path-plus-suffix, a command under another tool's tree, a non-string
+ * command, and the inline validators-runner shape (no script name) are left
+ * in place. The merge rewrites the validators-runner entry on every run.
+ *
+ * @param {unknown} commandString The hook command from a host configuration file.
  * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
+ * @param {{allOwnedHookRootKeys: Set<string>, homeDirectory: string}} ownership The owned roots.
  * @returns {boolean} True when the command runs a retired managed script.
  */
-function commandReferencesRetiredHook(commandString, retiredHookRelativePaths) {
-    if (typeof commandString !== 'string') return false;
-    const normalizedCommand = commandString.replace(/\\/g, '/');
+function commandReferencesRetiredHook(commandString, retiredHookRelativePaths, ownership) {
     for (const relativePath of retiredHookRelativePaths) {
-        if (commandTailEndsAtManagedHook(normalizedCommand, relativePath)) return true;
+        if (commandNamesOwnedHookScript(commandString, relativePath, ownership)) return true;
     }
     return false;
 }
@@ -1641,15 +1794,18 @@ function groupHookEntries(group) {
  *
  * @param {object} settings The parsed settings.json object (mutated in place).
  * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
+ * @param {{allOwnedHookRootKeys: Set<string>, homeDirectory: string}} ownership The owned roots.
  * @returns {number} How many hook entries were removed.
  */
-function stripRetiredHookEntries(settings, retiredHookRelativePaths) {
+function stripRetiredHookEntries(settings, retiredHookRelativePaths, ownership) {
     let removedCount = 0;
     for (const [eventType, matcherGroups] of Object.entries(settings.hooks)) {
         if (!Array.isArray(matcherGroups)) continue;
         const eventOutcome = retainedMatcherGroups(
             matcherGroups,
-            commandString => commandReferencesRetiredHook(commandString, retiredHookRelativePaths),
+            commandString => commandReferencesRetiredHook(
+                commandString, retiredHookRelativePaths, ownership,
+            ),
         );
         removedCount += eventOutcome.removedCount;
         if (eventOutcome.keptGroups.length === 0) {
@@ -1661,34 +1817,255 @@ function stripRetiredHookEntries(settings, retiredHookRelativePaths) {
     return removedCount;
 }
 
+const DEFAULT_HOST_CONFIGURATION_INDENT = '  ';
+
 /**
- * Remove every settings.json entry that runs a retired managed hook script,
- * writing the file only when an entry left it.
+ * Read the indent the host configuration file already uses.
  *
- * A run that retires no hook leaves settings.json byte-identical, so an install
- * touches the user's settings for a reason a reader can name. A settings file the
- * installer cannot parse is left alone with a warning.
+ * ~/.claude/settings.json uses four spaces and ~/.codex/hooks.json uses two.
+ * Forcing four spaces would rewrite every line of one of those files. The first
+ * indented line supplies the indent, tabs included.
  *
- * @param {string} settingsPath The absolute settings.json path.
+ * @param {string} settingsText The host configuration file as it stands on disk.
+ * @returns {string} The indent one nesting level uses.
+ */
+function hostConfigurationIndent(settingsText) {
+    const firstIndentedLine = /\n([ \t]+)\S/.exec(settingsText);
+    return firstIndentedLine ? firstIndentedLine[1] : DEFAULT_HOST_CONFIGURATION_INDENT;
+}
+
+/**
+ * Remove every entry of one host hook configuration file that runs a retired
+ * managed hook script, writing the file only when an entry left it.
+ *
+ * Claude settings.json and Codex hooks.json share this hook shape. A run that
+ * retires no hook leaves the file byte-identical. A file the installer cannot
+ * read or cannot parse is left alone with a warning, and the prune continues
+ * with the other host configuration file.
+ *
+ * @param {string} settingsPath The absolute host configuration path.
  * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
+ * @param {{allOwnedHookRootKeys?: Set<string>, homeDirectory?: string}} [options] Test overrides.
  * @returns {number} How many hook entries were removed.
  */
-export function pruneRetiredHookEntriesFromSettings(settingsPath, retiredHookRelativePaths) {
+export function pruneRetiredHookEntriesFromSettings(
+    settingsPath, retiredHookRelativePaths, options = {},
+) {
     if (retiredHookRelativePaths.size === 0) return 0;
     if (!existsSync(settingsPath)) return 0;
+    let settingsText;
     let settings;
     try {
-        settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
-    } catch (parseError) {
-        console.warn(`  Warning: leaving settings.json as it stands — the file holds JSON the installer cannot read (${parseError.message})`);
+        settingsText = readFileSync(settingsPath, 'utf8');
+        settings = JSON.parse(settingsText);
+    } catch (readError) {
+        console.warn(`  Warning: leaving ${basename(settingsPath)} as it stands — the installer cannot read the file as JSON (${readError.message})`);
         return 0;
     }
     if (!settings.hooks || typeof settings.hooks !== 'object') return 0;
-    const removedCount = stripRetiredHookEntries(settings, retiredHookRelativePaths);
+    const removedCount = stripRetiredHookEntries(
+        settings, retiredHookRelativePaths, retiredHookOwnership(options),
+    );
     if (removedCount === 0) return 0;
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+    const settingsIndent = hostConfigurationIndent(settingsText);
+    writeFileSync(settingsPath, JSON.stringify(settings, null, settingsIndent) + '\n');
     return removedCount;
 }
+
+const RETIRED_HOOK_STAND_IN_MARKER = 'claude-dev-env retired hook stand-in';
+
+const RETIRED_HOOK_STAND_IN_SOURCE = `"""${RETIRED_HOOK_STAND_IN_MARKER}.
+
+This install retired the hook that stood here and removed its settings.json
+registration. A session that started before the install still holds the old
+registration and runs this path on every matching tool call, so the path keeps an
+inert module: it does nothing and exits 0, which the harness reads as "allow".
+Restart the session to pick up the new registration. A later install removes this
+file once no registration names it.
+"""
+`;
+
+const PYTHON_HOOK_SUFFIX = '.py';
+
+
+/**
+ * List every hook command a settings object holds, across every event type.
+ *
+ * A group with no hooks array contributes nothing. An entry whose command is
+ * absent or is not a string still reaches the caller.
+ *
+ * @param {object} settings The parsed settings.json object.
+ * @returns {unknown[]} Every hook entry's command, in the order settings holds them.
+ */
+function settingsHookCommands(settings) {
+    const allCommands = [];
+    for (const matcherGroups of Object.values(settings.hooks ?? {})) {
+        if (!Array.isArray(matcherGroups)) continue;
+        for (const group of matcherGroups) {
+            for (const hook of groupHookEntries(group) ?? []) allCommands.push(hook?.command);
+        }
+    }
+    return allCommands;
+}
+
+
+/**
+ * Read the hook commands one host configuration file holds, or none when it
+ * cannot be read. Claude settings.json and Codex hooks.json share this shape.
+ *
+ * Call this before the run mutates settings. The hook merge rewrites
+ * settings.json early, and by prune time the file no longer names what a
+ * session started before this install still invokes.
+ *
+ * @param {string} settingsPath The absolute host configuration path.
+ * @returns {unknown[]} Every hook command the file holds.
+ */
+export function settingsHookCommandsAtPath(settingsPath) {
+    if (!existsSync(settingsPath)) return [];
+    let settings;
+    try {
+        settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    } catch {
+        return [];
+    }
+    if (!settings?.hooks || typeof settings.hooks !== 'object') return [];
+    return settingsHookCommands(settings);
+}
+
+
+/**
+ * Name the retired hook scripts a stale registration still runs.
+ *
+ * The commands come from the reading taken before the run mutated settings.json.
+ * Those paths are where a stand-in belongs.
+ *
+ * @param {unknown[]} allCommands Hook commands read before the run mutated settings.
+ * @param {Set<string>} retiredHookRelativePaths Retired script paths under hooks/.
+ * @param {{allOwnedHookRootKeys?: Set<string>, homeDirectory?: string}} [options] Test overrides.
+ * @returns {Set<string>} The retired paths a command names.
+ */
+export function retiredHookPathsNamedByCommands(
+    allCommands, retiredHookRelativePaths, options = {},
+) {
+    const ownership = retiredHookOwnership(options);
+    const namedPaths = new Set();
+    for (const relativePath of retiredHookRelativePaths) {
+        const namesThisPath = allCommands.some(
+            command => commandNamesOwnedHookScript(command, relativePath, ownership),
+        );
+        if (namesThisPath) namedPaths.add(relativePath);
+    }
+    return namedPaths;
+}
+
+
+/**
+ * Write an inert Python module at each retired hook path a stale registration
+ * still runs.
+ *
+ * Deleting a registered script makes python3 exit 2. The harness treats a
+ * PreToolUse exit 2 as a block, so every matching tool call is denied until
+ * the session restarts. An inert module with one docstring exits 0, which the
+ * harness treats as allow.
+ *
+ * An existing file is left in place. Each written path is recorded in the
+ * manifest so a later install removes the stand-in once no registration names
+ * it.
+ *
+ * @param {string} hooksRoot The absolute installed hooks directory.
+ * @param {Set<string>} registeredRetiredRelativePaths Retired paths a registration names.
+ * @returns {string[]} The absolute paths this run wrote a stand-in to.
+ */
+export function writeRetiredHookStandIns(hooksRoot, registeredRetiredRelativePaths) {
+    const writtenPaths = [];
+    for (const relativePath of registeredRetiredRelativePaths) {
+        if (!relativePath.endsWith(PYTHON_HOOK_SUFFIX)) continue;
+        const standInPath = join(hooksRoot, ...relativePath.split('/'));
+        if (existsSync(standInPath)) continue;
+        mkdirSync(dirname(standInPath), { recursive: true });
+        writeFileSync(standInPath, RETIRED_HOOK_STAND_IN_SOURCE);
+        writtenPaths.push(standInPath);
+    }
+    return writtenPaths;
+}
+
+
+/**
+ * List owned hooks directories that exist, one path per distinct real directory.
+ *
+ * On a healthy install the three roots are pointers to one directory. Keying
+ * on the real path writes the stand-in once. A missing root is skipped.
+ *
+ * @param {string[]} allHookRootPaths The hooks directories this installer writes.
+ * @returns {string[]} One path per distinct hooks directory that exists.
+ */
+function distinctExistingHookRoots(allHookRootPaths) {
+    const allRootKeys = new Set();
+    const allDistinctRoots = [];
+    for (const hookRootPath of allHookRootPaths) {
+        const realHookRootPath = realPathOrNull(hookRootPath);
+        if (!realHookRootPath) continue;
+        const rootKey = comparisonKeyForPath(realHookRootPath);
+        if (allRootKeys.has(rootKey)) continue;
+        allRootKeys.add(rootKey);
+        allDistinctRoots.push(hookRootPath);
+    }
+    return allDistinctRoots;
+}
+
+/**
+ * Leave an inert stand-in at each retired path under every owned hooks directory.
+ *
+ * @param {string[]} allHookRootPaths The hooks directories this installer writes.
+ * @param {Set<string>} registeredRetiredRelativePaths Retired paths a registration names.
+ * @returns {string[]} The absolute paths this run wrote a stand-in to.
+ */
+function writeRetiredHookStandInsAcrossOwnedRoots(
+    allHookRootPaths, registeredRetiredRelativePaths,
+) {
+    const allWrittenPaths = [];
+    for (const hooksRoot of distinctExistingHookRoots(allHookRootPaths)) {
+        allWrittenPaths.push(
+            ...writeRetiredHookStandIns(hooksRoot, registeredRetiredRelativePaths),
+        );
+    }
+    return allWrittenPaths;
+}
+
+/**
+ * Name each retired registration a stand-in now fills, by its path under hooks/.
+ *
+ * @param {string[]} allHookRootPaths The hooks directories this installer writes.
+ * @param {string[]} standInPaths The stand-ins this run wrote.
+ * @returns {string[]} The sorted relative names, one per registration.
+ */
+function standInRegistrationNames(allHookRootPaths, standInPaths) {
+    const allNames = new Set();
+    for (const standInPath of standInPaths) {
+        const owningRoot = allHookRootPaths.find(
+            hookRootPath => isInsideDirectory(resolve(standInPath), resolve(hookRootPath)),
+        );
+        if (!owningRoot) continue;
+        allNames.add(relative(owningRoot, standInPath).replace(/\\/g, '/'));
+    }
+    return [...allNames].sort();
+}
+
+/**
+ * Print the one-line restart notice naming the registrations this run retired.
+ *
+ * @param {string[]} allHookRootPaths The hooks directories this installer writes.
+ * @param {string[]} standInPaths The stand-ins this run wrote.
+ * @returns {void}
+ */
+function reportRetiredHookStandIns(allHookRootPaths, standInPaths) {
+    if (standInPaths.length === 0) return;
+    const allNames = standInRegistrationNames(allHookRootPaths, standInPaths);
+    console.log(
+        `  Restart open sessions: this install retired ${allNames.join(', ')} and left an inert stand-in at each path, so a session started before it keeps working until you restart it.`,
+    );
+}
+
 
 /**
  * Load ~/.claude/settings.json for an in-place merge, or `{}` when absent/empty.
@@ -1996,45 +2373,77 @@ function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalled
 }
 
 /**
+ * Remove every retired registration from each host hook configuration file, and
+ * report each file that lost one.
+ *
+ * Claude Code reads ~/.claude/settings.json and Codex reads ~/.codex/hooks.json.
+ * A session of either host holds the registrations its own file named at start,
+ * so a retirement that reaches only one file leaves the other host's open session
+ * running a script this install moved.
+ *
+ * @param {string} settingsPath The absolute settings.json path.
+ * @param {Set<string>} retiredHookPaths Retired script paths under hooks/.
+ * @returns {void}
+ */
+function pruneRetiredHookRegistrations(settingsPath, retiredHookPaths) {
+    const allConfigurationPaths = [settingsPath, CODEX_HOOKS_CONFIGURATION_PATH];
+    for (const configurationPath of allConfigurationPaths) {
+        const removedCount = pruneRetiredHookEntriesFromSettings(
+            configurationPath, retiredHookPaths,
+        );
+        if (removedCount === 0) continue;
+        console.log(
+            `  Hook entries: ${removedCount} retired entry(s) removed from ${basename(configurationPath)}`,
+        );
+    }
+}
+
+/**
  * Run every prune a full install performs, in the order that keeps ~/.claude
  * consistent at each step.
  *
- * The settings entries of retired hooks go before the file move: a settings.json
- * naming a hook script that has already left ~/.claude/hooks makes every session
- * start invoke a missing script, so the reference leaves first and the script
- * follows.
- *
- * Both prunes report how much content reached the run's backup root, and their sum
- * is what backup retention answers to: the sweep of older recovery points runs
- * only once this run holds one of its own.
+ * Retired hook entries leave settings before the script is moved, so a live
+ * session does not invoke a missing file. Stand-ins are written last, after
+ * the move has emptied those paths. Paths come from `priorSettingsHookCommands`,
+ * read before the run mutated settings. The caller records each stand-in in
+ * the manifest so a later install removes it once no registration names it.
  *
  * @param {Set<string>} copiedSkillNames Skill directory names this run wrote.
  * @param {string[]|null} priorManifestSkills The prior manifest's skill names, or null.
  * @param {string[]|null} priorManifestFiles The prior manifest's file list, or null.
  * @param {string[]} installedFiles Every file this run copied.
- * @returns {{prunedCount: number, skillsPrunedCount: number, failedPaths: string[]}}
- *   The stale files moved across all roots, the skills root's share, and every
- *   path whose move failed.
+ * @param {unknown[]} priorSettingsHookCommands Hook commands read before this run mutated settings.
+ * @returns {{prunedCount: number, skillsPrunedCount: number, failedPaths: string[],
+ *   standInPaths: string[]}} The stale files moved across all roots, the skills
+ *   root's share, every path whose move failed, and every stand-in written.
  */
 function runFullInstallPrunes(
-    copiedSkillNames, priorManifestSkills, priorManifestFiles, installedFiles,
+    copiedSkillNames,
+    priorManifestSkills,
+    priorManifestFiles,
+    installedFiles,
+    priorSettingsHookCommands,
 ) {
+    const hooksRoot = join(CLAUDE_HOME, MANAGED_HOOKS_DIRECTORY_NAME);
+    const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
     const retiredSkillMovedCount = pruneRetiredSkills(copiedSkillNames, priorManifestSkills);
-    const removedHookEntryCount = pruneRetiredHookEntriesFromSettings(
-        join(CLAUDE_HOME, SETTINGS_FILE_NAME),
-        retiredManagedHookRelativePaths(
-            priorManifestFiles, installedFiles, join(CLAUDE_HOME, MANAGED_HOOKS_DIRECTORY_NAME),
-        ),
+    const retiredHookPaths = retiredManagedHookRelativePaths(
+        priorManifestFiles, installedFiles, hooksRoot,
     );
-    if (removedHookEntryCount > 0) {
-        console.log(`  Hook entries: ${removedHookEntryCount} retired entry(s) removed from settings.json`);
-    }
+    const registeredRetiredPaths = retiredHookPathsNamedByCommands(
+        priorSettingsHookCommands, retiredHookPaths,
+    );
+    pruneRetiredHookRegistrations(settingsPath, retiredHookPaths);
     const staleOutcome = pruneStaleFilesAcrossManagedRoots(
         priorManifestFiles, installedFiles, currentRunBackupRoot(),
     );
+    const standInPaths = writeRetiredHookStandInsAcrossOwnedRoots(
+        MANAGED_HOOK_ROOT_PATHS, registeredRetiredPaths,
+    );
+    reportRetiredHookStandIns(MANAGED_HOOK_ROOT_PATHS, standInPaths);
     const didRunMoveContent = retiredSkillMovedCount + staleOutcome.prunedCount > 0;
     retainNewestRunBackupOnly(currentRunBackupRoot(), didRunMoveContent);
-    return staleOutcome;
+    return { ...staleOutcome, standInPaths };
 }
 
 /**
@@ -2135,6 +2544,10 @@ function executeInstallPlan(plan) {
  */
 function executeInstallPlanMutations(plan, transactionHelpers) {
     const { throwIfFault, syncWrittenPaths } = transactionHelpers;
+    const priorSettingsHookCommands = [
+        ...settingsHookCommandsAtPath(join(CLAUDE_HOME, SETTINGS_FILE_NAME)),
+        ...settingsHookCommandsAtPath(CODEX_HOOKS_CONFIGURATION_PATH),
+    ];
     const selectedGroups = plan.selectedGroups;
     const priorManifestFiles = plan.priorManifest.files;
     const priorManifestSkills = plan.priorManifest.skills;
@@ -2482,11 +2895,16 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     if (didPruneRun) {
         try {
             const prunes = runFullInstallPrunes(
-                copiedSkillNames, priorManifestSkills, priorManifestFiles, allInstalledFiles,
+                copiedSkillNames,
+                priorManifestSkills,
+                priorManifestFiles,
+                allInstalledFiles,
+                priorSettingsHookCommands,
             );
             summary.skills.pruned = prunes.skillsPrunedCount;
             stalePrunedTotal = prunes.prunedCount;
             failedPrunePaths = prunes.failedPaths;
+            allInstalledFiles.push(...prunes.standInPaths);
             didPruneFinish = true;
         } catch (pruneError) {
             console.warn(
