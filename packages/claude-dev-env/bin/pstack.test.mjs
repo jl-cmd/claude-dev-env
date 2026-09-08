@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -151,8 +151,13 @@ test('source symlinks are rejected before publication', t => {
     const outside = join(f.temporary, 'outside-source');
     mkdirSync(outside);
     put(join(outside, 'personal.txt'), 'Retain this file.');
-    symlinkSync(outside, join(f.checkout, 'pstack', 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
-    assert.throws(() => installPstack(f.options, f.dependencies), /symlinks require review/);
+    const dependencies = { ...f.dependencies, fetchSource: (lock, destination) => {
+        f.dependencies.fetchSource(lock, destination);
+        const link = join(destination, 'pstack', 'escape');
+        symlinkSync(outside, link, process.platform === 'win32' ? 'junction' : 'dir');
+        assert.equal(lstatSync(link).isSymbolicLink(), true);
+    } };
+    assert.throws(() => installPstack(f.options, dependencies), /symlinks require review/);
     assert.equal(readFileSync(join(outside, 'personal.txt'), 'utf8'), 'Retain this file.');
 });
 
