@@ -2324,6 +2324,42 @@ def test_is_code_path_rejects_non_code_suffix() -> None:
     assert not gate_module.is_code_path(Path("docs/readme.md"))
 
 
+def _eligible_relative_paths(repository_root: Path, all_relative_paths: list[str]) -> list[str]:
+    from code_rules_gate_parts import gate_running
+
+    return [
+        each_relative_path
+        for each_relative_path in all_relative_paths
+        if gate_running._path_is_eligible_for_validation(
+            (repository_root / each_relative_path).resolve(), repository_root, False
+        )
+    ]
+
+
+def test_gate_skips_a_root_vendored_tree_and_keeps_a_nested_vendor_directory(
+    tmp_path: Path,
+) -> None:
+    for each_relative_path in (
+        "src/live.ts",
+        "vendor/pstack/skills/watch-pr/github.ts",
+        "skill-archive/old.py",
+        "src/vendor/nested.py",
+    ):
+        file_path = tmp_path / each_relative_path
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text("const value = 1\n", encoding="utf-8")
+
+    assert _eligible_relative_paths(
+        tmp_path,
+        [
+            "src/live.ts",
+            "vendor/pstack/skills/watch-pr/github.ts",
+            "skill-archive/old.py",
+            "src/vendor/nested.py",
+        ],
+    ) == ["src/live.ts", "src/vendor/nested.py"]
+
+
 def test_parse_added_line_numbers_collects_every_added_line() -> None:
     unified_diff_text = (
         "diff --git a/target.py b/target.py\n"

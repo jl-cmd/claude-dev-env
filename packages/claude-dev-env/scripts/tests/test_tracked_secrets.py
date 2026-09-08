@@ -114,6 +114,30 @@ def test_should_flag_an_exact_exempt_value_at_a_different_path(
     )
 
 
+def test_should_exempt_the_vendored_pstack_ssh_remote_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vendored_relative_path = (
+        "vendor/pstack/skills/poteto-mode/scripts/watch-pr/github.ts"
+    )
+    assert (_REPOSITORY_ROOT / vendored_relative_path).is_file()
+    assert (
+        collect_tracked_secret_findings(_REPOSITORY_ROOT, [vendored_relative_path])
+        == []
+    )
+    monkeypatch.setattr(
+        "repository_checks.tracked_secrets.repository_constants.ALL_TRACKED_SECRET_EXACT_EXEMPTIONS",
+        frozenset(),
+    )
+    all_unexempted_findings = collect_tracked_secret_findings(
+        _REPOSITORY_ROOT, [vendored_relative_path]
+    )
+    assert [each_finding.relative_path for each_finding in all_unexempted_findings] == [
+        vendored_relative_path
+    ]
+    assert _PII_CATEGORY_EMAIL in all_unexempted_findings[0].message
+
+
 def test_should_store_tracked_secret_exemptions_as_digests() -> None:
     sha256_hex_digest_length = hashlib.sha256(b"").digest_size * 2
     assert ALL_TRACKED_SECRET_EXACT_EXEMPTIONS

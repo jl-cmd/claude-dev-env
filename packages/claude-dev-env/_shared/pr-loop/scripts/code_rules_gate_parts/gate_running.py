@@ -9,7 +9,10 @@ names how many files it inspected.
 import sys
 from pathlib import Path
 
-from pr_loop_shared_constants.code_rules_gate_constants import INSPECTED_COUNT_MESSAGE
+from pr_loop_shared_constants.code_rules_gate_constants import (
+    ALL_NON_RUNTIME_ROOT_DIRECTORY_NAMES,
+    INSPECTED_COUNT_MESSAGE,
+)
 from pr_loop_shared_constants.terminology_sweep_constants import (
     TERMINOLOGY_SWEEP_GATE_HEADER,
 )
@@ -44,14 +47,17 @@ def _path_is_eligible_for_validation(
             when False, require working-tree presence.
 
     Returns:
-        True when the path carries a code extension and exists in the source
-        the gate will read; False otherwise.
+        True when the path carries a code extension, sits outside a
+        non-runtime root directory, and exists in the source the gate will
+        read; False otherwise.
     """
     if not is_code_path(resolved_path):
         return False
+    resolved_root = repository_root.resolve()
+    relative_posix = str(resolved_path.relative_to(resolved_root)).replace("\\", "/")
+    if relative_posix.split("/")[0] in ALL_NON_RUNTIME_ROOT_DIRECTORY_NAMES:
+        return False
     if should_read_staged_content:
-        resolved_root = repository_root.resolve()
-        relative_posix = str(resolved_path.relative_to(resolved_root)).replace("\\", "/")
         return staged_blob_exists(resolved_root, relative_posix)
     return resolved_path.is_file()
 
