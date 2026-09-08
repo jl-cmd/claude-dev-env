@@ -17,9 +17,9 @@ function readJson(path) {
     return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-function atomicJson(path, value) {
+function atomicJson(path, jsonValue) {
     const pending = `${path}.${process.pid}.tmp`;
-    putFile(pending, JSON.stringify(value, null, 2) + '\n');
+    putFile(pending, JSON.stringify(jsonValue, null, 2) + '\n');
     renameSync(pending, path);
 }
 
@@ -174,7 +174,7 @@ export function verifyInstallation(root) {
     }
     for (const { path, content } of nativeAgentFiles(root)) {
         if (!present(path) || readFileSync(path, 'utf8') !== content) {
-            throw new Error(`Native agent registration changed: ${path}`);
+            throw new Error(`Native agent file changed: ${path}`);
         }
     }
     return { ...state, release: releasePath(root, state.generation), skills: record.skills };
@@ -212,9 +212,9 @@ function acquireLock(home) {
 }
 
 async function remoteLock() {
-    const response = await fetch(channelUrl, { signal: AbortSignal.timeout(15000), redirect: 'error' });
-    if (!response.ok) throw new Error(`Verified pstack channel returned HTTP ${response.status}`);
-    return validateLock(await response.json());
+    const channelResponse = await fetch(channelUrl, { signal: AbortSignal.timeout(15000), redirect: 'error' });
+    if (!channelResponse.ok) throw new Error(`Verified pstack channel returned HTTP ${channelResponse.status}`);
+    return validateLock(await channelResponse.json());
 }
 
 function publish(root, record, previous) {
@@ -232,7 +232,7 @@ function publish(root, record, previous) {
     }
     const created = [];
     const removed = [];
-    let switched = false;
+    let hasSwitched = false;
     try {
         for (const { path, target } of links) {
             if (!present(path)) { directoryLink(path, target); created.push(path); }
@@ -241,7 +241,7 @@ function publish(root, record, previous) {
             if (!present(path)) { putFile(path, content); created.push(path); }
         }
         setCurrent(home, releasePath(root, record.generation));
-        switched = true;
+        hasSwitched = true;
         for (const link of oldLinks) {
             if (!links.some(next => next.path === link.path)) {
                 rmSync(link.path); removed.push(link);
@@ -256,7 +256,7 @@ function publish(root, record, previous) {
         atomicJson(join(home, 'state.json'), state);
         return { ...state, release: releasePath(root, state.generation), skills: record.skills };
     } catch (error) {
-        if (switched) {
+        if (hasSwitched) {
             if (previous) setCurrent(home, previous.release);
             else rmSync(join(home, 'current'), { force: true });
         }

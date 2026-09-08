@@ -10,7 +10,7 @@
         "cde-pstack": "bin/pstack.mjs"
     },
     "scripts": {
-        "test": "node --test \"bin/*.test.mjs\" \".agents/skills/**/*.test.mjs\" \"tests/fresh-session/**/*.test.mjs\" \"scripts/ci/*.test.mjs\""
+        "test": "node --test \"bin/*.test.mjs\" \".agents/skills/**/*.test.mjs\" \"tests/fresh-session/**/*.test.mjs\" \"scripts/ci/*.test.mjs\" \"scripts/pstack/*.test.mjs\""
     },
     "files": [
         "bin/",

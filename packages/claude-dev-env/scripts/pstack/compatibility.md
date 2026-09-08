@@ -38,8 +38,7 @@ panel. Preserve the workflow's independent-review and diversity requirements.
 
 Read rules/pstack-host-mapping.md and rules/pstack-models.md in this release.
 Use the release paths in this file in place of their global installation paths.
-The portable role policy replaces
-upstream Cursor model defaults. The selector is scripts/select_pstack_models.mjs
+The portable role policy governs model selection on every host. The selector is scripts/select_pstack_models.mjs
 inside this release. Run it before each delegation with the active tool's confirmed
 inventory. Pass preferencesDirectory as the preferences directory beside releases
 in the installation root. Keep models in pstack-model-preferences.<host>.json there.
@@ -50,9 +49,8 @@ Omit the model for a supported parent-inheritance choice. Preserve the selector'
 capability and distinct-model checks. Stop when the requested choice is unavailable.
 
 For setup-pstack, read the upstream setup workflow for its role questions, then save
-only the active host's preference JSON in that preferences directory. This replaces
-the upstream step that writes ~/.cursor/rules/pstack-models.mdc. Keep the other hosts'
-preferences unchanged. Choose actual session models rather than guessed model IDs.
+only the active host's preference JSON in that preferences directory. Use this JSON
+path for model setup. Keep the other hosts' preferences unchanged. Choose actual session models rather than guessed model IDs.
 
 ## Files, transcripts and dependencies
 

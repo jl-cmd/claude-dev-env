@@ -56,7 +56,7 @@ Set the Codex maintenance field to:
 bash scripts/pstack-cloud-maintenance.sh codex
 ```
 
-Use `claude` instead of `codex` for the Claude environment setup field. The committed
+Use `claude` as the host argument for the Claude environment setup field. The committed
 `.claude/settings.json` SessionStart hook refreshes pstack for a new session and
 returns the release path as agent context. A resumed or compacted session keeps its
 recorded release. Its next new session checks for an update.
@@ -122,7 +122,7 @@ the bundled pin or the last published channel record. The channel describes
 
 Updates are prepared and checked before publication. A fetch, dependency or adapter
 failure keeps the checked previous installation and emits a warning. A corrupt
-installed release fails verification instead of being described as working. Active
+installed release fails verification and reports the damaged file. Active
 launcher processes defer publication. Agent instructions use immutable release paths.
 
 ## Verification and acceptance
@@ -130,7 +130,7 @@ launcher processes defer publication. Agent instructions use immutable release p
 Run the behavioral suite:
 
 ```sh
-node --test packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/pstack-pin.test.mjs
+node --test packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/pstack-pin.test.mjs packages/claude-dev-env/scripts/pstack/*.test.mjs
 ```
 
 The suite uses explicitly synthetic Git fixtures. It checks clean installation for

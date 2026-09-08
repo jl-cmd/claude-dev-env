@@ -19,58 +19,58 @@ export function parseArguments(args) {
         if (!['--root', '--host', '--source', '--lock'].includes(option)) {
             throw new Error(`Unknown option: ${option}`);
         }
-        const value = args.shift();
-        if (!value || value.startsWith('--')) throw new Error(`Missing value for ${option}`);
-        if (option === '--lock') options.lock = JSON.parse(readFileSync(value, 'utf8'));
-        else options[option.slice(2)] = value;
+        const optionValue = args.shift();
+        if (!optionValue || optionValue.startsWith('--')) throw new Error(`Missing value for ${option}`);
+        if (option === '--lock') options.lock = JSON.parse(readFileSync(optionValue, 'utf8'));
+        else options[option.slice(2)] = optionValue;
     }
     options.root = resolve(options.root);
     return { command, options, child };
 }
 
-function report(result) {
-    if (result.warning) process.stderr.write(`pstack: ${result.warning}\n`);
-    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+function report(installation) {
+    if (installation.warning) process.stderr.write(`pstack: ${installation.warning}\n`);
+    process.stdout.write(JSON.stringify(installation, null, 2) + '\n');
 }
 
 export async function runHook(options, input) {
     const sessionKey = createHash('sha256').update(String(input.session_id ?? 'unknown')).digest('hex');
     const sessionPath = join(options.root, '.claude', 'pstack', 'sessions', `${sessionKey}.json`);
-    let result;
+    let installation;
     if (process.env.CDE_PSTACK_RELEASE) {
-        result = verifyInstallation(options.root);
-        if (result.release !== process.env.CDE_PSTACK_RELEASE) throw new Error('Launch release changed before SessionStart');
+        installation = verifyInstallation(options.root);
+        if (installation.release !== process.env.CDE_PSTACK_RELEASE) throw new Error('Launch release changed before SessionStart');
     } else if (['resume', 'compact'].includes(input.source) && existsSync(sessionPath)) {
         const saved = JSON.parse(readFileSync(sessionPath, 'utf8'));
         const record = verifyRelease(options.root, saved.generation);
-        result = { ...saved, upstreamCommit: record.lock.upstreamCommit };
+        installation = { ...saved, upstreamCommit: record.lock.upstreamCommit };
     } else {
-        result = await installPstack({ ...options, checkIntervalMs: 0 });
+        installation = await installPstack({ ...options, checkIntervalMs: 0 });
     }
-    putFile(sessionPath, JSON.stringify({ generation: result.generation, release: result.release }));
-    if (result.warning) process.stderr.write(`pstack: ${result.warning}\n`);
+    putFile(sessionPath, JSON.stringify({ generation: installation.generation, release: installation.release }));
+    if (installation.warning) process.stderr.write(`pstack: ${installation.warning}\n`);
     return {
         hookSpecificOutput: {
             hookEventName: 'SessionStart',
-            additionalContext: `Pstack installation checked. Upstream ${result.upstreamCommit}. `
-                + `PSTACK_RELEASE: ${result.release}. For any pstack workflow, read `
-                + `${JSON.stringify(join(result.release, 'compatibility.md'))} first. `
+            additionalContext: `Pstack installation checked. Upstream ${installation.upstreamCommit}. `
+                + `PSTACK_RELEASE: ${installation.release}. For any pstack workflow, read `
+                + `${JSON.stringify(join(installation.release, 'compatibility.md'))} first. `
                 + 'Carry this immutable release into subagent prompts. '
                 + 'Installation checks cover files and adapters; live tool availability is checked in the session.'
-                + (result.warning ? ` Installer warning: ${result.warning}` : ''),
+                + (installation.warning ? ` Installer warning: ${installation.warning}` : ''),
         },
     };
 }
 
 export async function launch(options, command) {
     if (!command.length) throw new Error('launch requires -- followed by the agent executable and its arguments');
-    const result = await installPstack({ ...options, leasePid: process.pid });
-    if (result.warning) process.stderr.write(`pstack: ${result.warning}\n`);
+    const installation = await installPstack({ ...options, leasePid: process.pid });
+    if (installation.warning) process.stderr.write(`pstack: ${installation.warning}\n`);
     try {
         return await new Promise((accept, reject) => {
             const child = spawn(command[0], command.slice(1), {
                 cwd: options.root, stdio: 'inherit', shell: false,
-                env: { ...process.env, CDE_PSTACK_RELEASE: result.release },
+                env: { ...process.env, CDE_PSTACK_RELEASE: installation.release },
             });
             const handlers = ['SIGINT', 'SIGTERM'].map(signal => {
                 const handler = () => child.kill(signal);

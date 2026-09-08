@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/pstack-pin.test.mjs
+      - run: node --test packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/pstack-pin.test.mjs packages/claude-dev-env/scripts/pstack/*.test.mjs
   upstream:
     needs: behavior
     runs-on: ubuntu-latest
