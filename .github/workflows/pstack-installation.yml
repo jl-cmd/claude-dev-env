@@ -26,27 +26,28 @@ jobs:
         with:
           node-version: '22'
       - name: Test install and rollback behavior
-        run: node --test --test-reporter=spec packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs
-      - name: Identify a Windows native crash
-        if: failure() && runner.os == 'Windows'
         shell: bash
-        run: |
-          node --input-type=module <<'JS'
-          import { readFileSync } from 'node:fs';
-          import { spawnSync } from 'node:child_process';
-          const file = 'packages/claude-dev-env/bin/pstack.test.mjs';
-          const names = ['clean', ...Array.from(readFileSync(file, 'utf8').matchAll(/test\('([^']+)'/g), match => match[1])];
-          for (const name of names) {
-            console.log(`Checking ${name}`);
-            const result = spawnSync(process.execPath, ['--test', '--test-name-pattern', name, file], {encoding:'utf8'});
-            console.log(JSON.stringify({name,status:result.status,signal:result.signal}));
-            if (result.status !== 0) console.log(result.stdout, result.stderr);
-          }
-          JS
+        run: node --test --test-reporter=tap packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs | tee "$RUNNER_TEMP/pstack-tests.tap"
       - name: Fetch and install the real pinned upstream
         shell: bash
         run: |
           set -euo pipefail
-          node packages/claude-dev-env/bin/pstack.mjs install --root "$RUNNER_TEMP/pstack-proof/.claude" --strict
-          node packages/claude-dev-env/bin/pstack.mjs verify --root "$RUNNER_TEMP/pstack-proof/.claude"
+          node packages/claude-dev-env/bin/pstack.mjs install --root "$RUNNER_TEMP/pstack-proof/.claude" --strict > "$RUNNER_TEMP/pstack-install.json"
+          node packages/claude-dev-env/bin/pstack.mjs verify --root "$RUNNER_TEMP/pstack-proof/.claude" > "$RUNNER_TEMP/pstack-verify.json"
           node packages/claude-dev-env/bin/pstack.mjs install --root "$RUNNER_TEMP/pstack-proof/.claude" --offline --strict
+      - name: Archive the tested source
+        if: always()
+        shell: bash
+        run: |
+          git archive --format=zip --output="$RUNNER_TEMP/pstack-tested-source.zip" HEAD
+          git rev-parse HEAD > "$RUNNER_TEMP/pstack-source-sha.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pstack-evidence-${{ runner.os }}
+          path: |
+            ${{ runner.temp }}/pstack-tests.tap
+            ${{ runner.temp }}/pstack-install.json
+            ${{ runner.temp }}/pstack-verify.json
+            ${{ runner.temp }}/pstack-tested-source.zip
+            ${{ runner.temp }}/pstack-source-sha.txt
