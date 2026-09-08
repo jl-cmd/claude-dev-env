@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
 
-from .config.constants import ARCHIVED_SKILLS_DIRECTORY_NAME
+from .config.constants import ALL_NON_RUNTIME_ROOT_DIRECTORY_NAMES
 from .model import (
     ChangeSetRule,
     Diagnostic,
@@ -55,7 +55,7 @@ def lint(
 
 
 def _is_runtime_path(path: PurePosixPath) -> bool:
-    return path.parts[0] != ARCHIVED_SKILLS_DIRECTORY_NAME
+    return path.parts[0] not in ALL_NON_RUNTIME_ROOT_DIRECTORY_NAMES
 
 
 def _runtime_document_set(document_set: DocumentSet) -> DocumentSet:

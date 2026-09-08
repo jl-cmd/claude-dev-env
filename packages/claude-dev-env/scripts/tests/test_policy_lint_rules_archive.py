@@ -39,7 +39,13 @@ def archive_repository(tmp_path: Path) -> Path:
     _git(tmp_path, "config", "user.name", "Archive Tests")
     _git(tmp_path, "config", "user.email", "archive@example.invalid")
     _git(tmp_path, "config", "commit.gpgsign", "false")
-    for relative_path in ("active.py", "skill-archive/old.py", "src/skill-archive/live.py"):
+    for relative_path in (
+        "active.py",
+        "skill-archive/old.py",
+        "src/skill-archive/live.py",
+        "vendor/pstack/thing.py",
+        "src/vendor/live.py",
+    ):
         file_path = tmp_path / relative_path
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text("first\n", encoding="utf-8")
@@ -68,7 +74,7 @@ def _marker_rule() -> DocumentRule:
 
 
 @pytest.mark.parametrize("selection", (SelectionKind.STAGED, SelectionKind.BASE, SelectionKind.REPOSITORY))
-def test_automatic_checks_keep_live_code_and_exclude_only_root_archive(
+def test_automatic_checks_exclude_only_root_archive_and_root_vendor(
     archive_repository: Path, selection: SelectionKind,
 ) -> None:
     requests = {
@@ -78,9 +84,11 @@ def test_automatic_checks_keep_live_code_and_exclude_only_root_archive(
     }
     report = lint(requests[selection], all_registry=(_marker_rule(),))
     assert report.checked_documents == (
-        PurePosixPath("active.py"), PurePosixPath("src/skill-archive/live.py"),
+        PurePosixPath("active.py"),
+        PurePosixPath("src/skill-archive/live.py"),
+        PurePosixPath("src/vendor/live.py"),
     )
-    assert len(report.diagnostics) == 2
+    assert len(report.diagnostics) == 3
     assert report.executed_rules == ("marker",)
     assert report.exit_code == 1
 
