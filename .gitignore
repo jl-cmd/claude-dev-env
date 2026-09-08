@@ -73,3 +73,11 @@ pytestdebug.log
 # Mangled Windows temp paths created as literal filenames when an unquoted
 # backslash path passes through Git Bash (separators eaten, colon encoded)
 *AppDataLocalTemp*
+
+/.claude/pstack/
+/.claude/skills/pstack
+/.claude/skills/cursor-team-kit
+/.agents/skills/
+/.claude/agents/pstack-*.md
+/.cursor/agents/pstack-*.md
+/.codex/agents/pstack-*.toml

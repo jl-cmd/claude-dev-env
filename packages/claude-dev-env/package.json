@@ -6,7 +6,8 @@
     "bin": {
         "claude-dev-env": "bin/install.mjs",
         "codex-compat": "bin/codex-compat.mjs",
-        "cde": "bin/cde.mjs"
+        "cde": "bin/cde.mjs",
+        "cde-pstack": "bin/pstack.mjs"
     },
     "scripts": {
         "test": "node --test \"bin/*.test.mjs\" \".agents/skills/**/*.test.mjs\" \"tests/fresh-session/**/*.test.mjs\" \"scripts/ci/*.test.mjs\""

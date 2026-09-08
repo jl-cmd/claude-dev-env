@@ -1,0 +1,97 @@
+name: Pstack installation
+on:
+  pull_request:
+    paths:
+      - 'packages/claude-dev-env/bin/pstack*'
+      - 'packages/claude-dev-env/scripts/pstack/**'
+      - 'packages/claude-dev-env/rules/pstack*'
+      - 'packages/claude-dev-env/scripts/select_pstack_models.mjs'
+      - 'packages/claude-dev-env/package.json'
+      - 'scripts/pstack-cloud-*'
+      - '.claude/settings.json'
+      - '.github/workflows/pstack-install.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '23 8 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: pstack-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  behavior:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/pstack-pin.test.mjs
+  upstream:
+    needs: behavior
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.candidate.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -c core.autocrlf=false clone --depth=1 https://github.com/cursor/plugins.git "$RUNNER_TEMP/upstream"
+          commit="$(git -C "$RUNNER_TEMP/upstream" rev-parse HEAD)"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          node --input-type=module - "$commit" "$RUNNER_TEMP/pstack.lock.json" <<'JS'
+          import { writeFileSync } from 'node:fs';
+          import { resolve } from 'node:path';
+          import { adapterDigest } from './packages/claude-dev-env/scripts/pstack/install.mjs';
+          writeFileSync(process.argv[3], JSON.stringify({schemaVersion:1,adapterVersion:1,adapterDigest:adapterDigest(resolve('packages/claude-dev-env')),upstreamCommit:process.argv[2],verification:'install-contract'}, null, 2) + '\n');
+          JS
+          for host in claude codex cursor; do
+            root="$RUNNER_TEMP/install-$host"
+            node packages/claude-dev-env/bin/pstack.mjs install --host "$host" --root "$root" --source "$RUNNER_TEMP/upstream" --lock "$RUNNER_TEMP/pstack.lock.json" > "$RUNNER_TEMP/$host-install.json"
+            node packages/claude-dev-env/bin/pstack.mjs verify --root "$root" > "$RUNNER_TEMP/$host-verify.json"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pstack-install-evidence
+          path: |
+            ${{ runner.temp }}/pstack.lock.json
+            ${{ runner.temp }}/*-install.json
+            ${{ runner.temp }}/*-verify.json
+  publish-channel:
+    needs: upstream
+    if: github.event_name != 'pull_request' && vars.PSTACK_ENABLE_PROMOTION == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: pstack-install-evidence
+          path: channel-evidence
+      - shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          parents=()
+          if git ls-remote --exit-code origin refs/heads/pstack-verified; then
+            git fetch origin refs/heads/pstack-verified
+            parent="$(git rev-parse FETCH_HEAD)"
+            parents=(-p "$parent")
+            if git show "$parent:pstack.lock.json" | cmp -s - channel-evidence/pstack.lock.json; then
+              exit 0
+            fi
+          fi
+          blob="$(git hash-object -w channel-evidence/pstack.lock.json)"
+          tree="$(printf '100644 blob %s\tpstack.lock.json\n' "$blob" | git mktree)"
+          commit="$(git commit-tree "$tree" "${parents[@]}" -m 'Verify pstack installation revision')"
+          git push origin "$commit:refs/heads/pstack-verified"
