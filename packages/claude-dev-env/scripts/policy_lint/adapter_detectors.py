@@ -7,7 +7,15 @@ from pathlib import Path, PurePosixPath
 
 from . import adapter_support
 from .config import constants
-from .model import Diagnostic, Document, DocumentSet, Location, SelectionKind, Severity
+from .model import (
+    Diagnostic,
+    Document,
+    DocumentSet,
+    Location,
+    SelectionKind,
+    Severity,
+    is_runtime_path,
+)
 
 
 def _terminology_diagnostic(finding: str) -> Diagnostic:
@@ -36,7 +44,10 @@ def terminology_diagnostics(
         load_module: Shared script module loader.
 
     Returns:
-        Diagnostics that name the prose file and line.
+        Diagnostics that name the prose file and line. A finding inside a
+        non-runtime root directory is left out, because the sweep helper
+        reads the repository diff itself rather than the filtered
+        document set.
     """
     all_arguments: tuple[Path | str, ...]
     if document_set.selection is SelectionKind.BASE:
@@ -54,7 +65,14 @@ def terminology_diagnostics(
     helper_stderr = StringIO()
     with redirect_stdout(helper_stdout), redirect_stderr(helper_stderr):
         all_findings = getattr(terminology_module, checker_name)(*all_arguments)
-    return tuple(_terminology_diagnostic(each_finding) for each_finding in all_findings)
+    all_diagnostics = (
+        _terminology_diagnostic(each_finding) for each_finding in all_findings
+    )
+    return tuple(
+        each_diagnostic
+        for each_diagnostic in all_diagnostics
+        if is_runtime_path(each_diagnostic.location.path)
+    )
 
 
 def _stable_validator_message(document: Document, raw_message: str) -> str:

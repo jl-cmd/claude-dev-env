@@ -18,6 +18,7 @@ from policy_lint.model import (
     SelectionKind,
     Severity,
     TextDocument,
+    is_runtime_path,
 )
 
 
@@ -55,6 +56,26 @@ def archive_repository(tmp_path: Path) -> Path:
         file_path.write_text("second\n", encoding="utf-8")
     _git(tmp_path, "add", ".")
     return tmp_path
+
+
+def test_only_a_root_archive_or_vendor_directory_leaves_the_runtime_set() -> None:
+    all_runtime_answers = {
+        each_path: is_runtime_path(PurePosixPath(each_path))
+        for each_path in (
+            "active.py",
+            "skill-archive/old.py",
+            "vendor/pstack/thing.py",
+            "src/skill-archive/live.py",
+            "src/vendor/live.py",
+        )
+    }
+    assert all_runtime_answers == {
+        "active.py": True,
+        "skill-archive/old.py": False,
+        "vendor/pstack/thing.py": False,
+        "src/skill-archive/live.py": True,
+        "src/vendor/live.py": True,
+    }
 
 
 def _marker_diagnostics(document: Document, repository_root: Path) -> tuple[Diagnostic, ...]:

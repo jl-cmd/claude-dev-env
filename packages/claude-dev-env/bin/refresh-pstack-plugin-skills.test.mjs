@@ -14,9 +14,36 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import {
     PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH,
+    SEEDED_MANIFEST_FIELDS,
     findPstackSkillDirectoryNames,
     refreshPstackPluginManifest,
 } from '../scripts/refresh_pstack_plugin_skills.mjs';
+
+const ALL_VENDOR_TRACKED_MANIFEST_FIELD_NAMES = [
+    'name',
+    'version',
+    'description',
+    'homepage',
+    'repository',
+    'license',
+    'author',
+];
+
+function vendoredPstackManifest() {
+    const repositoryRoot = dirname(dirname(dirname(dirname(fileURLToPath(import.meta.url)))));
+    const manifestPath = join(
+        repositoryRoot, 'vendor', 'pstack', '.cursor-plugin', 'plugin.json',
+    );
+    return JSON.parse(readFileSync(manifestPath, 'utf8'));
+}
+
+function pickFields(manifest) {
+    return Object.fromEntries(
+        ALL_VENDOR_TRACKED_MANIFEST_FIELD_NAMES.map((eachFieldName) => (
+            [eachFieldName, manifest[eachFieldName]]
+        )),
+    );
+}
 
 function buildPluginRoot(homeDirectory, skillNames, manifest) {
     const pluginRoot = join(homeDirectory, 'pstack');
@@ -61,8 +88,7 @@ test('writes a manifest when the plugin folder has none', () => {
         assert.equal(outcome.didWrite, true);
         const manifestPath = join(pluginRoot, PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH);
         const written = JSON.parse(readFileSync(manifestPath, 'utf8'));
-        assert.equal(written.name, 'pstack');
-        assert.equal(written.version, '0.15.0');
+        assert.deepEqual(pickFields(written), pickFields(vendoredPstackManifest()));
         assert.deepEqual(written.skills, ['./how']);
     });
 });
@@ -209,4 +235,12 @@ test('refuses a folder that holds no skills', () => {
         assert.equal(outcome.didWrite, false);
         assert.equal(outcome.reason, 'plugin root holds no skills');
     });
+});
+
+
+test('the seeded manifest fields match the vendored pstack manifest', () => {
+    assert.deepEqual(
+        pickFields(SEEDED_MANIFEST_FIELDS),
+        pickFields(vendoredPstackManifest()),
+    );
 });

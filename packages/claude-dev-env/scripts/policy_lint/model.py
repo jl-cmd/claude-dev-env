@@ -6,7 +6,10 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import TypeAlias
 
-from .config.constants import INCOMPLETE_EXIT_CODE
+from .config.constants import (
+    ALL_NON_RUNTIME_ROOT_DIRECTORY_NAMES,
+    INCOMPLETE_EXIT_CODE,
+)
 
 
 class SelectionKind(StrEnum):
@@ -387,3 +390,25 @@ class LintReport:
                 )
             )
         return tuple(all_editor_diagnostics)
+
+
+def is_runtime_path(path: PurePosixPath) -> bool:
+    """Say whether a repository-relative path holds this repository's own code.
+
+    ::
+
+        skill-archive/old.py            -> False  (retired skill)
+        vendor/pstack/skills/why.md     -> False  (verbatim upstream copy)
+        src/vendor/live.py              -> True   (nested, not a root)
+        active.py                       -> True
+
+    Only a repository-root directory names a non-runtime tree, so a directory
+    of the same name deeper in the tree stays first-party code.
+
+    Args:
+        path: A repository-relative path.
+
+    Returns:
+        True when the path sits outside every non-runtime root directory.
+    """
+    return path.parts[0] not in ALL_NON_RUNTIME_ROOT_DIRECTORY_NAMES

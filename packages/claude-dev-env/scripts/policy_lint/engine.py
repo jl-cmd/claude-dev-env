@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
-from .config.constants import ALL_NON_RUNTIME_ROOT_DIRECTORY_NAMES
 from .model import (
     ChangeSetRule,
     Diagnostic,
@@ -15,6 +14,7 @@ from .model import (
     RepositoryRule,
     Rule,
     SelectionKind,
+    is_runtime_path,
 )
 from .registry import default_registry, selected_rules
 from .selection import select_documents
@@ -54,31 +54,27 @@ def lint(
     )
 
 
-def _is_runtime_path(path: PurePosixPath) -> bool:
-    return path.parts[0] not in ALL_NON_RUNTIME_ROOT_DIRECTORY_NAMES
-
-
 def _runtime_document_set(document_set: DocumentSet) -> DocumentSet:
     if document_set.selection in {SelectionKind.FILES, SelectionKind.TEXT}:
         return document_set
     all_documents = tuple(
         each_document
         for each_document in document_set.documents
-        if _is_runtime_path(each_document.path)
+        if is_runtime_path(each_document.path)
     )
     all_deleted_paths = tuple(
         each_path
         for each_path in document_set.deleted_paths
-        if _is_runtime_path(each_path)
+        if is_runtime_path(each_path)
     ) + tuple(
         old_path
         for old_path, new_path in document_set.renamed_paths
-        if _is_runtime_path(old_path) and not _is_runtime_path(new_path)
+        if is_runtime_path(old_path) and not is_runtime_path(new_path)
     )
     all_renamed_paths = tuple(
         each_pair
         for each_pair in document_set.renamed_paths
-        if _is_runtime_path(each_pair[1])
+        if is_runtime_path(each_pair[1])
     )
     return DocumentSet(
         all_documents,

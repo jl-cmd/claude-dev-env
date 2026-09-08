@@ -44,7 +44,7 @@ const HIDDEN_NAME_PREFIX = '.';
  * Fields a first write seeds from the published pstack plugin. An existing
  * manifest keeps its own values. This refresher changes only the skills list.
  */
-const SEEDED_MANIFEST_FIELDS = Object.freeze({
+export const SEEDED_MANIFEST_FIELDS = Object.freeze({
     $schema: 'https://anthropic.com/claude-code/plugin.schema.json',
     name: PSTACK_PLUGIN_DIRECTORY_NAME,
     version: '0.15.0',

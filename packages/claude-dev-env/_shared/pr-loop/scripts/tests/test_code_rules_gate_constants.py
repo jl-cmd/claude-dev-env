@@ -84,3 +84,10 @@ def test_banned_noun_span_pattern_extracts_definition_line_and_span() -> None:
     line_span = int(match.group(constants_module.BANNED_NOUN_SPAN_GROUP_INDEX))
     assert definition_line == 1
     assert line_span == 3
+
+
+def test_non_runtime_root_directory_names_hold_the_archive_and_vendor_roots() -> None:
+    assert constants_module.ALL_NON_RUNTIME_ROOT_DIRECTORY_NAMES == (
+        "skill-archive",
+        "vendor",
+    )
