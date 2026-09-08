@@ -48,6 +48,10 @@ def terminology_diagnostics(
         non-runtime root directory is left out, because the sweep helper
         reads the repository diff itself rather than the filtered
         document set.
+
+    Raises:
+        ValueError: If a base selection carries no comparison revision, or a
+            sweep finding does not parse as a path, line, and message.
     """
     all_arguments: tuple[Path | str, ...]
     if document_set.selection is SelectionKind.BASE:
