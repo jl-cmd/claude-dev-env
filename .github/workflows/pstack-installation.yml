@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm install --prefix "$RUNNER_TEMP/pstack-codex" @openai/codex@latest
+          npm install --prefix "$RUNNER_TEMP/pstack-codex" @openai/codex@0.153.4
           export CDE_CODEX_EXECUTABLE="$RUNNER_TEMP/pstack-codex/node_modules/.bin/codex"
           export CDE_PSTACK_PROOF_PROJECT="$RUNNER_TEMP/pstack-proof"
           export CDE_PSTACK_DISCOVERY_REPORT="$RUNNER_TEMP/pstack-codex-discovery.json"

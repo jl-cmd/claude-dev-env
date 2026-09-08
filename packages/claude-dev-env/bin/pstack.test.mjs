@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { installPstack, prepareRelease, validateLock, verifyInstallation, verifyRelease } from './pstack.mjs';
 
@@ -22,6 +22,7 @@ function fixture(t) {
     for (const [component, names] of Object.entries(baseLock.requiredSkills)) {
         for (const name of names) put(join(checkout, component, 'skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: Test ${name}.\n---\n\nRun ${name}.\n`);
         put(join(checkout, component, 'LICENSE'), `${component} license\n`);
+        put(join(checkout, component, '.cursor-plugin', 'plugin.json'), JSON.stringify({ name: component, skills: './skills' }));
     }
     put(join(checkout, 'pstack', 'skills', 'poteto-mode', 'playbooks', 'feature.md'), 'Build a small task, delegate, and verify it.\n');
     put(join(checkout, 'pstack', 'agents', 'poteto-agent.md'), 'Read poteto-mode and report complete findings.\n');
@@ -54,6 +55,11 @@ for (const host of ['claude', 'codex', 'cursor']) {
             assert.equal(readFileSync(join(entry, 'playbooks', 'feature.md'), 'utf8'), 'Build a small task, delegate, and verify it.\n');
         }
         assert.equal(existsSync(join(f.options.project, '.cursor')), false);
+        for (const component of baseLock.components) {
+            assert.equal(existsSync(join(release, 'runtime', component, '.cursor-plugin', 'plugin.json')), false);
+            assert.equal(readFileSync(join(release, 'upstream', component, '.cursor-plugin', 'plugin.json'), 'utf8'),
+                readFileSync(join(f.checkout, component, '.cursor-plugin', 'plugin.json'), 'utf8'));
+        }
         assert.equal(readFileSync(join(release, 'upstream', 'pstack', 'skills', 'poteto-mode', 'SKILL.md'), 'utf8'), readFileSync(join(f.checkout, 'pstack', 'skills', 'poteto-mode', 'SKILL.md'), 'utf8'));
         assert.deepEqual(readFileSync(join(release, 'upstream', 'pstack', 'assets', 'example.png')), Buffer.from([137, 80, 78, 71, 0, 255]));
         assert.equal(readFileSync(join(release, 'runtime', 'pstack', 'agents', 'poteto-agent.md'), 'utf8'), 'Read poteto-mode and report complete findings.\n');
@@ -266,4 +272,18 @@ test('session reservation is recorded before install releases its lock', t => {
     const result = installPstack({ ...f.options, reserveSession: true }, f.dependencies);
     assert.equal(readFileSync(join(f.store, 'sessions', String(process.pid)), 'utf8'), result.release);
     assert.equal(existsSync(join(f.store, '.install-lock')), false);
+});
+
+
+test('a changed installer creates a fresh generation for the same upstream pin', async t => {
+    const f = fixture(t);
+    const first = installPstack(f.options, f.dependencies);
+    const copied = join(f.temporary, 'updated-installer', 'bin', 'pstack.mjs');
+    put(copied, readFileSync(join(packageRoot, 'bin', 'pstack.mjs'), 'utf8') + '\n');
+    const updated = await import(pathToFileURL(copied).href);
+    const second = updated.installPstack(f.options, f.dependencies);
+    assert.equal(second.commit, first.commit);
+    assert.notEqual(second.adapterDigest, first.adapterDigest);
+    assert.notEqual(second.release, first.release);
+    assert.equal(verifyInstallation(f.options).release, second.release);
 });

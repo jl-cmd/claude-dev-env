@@ -94,6 +94,7 @@ export function prepareRelease(checkout, stage, finalRoot, lock, adapters) {
         filesUnder(source);
         cpSync(source, join(stage, 'upstream', component), { recursive: true });
         cpSync(source, join(stage, 'runtime', component), { recursive: true });
+        rmSync(join(stage, 'runtime', component, '.cursor-plugin', 'plugin.json'), { force: true });
         const skillHome = join(source, 'skills');
         const names = readdirSync(skillHome).filter(name => existsSync(join(skillHome, name, 'SKILL.md'))).sort();
         for (const name of lock.requiredSkills[component]) {
@@ -256,7 +257,8 @@ export function installPstack(options = {}, dependencies = {}) {
         } else if (options.refresh && prior?.lock) lock = prior.lock;
         validateLock(lock);
         const adapters = adapterFiles(options.packageRoot ?? packageRoot);
-        const adapterDigest = digest(json(adapters));
+        const installerSource = readFileSync(fileURLToPath(import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+        const adapterDigest = digest(json(adapters) + installerSource);
         const id = `${lock.commit}-${adapterDigest.slice(0, 16)}`;
         const releaseRoot = join(store, 'releases', id);
         mkdirSync(dirname(releaseRoot), { recursive: true });

@@ -30,7 +30,7 @@ Use --root to select a Claude config root or --project to install into a reposit
 
 Project entries live in .claude/skills with matching .agents/skills links. User entries live in the selected Claude config root and its existing sibling agents home. Existing shared directory pointers stay intact. The installer creates no .cursor/skills directory.
 
-The generated names are pstack-poteto-mode, pstack-how, and other pstack-prefixed names. Dependency names include cursor-team-kit-deslop, cursor-team-kit-control-cli, and cursor-team-kit-control-ui. Invoke /pstack-poteto-mode in Claude or Cursor, or $pstack-poteto-mode in Codex. These are direct skills, rather than plugin slash-command aliases. The mapping resolves upstream short names through release.json.
+The generated names are pstack-poteto-mode, pstack-how, and other pstack-prefixed names. Dependency names include cursor-team-kit-deslop, cursor-team-kit-control-cli, and cursor-team-kit-control-ui. Invoke /pstack-poteto-mode in Claude or Cursor, or $pstack-poteto-mode in Codex. These are direct skills. Cursor plugin registration metadata remains in the untouched upstream copy, so native loaders keep the component-prefixed names. The mapping resolves upstream short names through release.json.
 
 Each skill entry loads the common mapping and one of host-claude.md, host-codex.md, or host-cursor.md. Delegation prompts carry those paths and the upstream agent definition to the child. Required independent or cross-model work reports a missing host capability rather than substituting a weaker review. The copied model selector receives an explicit preferencesDirectory outside the release, preserving host settings through updates. cde-create-skill provides the portable authoring workflow when the native creator is absent.
 
@@ -60,7 +60,7 @@ Git and Node 22 or later are installer prerequisites. Runtime workflows still ne
 
 packages/claude-dev-env/scripts/pstack.lock.json is the shared record on main. The nightly workflow checks upstream, runs the installer tests, stages a real upstream installation, and opens a draft update PR. Review and native-host acceptance precede merging that pin. Environments adopt the merged record on their next eligible startup check. The workflow does not claim that filesystem checks prove agent behavior and does not auto-merge candidate updates.
 
-A release records its upstream commit, adapter digest and version, installed skills and agents, and file hashes. Installation stages a release before publishing pointers, checks unmanaged path collisions, and restores prior pointers if publication fails. Old releases remain on disk. An update error reports the retained revision; a first-install failure returns a failure status. verify checks installed files and pointers and labels the result filesystem-only.
+The adapter digest covers the installer code and compatibility files. A release records its upstream commit, adapter digest and version, installed skills and agents, and file hashes. Installation stages a release before publishing pointers, checks unmanaged path collisions, and restores prior pointers if publication fails. Old releases remain on disk. An update error reports the retained revision; a first-install failure returns a failure status. verify checks installed files and pointers and labels the result filesystem-only.
 
 ## Acceptance before enabling the default
 
@@ -68,7 +68,7 @@ Run a fresh Claude cloud session and a fresh Codex cloud session against this br
 
 Repeat on the actual local Claude, Codex, and Cursor profiles. Confirm the separate session-continuity companion loads the generated entry and restores the same immutable release after compaction. Test a real changed, added, and removed upstream skill across the environments, then an unreachable upstream and an incompatible dependency.
 
-The automated tests cover filesystem discovery locations, metadata, resources, dependencies, update reconciliation, collision handling, rollback, offline reuse, launch leases, and hook JSON. The real-upstream CI job runs on Linux and Windows. Native menus, cloud task execution, delegation, and actual profile launch integration remain separate acceptance evidence.
+The automated tests cover filesystem discovery locations, metadata, resources, dependencies, update reconciliation, collision handling, rollback, offline reuse, launch leases, and hook JSON. The real-upstream CI job runs on Linux and Windows. The Linux job also asks Codex 0.153.4 to list the installed skills through its native app server and checks each name and entry path. This read-only discovery test sends no agent task. Cloud task execution, delegation, Claude and Cursor menus, and actual profile launch integration remain separate acceptance evidence.
 
 ## Sources
 
