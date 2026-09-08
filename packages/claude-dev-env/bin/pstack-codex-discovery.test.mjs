@@ -60,7 +60,7 @@ test('native Codex discovers every installed pstack skill and its real entry pat
         lines.on('line', receive);
         send({ id, method, params });
     });
-    await request(0, 'initialize', { clientInfo: { name: 'cde_pstack_discovery', version: '1.0.0' } });
+    await request(0, 'initialize', { clientInfo: { name: 'skillcheck', version: '1.0.0' } });
     send({ method: 'initialized', params: {} });
     const discovered = await request(1, 'skills/list', { cwds: [resolve(project)], forceReload: true });
     const evidence = { verification: 'native-codex-skill-discovery', codexVersion: version.stdout.trim(),
