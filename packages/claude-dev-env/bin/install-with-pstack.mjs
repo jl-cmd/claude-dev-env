@@ -34,9 +34,9 @@ export async function runInstaller(args, dependencies = {}) {
     if (base.status !== 0) return base.status ?? 1;
     const roots = await (dependencies.selectedRoots ?? selectedRoots)(args);
     for (const root of roots) {
-        const result = (dependencies.install ?? installPstack)({ root });
-        console.log(`Pstack ${result.commit}: ${result.status}.`);
-        if (result.warning) console.error(`Pstack kept the previous release: ${result.warning}`);
+        const installation = (dependencies.install ?? installPstack)({ root });
+        console.log(`Pstack ${installation.commit}: ${installation.status}.`);
+        if (installation.warning) console.error(`Pstack kept the previous release: ${installation.warning}`);
     }
     return 0;
 }

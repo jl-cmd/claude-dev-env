@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test installer behavior
-        run: node --test packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs
+        run: node --test packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs packages/claude-dev-env/bin/install-session-continuity.test.mjs packages/claude-dev-env/.agents/skills/session-continuity/continuity.test.mjs scripts/propose-pstack-update.test.mjs
       - name: Check upstream and stage a candidate pin
         run: node scripts/propose-pstack-update.mjs
       - name: Open a candidate pull request

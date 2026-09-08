@@ -35,3 +35,12 @@ test('first pstack install failure is visible to the package caller', async () =
         install: () => { throw new Error('source unavailable'); },
     }), /source unavailable/);
 });
+
+
+test('retained pstack release keeps the full installer successful', async () => {
+    const status = await runInstaller([], {
+        runBase: () => ({ status: 0 }), selectedRoots: () => ['/profile'],
+        install: () => ({ commit: 'verified-prior', status: 'retained', warning: 'Upstream unavailable' }),
+    });
+    assert.equal(status, 0);
+});

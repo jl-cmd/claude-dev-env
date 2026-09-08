@@ -6,6 +6,9 @@ on:
       - 'packages/claude-dev-env/bin/install-with-pstack*'
       - 'packages/claude-dev-env/.agents/skills/session-continuity/**'
       - 'packages/claude-dev-env/scripts/pstack*'
+      - 'packages/claude-dev-env/scripts/pstack-adapters/**'
+      - 'packages/claude-dev-env/bin/install-session-continuity*'
+      - 'scripts/propose-pstack-update*'
       - 'packages/claude-dev-env/rules/pstack*'
       - 'packages/claude-dev-env/package.json'
       - '.github/workflows/pstack-installation.yml'
@@ -27,7 +30,7 @@ jobs:
           node-version: '22'
       - name: Test install and rollback behavior
         shell: bash
-        run: node --test --test-reporter=tap packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs | tee "$RUNNER_TEMP/pstack-tests.tap"
+        run: node --test --test-reporter=tap packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs packages/claude-dev-env/bin/install-session-continuity.test.mjs packages/claude-dev-env/.agents/skills/session-continuity/continuity.test.mjs scripts/propose-pstack-update.test.mjs | tee "$RUNNER_TEMP/pstack-tests.tap"
       - name: Fetch and install the real pinned upstream
         shell: bash
         run: |

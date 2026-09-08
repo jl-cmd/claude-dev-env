@@ -64,7 +64,7 @@ export function fetchUpstream(lock, destination) {
 function adapterFiles(root) {
     const adapters = join(root, 'scripts', 'pstack-adapters');
     return Object.fromEntries([
-        ...['common.md', ...hosts.map(host => `${host}.md`), 'create-skill.md'].map(name => [name, join(adapters, name)]),
+        ...['common.md', ...hosts.map(host => `host-${host}.md`), 'create-skill.md'].map(name => [name, join(adapters, name)]),
         ...['pstack-host-mapping.md', 'pstack-models.md'].map(name => [name, join(root, 'rules', name)]),
         ['select_pstack_models.mjs', join(root, 'scripts', 'select_pstack_models.mjs')],
     ].map(([name, path]) => [name, readFileSync(path, 'utf8')]));
@@ -231,13 +231,13 @@ export function installPstack(options = {}, dependencies = {}) {
     const lockDirectory = join(store, '.install-lock');
     mkdirSync(lockDirectory);
     let temporaryRoot;
-    const finish = result => {
+    const finish = installation => {
         if (options.reserveSession) {
             const sessions = join(store, 'sessions');
             mkdirSync(sessions, { recursive: true });
-            writeFileSync(join(sessions, String(process.pid)), result.release);
+            writeFileSync(join(sessions, String(process.pid)), installation.release);
         }
-        return result;
+        return installation;
     };
     try {
         const prior = loadState(store);
@@ -296,11 +296,11 @@ function parseArguments(args) {
         const flag = tokens[index];
         if (['--offline', '--refresh', '--force', '--strict'].includes(flag)) options[flag.slice(2)] = true;
         else if (['--root', '--project', '--host', '--lock', '--interval-ms'].includes(flag)) {
-            const value = tokens[++index];
-            if (!value || value.startsWith('--')) throw new Error(`${flag} requires a value`);
-            if (flag === '--lock') options.lock = readJson(resolve(value));
-            else if (flag === '--interval-ms') options.intervalMs = Number(value);
-            else options[flag.slice(2)] = value;
+            const argument = tokens[++index];
+            if (!argument || argument.startsWith('--')) throw new Error(`${flag} requires a value`);
+            if (flag === '--lock') options.lock = readJson(resolve(argument));
+            else if (flag === '--interval-ms') options.intervalMs = Number(argument);
+            else options[flag.slice(2)] = argument;
         } else throw new Error(`Unknown option: ${flag}`);
     }
     if (options.host && !hosts.includes(options.host)) throw new Error('Host must be claude, codex, or cursor');
@@ -326,21 +326,21 @@ export function main(args = process.argv.slice(2)) {
         }
         if (command === 'launch' && !options.host) throw new Error('launch requires --host');
         if (command === 'launch') { options.refresh = !options.offline && !options.lock; options.reserveSession = true; }
-        const result = command === 'verify' ? verifyInstallation(options) : installPstack(options);
-        if (result.warning) console.error(`Pstack update failed; keeping ${result.commit}: ${result.warning}`);
+        const installation = command === 'verify' ? verifyInstallation(options) : installPstack(options);
+        if (installation.warning) console.error(`Pstack update failed; keeping ${installation.commit}: ${installation.warning}`);
         if (command === 'hook') {
             const { store } = layout(options);
-            const release = join(store, 'releases', result.release);
-            console.log(json({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: `Pstack ${result.commit} is installed. Before using pstack, read ${join(release, 'compat', 'common.md')} and ${join(release, 'compat', 'claude.md')}. Skill inventory: ${join(release, 'release.json')}. ${result.warning ?? ''}` } }));
+            const release = join(store, 'releases', installation.release);
+            console.log(json({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: `Pstack ${installation.commit} is installed. Use the immutable release recorded by session-continuity or the loaded skill entry for this session. Read common.md and host-claude.md in that release's compat directory. New sessions can use the installed inventory at ${join(release, 'release.json')}. ${installation.warning ?? ''}` } }));
         } else if (command === 'launch') {
             const sessions = join(layout(options).store, 'sessions');
             const lease = join(sessions, String(process.pid));
             try {
-                const child = spawnSync(options.host, forwarded, { stdio: 'inherit', shell: false, env: { ...process.env, CDE_PSTACK_RELEASE: join(layout(options).store, 'releases', result.release) } });
+                const child = spawnSync(options.host, forwarded, { stdio: 'inherit', shell: false, env: { ...process.env, CDE_PSTACK_RELEASE: join(layout(options).store, 'releases', installation.release) } });
                 if (child.error) throw child.error;
                 return child.status ?? 1;
             } finally { unlinkSync(lease); }
-        } else console.log(json(result));
+        } else console.log(json(installation));
         return 0;
     } catch (error) { console.error(`Pstack: ${error.message}`); return 1; }
 }

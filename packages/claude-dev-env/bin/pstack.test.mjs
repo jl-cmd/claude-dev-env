@@ -50,7 +50,7 @@ for (const host of ['claude', 'codex', 'cursor']) {
             assert.equal(realpathSync(entry), join(release, 'runtime', 'pstack', 'skills', 'poteto-mode'));
             const text = readFileSync(join(entry, 'SKILL.md'), 'utf8');
             assert.match(text, /name: pstack-poteto-mode/);
-            assert.ok(text.includes(join(release, 'compat', 'common.md')));
+            assert.ok(text.includes(JSON.stringify(join(release, 'compat', 'common.md'))));
             assert.equal(readFileSync(join(entry, 'playbooks', 'feature.md'), 'utf8'), 'Build a small task, delegate, and verify it.\n');
         }
         assert.equal(existsSync(join(f.options.project, '.cursor')), false);
@@ -148,8 +148,12 @@ test('unknown namespaced upstream dependency requires adapter review', t => {
 
 test('source symlinks are rejected before publication', t => {
     const f = fixture(t);
-    symlinkSync(f.checkout, join(f.checkout, 'pstack', 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
+    const outside = join(f.temporary, 'outside-source');
+    mkdirSync(outside);
+    put(join(outside, 'personal.txt'), 'Retain this file.');
+    symlinkSync(outside, join(f.checkout, 'pstack', 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
     assert.throws(() => installPstack(f.options, f.dependencies), /symlinks require review/);
+    assert.equal(readFileSync(join(outside, 'personal.txt'), 'utf8'), 'Retain this file.');
 });
 
 test('update checks use the shared record and respect the interval', t => {

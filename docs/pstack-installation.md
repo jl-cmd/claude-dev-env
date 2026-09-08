@@ -32,9 +32,9 @@ Project entries live in .claude/skills with matching .agents/skills links. User 
 
 The generated names are pstack-poteto-mode, pstack-how, and other pstack-prefixed names. Dependency names include cursor-team-kit-deslop, cursor-team-kit-control-cli, and cursor-team-kit-control-ui. Invoke /pstack-poteto-mode in Claude or Cursor, or $pstack-poteto-mode in Codex. These are direct skills, rather than plugin slash-command aliases. The mapping resolves upstream short names through release.json.
 
-Each skill entry loads the common mapping and one of claude.md, codex.md, or cursor.md. Delegation prompts carry those paths and the upstream agent definition to the child. Required independent or cross-model work reports a missing host capability rather than substituting a weaker review. The copied model selector receives an explicit preferencesDirectory outside the release, preserving host settings through updates. cde-create-skill provides the portable authoring workflow when the native creator is absent.
+Each skill entry loads the common mapping and one of host-claude.md, host-codex.md, or host-cursor.md. Delegation prompts carry those paths and the upstream agent definition to the child. Required independent or cross-model work reports a missing host capability rather than substituting a weaker review. The copied model selector receives an explicit preferencesDirectory outside the release, preserving host settings through updates. cde-create-skill provides the portable authoring workflow when the native creator is absent.
 
-The separate session-continuity companion still needs its legacy source resolver extended for the generated pstack-poteto-mode name and release paths. Keep this change in draft until that integration and the native host checks below pass.
+The separate session-continuity companion recognizes the generated pstack-poteto-mode name and resolves its immutable release path. Reinvocation, compaction, and resume keep the recorded release. A new session adopts the newly installed revision. Legacy invocations and explicit source overrides remain supported.
 
 ## Cloud setup and maintenance
 
@@ -50,7 +50,7 @@ Put this command in its maintenance script:
 node packages/claude-dev-env/bin/pstack.mjs install --project "$PWD" --refresh
 ```
 
-For Claude cloud, run the setup command in its environment setup script. The repository's .claude/settings.json also invokes the pstack SessionStart hook. A fresh installation uses the checkout's bundled pin. Later startup events check the shared pin. Resume, clear, and compaction events verify and retain the current release instead of replacing instructions during an existing session. The hook emits native SessionStart JSON with the installed revision and compatibility paths.
+For Claude cloud, run the setup command in its environment setup script. The repository's .claude/settings.json also invokes the pstack SessionStart hook. A fresh installation uses the checkout's bundled pin. Later startup events check the shared pin. Resume, clear, and compaction events verify and retain the installed release. The companion restores the immutable skill source recorded for that session. The hook emits native SessionStart JSON with the installed revision and compatibility paths.
 
 For other repositories, install the published package's cde-pstack command in the environment and use cde-pstack install --project "$PWD" in setup, adding --refresh in maintenance. Add the same repository SessionStart registration for Claude, pointing at the installed command with hook. A setup script in this repository does not change settings in an existing remote environment. Configure each environment's script fields separately.
 
