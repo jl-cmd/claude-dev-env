@@ -62,6 +62,7 @@ test('writes a manifest when the plugin folder has none', () => {
         const manifestPath = join(pluginRoot, PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH);
         const written = JSON.parse(readFileSync(manifestPath, 'utf8'));
         assert.equal(written.name, 'pstack');
+        assert.equal(written.version, '0.15.0');
         assert.deepEqual(written.skills, ['./how']);
     });
 });

@@ -47,7 +47,7 @@ const HIDDEN_NAME_PREFIX = '.';
 const SEEDED_MANIFEST_FIELDS = Object.freeze({
     $schema: 'https://anthropic.com/claude-code/plugin.schema.json',
     name: PSTACK_PLUGIN_DIRECTORY_NAME,
-    version: '0.14.8',
+    version: '0.15.0',
     description:
         'if you want to go fast, go deep first. pstack helps you write less, but higher '
         + 'quality code. rigorous agent workflows you can parallelize with confidence.',

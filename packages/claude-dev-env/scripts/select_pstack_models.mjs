@@ -18,7 +18,6 @@ export const allPstackRoleRequirements = Object.freeze({
     'hardest tasks': 'highest available reasoning capability',
     'how explorer': 'fast codebase exploration',
     'how explainer': 'clear technical synthesis',
-    'how critics': 'independent technical criticism',
     'why investigators': 'fast evidence gathering',
     'why synthesizer': 'strong evidence synthesis',
     'reflect tooling': 'reliable tool and workflow analysis',
@@ -31,7 +30,6 @@ export const allPstackRoleRequirements = Object.freeze({
 });
 
 export const defaultPanelByPstackRole = Object.freeze({
-    'how critics': Object.freeze({ agentCount: 3, requiresDistinctModels: false }),
     'arena runners': Object.freeze({ agentCount: 3, requiresDistinctModels: true }),
     'swarm workers': defaultSingleDelegationPanel,
     'architect runners': Object.freeze({ agentCount: 2, requiresDistinctModels: true }),

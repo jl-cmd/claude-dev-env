@@ -48,11 +48,11 @@ $selectorInput = @'
 {
   "host": "current-host",
   "inventoryHost": "current-host",
-  "role": "how critics",
+  "role": "interrogate reviewers",
   "delegationIndex": 0,
   "panel": {
     "agentCount": 3,
-    "requiresDistinctModels": false
+    "requiresDistinctModels": true
   },
   "availableModelIds": ["confirmed-host-model"],
   "confirmedSuitableModelIds": [],
@@ -91,7 +91,6 @@ judgment and prose: strong judgment and clear prose
 hardest tasks: highest available reasoning capability
 how explorer: fast codebase exploration
 how explainer: clear technical synthesis
-how critics: independent technical criticism
 why investigators: fast evidence gathering
 why synthesizer: strong evidence synthesis
 reflect tooling: reliable tool and workflow analysis
@@ -106,7 +105,6 @@ interrogate reviewers: independent adversarial review
 
 Panel size and model diversity are separate from model preferences.
 
-- How critics use three agents by default. Cross-model diversity is optional.
 - Arena runners use three agents by default and require distinct models.
 - The arena cross-judge pool selects one judge. Pass `parentModelId` so the
   selector chooses another available preference before the parent's model.

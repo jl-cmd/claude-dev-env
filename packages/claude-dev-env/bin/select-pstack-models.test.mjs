@@ -17,7 +17,6 @@ const ALL_PSTACK_ROLES = [
     'hardest tasks',
     'how explorer',
     'how explainer',
-    'how critics',
     'why investigators',
     'why synthesizer',
     'reflect tooling',
@@ -64,10 +63,10 @@ test('Codex preferences select every available model in a diverse panel', () => 
     const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-codex-'));
     try {
         writeHostPreferences(preferencesDirectory, 'codex', {
-            'how critics': ['gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-6-astra'],
+            'arena runners': ['gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-6-astra'],
         });
         const selection = selectWithPreferences(preferencesDirectory, {
-            role: 'how critics',
+            role: 'arena runners',
             delegationIndex: 1,
             availableModelIds: ['gpt-5.6-sol', 'gpt-6-astra', 'gpt-5.6-terra'],
         });
@@ -354,10 +353,10 @@ test('an optional-diversity review panel reports repeated models', () => {
     const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-review-panel-'));
     try {
         writeHostPreferences(preferencesDirectory, 'codex', {
-            'how critics': ['gpt-5.6-sol'],
+            'swarm workers': ['gpt-5.6-sol'],
         });
         const selection = selectWithPreferences(preferencesDirectory, {
-            role: 'how critics',
+            role: 'swarm workers',
             delegationIndex: 2,
             panel: {
                 agentCount: 3,

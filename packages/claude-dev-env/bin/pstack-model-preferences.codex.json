@@ -9,7 +9,6 @@
         "hardest tasks": ["gpt-6-astra"],
         "how explorer": ["gpt-5.6-terra"],
         "how explainer": ["gpt-5.6-sol"],
-        "how critics": ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-6-astra"],
         "why investigators": ["gpt-5.6-terra"],
         "why synthesizer": ["gpt-6-astra"],
         "reflect tooling": ["gpt-5.6-sol"],
