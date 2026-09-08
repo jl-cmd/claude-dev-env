@@ -4,7 +4,8 @@
     "description": "Claude Code development standards — rules, hooks, agents, commands, and skills",
     "type": "module",
     "bin": {
-        "claude-dev-env": "bin/install.mjs",
+        "claude-dev-env": "bin/install-with-pstack.mjs",
+        "cde-pstack": "bin/pstack.mjs",
         "codex-compat": "bin/codex-compat.mjs",
         "cde": "bin/cde.mjs"
     },

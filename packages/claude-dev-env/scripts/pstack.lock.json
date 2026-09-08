@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "adapterVersion": 1,
+  "repository": "https://github.com/cursor/plugins.git",
+  "commit": "2b8ae2ee306f823d54879d3da7f8496b73c31d5d",
+  "components": ["pstack", "cursor-team-kit"],
+  "requiredSkills": {
+    "pstack": ["poteto-mode"],
+    "cursor-team-kit": ["deslop", "control-cli", "control-ui"]
+  }
+}

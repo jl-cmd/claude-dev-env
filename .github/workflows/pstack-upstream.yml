@@ -1,0 +1,42 @@
+name: Propose pstack update
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: pstack-upstream
+  cancel-in-progress: false
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test installer behavior
+        run: node --test packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs
+      - name: Check upstream and stage a candidate pin
+        run: node scripts/propose-pstack-update.mjs
+      - name: Open a candidate pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock=packages/claude-dev-env/scripts/pstack.lock.json
+          git diff --quiet -- "$lock" && exit 0
+          sha=$(node -p "require('./$lock').commit")
+          branch="automation/pstack-${sha:0:12}"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then exit 0; fi
+          git switch -c "$branch"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$lock"
+          git commit -m "chore(pstack): propose upstream ${sha:0:12}"
+          git push origin "$branch"
+          gh pr create --draft --base main --head "$branch" --title "Update pstack to ${sha:0:12}" --body 'The pinned upstream installs and passes filesystem checks. Complete the Claude cloud and Codex cloud acceptance steps in docs/pstack-installation.md before merging this shared pin. This workflow leaves the current shared pin unchanged until review and merge.'

@@ -1,0 +1,35 @@
+name: Pstack installation
+on:
+  pull_request:
+    paths:
+      - 'packages/claude-dev-env/bin/pstack*'
+      - 'packages/claude-dev-env/bin/install-with-pstack*'
+      - 'packages/claude-dev-env/scripts/pstack*'
+      - 'packages/claude-dev-env/rules/pstack*'
+      - 'packages/claude-dev-env/package.json'
+      - '.github/workflows/pstack-installation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  installation:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test install and rollback behavior
+        run: node --test packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs
+      - name: Fetch and install the real pinned upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          node packages/claude-dev-env/bin/pstack.mjs install --root "$RUNNER_TEMP/pstack-proof/.claude" --strict
+          node packages/claude-dev-env/bin/pstack.mjs verify --root "$RUNNER_TEMP/pstack-proof/.claude"
+          node packages/claude-dev-env/bin/pstack.mjs install --root "$RUNNER_TEMP/pstack-proof/.claude" --offline --strict
