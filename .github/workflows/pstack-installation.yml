@@ -4,6 +4,7 @@ on:
     paths:
       - 'packages/claude-dev-env/bin/pstack*'
       - 'packages/claude-dev-env/bin/install-with-pstack*'
+      - 'packages/claude-dev-env/.agents/skills/session-continuity/**'
       - 'packages/claude-dev-env/scripts/pstack*'
       - 'packages/claude-dev-env/rules/pstack*'
       - 'packages/claude-dev-env/package.json'
@@ -25,7 +26,23 @@ jobs:
         with:
           node-version: '22'
       - name: Test install and rollback behavior
-        run: node --test packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs
+        run: node --test --test-reporter=spec packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs
+      - name: Identify a Windows native crash
+        if: failure() && runner.os == 'Windows'
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { spawnSync } from 'node:child_process';
+          const file = 'packages/claude-dev-env/bin/pstack.test.mjs';
+          const names = ['clean', ...Array.from(readFileSync(file, 'utf8').matchAll(/test\('([^']+)'/g), match => match[1])];
+          for (const name of names) {
+            console.log(`Checking ${name}`);
+            const result = spawnSync(process.execPath, ['--test', '--test-name-pattern', name, file], {encoding:'utf8'});
+            console.log(JSON.stringify({name,status:result.status,signal:result.signal}));
+            if (result.status !== 0) console.log(result.stdout, result.stderr);
+          }
+          JS
       - name: Fetch and install the real pinned upstream
         shell: bash
         run: |
