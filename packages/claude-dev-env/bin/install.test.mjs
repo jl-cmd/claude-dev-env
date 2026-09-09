@@ -90,8 +90,7 @@ function commitAllChanges(repositoryRoot, commitMessage) {
 function tryMergeAllowingConflict(repositoryRoot, branchName) {
     try {
         execFileSync('git', ['merge', '--no-edit', branchName], {
-            cwd: repositoryRoot,
-            stdio: 'ignore',
+            cwd: repositoryRoot, stdio: 'ignore',
         });
     } catch {
         return;
@@ -1798,7 +1797,7 @@ test('should preserve a case-only rename on a case-insensitive filesystem (host-
             [copiedReadmePath],
             sandbox.skillsRoot,
             sandbox.backupRoot,
-            { isCaseInsensitive: true, managedHomeDirectory: sandbox.root },
+            { managedHomeDirectory: sandbox.root },
         );
 
         const survivingReadmeNames = readdirSync(join(sandbox.skillsRoot, 'demo'))
@@ -2517,7 +2516,7 @@ test('settingsHookCommandsAtPath reads no command from a settings file it cannot
         assert.deepEqual(
             settingsHookCommandsAtPath(join(sandboxRoot, 'absent.json')),
             [],
-            'settings that are not there hold no command',
+            'a settings file that is not there holds no command',
         );
         assert.equal(
             retiredHookPathsNamedByCommands(
