@@ -84,6 +84,24 @@ function adaptSkill(text, name, releaseRoot, skillRoot) {
         + fork + '\n' + match[2].trimStart();
 }
 
+function writePstackPluginManifest(checkout, stage, skills) {
+    const upstream = readJson(join(checkout, 'pstack', '.cursor-plugin', 'plugin.json'));
+    const manifest = {
+        $schema: 'https://anthropic.com/claude-code/plugin.schema.json',
+        name: 'pstack',
+        version: upstream.version,
+        description: upstream.description,
+        author: upstream.author,
+        homepage: upstream.homepage,
+        repository: upstream.repository,
+        license: upstream.license,
+        skills: skills.filter(skill => skill.component === 'pstack').map(skill => `./${skill.slug}`),
+    };
+    const pluginRoot = join(stage, 'runtime', 'pstack', 'skills');
+    mkdirSync(join(pluginRoot, '.claude-plugin'), { recursive: true });
+    writeFileSync(join(pluginRoot, '.claude-plugin', 'plugin.json'), json(manifest));
+}
+
 export function prepareRelease(checkout, stage, finalRoot, lock, adapters) {
     const skills = [];
     const agents = [];
@@ -118,6 +136,7 @@ export function prepareRelease(checkout, stage, finalRoot, lock, adapters) {
     mkdirSync(join(stage, creatorPath), { recursive: true });
     writeFileSync(join(stage, creatorPath, 'SKILL.md'), adapters['create-skill.md']);
     skills.push({ name: 'cde-create-skill', component: 'cde', slug: 'create-skill', path: creatorPath });
+    writePstackPluginManifest(checkout, stage, skills);
     const knownNames = new Set(skills.map(skill => `${skill.component}:${skill.slug}`));
     for (const path of filesUnder(join(stage, 'upstream')).filter(path => path.endsWith('.md') && (path.includes(sep + 'skills' + sep) || path.includes(sep + 'agents' + sep)))) {
         const references = readFileSync(path, 'utf8').matchAll(/\b(pstack|cursor-team-kit):([a-z][a-z0-9-]*)/g);
@@ -177,7 +196,12 @@ export function verifyInstallation(options = {}) {
 
 function publish(releaseRoot, release, homes, prior) {
     const uniqueHomes = [...new Set(homes.map(home => { mkdirSync(home, { recursive: true }); return realpathSync(home); }))];
-    const links = Object.fromEntries(uniqueHomes.flatMap(home => release.skills.map(skill => [join(home, skill.name), join(releaseRoot, skill.path)])));
+    const pstackSkill = release.skills.find(skill => skill.component === 'pstack');
+    const directSkills = release.skills.filter(skill => skill.component !== 'pstack');
+    const links = Object.fromEntries(uniqueHomes.flatMap(home => [
+        ...(pstackSkill ? [[join(home, 'pstack'), join(releaseRoot, dirname(pstackSkill.path))]] : []),
+        ...directSkills.map(skill => [join(home, skill.name), join(releaseRoot, skill.path)]),
+    ]));
     const paths = new Set([...Object.keys(prior?.links ?? {}), ...Object.keys(links)]);
     const before = new Map();
     for (const path of paths) {
