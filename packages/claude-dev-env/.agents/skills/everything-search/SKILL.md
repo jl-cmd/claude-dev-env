@@ -15,7 +15,11 @@ Search files instantly on Windows using the Everything command-line interface (e
 
 Every search carries a scope: a project path or registry token, an `ext:` filter, a `dm:` date filter, a `size:` filter, or a name pattern. A bare whole-drive scan or a network-share sweep is out of bounds. Narrow the search to what you need.
 
-When `es.exe` fails or returns nothing, self-heal first: fall back to the `Glob` tool (name and path patterns) or `Grep` (file contents), and report the outage so the reader knows the index was unavailable. When self-healing also fails, ask the user through `AskUserQuestion` with a short analysis and next-step options.
+When `es.exe` returns Error 8, the Everything IPC client window is missing. Retry the same search twice with a short pause. Do not report that Everything is not running, not loaded, or that the index is unavailable from that first miss. After those retries fail, report that the Everything IPC client did not answer and that the service state was not probed, then fall back to the `Glob` tool (name and path patterns) or `Grep` (file contents) with the same scope.
+
+When `es.exe` is missing, or a later search returns no hits, fall back to `Glob` or `Grep`. A failed search is not proof the index is down. When those fallbacks also fail, ask the user through `AskUserQuestion` with a short analysis and next-step options.
+
+Direct `es.exe` calls use the same Error 8 retry. The wrapper in `scripts/everything_search.py` already retries Error 8 twice.
 
 ## Registry tokens
 
@@ -139,7 +143,8 @@ Run separate searches for each extension type:
 
 ## Best Practices
 
-- Everything must be running (system tray) for es.exe to work
+- `es.exe` talks to the Everything tray client IPC window. The Everything service can be running while Error 8 still fires.
+- On Error 8, retry the same search twice before treating the search as failed.
 - Run one extension per search for cleaner results
 - Use `dm:` to filter recent files by the index timestamp
 - Combine with path to narrow scope
@@ -165,5 +170,5 @@ Everything indexes REAL paths only, not junctions or mapped drives.
 
 ## Files
 
-- `scripts/everything_search.py` runs one Everything search without a shell.
-- `scripts/test_everything_search.py` verifies registry expansion and command failures.
+- `scripts/everything_search.py` runs one Everything search without a shell, retries Error 8 twice, and reports that the IPC client did not answer and that the service state was not probed when those retries fail.
+- `scripts/test_everything_search.py` verifies registry expansion, command failures, Error 8 retry, and the IPC-client miss message.
