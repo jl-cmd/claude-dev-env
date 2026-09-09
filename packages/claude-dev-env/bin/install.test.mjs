@@ -1798,7 +1798,7 @@ test('should preserve a case-only rename on a case-insensitive filesystem (host-
             [copiedReadmePath],
             sandbox.skillsRoot,
             sandbox.backupRoot,
-            { managedHomeDirectory: sandbox.root },
+            { isCaseInsensitive: true, managedHomeDirectory: sandbox.root },
         );
 
         const survivingReadmeNames = readdirSync(join(sandbox.skillsRoot, 'demo'))
@@ -2517,7 +2517,7 @@ test('settingsHookCommandsAtPath reads no command from a settings file it cannot
         assert.deepEqual(
             settingsHookCommandsAtPath(join(sandboxRoot, 'absent.json')),
             [],
-            'a settings file that is not there holds no command',
+            'settings that are not there hold no command',
         );
         assert.equal(
             retiredHookPathsNamedByCommands(
@@ -3047,9 +3047,10 @@ test('the base install publishes the pstack poteto-mode entry into the managed s
 
     assert.equal(outcome.status, 'installed');
     assert.equal(outcome.warning, null);
-    const entryPath = join(fixture.managedRoot, 'skills', 'pstack-poteto-mode');
-    assert.equal(lstatSync(entryPath).isSymbolicLink(), true, 'the entry is a pointer into the release');
-    assert.equal(existsSync(join(entryPath, 'SKILL.md')), true, 'the pointer resolves to a skill');
+    const pstackRoot = join(fixture.managedRoot, 'skills', 'pstack');
+    const entryPath = join(pstackRoot, 'poteto-mode');
+    assert.equal(lstatSync(pstackRoot).isSymbolicLink(), true, 'the pstack root is a pointer into the release');
+    assert.equal(existsSync(join(entryPath, 'SKILL.md')), true, 'the nested entry resolves to a skill');
 });
 
 test('an unreachable pstack upstream reports a warning and keeps the base install going', t => {
