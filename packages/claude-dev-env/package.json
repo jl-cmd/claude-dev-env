@@ -5,6 +5,7 @@
     "type": "module",
     "bin": {
         "claude-dev-env": "bin/install.mjs",
+        "cde-pstack": "bin/pstack.mjs",
         "codex-compat": "bin/codex-compat.mjs",
         "cde": "bin/cde.mjs"
     },
