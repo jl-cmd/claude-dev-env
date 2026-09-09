@@ -44,6 +44,8 @@ for (const host of ['claude', 'codex', 'cursor']) {
         assert.equal(result.commit, '27e2a62ff94f9af4b5e68435e41cdceacadb840c');
         assert.equal(result.verification, 'filesystem-only');
         const release = join(f.store, 'releases', result.release);
+        const releaseManifest = JSON.parse(readFileSync(join(release, 'release.json'), 'utf8'));
+        assert.equal(releaseManifest.skills.find(skill => skill.component === 'pstack').name, 'pstack:poteto-mode');
         const expected = ['cde-create-skill', 'cursor-team-kit-control-cli', 'cursor-team-kit-control-ui', 'cursor-team-kit-deslop', 'pstack'];
         for (const home of ['.claude', '.agents']) {
             const skillsHome = join(f.options.project, home, 'skills');
@@ -53,7 +55,7 @@ for (const host of ['claude', 'codex', 'cursor']) {
             const entry = join(pstackRoot, 'poteto-mode');
             assert.equal(realpathSync(entry), join(release, 'runtime', 'pstack', 'skills', 'poteto-mode'));
             const text = readFileSync(join(entry, 'SKILL.md'), 'utf8');
-            assert.match(text, /name: pstack-poteto-mode/);
+            assert.match(text, /name: poteto-mode/);
             assert.ok(text.includes(JSON.stringify(join(release, 'compat', 'common.md'))));
             assert.equal(readFileSync(join(entry, 'playbooks', 'feature.md'), 'utf8'), 'Build a small task, delegate, and verify it.\n');
             const manifest = JSON.parse(readFileSync(join(pstackRoot, '.claude-plugin', 'plugin.json'), 'utf8'));
