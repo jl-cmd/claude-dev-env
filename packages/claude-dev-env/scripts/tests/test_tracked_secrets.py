@@ -10,6 +10,7 @@ import pytest
 from repository_checks.config.constants import (
     ALL_TRACKED_SECRET_EXACT_EXEMPTIONS,
     CHECK_ID_TRACKED_PERSONAL_DATA,
+    FAILED_CHECK_EXIT_CODE,
     FINDINGS_EXIT_CODE,
 )
 from repository_checks.hook_modules import load_hooks_module
@@ -53,6 +54,18 @@ def test_should_flag_a_tracked_secret(tmp_path: Path) -> None:
     assert CHECK_ID_TRACKED_PERSONAL_DATA in stdout_text
     assert "src/app.py" in stdout_text
     assert _SYNTHETIC_GITHUB_TOKEN not in stdout_text
+
+
+def test_should_fail_closed_for_malformed_repository_email_policy(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    initialize_repository(repository_root)
+    write_text(repository_root / "config" / "repository-policy.json", "{")
+    commit_tracked_files(repository_root)
+    exit_code, stdout_text, _stderr_text = run_policy(repository_root)
+    assert exit_code == FAILED_CHECK_EXIT_CODE
+    assert f"error: rule failed: {CHECK_ID_TRACKED_PERSONAL_DATA}" in stdout_text
 
 
 def test_should_fail_closed_before_reading_a_tracked_symlink_outside_repository(

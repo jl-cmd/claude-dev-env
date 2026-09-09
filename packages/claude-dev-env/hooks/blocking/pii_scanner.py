@@ -18,10 +18,9 @@ if _hooks_directory not in sys.path:
     sys.path.insert(0, _hooks_directory)
 
 from hooks_constants.local_identity import nas_host  # noqa: E402
-from hooks_constants.pii_prevention_constants import (  # noqa: E402
+from hooks_constants.pii_prevention_constants import (
     ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES,
     ALL_EXACT_LEGAL_NOTICE_BASENAMES,
-    ALL_HOME_DIRECTORY_PATH_MARKERS,
     ALL_PLACEHOLDER_HOME_USERNAMES,
     ALL_REDACTED_PREVIEW_CATEGORIES,
     ALL_RFC1918_NETWORK_CIDRS,
@@ -37,6 +36,8 @@ from hooks_constants.pii_prevention_constants import (  # noqa: E402
     CONFTEST_BASENAME,
     EMAIL_PATTERN,
     HOME_PATH_PATTERN,
+    HOME_USERNAME_MARKER_PATTERN,
+    INTERPOLATED_HOME_USERNAME_PATTERN,
     IPV4_PATTERN,
     IPV4_VERSION_NUMBER,
     MAXIMUM_FINDINGS_PER_SCAN,
@@ -90,9 +91,7 @@ def is_path_exempt_from_pii_scan(file_path: str) -> bool:
         return False
     normalized_path = file_path.replace("\\", "/").lower()
     path_for_suffix_match = (
-        normalized_path
-        if normalized_path.startswith("/")
-        else f"/{normalized_path}"
+        normalized_path if normalized_path.startswith("/") else f"/{normalized_path}"
     )
     basename = os.path.basename(file_path)
     basename_lower = basename.lower()
@@ -106,9 +105,7 @@ def is_path_exempt_from_pii_scan(file_path: str) -> bool:
         or basename_lower.endswith(TEST_MODULE_BASENAME_SUFFIX)
     ):
         return True
-    if TESTS_PATH_SEGMENT in normalized_path or normalized_path.startswith(
-        TESTS_PATH_PREFIX
-    ):
+    if TESTS_PATH_SEGMENT in normalized_path or normalized_path.startswith(TESTS_PATH_PREFIX):
         return True
     if basename_lower.endswith(ALL_SOURCE_TEST_FILE_SUFFIXES) and (
         SPEC_BASENAME_MARKER in basename_lower or TEST_BASENAME_MARKER in basename_lower
@@ -130,11 +127,7 @@ def _redact_sensitive_preview(matched_text: str) -> str:
         return REDACTED_SHORT_PREVIEW
     prefix_length = REDACTED_PREVIEW_PREFIX_LENGTH
     suffix_length = REDACTED_PREVIEW_SUFFIX_LENGTH
-    return (
-        matched_text[:prefix_length]
-        + REDACTED_PREVIEW_ELLIPSIS
-        + matched_text[-suffix_length:]
-    )
+    return matched_text[:prefix_length] + REDACTED_PREVIEW_ELLIPSIS + matched_text[-suffix_length:]
 
 
 def _build_preview(matched_text: str, category: str) -> str:
@@ -161,8 +154,7 @@ def _is_safe_email_domain(domain_name: str) -> bool:
     if domain_name in ALL_SAFE_EMAIL_DOMAINS:
         return True
     return any(
-        domain_name.endswith("." + each_safe_domain)
-        for each_safe_domain in ALL_SAFE_EMAIL_DOMAINS
+        domain_name.endswith("." + each_safe_domain) for each_safe_domain in ALL_SAFE_EMAIL_DOMAINS
     )
 
 
@@ -180,8 +172,8 @@ def _home_username_offset(matched_path: str) -> tuple[int, str] | None:
 
         C:\\Users\\Users\\file.txt  ->  (9, "Users")   the second Users, not the first
 
-    Replacing backslashes with forward slashes preserves length, so the marker
-    offset computed on the normalized path indexes *matched_path* directly.
+    The marker match consumes repeated separators, so the username starts after
+    both ordinary and escaped Windows path separators.
 
     Args:
         matched_path: The matched home-path substring.
@@ -189,18 +181,14 @@ def _home_username_offset(matched_path: str) -> tuple[int, str] | None:
     Returns:
         The username's start index and value, or None when no marker is found.
     """
-    normalized_path = matched_path.replace("\\", "/")
-    lowered_path = normalized_path.lower()
-    for each_marker in ALL_HOME_DIRECTORY_PATH_MARKERS:
-        marker_index = lowered_path.find(each_marker)
-        if marker_index < 0:
-            continue
-        username_start = marker_index + len(each_marker)
-        username = normalized_path[username_start:].split("/", 1)[0]
-        if not username:
-            return None
-        return username_start, username
-    return None
+    marker = HOME_USERNAME_MARKER_PATTERN.search(matched_path)
+    if marker is None:
+        return None
+    username_start = marker.end()
+    username = matched_path[username_start:].replace("\\", "/").split("/", 1)[0]
+    if not username:
+        return None
+    return username_start, username
 
 
 def _username_from_home_path(matched_path: str) -> str | None:
@@ -226,6 +214,8 @@ def _redact_home_path_username(matched_text: str) -> str:
 
 
 def _is_placeholder_home_username(username: str) -> bool:
+    if INTERPOLATED_HOME_USERNAME_PATTERN.fullmatch(username) is not None:
+        return True
     if ANGLE_BRACKET_PLACEHOLDER_PATTERN.match(username) is not None:
         return True
     lowered_username = username.lower()

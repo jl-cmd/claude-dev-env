@@ -138,15 +138,7 @@ def _iter_env_var_code_references(
     drift_module: ModuleType,
     drift_constants: ModuleType,
 ) -> Iterator[str]:
-    is_inside_code_fence = False
-    for each_line in content.splitlines():
-        if drift_constants.CODE_FENCE_PATTERN.match(each_line) is not None:
-            is_inside_code_fence = not is_inside_code_fence
-            continue
-        if is_inside_code_fence:
-            continue
-        if drift_constants.TABLE_ROW_PATTERN.match(each_line) is None:
-            continue
+    for each_line in drift_module.iter_env_var_table_rows(content):
         maybe_code_reference = _code_reference_for_env_var_row(
             each_line,
             drift_module,

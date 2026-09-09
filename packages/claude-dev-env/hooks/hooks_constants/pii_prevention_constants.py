@@ -18,9 +18,7 @@ from hooks_constants.pre_tool_use_dispatcher_constants import (  # noqa: F401
 BASH_TOOL_NAME: str = "Bash"
 POWERSHELL_TOOL_NAME: str = "PowerShell"
 
-ALL_SHELL_TOOL_NAMES: frozenset[str] = frozenset(
-    {BASH_TOOL_NAME, POWERSHELL_TOOL_NAME}
-)
+ALL_SHELL_TOOL_NAMES: frozenset[str] = frozenset({BASH_TOOL_NAME, POWERSHELL_TOOL_NAME})
 
 ALL_GIT_BINARY_BASENAMES: frozenset[str] = frozenset({"git", "git.exe"})
 GIT_COMMIT_SUBCOMMAND: str = "commit"
@@ -29,12 +27,8 @@ ALL_VALUE_TAKING_GIT_OPTIONS: frozenset[str] = frozenset(
     {GIT_WORKING_DIRECTORY_OPTION, "-c", "--git-dir", "--work-tree", "--namespace"}
 )
 GIT_OPTION_WITH_VALUE_STEP: int = 2
-ALL_SHELL_COMMAND_SEPARATOR_TOKENS: frozenset[str] = frozenset(
-    {"&&", "||", ";", "|", "&"}
-)
-ALL_SHELL_KEYWORD_TOKENS: frozenset[str] = frozenset(
-    {"then", "do", "else", "elif"}
-)
+ALL_SHELL_COMMAND_SEPARATOR_TOKENS: frozenset[str] = frozenset({"&&", "||", ";", "|", "&"})
+ALL_SHELL_KEYWORD_TOKENS: frozenset[str] = frozenset({"then", "do", "else", "elif"})
 ALL_COMMAND_WRAPPER_TOKENS: frozenset[str] = frozenset(
     {
         "sudo",
@@ -85,9 +79,7 @@ SINGLE_DASH_OPTION_PREFIX: str = "-"
 DOUBLE_DASH_OPTION_PREFIX: str = "--"
 ALL_SHELL_QUOTE_CHARACTERS: frozenset[str] = frozenset({'"', "'"})
 ALL_COMMAND_BOUNDARY_NEWLINE_CHARACTERS: frozenset[str] = frozenset({"\n", "\r"})
-ENVIRONMENT_ASSIGNMENT_PATTERN: re.Pattern[str] = re.compile(
-    r"^[A-Za-z_][A-Za-z0-9_]*="
-)
+ENVIRONMENT_ASSIGNMENT_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 LINE_CONTINUATION_PATTERN: re.Pattern[str] = re.compile(r"\\\r?\n")
 POWERSHELL_LINE_CONTINUATION_PATTERN: re.Pattern[str] = re.compile(r"`\r?\n")
 
@@ -223,9 +215,7 @@ CATEGORY_HOME_PATH: str = "home-path"
 CATEGORY_PRIVATE_IP: str = "private-ip"
 CATEGORY_SECRET: str = "secret"
 
-ALL_REDACTED_PREVIEW_CATEGORIES: frozenset[str] = frozenset(
-    {CATEGORY_EMAIL, CATEGORY_SECRET}
-)
+ALL_REDACTED_PREVIEW_CATEGORIES: frozenset[str] = frozenset({CATEGORY_EMAIL, CATEGORY_SECRET})
 REDACTED_PREVIEW_PREFIX_LENGTH: int = 4
 REDACTED_PREVIEW_SUFFIX_LENGTH: int = 4
 REDACTED_PREVIEW_REVEALED_LENGTH: int = (
@@ -238,9 +228,7 @@ MINIMUM_LENGTH_FOR_PARTIAL_REDACTION: int = (
     REDACTED_PREVIEW_REVEALED_LENGTH + REDACTED_PREVIEW_MINIMUM_HIDDEN_LENGTH
 )
 
-EMAIL_PATTERN: re.Pattern[str] = re.compile(
-    r"(?i)\b([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})\b"
-)
+EMAIL_PATTERN: re.Pattern[str] = re.compile(r"(?i)\b([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})\b")
 
 IPV4_PATTERN: re.Pattern[str] = re.compile(
     r"\b((?:25[0-5]|2[0-4]\d|1?\d?\d)\."
@@ -249,13 +237,9 @@ IPV4_PATTERN: re.Pattern[str] = re.compile(
     r"(?:25[0-5]|2[0-4]\d|1?\d?\d))\b"
 )
 
-GITHUB_TOKEN_PATTERN: re.Pattern[str] = re.compile(
-    r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\b"
-)
+GITHUB_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\b")
 
-GITHUB_FINE_GRAINED_TOKEN_PATTERN: re.Pattern[str] = re.compile(
-    r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"
-)
+GITHUB_FINE_GRAINED_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b")
 
 AWS_ACCESS_KEY_PATTERN: re.Pattern[str] = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
 
@@ -264,8 +248,9 @@ PEM_PRIVATE_KEY_HEADER_PATTERN: re.Pattern[str] = re.compile(
 )
 
 HOME_PATH_PATTERN: re.Pattern[str] = HARDCODED_USER_PATH_PATTERN
+INTERPOLATED_HOME_USERNAME_PATTERN: re.Pattern[str] = re.compile(r"^\{[A-Za-z_][A-Za-z0-9_]*\}$")
 
-ALL_HOME_DIRECTORY_PATH_MARKERS: tuple[str, ...] = ("/users/", "/home/")
+HOME_USERNAME_MARKER_PATTERN: re.Pattern[str] = re.compile(r"[\\/]+(?:users|home)[\\/]+", re.I)
 
 ALL_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
     GITHUB_TOKEN_PATTERN,
