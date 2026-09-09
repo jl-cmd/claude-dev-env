@@ -7,7 +7,7 @@ test('full installer preserves original arguments and installs each selected pro
     const status = await runInstaller(['--profiles', 'alpha,beta'], {
         runBase: args => { calls.push(['base', args]); return { status: 0 }; },
         selectedRoots: async () => ['/profiles/alpha', '/profiles/beta'],
-        install: options => { calls.push(['pstack', options.root]); return { commit: 'test', status: 'installed' }; },
+        install: options => { assert.equal(options.refresh, true); calls.push(['pstack', options.root]); return { commit: 'test', status: 'installed' }; },
     });
     assert.equal(status, 0);
     assert.deepEqual(calls, [['base', ['--profiles', 'alpha,beta']], ['pstack', '/profiles/alpha'], ['pstack', '/profiles/beta']]);

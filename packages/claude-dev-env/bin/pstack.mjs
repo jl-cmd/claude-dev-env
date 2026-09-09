@@ -67,7 +67,27 @@ function adapterFiles(root) {
         ...['common.md', ...hosts.map(host => `host-${host}.md`), 'create-skill.md'].map(name => [name, join(adapters, name)]),
         ...['pstack-host-mapping.md', 'pstack-models.md'].map(name => [name, join(root, 'rules', name)]),
         ['select_pstack_models.mjs', join(root, 'scripts', 'select_pstack_models.mjs')],
-    ].map(([name, path]) => [name, readFileSync(path, 'utf8')]));
+    ].map(([name, path]) => [name, readFileSync(path, 'utf8').replace(/\r\n/g, '\n')]));
+}
+
+export function adapterDigest(root = packageRoot) {
+    const installerSource = readFileSync(fileURLToPath(import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+    return digest(json(adapterFiles(root)) + installerSource);
+}
+
+export function validateVerifiedLock(lock) {
+    validateLock(lock);
+    if (!/^[0-9a-f]{64}$/.test(lock.adapterDigest ?? '') || lock.verification !== 'install-contract') {
+        throw new Error('Invalid verified pstack record');
+    }
+    return lock;
+}
+
+function requireMatchingAdapter(lock, installedDigest) {
+    validateVerifiedLock(lock);
+    if (lock.adapterDigest !== installedDigest) {
+        throw new Error('Verified adapter differs from this installation. Update claude-dev-env first.');
+    }
 }
 
 function adaptSkill(text, name, releaseRoot, skillRoot) {
@@ -218,12 +238,12 @@ function liveLeases(store) {
     });
 }
 
-function readCentralLock(temporaryRoot) {
+export function readCentralLock(temporaryRoot, sourceRepository = 'https://github.com/jl-cmd/claude-dev-env.git') {
     const repository = join(temporaryRoot, 'record');
     mkdirSync(repository);
     runGit(['init', '--quiet'], repository);
-    runGit(['fetch', '--quiet', '--depth=1', '--filter=blob:none', 'https://github.com/jl-cmd/claude-dev-env.git', 'main'], repository);
-    return JSON.parse(runGit(['show', 'FETCH_HEAD:packages/claude-dev-env/scripts/pstack.lock.json'], repository));
+    runGit(['fetch', '--quiet', '--depth=1', '--filter=blob:none', sourceRepository, 'refs/heads/pstack-verified'], repository);
+    return validateVerifiedLock(JSON.parse(runGit(['show', 'FETCH_HEAD:pstack.lock.json'], repository)));
 }
 
 export function installPstack(options = {}, dependencies = {}) {
@@ -248,18 +268,26 @@ export function installPstack(options = {}, dependencies = {}) {
         const now = dependencies.now ?? Date.now();
         const interval = options.intervalMs ?? 3600000;
         if (!Number.isFinite(interval) || interval < 0) throw new Error('Invalid update interval');
-        const bundled = options.lock ?? prior?.lock ?? readJson(bundledLockPath);
-        let lock = bundled;
-        let checkedAt = prior?.checkedAt ?? 0;
-        if (options.refresh && (options.force || now - checkedAt >= interval)) {
-            lock = (dependencies.readCentralLock ?? readCentralLock)(temporaryRoot);
-            checkedAt = now;
-        } else if (options.refresh && prior?.lock) lock = prior.lock;
-        validateLock(lock);
         const adapters = adapterFiles(options.packageRoot ?? packageRoot);
-        const installerSource = readFileSync(fileURLToPath(import.meta.url), 'utf8').replace(/\r\n/g, '\n');
-        const adapterDigest = digest(json(adapters) + installerSource);
-        const id = `${lock.commit}-${adapterDigest.slice(0, 16)}`;
+        const currentAdapterDigest = adapterDigest(options.packageRoot ?? packageRoot);
+        let lock = options.lock ?? prior?.lock ?? readJson(bundledLockPath);
+        let checkedAt = prior?.checkedAt ?? 0;
+        let warning;
+        if (options.refresh && !options.lock && (options.force || now - checkedAt >= interval)) {
+            try {
+                const candidate = (dependencies.readCentralLock ?? readCentralLock)(temporaryRoot);
+                requireMatchingAdapter(candidate, currentAdapterDigest);
+                lock = candidate;
+                checkedAt = now;
+            } catch (error) {
+                if (prior) throw error;
+                lock = readJson(bundledLockPath);
+                warning = `Using bundled pin because the verified channel is unavailable: ${error.message}`;
+            }
+        }
+        validateLock(lock);
+        if (lock.adapterDigest !== undefined || lock.verification !== undefined) requireMatchingAdapter(lock, currentAdapterDigest);
+        const id = `${lock.commit}-${currentAdapterDigest.slice(0, 16)}`;
         const releaseRoot = join(store, 'releases', id);
         mkdirSync(dirname(releaseRoot), { recursive: true });
         if (!existsSync(releaseRoot)) {
@@ -272,12 +300,12 @@ export function installPstack(options = {}, dependencies = {}) {
         }
         const release = verifyRelease(releaseRoot);
         const publication = publish(releaseRoot, release, skillHomes, prior);
-        const state = { release: id, commit: lock.commit, adapterVersion: lock.adapterVersion, adapterDigest, checkedAt, lock, links: publication.links };
+        const state = { release: id, commit: lock.commit, adapterVersion: lock.adapterVersion, adapterDigest: currentAdapterDigest, checkedAt, lock, links: publication.links };
         try {
             writeFileSync(join(store, 'installed.next.json'), json(state));
             renameSync(join(store, 'installed.next.json'), join(store, 'installed.json'));
         } catch (error) { publication.restore(); throw error; }
-        return finish({ ...verifyInstallation(options), status: prior?.release === id ? 'unchanged' : 'installed' });
+        return finish({ ...verifyInstallation(options), status: prior?.release === id ? 'unchanged' : 'installed', ...(warning ? { warning } : {}) });
     } catch (error) {
         if (!options.strict) {
             try { return finish({ ...verifyInstallation(options), status: 'retained', warning: error.message }); } catch { }
@@ -324,7 +352,7 @@ export function main(args = process.argv.slice(2)) {
             hookInput = JSON.parse(readFileSync(0, 'utf8') || '{}');
             options.project ??= process.env.CLAUDE_PROJECT_DIR || process.cwd();
             options.offline = hookInput.source !== 'startup';
-            options.refresh = !options.offline && loadState(layout(options).store) !== null;
+            options.refresh = !options.offline && !options.lock;
         }
         if (command === 'launch' && !options.host) throw new Error('launch requires --host');
         if (command === 'launch') { options.refresh = !options.offline && !options.lock; options.reserveSession = true; }

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { installPstack, prepareRelease, validateLock, verifyInstallation, verifyRelease } from './pstack.mjs';
+import { adapterDigest, installPstack, prepareRelease, validateLock, verifyInstallation, verifyRelease } from './pstack.mjs';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const baseLock = JSON.parse(readFileSync(join(packageRoot, 'scripts', 'pstack.lock.json'), 'utf8'));
@@ -169,22 +169,22 @@ test('source symlinks are rejected before publication', t => {
 
 test('update checks use the shared record and respect the interval', t => {
     const f = fixture(t);
-    const shared = { ...baseLock, commit: 'd'.repeat(40) };
+    const shared = { ...baseLock, commit: 'd'.repeat(40), adapterDigest: adapterDigest(packageRoot), verification: 'install-contract' };
     let calls = 0;
     const dependencies = { ...f.dependencies, readCentralLock: () => { calls++; return shared; } };
-    const first = installPstack({ ...f.options, refresh: true }, dependencies);
+    const first = installPstack({ ...f.options, lock: undefined, refresh: true }, dependencies);
     assert.equal(first.commit, 'd'.repeat(40));
-    const second = installPstack({ ...f.options, refresh: true }, { ...dependencies, now: dependencies.now + 100 });
+    const second = installPstack({ ...f.options, lock: undefined, refresh: true }, { ...dependencies, now: dependencies.now + 100 });
     assert.equal(second.commit, 'd'.repeat(40));
     assert.equal(calls, 1);
-    installPstack({ ...f.options, refresh: true }, { ...dependencies, now: dependencies.now + 3600001 });
+    installPstack({ ...f.options, lock: undefined, refresh: true }, { ...dependencies, now: dependencies.now + 3600001 });
     assert.equal(calls, 2);
 });
 
 test('failed shared-record refresh retains and reports the previous revision', t => {
     const f = fixture(t);
     const first = installPstack(f.options, f.dependencies);
-    const result = installPstack({ ...f.options, refresh: true }, { ...f.dependencies, readCentralLock: () => { throw new Error('record unavailable'); } });
+    const result = installPstack({ ...f.options, lock: undefined, refresh: true }, { ...f.dependencies, readCentralLock: () => { throw new Error('record unavailable'); } });
     assert.equal(result.release, first.release);
     assert.equal(result.warning, 'record unavailable');
 });
@@ -286,4 +286,95 @@ test('a changed installer creates a fresh generation for the same upstream pin',
     assert.notEqual(second.adapterDigest, first.adapterDigest);
     assert.notEqual(second.release, first.release);
     assert.equal(verifyInstallation(f.options).release, second.release);
+});
+
+test('verified channel with another adapter retains the working release before fetching source', t => {
+    const f = fixture(t);
+    const first = installPstack(f.options, f.dependencies);
+    const candidate = { ...baseLock, commit: 'a'.repeat(40), adapterDigest: '0'.repeat(64), verification: 'install-contract' };
+    let sourceFetches = 0;
+    const installation = installPstack({ ...f.options, lock: undefined, refresh: true }, {
+        ...f.dependencies, readCentralLock: () => candidate,
+        fetchSource: (...args) => { sourceFetches++; return f.dependencies.fetchSource(...args); },
+    });
+    assert.equal(installation.release, first.release);
+    assert.match(installation.warning, /adapter.*Update claude-dev-env/i);
+    assert.equal(sourceFetches, 0);
+    assert.equal(verifyInstallation(f.options).release, first.release);
+});
+
+test('verified channel rejects an unverified record and preserves the existing pointers', t => {
+    const f = fixture(t);
+    const first = installPstack(f.options, f.dependencies);
+    for (const candidate of [
+        { ...baseLock, commit: 'a'.repeat(40) },
+        { ...baseLock, commit: 'a'.repeat(40), adapterDigest: first.adapterDigest, verification: 'live-host' },
+    ]) {
+        const installation = installPstack({ ...f.options, lock: undefined, refresh: true }, {
+            ...f.dependencies, readCentralLock: () => candidate,
+        });
+        assert.equal(installation.release, first.release);
+        assert.match(installation.warning, /Invalid verified pstack record/);
+    }
+});
+
+test('verified channel fresh install falls back to the bundled pin with a visible warning', t => {
+    const f = fixture(t);
+    const installation = installPstack({ ...f.options, lock: undefined, refresh: true }, {
+        ...f.dependencies, readCentralLock: () => { throw new Error('Channel unavailable'); },
+    });
+    assert.equal(installation.commit, baseLock.commit);
+    assert.equal(installation.status, 'installed');
+    assert.match(installation.warning, /bundled pin.*Channel unavailable/);
+});
+
+test('verified channel matching adapter installs changed, added and removed workflows for all hosts', t => {
+    const f = fixture(t);
+    const oldSkill = join(f.checkout, 'pstack', 'skills', 'old-channel-skill');
+    put(join(oldSkill, 'SKILL.md'), '---\nname: old-channel-skill\ndescription: Old channel skill.\n---\nOld workflow.\n');
+    const first = installPstack(f.options, f.dependencies);
+    rmSync(oldSkill, { recursive: true });
+    put(join(f.checkout, 'pstack', 'skills', 'new-channel-skill', 'SKILL.md'), '---\nname: new-channel-skill\ndescription: New channel skill.\n---\nNew workflow.\n');
+    put(join(f.checkout, 'pstack', 'skills', 'poteto-mode', 'playbooks', 'feature.md'), 'Verified channel playbook.\n');
+    const candidate = { ...baseLock, commit: 'b'.repeat(40), adapterDigest: first.adapterDigest, verification: 'install-contract' };
+    for (const host of ['claude', 'codex', 'cursor']) {
+        const options = { ...f.options, host, project: join(f.temporary, `channel-${host}`) };
+        installPstack(options, { ...f.dependencies, fetchSource: (_lock, destination) => {
+            cpSync(f.checkout, destination, { recursive: true });
+            rmSync(join(destination, 'pstack', 'skills', 'new-channel-skill'), { recursive: true });
+            put(join(destination, 'pstack', 'skills', 'poteto-mode', 'playbooks', 'feature.md'), 'Old channel playbook.\n');
+            put(join(destination, 'pstack', 'skills', 'old-channel-skill', 'SKILL.md'), '---\nname: old-channel-skill\ndescription: Old channel skill.\n---\nOld workflow.\n');
+        } });
+        const installed = installPstack({ ...options, lock: undefined, refresh: true }, { ...f.dependencies, readCentralLock: () => candidate });
+        assert.equal(installed.commit, candidate.commit);
+        assert.equal(installed.adapterDigest, candidate.adapterDigest);
+        assert.deepEqual(installed.lock, candidate);
+        assert.equal(installed.checkedAt, f.dependencies.now);
+        for (const home of ['.claude', '.agents']) {
+            const skills = join(options.project, home, 'skills');
+            assert.equal(existsSync(join(skills, 'pstack-old-channel-skill')), false);
+            assert.equal(existsSync(join(skills, 'pstack-new-channel-skill', 'SKILL.md')), true);
+            assert.equal(readFileSync(join(skills, 'pstack-poteto-mode', 'playbooks/feature.md'), 'utf8'), 'Verified channel playbook.\n');
+        }
+    }
+});
+
+
+test('adapter digest is identical for LF and CRLF compatibility files', t => {
+    const f = fixture(t);
+    const copiedPackage = join(f.temporary, 'windows-package');
+    const paths = [
+        ...['common.md', 'create-skill.md', 'host-claude.md', 'host-codex.md', 'host-cursor.md'].map(name => `scripts/pstack-adapters/${name}`),
+        'rules/pstack-host-mapping.md', 'rules/pstack-models.md', 'scripts/select_pstack_models.mjs',
+    ];
+    for (const path of paths) put(join(copiedPackage, path), readFileSync(join(packageRoot, path), 'utf8').replace(/\r?\n/g, '\r\n'));
+    assert.equal(adapterDigest(copiedPackage), adapterDigest(packageRoot));
+});
+
+test('explicit pinned install stays deterministic with refresh requested', t => {
+    const f = fixture(t);
+    const installation = installPstack({ ...f.options, refresh: true }, {
+        ...f.dependencies, readCentralLock: () => assert.fail('explicit pin must not read channel'),
+    });
+    assert.equal(installation.commit, baseLock.commit);
 });

@@ -7,16 +7,41 @@ on:
       - 'packages/claude-dev-env/.agents/skills/session-continuity/**'
       - 'packages/claude-dev-env/scripts/pstack*'
       - 'packages/claude-dev-env/scripts/pstack-adapters/**'
+      - 'packages/claude-dev-env/scripts/select_pstack_models.mjs'
       - 'packages/claude-dev-env/bin/install-session-continuity*'
-      - 'scripts/propose-pstack-update*'
+      - 'scripts/pstack-channel*'
       - 'packages/claude-dev-env/rules/pstack*'
       - 'packages/claude-dev-env/package.json'
+      - '.claude/settings.json'
       - '.github/workflows/pstack-installation.yml'
   workflow_dispatch:
+  schedule:
+    - cron: '17 7 * * *'
 permissions:
   contents: read
+concurrency:
+  group: pstack-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Record one upstream candidate for both operating systems
+        run: node scripts/pstack-channel.mjs candidate "${{ runner.temp }}/pstack.lock.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pstack-candidate
+          path: ${{ runner.temp }}/pstack.lock.json
+          if-no-files-found: error
   installation:
+    needs: candidate
     strategy:
       fail-fast: false
       matrix:
@@ -25,17 +50,24 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: pstack-candidate
+          path: ${{ runner.temp }}/candidate
       - name: Test install and rollback behavior
         shell: bash
-        run: node --test --test-reporter=tap packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs packages/claude-dev-env/bin/install-session-continuity.test.mjs packages/claude-dev-env/.agents/skills/session-continuity/continuity.test.mjs scripts/propose-pstack-update.test.mjs | tee "$RUNNER_TEMP/pstack-tests.tap"
-      - name: Fetch and install the real pinned upstream
+        run: node --test --test-reporter=tap packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-with-pstack.test.mjs packages/claude-dev-env/bin/install-session-continuity.test.mjs packages/claude-dev-env/.agents/skills/session-continuity/continuity.test.mjs scripts/pstack-channel.test.mjs | tee "$RUNNER_TEMP/pstack-tests.tap"
+      - name: Install the bundled pin and update to the exact candidate
         shell: bash
         run: |
           set -euo pipefail
-          node packages/claude-dev-env/bin/pstack.mjs install --root "$RUNNER_TEMP/pstack-proof/.claude" --strict > "$RUNNER_TEMP/pstack-install.json"
+          node packages/claude-dev-env/bin/pstack.mjs install --root "$RUNNER_TEMP/pstack-proof/.claude" --strict > "$RUNNER_TEMP/pstack-bootstrap.json"
+          node packages/claude-dev-env/bin/pstack.mjs install --root "$RUNNER_TEMP/pstack-proof/.claude" --lock "$RUNNER_TEMP/candidate/pstack.lock.json" --strict > "$RUNNER_TEMP/pstack-install.json"
           node packages/claude-dev-env/bin/pstack.mjs verify --root "$RUNNER_TEMP/pstack-proof/.claude" > "$RUNNER_TEMP/pstack-verify.json"
           node packages/claude-dev-env/bin/pstack.mjs install --root "$RUNNER_TEMP/pstack-proof/.claude" --offline --strict
       - name: Verify native Codex skill discovery
@@ -61,7 +93,28 @@ jobs:
           path: |
             ${{ runner.temp }}/pstack-codex-discovery.json
             ${{ runner.temp }}/pstack-tests.tap
+            ${{ runner.temp }}/pstack-bootstrap.json
             ${{ runner.temp }}/pstack-install.json
             ${{ runner.temp }}/pstack-verify.json
             ${{ runner.temp }}/pstack-tested-source.zip
             ${{ runner.temp }}/pstack-source-sha.txt
+  publish-channel:
+    needs: [candidate, installation]
+    if: >-
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main' && vars.PSTACK_ENABLE_PROMOTION == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: pstack-candidate
+          path: ${{ runner.temp }}/candidate
+      - name: Publish the checked record with a fast-forward push
+        run: node scripts/pstack-channel.mjs publish "${{ runner.temp }}/candidate/pstack.lock.json"
