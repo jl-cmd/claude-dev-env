@@ -1,5 +1,3 @@
-"""Regression tests for the inert retired search hook entrypoint."""
-
 from __future__ import annotations
 
 import json
