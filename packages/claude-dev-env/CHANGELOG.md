@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.3.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.2.1...claude-dev-env-v7.3.0) (2026-09-09)
+
+
+### Features
+
+* **pstack:** add pinned installation and Claude, Codex, Cursor adapters ([50f8e05](https://github.com/jl-cmd/claude-dev-env/commit/50f8e05b8a8b88947348cf84be7349c3b4036d06))
+* **pstack:** consolidate verified upstream updates into the shared installer ([e5bd2e1](https://github.com/jl-cmd/claude-dev-env/commit/e5bd2e178fcd8f1a37e111aaf789b39eaadeeb40))
+
+
+### Refactoring
+
+* **pstack:** keep installation opt-in ([939edd6](https://github.com/jl-cmd/claude-dev-env/commit/939edd6bbf541942338ecd7c64c0594ef1223688))
+
 ## [7.2.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.2.0...claude-dev-env-v7.2.1) (2026-09-09)
 
 
