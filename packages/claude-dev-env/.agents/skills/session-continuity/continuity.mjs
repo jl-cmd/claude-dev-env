@@ -101,7 +101,7 @@ function potetoSource() {
     const found = [...new Set(candidates.filter(existsSync).map(path => realpathSync(path)))];
     if (found.length > 1) throw new Error('Multiple Poteto sources found. Set CDE_POTETO_SOURCE to the installed source used by this host.');
     const source = resolve(found[0] || candidates[0]);
-    if (existsSync(source) && !/^name:\s*["']?Poteto Mode["']?\s*$/m.test(readFileSync(source, 'utf8'))) {
+    if (existsSync(source) && !/^name:\s*["']?Poteto(?: |-)Mode["']?\s*$/m.test(readFileSync(source, 'utf8'))) {
         throw new Error(`The selected source does not declare Poteto Mode: ${source}`);
     }
     return source;
