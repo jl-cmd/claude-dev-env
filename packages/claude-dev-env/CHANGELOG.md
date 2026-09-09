@@ -1,5 +1,35 @@
 # Changelog
 
+## [7.4.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.4.0...claude-dev-env-v7.4.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **policy:** narrow table and path checks ([f7a93dc](https://github.com/jl-cmd/claude-dev-env/commit/f7a93dc51b6376c6dbd98f48598a079d2b76698b))
+* **policy:** refresh tracked-secret exemption digests ([7348141](https://github.com/jl-cmd/claude-dev-env/commit/7348141a97c3948f8edc8b39ecc66c81e54d5396))
+* **pstack:** use native plugin skill identities ([3690112](https://github.com/jl-cmd/claude-dev-env/commit/3690112e53dd4a44f9ac996b012774869dc350fa))
+
+
+### Documentation
+
+* **pstack:** map native plugin identities ([4013e43](https://github.com/jl-cmd/claude-dev-env/commit/4013e43cc049bd0982dfd0a58d56cf806e17b8cf))
+
+
+### Refactoring
+
+* **pstack:** keep nested manifest self-contained ([84580f1](https://github.com/jl-cmd/claude-dev-env/commit/84580f14e9f165dafd6a45428f8253136f5a5e61))
+* **pstack:** nest pstack skills under one root ([6aedf7a](https://github.com/jl-cmd/claude-dev-env/commit/6aedf7a64cfe0c11c4c8213943ba3e9631e3f65c))
+
+
+### Tests
+
+* **hooks:** pair env-var table row parsing with its own suite ([bcc0075](https://github.com/jl-cmd/claude-dev-env/commit/bcc0075fa5937741df5d467808b6126d7fa8622a))
+* **install:** expect nested pstack skill path ([0227445](https://github.com/jl-cmd/claude-dev-env/commit/02274453294c484d45358ad6af0ca6f10fa19578))
+* **install:** remove unrelated diff noise ([4a17a78](https://github.com/jl-cmd/claude-dev-env/commit/4a17a78b30172ca2fb3ad0b2b3b7403922a73cce))
+* **install:** restore unrelated fixture text ([a2a2dbb](https://github.com/jl-cmd/claude-dev-env/commit/a2a2dbb75c31ff0c6b3e010fff2440455c57a712))
+* **pstack:** cover nested pstack skill layout ([8440228](https://github.com/jl-cmd/claude-dev-env/commit/84402281560cb49481f7a317609f628ae9a6e709))
+* **pstack:** pin plugin namespace identity ([cfbb0ac](https://github.com/jl-cmd/claude-dev-env/commit/cfbb0ace27b048d9bccfafd23b6774192cd50573))
+
 ## [7.4.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.3.0...claude-dev-env-v7.4.0) (2026-09-09)
 
 
