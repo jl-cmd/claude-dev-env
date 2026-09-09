@@ -21,6 +21,10 @@ class GitSelectionError(ValueError):
     """Raised when Git cannot provide the requested source bytes."""
 
 
+class GitBlobItemBlocked(GitSelectionError):
+    """Raised when one Git blob holds bytes that are not UTF-8 text."""
+
+
 def git_bytes_for(repository_root: Path, all_arguments: tuple[str, ...]) -> bytes:
     """Run a fixed Git argument vector and return raw stdout bytes.
 
@@ -89,7 +93,7 @@ def read_blob(repository_root: Path, revision: str, relative_path: str) -> str |
         Decoded blob text, or None when the blob is absent.
 
     Raises:
-        GitSelectionError: If the blob is not UTF-8.
+        GitBlobItemBlocked: If the blob is not UTF-8.
     """
     blob_bytes = _read_blob_bytes(repository_root, revision, relative_path)
     if blob_bytes is None:
@@ -97,7 +101,7 @@ def read_blob(repository_root: Path, revision: str, relative_path: str) -> str |
     try:
         return blob_bytes.decode(UTF8_ENCODING)
     except UnicodeDecodeError as error:
-        raise GitSelectionError(f"Git blob is not UTF-8: {relative_path}") from error
+        raise GitBlobItemBlocked(f"Git blob is not UTF-8: {relative_path}") from error
 
 
 def _git_subprocess_environment() -> dict[str, str]:
