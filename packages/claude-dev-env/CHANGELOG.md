@@ -1,5 +1,22 @@
 # Changelog
 
+## [7.2.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.2.0...claude-dev-env-v7.2.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **everything-search:** retry Error 8 instead of reporting a down index ([dca6530](https://github.com/jl-cmd/claude-dev-env/commit/dca653062109315b1564000edbd0eaba33901a9e))
+* **everything-search:** retry Error 8 IPC miss ([8b9ca87](https://github.com/jl-cmd/claude-dev-env/commit/8b9ca87f4bbb52b564a1272b7f79ad1bc6604dd3))
+* **hooks:** cap SessionEnd timeouts and retire search redirector ([79dcdc1](https://github.com/jl-cmd/claude-dev-env/commit/79dcdc16df99f9a6a9ca32703d7ec6d7f1a9198c))
+* **hooks:** cap SessionEnd timeouts at 3 seconds ([ffadf34](https://github.com/jl-cmd/claude-dev-env/commit/ffadf34bd1dc86c30011b272000b3e72cf5714fa))
+* **hooks:** retire Zoekt search blocker ([9e92b35](https://github.com/jl-cmd/claude-dev-env/commit/9e92b35a46115acfb5b9c831fc8a2c9b4b11a30e))
+
+
+### Tests
+
+* **hooks:** cover retired search hook behavior ([0c79037](https://github.com/jl-cmd/claude-dev-env/commit/0c79037b7582de18b746931bcc3e961de1d3ca7b))
+* **hooks:** cover SessionEnd timeout limit ([b8df8a0](https://github.com/jl-cmd/claude-dev-env/commit/b8df8a075722e3983a60754c1920e5f10c92021a))
+
 ## [7.2.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.1.0...claude-dev-env-v7.2.0) (2026-09-07)
 
 
