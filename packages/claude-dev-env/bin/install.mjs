@@ -34,9 +34,6 @@ import {
     CURSOR_SYNC_SCRIPT_FILE_NAME,
     CURSOR_RULES_DIRECTORY_NAME,
     PSTACK_MODEL_RULE_FILE_NAME,
-    PSTACK_RELEASE_OPT_OUT_FLAG,
-    PSTACK_RELEASE_OPT_OUT_VARIABLE,
-    PSTACK_RELEASE_OPT_OUT_VALUE,
     PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME,
     WINDOWS_PYTHON_LAUNCHER_COMMAND,
     PYTHON_PROBE_TIMEOUT_MILLISECONDS,
@@ -425,6 +422,10 @@ export function runCursorRuleSync(pythonCommand, scriptPath, claudeRoot, cursorR
         { stdio: 'inherit' },
     );
 }
+
+const PSTACK_RELEASE_OPT_OUT_FLAG = '--no-pstack';
+const PSTACK_RELEASE_OPT_OUT_VARIABLE = 'CDE_INSTALL_PSTACK';
+const PSTACK_RELEASE_OPT_OUT_VALUE = '0';
 
 /**
  * Decide whether a full install also installs the pstack release.

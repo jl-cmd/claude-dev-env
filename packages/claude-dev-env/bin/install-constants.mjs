@@ -56,9 +56,6 @@ export const RUN_BACKUP_DIRECTORY_NAME_PATTERN =
 export const PACKAGE_AGENTS_HOME_DIRECTORY_NAME = '.agents';
 
 export const PSTACK_MODEL_RULE_FILE_NAME = 'pstack-models.mdc';
-export const PSTACK_RELEASE_OPT_OUT_FLAG = '--no-pstack';
-export const PSTACK_RELEASE_OPT_OUT_VARIABLE = 'CDE_INSTALL_PSTACK';
-export const PSTACK_RELEASE_OPT_OUT_VALUE = '0';
 export const PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME =
     'pstack-model-preferences.codex.json';
 
