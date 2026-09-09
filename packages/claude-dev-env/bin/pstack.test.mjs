@@ -44,15 +44,21 @@ for (const host of ['claude', 'codex', 'cursor']) {
         assert.equal(result.commit, '27e2a62ff94f9af4b5e68435e41cdceacadb840c');
         assert.equal(result.verification, 'filesystem-only');
         const release = join(f.store, 'releases', result.release);
-        const expected = ['cde-create-skill', 'cursor-team-kit-control-cli', 'cursor-team-kit-control-ui', 'cursor-team-kit-deslop', 'pstack-poteto-mode'];
+        const expected = ['cde-create-skill', 'cursor-team-kit-control-cli', 'cursor-team-kit-control-ui', 'cursor-team-kit-deslop', 'pstack'];
         for (const home of ['.claude', '.agents']) {
-            assert.deepEqual(readdirSync(join(f.options.project, home, 'skills')).sort(), expected);
-            const entry = join(f.options.project, home, 'skills', 'pstack-poteto-mode');
+            const skillsHome = join(f.options.project, home, 'skills');
+            assert.deepEqual(readdirSync(skillsHome).sort(), expected);
+            const pstackRoot = join(skillsHome, 'pstack');
+            assert.equal(lstatSync(pstackRoot).isSymbolicLink(), true);
+            const entry = join(pstackRoot, 'poteto-mode');
             assert.equal(realpathSync(entry), join(release, 'runtime', 'pstack', 'skills', 'poteto-mode'));
             const text = readFileSync(join(entry, 'SKILL.md'), 'utf8');
             assert.match(text, /name: pstack-poteto-mode/);
             assert.ok(text.includes(JSON.stringify(join(release, 'compat', 'common.md'))));
             assert.equal(readFileSync(join(entry, 'playbooks', 'feature.md'), 'utf8'), 'Build a small task, delegate, and verify it.\n');
+            const manifest = JSON.parse(readFileSync(join(pstackRoot, '.claude-plugin', 'plugin.json'), 'utf8'));
+            assert.equal(manifest.name, 'pstack');
+            assert.deepEqual(manifest.skills, ['./poteto-mode']);
         }
         assert.equal(existsSync(join(f.options.project, '.cursor')), false);
         for (const component of baseLock.components) {
@@ -89,10 +95,12 @@ test('changed, added, and removed skills converge while old releases remain read
     const after = installPstack({ ...f.options, lock: { ...baseLock, commit: 'b'.repeat(40) } }, f.dependencies);
     assert.equal(after.skillCount, 6);
     for (const home of ['.claude', '.agents']) {
-        const path = join(f.options.project, home, 'skills');
-        assert.equal(existsSync(join(path, 'pstack-old')), false);
-        assert.equal(readFileSync(join(path, 'pstack-new', 'SKILL.md'), 'utf8').endsWith('New body.\n'), true);
-        assert.equal(readFileSync(join(path, 'pstack-poteto-mode', 'playbooks', 'feature.md'), 'utf8'), 'Changed playbook.\n');
+        const pstackRoot = join(f.options.project, home, 'skills', 'pstack');
+        assert.equal(existsSync(join(pstackRoot, 'old')), false);
+        assert.equal(readFileSync(join(pstackRoot, 'new', 'SKILL.md'), 'utf8').endsWith('New body.\n'), true);
+        assert.equal(readFileSync(join(pstackRoot, 'poteto-mode', 'playbooks', 'feature.md'), 'utf8'), 'Changed playbook.\n');
+        const manifest = JSON.parse(readFileSync(join(pstackRoot, '.claude-plugin', 'plugin.json'), 'utf8'));
+        assert.deepEqual(manifest.skills, ['./new', './poteto-mode']);
     }
     assert.equal(readFileSync(join(oldRelease, 'runtime', 'pstack', 'skills', 'poteto-mode', 'SKILL.md'), 'utf8'), firstBody);
 });
@@ -117,9 +125,9 @@ test('a failed first install returns failure and publishes no skills', t => {
     assert.equal(existsSync(join(f.store, '.install-lock')), false);
 });
 
-test('unmanaged skill collision preserves user files', t => {
+test('unmanaged pstack root collision preserves user files', t => {
     const f = fixture(t);
-    const userFile = join(f.options.project, '.claude', 'skills', 'pstack-poteto-mode', 'SKILL.md');
+    const userFile = join(f.options.project, '.claude', 'skills', 'pstack', 'poteto-mode', 'SKILL.md');
     put(userFile, 'Personal workflow\n');
     assert.throws(() => installPstack(f.options, f.dependencies), /Keep existing unmanaged path/);
     assert.equal(readFileSync(userFile, 'utf8'), 'Personal workflow\n');
