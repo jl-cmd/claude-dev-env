@@ -1,6 +1,6 @@
 # Install pstack across hosts
 
-Run `cde-pstack` when you want to install the pinned pstack release. The regular `claude-dev-env` command keeps its existing install behavior. The pstack installer keeps complete pstack and cursor-team-kit trees, including scripts, playbooks, references, agents, licenses, and images. Generated entry points load the compatibility instructions before the upstream workflow. The original upstream files remain under `upstream/` in each release.
+A full `claude-dev-env` install also installs the pinned pstack release, so `npx -y claude-dev-env@latest` needs no second command. Run `cde-pstack` to manage that release on its own: verify it, refresh its pin, or launch a host with it. The pstack installer keeps complete pstack and cursor-team-kit trees, including scripts, playbooks, references, agents, licenses, and images. Generated entry points load the compatibility instructions before the upstream workflow. The original upstream files remain under `upstream/` in each release.
 
 ## Commands
 
@@ -23,7 +23,20 @@ Use `cde-pstack install` before these launch commands. The launcher checks the s
 
 A launcher records its process as an active session. Other launcher sessions reuse that release until the active processes end. Each generated skill also records immutable absolute paths to its own supporting files. Direct launches outside this wrapper do not register a session lease. Restart those sessions before adopting a new pin.
 
-Use `--root` to select a Claude config root or `--project` to install into a repository. Run `cde-pstack` explicitly for pstack installation and management.
+Use `--root` to select a Claude config root or `--project` to install into a repository.
+
+## The pstack step inside a full install
+
+A full install installs the pstack release into the managed Claude root it already writes to. The step reaches the network for the pinned upstream commit. A failure prints a warning and the install continues, so a network problem never stops the rules, hooks, and skills.
+
+The step runs on a full install only. A `--only <group>` run installs the named groups and skips pstack.
+
+Two controls turn the step off:
+
+- `npx -y claude-dev-env@latest --no-pstack`
+- `CDE_INSTALL_PSTACK=0` in the environment
+
+The pstack store keeps its own state and its own entry pointers. The install manifest does not record them, so the stale-file prune and `--uninstall` leave the pstack store in place. Remove it with the store directory under the managed root.
 
 ## Discovery and names
 
@@ -49,7 +62,7 @@ Put this command in its maintenance script:
 node packages/claude-dev-env/bin/pstack.mjs install --project "$PWD" --refresh
 ```
 
-For Claude cloud, run the setup command in its environment setup script. This installer does not change the repository's Claude hooks. Install the existing session-continuity companion separately if the environment uses it.
+For Claude cloud, `npx -y claude-dev-env@latest` in the environment setup script installs pstack with everything else. Run the command above instead when the environment needs a project-scoped install. This installer does not change the repository's Claude hooks. Install the existing session-continuity companion separately if the environment uses it.
 
 For other repositories, install the published package's cde-pstack command in the environment and use cde-pstack install --project "$PWD" in setup, adding --refresh in maintenance. Add the same repository SessionStart registration for Claude, pointing at the installed command with hook. A setup script in this repository does not change settings in an existing remote environment. Configure each environment's script fields separately.
 
