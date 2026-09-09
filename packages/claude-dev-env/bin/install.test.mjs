@@ -90,7 +90,8 @@ function commitAllChanges(repositoryRoot, commitMessage) {
 function tryMergeAllowingConflict(repositoryRoot, branchName) {
     try {
         execFileSync('git', ['merge', '--no-edit', branchName], {
-            cwd: repositoryRoot, stdio: 'ignore',
+            cwd: repositoryRoot,
+            stdio: 'ignore',
         });
     } catch {
         return;
