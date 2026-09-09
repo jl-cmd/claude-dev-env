@@ -10,6 +10,7 @@ from types import ModuleType
 from policy_lint.config import constants as policy_constants
 
 from repository_checks.config import constants as repository_constants
+from repository_checks.email_exemptions import load_email_exemptions
 from repository_checks.hook_modules import load_hooks_module
 from repository_checks.models import RepositoryFinding
 
@@ -29,6 +30,8 @@ def collect_tracked_secret_findings(
     scanner = load_hooks_module(repository_constants.PII_SCANNER_MODULE_NAME)
     exemption = load_hooks_module(repository_constants.REPOSITORY_EXEMPTION_MODULE_NAME)
     all_allowlisted_literals = exemption.repository_allowlisted_values(repository_root)
+    all_exact_exemptions = load_email_exemptions(repository_root)
+    all_exact_exemptions |= repository_constants.ALL_TRACKED_SECRET_EXACT_EXEMPTIONS
     all_findings: list[RepositoryFinding] = []
     for each_relative_path in all_tracked_paths:
         all_findings.extend(
@@ -37,6 +40,7 @@ def collect_tracked_secret_findings(
                 each_relative_path,
                 scanner,
                 all_allowlisted_literals,
+                all_exact_exemptions,
             )
         )
     return all_findings
@@ -47,6 +51,7 @@ def _find_secrets_for_path(
     relative_path: str,
     scanner: ModuleType,
     all_allowlisted_literals: frozenset[str],
+    all_exact_exemptions: frozenset[tuple[str, str, str]],
 ) -> list[RepositoryFinding]:
     posix_relative_path = relative_path.replace(
         repository_constants.WINDOWS_PATH_SEPARATOR,
@@ -65,6 +70,7 @@ def _find_secrets_for_path(
         maybe_content,
         scanner,
         all_allowlisted_literals,
+        all_exact_exemptions,
     )
 
 
@@ -73,6 +79,7 @@ def _find_secret_matches(
     content: str,
     scanner: ModuleType,
     all_allowlisted_literals: frozenset[str],
+    all_exact_exemptions: frozenset[tuple[str, str, str]],
 ) -> list[RepositoryFinding]:
     return [
         _build_finding(
@@ -86,6 +93,7 @@ def _find_secret_matches(
             each_match.category,
             each_match.matched_text,
             all_allowlisted_literals,
+            all_exact_exemptions,
         )
     ]
 
@@ -127,16 +135,14 @@ def _should_report_match(
     category: str,
     matched_text: str,
     all_allowlisted_literals: frozenset[str],
+    all_exact_exemptions: frozenset[tuple[str, str, str]],
 ) -> bool:
     exact_exemption_identity = (
         posix_relative_path,
         category,
         _secret_digest(matched_text),
     )
-    if (
-        exact_exemption_identity
-        in repository_constants.ALL_TRACKED_SECRET_EXACT_EXEMPTIONS
-    ):
+    if exact_exemption_identity in all_exact_exemptions:
         return False
     return matched_text not in all_allowlisted_literals
 
