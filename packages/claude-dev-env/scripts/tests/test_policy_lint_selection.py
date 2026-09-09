@@ -19,6 +19,10 @@ from policy_lint.model import (
 )
 from policy_lint.selection import SelectionRunFatal, select_documents
 
+NON_UTF8_PNG_BYTES = bytes(
+    (0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0xFF, 0xFE, 0xFF)
+)
+
 
 def _git_environment() -> dict[str, str]:
     return {
@@ -64,6 +68,22 @@ def _commit_text(repository_root: Path, relative_path: str, text: str) -> None:
     _write_text(repository_root, relative_path, text)
     _run_git(repository_root, "add", "--", relative_path)
     _run_git(repository_root, "commit", "--quiet", "-m", "selection fixture")
+
+
+def _write_bytes(repository_root: Path, relative_path: str, raw_bytes: bytes) -> None:
+    file_path = repository_root / relative_path
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_bytes(raw_bytes)
+
+
+def _commit_bytes(repository_root: Path, relative_path: str, raw_bytes: bytes) -> None:
+    _write_bytes(repository_root, relative_path, raw_bytes)
+    _run_git(repository_root, "add", "--", relative_path)
+    _run_git(repository_root, "commit", "--quiet", "-m", "selection binary fixture")
+
+
+def _all_selected_paths(document_set: DocumentSet) -> set[str]:
+    return {each_document.path.as_posix() for each_document in document_set.documents}
 
 
 def _document_for(document_set: DocumentSet, relative_path: str) -> Document:
@@ -394,3 +414,90 @@ def test_tracked_worktree_document_preserves_git_path_spelling(
         tmp_path, "MiXeD.py"
     )
     assert selected_document.path == PurePosixPath("MiXeD.py")
+
+
+def test_base_added_binary_file_should_be_left_out_of_the_selection(
+    tmp_path: Path,
+) -> None:
+    repository_root = _initialize_repository(tmp_path)
+    _commit_text(repository_root, "file.py", "base-text\n")
+    _run_git(repository_root, "checkout", "--quiet", "-b", "feature")
+    _commit_text(repository_root, "file.py", "feature-text\n")
+    _commit_bytes(repository_root, "approved_design_overlay.png", NON_UTF8_PNG_BYTES)
+
+    document_set = select_documents(LintRequest.base(repository_root, "main"))
+
+    assert _all_selected_paths(document_set) == {"file.py"}
+    assert _document_for(document_set, "file.py").text == "feature-text\n"
+    assert document_set.deleted_paths == ()
+
+
+def test_base_modified_binary_file_should_be_left_out_of_the_selection(
+    tmp_path: Path,
+) -> None:
+    repository_root = _initialize_repository(tmp_path)
+    _commit_bytes(repository_root, "approved_design_overlay.png", NON_UTF8_PNG_BYTES)
+    _run_git(repository_root, "checkout", "--quiet", "-b", "feature")
+    _commit_bytes(
+        repository_root,
+        "approved_design_overlay.png",
+        NON_UTF8_PNG_BYTES + bytes((0xFF, 0x00, 0xFE)),
+    )
+    _commit_text(repository_root, "file.py", "feature-text\n")
+
+    document_set = select_documents(LintRequest.base(repository_root, "main"))
+
+    assert _all_selected_paths(document_set) == {"file.py"}
+    assert _document_for(document_set, "file.py").text == "feature-text\n"
+    assert document_set.deleted_paths == ()
+
+
+def test_staged_binary_file_should_be_left_out_of_the_selection(tmp_path: Path) -> None:
+    repository_root = _initialize_repository(tmp_path)
+    _commit_text(repository_root, "file.py", "committed\n")
+    _write_bytes(repository_root, "approved_design_overlay.png", NON_UTF8_PNG_BYTES)
+    _write_text(repository_root, "file.py", "staged\n")
+    _run_git(repository_root, "add", "--all", "--", ".")
+
+    document_set = select_documents(LintRequest.staged(repository_root))
+
+    assert _all_selected_paths(document_set) == {"file.py"}
+    assert _document_for(document_set, "file.py").text == "staged\n"
+    assert document_set.deleted_paths == ()
+
+
+def test_repository_source_should_leave_binary_tracked_files_out(
+    tmp_path: Path,
+) -> None:
+    repository_root = _initialize_repository(tmp_path)
+    _commit_text(repository_root, "tracked.py", "tracked\n")
+    _commit_bytes(repository_root, "approved_design_overlay.png", NON_UTF8_PNG_BYTES)
+
+    document_set = select_documents(LintRequest.repository(repository_root))
+
+    assert _all_selected_paths(document_set) == {"tracked.py"}
+    assert _document_for(document_set, "tracked.py").text == "tracked\n"
+
+
+def test_files_source_should_leave_a_named_binary_path_out(tmp_path: Path) -> None:
+    repository_root = _initialize_repository(tmp_path)
+    _commit_text(repository_root, "file.py", "committed\n")
+    _write_bytes(repository_root, "approved_design_overlay.png", NON_UTF8_PNG_BYTES)
+
+    document_set = select_documents(
+        LintRequest.files(
+            repository_root,
+            [Path("file.py"), Path("approved_design_overlay.png")],
+        )
+    )
+
+    assert _all_selected_paths(document_set) == {"file.py"}
+    assert _document_for(document_set, "file.py").text == "committed\n"
+
+
+def test_files_missing_path_should_still_raise(tmp_path: Path) -> None:
+    repository_root = _initialize_repository(tmp_path)
+    _commit_text(repository_root, "file.py", "committed\n")
+
+    with pytest.raises(SelectionRunFatal, match="does not exist"):
+        select_documents(LintRequest.files(repository_root, [Path("missing.py")]))

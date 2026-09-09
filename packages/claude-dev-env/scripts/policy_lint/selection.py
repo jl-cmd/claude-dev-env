@@ -18,6 +18,7 @@ from .model import (
     TextDocument,
 )
 from .selection_git import (
+    GitBlobItemBlocked,
     GitSelectionError,
     git_bytes_for,
     head_revision,
@@ -28,6 +29,10 @@ from .selection_git import (
 
 class SelectionRunFatal(ValueError):
     """Raised when a source selection cannot be resolved safely."""
+
+
+class SelectionItemBlocked(ValueError):
+    """Raised when one file holds bytes that are not a policy document."""
 
 
 SelectionError = SelectionRunFatal
@@ -54,9 +59,7 @@ def select_documents(request: LintRequest) -> DocumentSet:
 
 def _select_source(repository_root: Path, source: object) -> DocumentSet:
     if isinstance(source, ExplicitFiles):
-        all_documents = tuple(
-            _worktree_document(repository_root, each_path) for each_path in source.paths
-        )
+        all_documents = _explicit_documents(repository_root, source.paths)
         return DocumentSet(all_documents, SelectionKind.FILES, repository_root)
     if isinstance(source, StagedChanges):
         return _select_changes(repository_root, True, None)
@@ -89,13 +92,28 @@ def _validated_repository_root(repository_root: Path) -> Path:
     return resolved_root
 
 
+def _explicit_documents(
+    repository_root: Path, all_paths: tuple[Path, ...]
+) -> tuple[Document, ...]:
+    all_documents: list[Document] = []
+    for each_path in all_paths:
+        try:
+            all_documents.append(_worktree_document(repository_root, each_path))
+        except SelectionItemBlocked:
+            continue
+    return tuple(all_documents)
+
+
 def _select_repository_tree(repository_root: Path) -> DocumentSet:
-    all_documents = tuple(
-        _tracked_worktree_document(repository_root, each_path)
-        for each_path in _tracked_paths(repository_root)
-        if (repository_root / each_path).is_file()
-    )
-    return DocumentSet(all_documents, SelectionKind.REPOSITORY, repository_root)
+    all_documents: list[Document] = []
+    for each_path in _tracked_paths(repository_root):
+        if not (repository_root / each_path).is_file():
+            continue
+        try:
+            all_documents.append(_tracked_worktree_document(repository_root, each_path))
+        except SelectionItemBlocked:
+            continue
+    return DocumentSet(tuple(all_documents), SelectionKind.REPOSITORY, repository_root)
 
 
 def _tracked_worktree_document(repository_root: Path, raw_path: str) -> Document:
@@ -189,12 +207,15 @@ def _append_change(
     old_path, new_path = all_paths if status[:1] in {"R", "C"} else (all_paths[0], all_paths[0])
     normalized_old_path = _normalize_path(repository_root, old_path)
     normalized_new_path = _normalize_path(repository_root, new_path)
-    document = _change_document(
-        repository_root, old_path, new_path, normalized_old_path,
-        normalized_new_path, is_staged, base_revision, status,
-    )
-    if document is None:
+    if status == "D":
         all_deleted_paths.append(normalized_old_path)
+        return
+    try:
+        document = _change_document(
+            repository_root, old_path, new_path, normalized_old_path,
+            normalized_new_path, is_staged, base_revision, status,
+        )
+    except (SelectionItemBlocked, GitBlobItemBlocked):
         return
     all_documents.append(document)
     if document.prior_path is not None:
@@ -210,9 +231,7 @@ def _change_document(
     is_staged: bool,
     base_revision: str | None,
     status: str,
-) -> Document | None:
-    if status == "D":
-        return None
+) -> Document:
     is_copy = status[:1] == "C"
     is_rename = status[:1] == "R"
     prior_text = _change_prior_text(
@@ -274,7 +293,7 @@ def _read_worktree_text(file_path: Path) -> str:
     try:
         return file_path.read_bytes().decode(constants.UTF8_ENCODING)
     except UnicodeDecodeError as error:
-        raise SelectionRunFatal(f"File is not UTF-8: {file_path}") from error
+        raise SelectionItemBlocked(f"File is not UTF-8: {file_path}") from error
     except OSError as error:
         raise SelectionRunFatal(f"File cannot be read: {file_path}") from error
 
