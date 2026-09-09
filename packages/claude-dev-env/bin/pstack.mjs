@@ -113,10 +113,11 @@ export function prepareRelease(checkout, stage, finalRoot, lock, adapters) {
         }
         for (const slug of names) {
             if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error(`Invalid skill directory: ${slug}`);
-            const name = `${component}-${slug}`;
+            const name = component === 'pstack' ? `pstack:${slug}` : `${component}-${slug}`;
+            const frontmatterName = component === 'pstack' ? slug : name;
             const path = join('runtime', component, 'skills', slug);
             const text = readFileSync(join(source, 'skills', slug, 'SKILL.md'), 'utf8');
-            writeFileSync(join(stage, path, 'SKILL.md'), adaptSkill(text, name, finalRoot, join(finalRoot, path)));
+            writeFileSync(join(stage, path, 'SKILL.md'), adaptSkill(text, frontmatterName, finalRoot, join(finalRoot, path)));
             skills.push({ name, component, slug, path });
         }
         const agentHome = join(source, 'agents');
@@ -158,7 +159,9 @@ export function verifyRelease(root) {
         if (digest(readFileSync(assertContained(root, path))) !== hash) throw new Error(`Changed installed file: ${path}`);
     }
     for (const skill of release.skills) {
-        if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skill.name)) throw new Error('Invalid installed skill name');
+        const validPart = value => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+        const expectedName = skill.component === 'pstack' ? `pstack:${skill.slug}` : `${skill.component}-${skill.slug}`;
+        if (!validPart(skill.component) || !validPart(skill.slug) || skill.name !== expectedName) throw new Error('Invalid installed skill name');
         const path = join(assertContained(root, skill.path), 'SKILL.md');
         if (!Object.hasOwn(release.fileDigests, relative(root, path)) || !existsSync(path)) throw new Error(`Missing entry: ${skill.name}`);
     }
