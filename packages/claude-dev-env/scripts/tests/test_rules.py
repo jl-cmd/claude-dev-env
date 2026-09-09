@@ -125,6 +125,31 @@ def _worker_policy_surfaces(package_root: Path) -> tuple[Path, ...]:
     )
 
 
+def _banned_word_real_phrases() -> tuple[str, ...]:
+    return (
+        "banned word: real",
+        "never write real, really, or real-world",
+        "this ban has no exception",
+        "swapping in actual, actually, genuine, or true is the same move",
+    )
+
+
+def _banned_word_real_surfaces(package_root: Path) -> tuple[Path, ...]:
+    return (
+        package_root.parent.parent / "AGENTS.md",
+        package_root / "AGENTS.md",
+    )
+
+
+def test_banned_word_real_reaches_installed_instruction_surfaces() -> None:
+    all_expected_phrases = _banned_word_real_phrases()
+
+    for each_surface_path in _banned_word_real_surfaces(_PACKAGE_ROOT):
+        surface_text = each_surface_path.read_text(encoding="utf-8").lower()
+        for each_phrase in all_expected_phrases:
+            assert each_phrase in surface_text, each_surface_path
+
+
 def test_comment_guidance_reaches_installed_instruction_surfaces() -> None:
     expected_phrases = _comment_policy_phrases()
     all_surface_paths = _comment_policy_surfaces(_PACKAGE_ROOT)

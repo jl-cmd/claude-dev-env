@@ -12,6 +12,16 @@ Use direct outcome-focused wording. Omit filler, failed attempts, alternatives c
 
 Cut AI tells from any writing. Must always apply.
 
+Banned word: real
+
+Never write real, really, or real-world. Not in chat, not in a commit message, not in a pull request body, not in a comment, not in documentation, not in a heading, not in a variable name. This ban has no exception. Emphasis is not an exception. Contrast with a test, a mock, a fixture, or a hypothetical is not an exception. Insisting that something is genuine is not an exception.
+
+Every sentence carrying real says the same thing without it. "One real failure" is "one failure". "The real cause" is "the cause". "Really fast" is "fast", or the measured number. "Real users" is "users". "A real bug, not a flake" is "a bug", followed by the evidence that rules out a flake.
+
+Delete the word, then read the sentence. When it still says what you meant, you are done. When something is missing, the missing part is evidence, so name the evidence. The failing check. The log line. The measured number. The file and the line.
+
+Swapping in actual, actually, genuine, or true is the same move, and each is banned with it. So is the invented contrast that invites the word back, such as "not a hypothetical problem but a problem".
+
 Edit text to remove AI patterns and add human voice.
 
 Process
@@ -37,7 +47,7 @@ Content
 
 Puffery. "pivotal moment", "testament to", "evolving landscape", "setting the stage for", "indelible mark", "deeply rooted". Cut puffery, state what happened.
 Name-dropping. Listing media outlets without context. Pick one, say what was said.
-Superficial -ing phrases. "highlighting...", "ensuring...", "reflecting...", "showcasing...", "fostering...". Delete or expand with real sources.
+Superficial -ing phrases. "highlighting...", "ensuring...", "reflecting...", "showcasing...", "fostering...". Delete or expand with named sources.
 Promotional language. "nestled", "vibrant", "breathtaking", "groundbreaking", "renowned", "stunning", "must-visit". Use neutral descriptions.
 Vague attributions. "Experts believe", "Industry reports suggest", "Some critics argue". Name the source or delete.
 Formulaic challenges. "Despite challenges... continues to thrive." Replace with specific facts.
@@ -78,7 +88,7 @@ Generic conclusions. "The future looks bright." State specific plans or facts.
 
 
 Jargon
-Abstract metaphor nouns. Substrate, wedge, vector, locus, vantage, nexus, primitive (as noun), harness (as metaphor), surface (as in "API surface"), bedrock, scaffolding (as metaphor), modality, paradigm, gold-plating, ratchet (as metaphor), evacuate (for moving code), endgame, north star, flywheel. These read as technical but usually have a plainer concrete word. "Substrate" becomes "base". "Wedge in" becomes "add". "Vector" becomes "way" or "method". "Gold-plating" becomes "more than the job needs". "Ratchet" becomes the mechanism's real name or "a limit that only tightens". "Evacuate" becomes "move out". "Endgame" becomes "the last phase". Pick the concrete word.
+Abstract metaphor nouns. Substrate, wedge, vector, locus, vantage, nexus, primitive (as noun), harness (as metaphor), surface (as in "API surface"), bedrock, scaffolding (as metaphor), modality, paradigm, gold-plating, ratchet (as metaphor), evacuate (for moving code), endgame, north star, flywheel. These read as technical but usually have a plainer concrete word. "Substrate" becomes "base". "Wedge in" becomes "add". "Vector" becomes "way" or "method". "Gold-plating" becomes "more than the job needs". "Ratchet" becomes the mechanism's own name or "a limit that only tightens". "Evacuate" becomes "move out". "Endgame" becomes "the last phase". Pick the concrete word.
 
 
 Plain speech
