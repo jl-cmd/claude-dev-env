@@ -16,6 +16,9 @@ __all__ = [
     "SEPARATOR_CELL_PATTERN",
     "BACKTICK_TOKEN_PATTERN",
     "ENV_VAR_NAME_PATTERN",
+    "ENV_VAR_HEADER_PATTERN",
+    "ALL_GENERIC_ENV_VAR_HEADERS",
+    "ENV_VAR_HEADING_PATTERN",
     "ALL_CODE_FILE_EXTENSIONS",
     "ALL_NOISE_DIRECTORY_NAMES",
     "GIT_DIRECTORY_NAME",
@@ -34,10 +37,13 @@ CODE_FENCE_PATTERN = re.compile(r"^\s*(```|~~~)")
 SEPARATOR_CELL_PATTERN = re.compile(r"^[:\-\s]+$")
 BACKTICK_TOKEN_PATTERN = re.compile(r"`([^`]+)`")
 ENV_VAR_NAME_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{1,}$")
-
-ALL_CODE_FILE_EXTENSIONS: frozenset[str] = frozenset(
-    {".py", ".mjs", ".js", ".ts", ".ps1", ".sh"}
+ENV_VAR_HEADER_PATTERN = re.compile(
+    r"^(?:(?:environment|env)[ -]+)?(?:variables?|vars?)(?:[ -]+(?:name|key))?$", re.I
 )
+ALL_GENERIC_ENV_VAR_HEADERS = frozenset({"name", "key"})
+ENV_VAR_HEADING_PATTERN = re.compile(r"\b(?:environment|env)[ -]+(?:variables?|vars?)\b", re.I)
+
+ALL_CODE_FILE_EXTENSIONS: frozenset[str] = frozenset({".py", ".mjs", ".js", ".ts", ".ps1", ".sh"})
 ALL_NOISE_DIRECTORY_NAMES: frozenset[str] = frozenset(
     {".git", "__pycache__", "node_modules", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 )
@@ -61,4 +67,6 @@ DRIFT_ADDITIONAL_CONTEXT = (
     "its source never references the variable name, the row is stale. Drop the "
     "row, or point it at the variable the file actually reads."
 )
-DRIFT_SYSTEM_MESSAGE = "Blocked: env-var summary table attributes a variable to a code file that does not read it."
+DRIFT_SYSTEM_MESSAGE = (
+    "Blocked: env-var summary table attributes a variable to a code file that does not read it."
+)

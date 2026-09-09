@@ -125,9 +125,10 @@ def test_production_entrypoint_denies_drifted_table(tmp_path: Path) -> None:
     hook_specific_output = parsed_payload["hookSpecificOutput"]
     assert completed.returncode == 0, completed.stderr
     assert hook_specific_output["permissionDecision"] == "deny"
-    assert "GOOGLE_APPLICATION_CREDENTIALS -> auth/google_auth.py" in hook_specific_output[
-        "permissionDecisionReason"
-    ]
+    assert (
+        "GOOGLE_APPLICATION_CREDENTIALS -> auth/google_auth.py"
+        in hook_specific_output["permissionDecisionReason"]
+    )
     assert_hook_deny_log_contains(tmp_path, "env_var_table_code_drift_blocker.py")
 
 
@@ -159,3 +160,80 @@ def test_ignores_row_whose_second_cell_is_not_a_code_file(tmp_path: Path) -> Non
         "| `SOME_FLAG` | `enables the thing` | off |\n"
     )
     assert find_drift_rows(content, doc_path.parent) == []
+
+
+def test_constant_tables_do_not_claim_environment_consumers(tmp_path: Path) -> None:
+    _anchor_repo_root(tmp_path)
+    _write(tmp_path / "workflow.py", "def run():\n    return\n")
+    content = (
+        "| Symbol | Imported by |\n"
+        "| --- | --- |\n"
+        "| `PROCESSING_VISIBLE` | `workflow.py` |\n\n"
+        "| Component | Location | Purpose |\n"
+        "| --- | --- | --- |\n"
+        "| `ACCOUNT_LINK_PRIMARY` | `workflow.py` | Selector |\n\n"
+        "| Constant | Value | Source |\n"
+        "| --- | --- | --- |\n"
+        "| `UPLOAD_DELAY_SECONDS` | 5 | `workflow.py` |\n"
+    )
+    assert find_drift_rows(content, tmp_path) == []
+
+
+def test_environment_table_after_constants_still_reports_drift(tmp_path: Path) -> None:
+    _anchor_repo_root(tmp_path)
+    _write(tmp_path / "workflow.py", "def run():\n    return\n")
+    content = (
+        "| Constant | Source |\n"
+        "| --- | --- |\n"
+        "| `UPLOAD_DELAY_SECONDS` | `workflow.py` |\n\n"
+        "| Environment variable | Consumer |\n"
+        "| --- | --- |\n"
+        "| `UPLOAD_TOKEN` | `workflow.py` |\n"
+    )
+    assert find_drift_rows(content, tmp_path) == ["UPLOAD_TOKEN -> workflow.py"]
+
+
+def test_environment_section_supports_name_header(tmp_path: Path) -> None:
+    _anchor_repo_root(tmp_path)
+    _write(tmp_path / "workflow.py", "def run():\n    return\n")
+    content = (
+        "## Environment variables\n\n"
+        "| Name | Consumer |\n"
+        "| --- | --- |\n"
+        "| `UPLOAD_TOKEN` | `workflow.py` |\n"
+    )
+    assert find_drift_rows(content, tmp_path) == ["UPLOAD_TOKEN -> workflow.py"]
+
+
+def test_headerless_edit_fragment_still_reports_drift(tmp_path: Path) -> None:
+    _anchor_repo_root(tmp_path)
+    _write(tmp_path / "workflow.py", "def run():\n    return\n")
+    content = "| `UPLOAD_TOKEN` | `workflow.py` |\n"
+    assert find_drift_rows(content, tmp_path) == ["UPLOAD_TOKEN -> workflow.py"]
+
+
+def test_descriptive_environment_header_reports_drift(tmp_path: Path) -> None:
+    _anchor_repo_root(tmp_path)
+    _write(tmp_path / "workflow.py", "def run():\n    return\n")
+    content = (
+        "| Environment Variable Name | Consumer |\n"
+        "| --- | --- |\n"
+        "| `UPLOAD_TOKEN` | `workflow.py` |\n"
+    )
+    assert find_drift_rows(content, tmp_path) == ["UPLOAD_TOKEN -> workflow.py"]
+
+
+def test_explicit_source_header_overrides_environment_section(tmp_path: Path) -> None:
+    _anchor_repo_root(tmp_path)
+    _write(tmp_path / "workflow.py", "def run():\n    return\n")
+    content = (
+        "## Environment variables\n\n"
+        "| Name | Consumer |\n"
+        "| --- | --- |\n"
+        "| `UPLOAD_TOKEN` | `workflow.py` |\n\n"
+        "The source also defines a delay constant.\n\n"
+        "| Constant | Source |\n"
+        "| --- | --- |\n"
+        "| `UPLOAD_DELAY_SECONDS` | `workflow.py` |\n"
+    )
+    assert find_drift_rows(content, tmp_path) == ["UPLOAD_TOKEN -> workflow.py"]

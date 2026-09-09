@@ -25,22 +25,23 @@ _hooks_dir = str(Path(__file__).resolve().parent.parent)
 if _hooks_dir not in sys.path:
     sys.path.insert(0, _hooks_dir)
 
-from hooks_constants.env_var_table_code_drift_constants import (  # noqa: E402
-    ALL_CODE_FILE_EXTENSIONS,
+from env_var_table_rows import (
+    _code_file_reference_in_cell,
+    _env_var_name_in_cell,
+    _is_separator_row,
+    _row_cells,
+    iter_env_var_table_rows,
+)
+from hooks_constants.env_var_table_code_drift_constants import (
     ALL_NOISE_DIRECTORY_NAMES,
-    BACKTICK_TOKEN_PATTERN,
-    CODE_FENCE_PATTERN,
     DRIFT_ADDITIONAL_CONTEXT,
     DRIFT_MESSAGE_TEMPLATE,
     DRIFT_SYSTEM_MESSAGE,
-    ENV_VAR_NAME_PATTERN,
     GIT_DIRECTORY_NAME,
     MARKDOWN_FILE_EXTENSION,
     MAX_DRIFT_ISSUES,
     MAX_SUBTREE_FILES_SCANNED,
     MINIMUM_ENV_VAR_ROW_CELL_COUNT,
-    SEPARATOR_CELL_PATTERN,
-    TABLE_ROW_PATTERN,
 )
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 from hooks_constants.multi_edit_reconstruction import (  # noqa: E402
@@ -63,87 +64,6 @@ def is_markdown_file(file_path: str) -> bool:
     """
     _, extension = os.path.splitext(file_path)
     return extension.lower() == MARKDOWN_FILE_EXTENSION
-
-
-def _row_cells(table_line: str) -> list[str]:
-    """Return the trimmed cells of one markdown table row.
-
-    Args:
-        table_line: A single line that begins with a pipe character.
-
-    Returns:
-        The text of each pipe-delimited cell, stripped, with the empty leading
-        and trailing segments a bounding pipe produces removed.
-    """
-    stripped_line = table_line.strip()
-    inner = stripped_line.strip("|")
-    return [each_cell.strip() for each_cell in inner.split("|")]
-
-
-def _first_backtick_token(cell_text: str) -> str | None:
-    """Return the first backtick-wrapped token in a cell, when it has one.
-
-    Args:
-        cell_text: The trimmed text of a table cell.
-
-    Returns:
-        The text inside the first pair of backticks, or None when the cell
-        carries no backtick-wrapped token.
-    """
-    token_match = BACKTICK_TOKEN_PATTERN.search(cell_text)
-    if token_match is None:
-        return None
-    inner_text = token_match.group(1).strip()
-    return inner_text or None
-
-
-def _env_var_name_in_cell(cell_text: str) -> str | None:
-    """Return the environment-variable name a cell names, when it names one.
-
-    Args:
-        cell_text: The trimmed text of a table cell.
-
-    Returns:
-        The UPPER_SNAKE variable name inside the first backticks, or None when
-        the cell names no variable-shaped token.
-    """
-    token = _first_backtick_token(cell_text)
-    if token is None:
-        return None
-    if ENV_VAR_NAME_PATTERN.match(token) is None:
-        return None
-    return token
-
-
-def _code_file_reference_in_cell(cell_text: str) -> str | None:
-    """Return the code-file path a cell names, when it names one.
-
-    Args:
-        cell_text: The trimmed text of a table cell.
-
-    Returns:
-        The relative code-file path inside the first backticks, or None when the
-        token carries no recognized code-file extension.
-    """
-    token = _first_backtick_token(cell_text)
-    if token is None:
-        return None
-    _, extension = os.path.splitext(token)
-    if extension.lower() not in ALL_CODE_FILE_EXTENSIONS:
-        return None
-    return token
-
-
-def _is_separator_row(all_cells: list[str]) -> bool:
-    """Return whether every cell is a markdown table header-separator cell.
-
-    Args:
-        all_cells: The trimmed cells of one table row.
-
-    Returns:
-        True when each cell holds only dashes, colons, and whitespace.
-    """
-    return all(SEPARATOR_CELL_PATTERN.match(each_cell) is not None for each_cell in all_cells)
 
 
 def _resolve_scan_root(markdown_directory: Path) -> Path:
@@ -248,8 +168,8 @@ def _code_file_reads_variable(code_file: Path, variable_name: str) -> bool | Non
 def find_drift_rows(content: str, markdown_directory: Path) -> list[str]:
     """Return each env-var table row whose code file does not read the variable.
 
-    Walks the markdown content line by line, skipping lines inside a fenced code
-    block. A table row counts when its first cell names an UPPER_SNAKE variable and
+    Reads environment-variable tables and headerless edit fragments outside code
+    fences. A row counts when its first cell names an UPPER_SNAKE variable and
     a later cell names a code file with a recognized extension. The row drifts when
     that code file resolves under the scan root yet its source never references the
     variable name; a row whose code file does not resolve, or cannot be read, is
@@ -266,15 +186,7 @@ def find_drift_rows(content: str, markdown_directory: Path) -> list[str]:
     scan_root = _resolve_scan_root(markdown_directory)
     drift_rows: list[str] = []
     already_reported: set[str] = set()
-    is_inside_code_fence = False
-    for each_line in content.splitlines():
-        if CODE_FENCE_PATTERN.match(each_line) is not None:
-            is_inside_code_fence = not is_inside_code_fence
-            continue
-        if is_inside_code_fence:
-            continue
-        if TABLE_ROW_PATTERN.match(each_line) is None:
-            continue
+    for each_line in iter_env_var_table_rows(content):
         each_finding = _drift_finding_for_row(each_line, scan_root)
         if each_finding is None or each_finding in already_reported:
             continue

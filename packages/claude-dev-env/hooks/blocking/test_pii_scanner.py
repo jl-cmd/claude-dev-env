@@ -55,17 +55,13 @@ def test_allows_hygiene_placeholder_username_example() -> None:
 
 
 def test_flags_unix_home_path() -> None:
-    all_unix_hits = scan_text_for_pii(
-        "config lives in /Users/fixture_real_user/.config"
-    )
+    all_unix_hits = scan_text_for_pii("config lives in /Users/fixture_real_user/.config")
     assert any(each.category == "home-path" for each in all_unix_hits)
 
 
 def test_flags_raw_escaped_windows_home_path() -> None:
     all_home_hits = scan_text_for_pii(r"path is C:\\Users\\concrete-user\\file")
-    assert [each.matched_text for each in all_home_hits] == [
-        r"C:\\Users\\concrete-user"
-    ]
+    assert [each.matched_text for each in all_home_hits] == [r"C:\\Users\\concrete-user"]
 
 
 def test_flags_unc_windows_home_path_at_each_share_depth() -> None:
@@ -82,9 +78,7 @@ def test_flags_unc_windows_home_path_at_each_share_depth() -> None:
 
 def test_flags_forward_slash_unc_home_paths() -> None:
     all_home_hits = scan_text_for_pii(
-        "path is //server/Users/concrete-user/file"
-        "\n"
-        "path is //server/share/Users/other-user/file"
+        "path is //server/Users/concrete-user/file\npath is //server/share/Users/other-user/file"
     )
     assert [each.matched_text for each in all_home_hits] == [
         "//server/Users/concrete-user",
@@ -112,9 +106,7 @@ def test_flags_absolute_and_file_uri_home_paths() -> None:
     all_home_hits += scan_text_for_pii("path is file:///home/concrete-user/file")
     all_home_hits += scan_text_for_pii("path is file://server/home/concrete-user/file")
     all_home_hits += scan_text_for_pii("path is FILE://server/home/other-user/file")
-    all_home_hits += scan_text_for_pii(
-        "path is FILE://server/share/home/third-user/file"
-    )
+    all_home_hits += scan_text_for_pii("path is FILE://server/share/home/third-user/file")
     assert [each.matched_text for each in all_home_hits] == [
         "/home/concrete-user",
         "file:///home/concrete-user",
@@ -191,9 +183,7 @@ def test_flags_github_token_aws_key_and_pem_header() -> None:
 def test_secret_and_email_previews_are_redacted() -> None:
     all_secret_hits = scan_text_for_pii(f"export TOKEN={SYNTHETIC_GITHUB_TOKEN}")
     all_email_hits = scan_text_for_pii(f"contact {SYNTHETIC_REAL_EMAIL}")
-    secret_finding = next(
-        each for each in all_secret_hits if each.category == "secret"
-    )
+    secret_finding = next(each for each in all_secret_hits if each.category == "secret")
     email_finding = next(each for each in all_email_hits if each.category == "email")
     assert secret_finding.matched_text == SYNTHETIC_GITHUB_TOKEN
     assert SYNTHETIC_GITHUB_TOKEN not in secret_finding.preview
@@ -217,9 +207,7 @@ def test_flags_genuine_human_home_username() -> None:
 
 def test_short_nonsafe_email_preview_is_fully_redacted() -> None:
     all_email_hits = scan_text_for_pii("reach owner@acme.io")
-    email_finding = next(
-        each for each in all_email_hits if each.category == "email"
-    )
+    email_finding = next(each for each in all_email_hits if each.category == "email")
     assert email_finding.matched_text == "owner@acme.io"
     assert email_finding.preview == "[redacted]"
     assert "owner" not in email_finding.preview
@@ -227,9 +215,7 @@ def test_short_nonsafe_email_preview_is_fully_redacted() -> None:
 
 def test_home_path_preview_redacts_only_the_username() -> None:
     all_home_hits = scan_text_for_pii(r"path is C:\Users\johnsmith\secret.txt")
-    home_finding = next(
-        each for each in all_home_hits if each.category == "home-path"
-    )
+    home_finding = next(each for each in all_home_hits if each.category == "home-path")
     assert "johnsmith" not in home_finding.preview
     assert "[redacted]" in home_finding.preview
     assert "Users" in home_finding.preview
@@ -237,9 +223,7 @@ def test_home_path_preview_redacts_only_the_username() -> None:
 
 def test_home_path_preview_redacts_home_segment_when_name_repeats_earlier() -> None:
     all_home_hits = scan_text_for_pii(r"path is C:\Users\Users\secret.txt")
-    home_finding = next(
-        each for each in all_home_hits if each.category == "home-path"
-    )
+    home_finding = next(each for each in all_home_hits if each.category == "home-path")
     assert home_finding.preview == r"C:\Users\[redacted]"
 
 
@@ -269,3 +253,29 @@ def test_path_exemptions_for_tests_license_and_self_modules() -> None:
 def test_empty_path_still_scans_payload_text() -> None:
     all_hits = scan_text_for_pii(f"contact {SYNTHETIC_REAL_EMAIL}")
     assert any(each.category == "email" for each in all_hits)
+
+
+def test_home_match_stops_at_source_string_boundary() -> None:
+    findings = scan_text_for_pii('path = "C:/Users/concrete-user"\nnext_path = "C:/data"')
+    assert [(item.category, item.matched_text) for item in findings] == [
+        ("home-path", "C:/Users/concrete-user")
+    ]
+
+
+def test_allows_interpolated_home_username() -> None:
+    assert scan_text_for_pii('path = f"C:/Users/{username}/Documents"') == []
+    assert scan_text_for_pii('path = f"C:/Users/{username}"\nnext_path = "C:/data"') == []
+
+
+def test_template_username_does_not_exempt_literal_username() -> None:
+    findings = scan_text_for_pii('path = "C:/Users/concrete-user{suffix}/Documents"')
+    assert [item.category for item in findings] == ["home-path"]
+
+
+def test_preserves_apostrophes_and_parentheses_in_usernames() -> None:
+    findings = scan_text_for_pii("C:/Users/O'Neil/Documents\nC:/Users/Jane (Work)/Documents")
+    assert [item.matched_text for item in findings] == ["C:/Users/O'Neil", "C:/Users/Jane (Work)"]
+
+
+def test_escaped_placeholder_username_uses_complete_separator() -> None:
+    assert scan_text_for_pii(r"C:\\Users\\example\\Documents") == []

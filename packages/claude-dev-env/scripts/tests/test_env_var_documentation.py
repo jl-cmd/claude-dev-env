@@ -17,6 +17,9 @@ from repository_checks.config.constants import (
     FINDINGS_EXIT_CODE,
     SUCCESS_EXIT_CODE,
 )
+from repository_checks.env_var_documentation import (
+    collect_env_var_documentation_findings,
+)
 from repository_policy_test_support import (
     commit_tracked_files,
     initialize_repository,
@@ -131,3 +134,26 @@ def record_read_paths(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
 
     monkeypatch.setattr(Path, "read_text", record_read_path)
     return all_read_paths
+
+
+@pytest.mark.parametrize("header", ["Symbol", "Component", "Constant"])
+def test_should_ignore_source_tables_before_reading_named_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, header: str
+) -> None:
+    repository_root = tmp_path / "repo"
+    initialize_repository(repository_root)
+    write_text(repository_root / "workflow.py", "def run():\n    return\n")
+    write_text(
+        repository_root / "docs" / "source-map.md",
+        f"| {header} | Source |\n"
+        "| --- | --- |\n"
+        "| `PROCESSING_VISIBLE` | `workflow.py` |\n",
+    )
+    commit_tracked_files(repository_root)
+    patch_unreadable_named_file(
+        monkeypatch, "workflow.py", "unrelated source unreadable"
+    )
+    assert (
+        collect_env_var_documentation_findings(repository_root, ["docs/source-map.md"])
+        == []
+    )
