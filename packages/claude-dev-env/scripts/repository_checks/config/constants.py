@@ -99,37 +99,27 @@ ALL_TRACKED_SECRET_EXACT_EXEMPTIONS: frozenset[tuple[str, str, str]] = frozenset
         (
             "packages/claude-dev-env/_shared/pr-loop/scripts/_claude_permissions_common.py",
             "home-path",
-            "9c48917645524d03ea0a4f4d8755aa8f0d59f3108e1aa976202a02e613c1444d",
-        ),
-        (
-            "packages/claude-dev-env/_shared/pr-loop/scripts/_claude_permissions_common.py",
-            "home-path",
-            "07ba214cb23325675bc68e5513c030e968eccf2760cb5917d932ae5da29d5af1",
-        ),
-        (
-            "packages/claude-dev-env/_shared/pr-loop/scripts/_claude_permissions_common.py",
-            "home-path",
-            "d41ce8d0f21de2d5320bdd8cd4e8693a2f3d6ea59db6df5ea102a7d2be4b2c22",
+            "f9e409c5c16ecfdd5883da4f3ad045b4af5677740c9e703ad2d47ba231718350",
         ),
         (
             "packages/claude-dev-env/audit-rubrics/prompts/category-n-test-name-scenario-verifier.md",
             "home-path",
-            "550c7b16a2a04e1d05a8a6b4f5b764b8d4fdef65e9d79d09e5dbb3a15a855812",
-        ),
-        (
-            "packages/claude-dev-env/audit-rubrics/prompts/category-n-test-name-scenario-verifier.md",
-            "home-path",
-            "b8bbdd1a7ebdad16f4e51377a3f21d05dd35992d89e35971b28b05f53245c69d",
+            "6b98ff7f0398f06452f19c4a93f3d69186401dab40aaa7077b394ef59b3e730e",
         ),
         (
             "packages/claude-dev-env/bin/expand_home_directory_tokens.mjs",
             "home-path",
-            "10d5571e7126d2018ee7fb06aa29c72a9d503cac79a4e52d6848602ee10e8832",
+            "31e989aa0fbf83d6de5d2f0cd6f08b3cd8151592050b71794ffa180b80385ff2",
         ),
         (
             "packages/claude-dev-env/bin/expand_home_directory_tokens.mjs",
             "home-path",
-            "09f83c224a02c370d3d63de5c330e1a830fc92866330fc7963b5b5fd20ffcb91",
+            "73ff793e488241663bb0c075fd50bd3a18fca8dd79cbd11629c00d2ad7548a8a",
+        ),
+        (
+            "packages/claude-dev-env/bin/expand_home_directory_tokens.mjs",
+            "home-path",
+            "fd9ba4ae930ef31ebdfc463b231a093656b8eaa1d8fe65f60715ec2b6fee04a9",
         ),
         (
             "packages/claude-dev-env/hooks/hooks_constants/hardcoded_user_path_constants.py",
@@ -139,7 +129,7 @@ ALL_TRACKED_SECRET_EXACT_EXEMPTIONS: frozenset[tuple[str, str, str]] = frozenset
         (
             "packages/claude-dev-env/hooks/hooks_constants/hardcoded_user_path_constants.py",
             "home-path",
-            "a541acfac2e649581bca0cd03e4c3dcf306344915017d9cd6be4ad57a8fd7379",
+            "5d956228802fbd4a65af8fa7fb4183f5a9f8793dbe218877aefe887b905f726d",
         ),
     )
 )
