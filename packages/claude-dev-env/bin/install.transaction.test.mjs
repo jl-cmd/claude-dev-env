@@ -83,6 +83,7 @@ test('capture and restore recover settings, manifest, files, and hooksPath', () 
     mkdirSync(priorHooksDirectory, { recursive: true });
     const env = {
         ...process.env,
+        CDE_INSTALL_PSTACK: '0',
         HOME: box.root,
         USERPROFILE: box.root,
         GIT_CONFIG_GLOBAL: gitConfigPath,
@@ -139,6 +140,7 @@ test('runWithInstallTransaction restores prior state on injected fault', () => {
     writeFileSync(gitConfigPath, '');
     const env = {
         ...process.env,
+        CDE_INSTALL_PSTACK: '0',
         HOME: box.root,
         USERPROFILE: box.root,
         GIT_CONFIG_GLOBAL: gitConfigPath,
@@ -191,6 +193,7 @@ test('runWithInstallTransaction commits and discards journal on success', () => 
     const io = {
         env: {
             ...process.env,
+            CDE_INSTALL_PSTACK: '0',
             HOME: box.root,
             USERPROFILE: box.root,
             GIT_CONFIG_GLOBAL: gitConfigPath,
@@ -239,6 +242,7 @@ test('runWithInstallTransaction commits and discards journal on success', () => 
 function runInstaller(homeDirectory, extraArguments, options = {}) {
     const childEnvironment = {
         ...process.env,
+        CDE_INSTALL_PSTACK: '0',
         HOME: homeDirectory,
         USERPROFILE: homeDirectory,
         GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
@@ -356,6 +360,7 @@ test('installer fault after_git_config restores prior core.hooksPath', () => {
         writeGlobalCoreHooksPath(priorHooksPath, {
             env: {
                 ...process.env,
+                CDE_INSTALL_PSTACK: '0',
                 HOME: homeDirectory,
                 USERPROFILE: homeDirectory,
                 GIT_CONFIG_GLOBAL: gitConfigPath,
@@ -371,6 +376,7 @@ test('installer fault after_git_config restores prior core.hooksPath', () => {
         const restored = readGlobalCoreHooksPath({
             env: {
                 ...process.env,
+                CDE_INSTALL_PSTACK: '0',
                 HOME: homeDirectory,
                 USERPROFILE: homeDirectory,
                 GIT_CONFIG_GLOBAL: gitConfigPath,

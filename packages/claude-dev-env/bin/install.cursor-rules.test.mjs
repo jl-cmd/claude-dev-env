@@ -31,6 +31,7 @@ function runInstaller(homeDirectory, extraArguments, environmentOverrides = {}) 
         encoding: 'utf8',
         env: {
             ...process.env,
+            CDE_INSTALL_PSTACK: '0',
             HOME: homeDirectory,
             USERPROFILE: homeDirectory,
             CODEX_HOME: join(homeDirectory, '.codex'),

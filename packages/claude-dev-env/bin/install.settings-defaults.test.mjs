@@ -49,6 +49,7 @@ function runInstallerInSandbox(sandboxHome, installerArguments = []) {
         encoding: 'utf8',
         env: {
             ...process.env,
+            CDE_INSTALL_PSTACK: '0',
             HOME: sandboxHome,
             USERPROFILE: sandboxHome,
             GIT_CONFIG_GLOBAL: gitConfigGlobal,

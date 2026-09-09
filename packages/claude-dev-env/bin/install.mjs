@@ -34,6 +34,9 @@ import {
     CURSOR_SYNC_SCRIPT_FILE_NAME,
     CURSOR_RULES_DIRECTORY_NAME,
     PSTACK_MODEL_RULE_FILE_NAME,
+    PSTACK_RELEASE_OPT_OUT_FLAG,
+    PSTACK_RELEASE_OPT_OUT_VARIABLE,
+    PSTACK_RELEASE_OPT_OUT_VALUE,
     PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME,
     WINDOWS_PYTHON_LAUNCHER_COMMAND,
     PYTHON_PROBE_TIMEOUT_MILLISECONDS,
@@ -43,6 +46,7 @@ import {
     PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH,
     refreshPstackPluginManifest,
 } from '../scripts/refresh_pstack_plugin_skills.mjs';
+import { installPstack } from './pstack.mjs';
 import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
@@ -420,6 +424,50 @@ export function runCursorRuleSync(pythonCommand, scriptPath, claudeRoot, cursorR
         ],
         { stdio: 'inherit' },
     );
+}
+
+/**
+ * Decide whether a full install also installs the pstack release.
+ *
+ * The step reaches the network for the pinned upstream commit. `--no-pstack`
+ * on the command line, or `CDE_INSTALL_PSTACK=0` in the environment, turns it
+ * off for an air-gapped or offline run.
+ *
+ * @param {string[]} [argumentList] The command-line arguments after the script.
+ * @param {Record<string, string|undefined>} [environment] The process environment.
+ * @returns {boolean} True when this run installs the pstack release.
+ */
+export function shouldInstallPstackRelease(
+    argumentList = process.argv.slice(2),
+    environment = process.env,
+) {
+    if (argumentList.includes(PSTACK_RELEASE_OPT_OUT_FLAG)) return false;
+    return environment[PSTACK_RELEASE_OPT_OUT_VARIABLE] !== PSTACK_RELEASE_OPT_OUT_VALUE;
+}
+
+/**
+ * Install the pstack release into a managed root without failing the run.
+ *
+ * The pstack store keeps its own state and its own skill pointers, so this
+ * step reports its outcome rather than adding paths to the install manifest.
+ * A network failure returns a warning so the rules, hooks, and skills this
+ * run already wrote still reach their durable places.
+ *
+ * @param {object} [options] Options for `installPstack`, including `root`.
+ * @param {object} [dependencies] Seams `installPstack` accepts, such as `fetchSource`.
+ * @returns {{status: string, release: string|null, warning: string|null}} The outcome.
+ */
+export function installPstackRelease(options = {}, dependencies = {}) {
+    try {
+        const installation = installPstack(options, dependencies);
+        return {
+            status: installation.status,
+            release: installation.release,
+            warning: installation.warning ?? null,
+        };
+    } catch (installError) {
+        return { status: 'failed', release: null, warning: installError.message };
+    }
 }
 
 /**
@@ -2743,6 +2791,13 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     }
     summary.skills = { created: skillsCreated, updated: skillsUpdated, pruned: 0, paths: skillPaths };
     allInstalledFiles.push(...skillPaths);
+    if (!selectedGroups && shouldInstallPstackRelease()) {
+        const pstackRelease = installPstackRelease({ root: CLAUDE_HOME });
+        summary.pstackRelease = pstackRelease;
+        console.log(pstackRelease.warning
+            ? `  Pstack: ${pstackRelease.status} \u2014 ${pstackRelease.warning}`
+            : `  Pstack: ${pstackRelease.status} (${pstackRelease.release})`);
+    }
     const pstackManifestPath = refreshInstalledPstackPluginManifest();
     if (pstackManifestPath) allInstalledFiles.push(pstackManifestPath);
     summary.pstackPlugin = { manifestPath: pstackManifestPath };
@@ -3230,6 +3285,7 @@ Usage:
   npx ${PACKAGE_NAME} --target DIR Install into DIR instead of ~/.claude (overrides CLAUDE_CONFIG_DIR)
   npx ${PACKAGE_NAME} --profile ID Install into one named profile root (under the profiles root)
   npx ${PACKAGE_NAME} --profiles A,B  Install into each selected profile (one ownership manifest per target)
+  npx ${PACKAGE_NAME} --no-pstack  Full install without the pinned pstack release (also CDE_INSTALL_PSTACK=0)
   npx ${PACKAGE_NAME} --uninstall  Remove installed files from the selected root
   npx ${PACKAGE_NAME} --help       Show this help
 
