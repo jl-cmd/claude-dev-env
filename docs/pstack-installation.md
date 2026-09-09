@@ -40,11 +40,11 @@ The pstack store keeps its own state and its own entry pointers. The install man
 
 ## Discovery and names
 
-Project entries live in .claude/skills with matching .agents/skills links. User entries live in the selected Claude config root and its existing sibling agents home. Existing shared directory pointers stay intact. The installer creates no .cursor/skills directory.
+Project pstack entries live under `.claude/skills/pstack/<subskill>` with matching `.agents/skills/pstack/<subskill>` paths. User entries use the selected Claude config root and its existing sibling agents home. The installer publishes one managed `pstack` pointer per distinct skills home. The pointed-to tree carries `.claude-plugin/plugin.json` with every pstack subskill path, so the release is self-contained. Existing shared skills-directory pointers stay intact. The installer creates no `.cursor/skills` directory.
 
-The generated names are pstack-poteto-mode, pstack-how, and other pstack-prefixed names. Dependency names include cursor-team-kit-deslop, cursor-team-kit-control-cli, and cursor-team-kit-control-ui. Invoke /pstack-poteto-mode in Claude or Cursor, or $pstack-poteto-mode in Codex. These are direct skills. Cursor plugin registration metadata remains in the untouched upstream copy, so native loaders keep the component-prefixed names. The mapping resolves upstream short names through release.json.
+The generated pstack skill names remain `pstack-poteto-mode`, `pstack-how`, and other pstack-prefixed names. Dependency names such as `cursor-team-kit-deslop`, `cursor-team-kit-control-cli`, and `cursor-team-kit-control-ui` remain flat entries beside the `pstack` folder. The mapping resolves upstream component and short names through `release.json`.
 
-If an older unprefixed pstack tree already exists, verify the new entries before removing the old tree. The installer preserves unmanaged entries and does not remove the old tree for you.
+If an unmanaged `pstack` path already exists in a skills home, the installer leaves it in place and reports the collision instead of replacing it. A managed update swaps the one pstack pointer to the new immutable release, so added and removed subskills converge with the release tree.
 
 Each skill entry loads the common mapping and one of host-claude.md, host-codex.md, or host-cursor.md. Delegation prompts carry those paths and the upstream agent definition to the child. Required independent or cross-model work reports a missing host capability rather than substituting a weaker review. The copied model selector receives an explicit preferencesDirectory outside the release, preserving host settings through updates. cde-create-skill provides the portable authoring workflow when the native creator is absent.
 
