@@ -113,12 +113,79 @@ def test_main_passes_through_child_exit_status() -> None:
     with (
         patch.object(search, "load_registry", return_value={}),
         patch.object(search.shutil, "which", return_value="es.exe"),
-        patch.object(search.subprocess, "run", return_value=completed_process),
+        patch.object(
+            search.subprocess, "run", return_value=completed_process
+        ) as run_process,
         patch.object(search.sys, "stderr", captured_stderr),
     ):
         exit_code = search.main(["config.py"])
     assert exit_code == 7
     assert captured_stderr.getvalue() == "failed\n"
+    run_process.assert_called_once()
+
+
+def _ipc_window_error_process() -> search.subprocess.CompletedProcess:
+    return search.subprocess.CompletedProcess(
+        args=["es.exe", "config.py"],
+        returncode=8,
+        stdout="",
+        stderr=(
+            "Error 8: Everything IPC window not found. "
+            "Please make sure Everything is running.\n"
+        ),
+    )
+
+
+def test_main_retries_ipc_window_error_then_returns_search_hits() -> None:
+    successful_process = search.subprocess.CompletedProcess(
+        args=["es.exe", "config.py"],
+        returncode=0,
+        stdout="found path\n",
+        stderr="",
+    )
+    captured_stdout = io.StringIO()
+    captured_stderr = io.StringIO()
+    with (
+        patch.object(search, "load_registry", return_value={}),
+        patch.object(search.shutil, "which", return_value="es.exe"),
+        patch.object(
+            search.subprocess,
+            "run",
+            side_effect=[_ipc_window_error_process(), successful_process],
+        ) as run_process,
+        patch.object(search.sys, "stdout", captured_stdout),
+        patch.object(search.sys, "stderr", captured_stderr),
+        patch("time.sleep"),
+    ):
+        exit_code = search.main(["config.py"])
+    assert exit_code == 0
+    assert captured_stdout.getvalue() == "found path\n"
+    assert "not loaded" not in captured_stderr.getvalue().casefold()
+    assert "not running" not in captured_stderr.getvalue().casefold()
+    assert run_process.call_count == 2
+
+
+def test_main_reports_ipc_client_miss_after_ipc_window_retries_exhaust() -> None:
+    captured_stderr = io.StringIO()
+    with (
+        patch.object(search, "load_registry", return_value={}),
+        patch.object(search.shutil, "which", return_value="es.exe"),
+        patch.object(
+            search.subprocess,
+            "run",
+            return_value=_ipc_window_error_process(),
+        ) as run_process,
+        patch.object(search.sys, "stderr", captured_stderr),
+        patch("time.sleep"),
+    ):
+        exit_code = search.main(["config.py"])
+    assert exit_code == 8
+    stderr_text = captured_stderr.getvalue()
+    assert "Everything IPC client did not answer" in stderr_text
+    assert "service state was not probed" in stderr_text.casefold()
+    assert "Please make sure Everything is running" not in stderr_text
+    assert "not loaded" not in stderr_text.casefold()
+    assert run_process.call_count == 3
 
 
 def test_main_reports_missing_executable() -> None:

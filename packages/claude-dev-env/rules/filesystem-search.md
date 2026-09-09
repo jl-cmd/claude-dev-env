@@ -19,7 +19,7 @@ Three tools are equally sanctioned; pick by what you know:
 | A name or path pattern | The harness `Glob` tool |
 | Text inside files | The harness `Grep` tool |
 
-When `es.exe` fails or returns nothing, fall back to `Glob` or `Grep` without pausing, and report the outage so the reader knows the index was unavailable. Ask the user only after all three tools fail.
+When `es.exe` returns Error 8, retry the same search twice before any fallback. Error 8 is a missing IPC client window, not proof the index is down. After those retries fail, report that the Everything IPC client did not answer and that the service state was not probed, then fall back to `Glob` or `Grep` with the same scope. When `es.exe` is missing, or a later search returns no hits, fall back to `Glob` or `Grep`. Ask the user only after all three tools fail.
 
 `skills/everything-search/SKILL.md` holds the full `es.exe` operator reference: `ext:`, `dm:`, `size:`, wildcards, OR/AND/NOT, output flags, and the junction and drive-mapping note.
 

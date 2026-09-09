@@ -1353,6 +1353,23 @@ test('mergeHooksIntoSettings is idempotent when run twice against an already-upd
 });
 
 
+test('shipped SessionEnd hook timeouts stay within the Codex runtime limit', () => {
+    const shippedHooksConfig = JSON.parse(
+        readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')
+    );
+    const allSessionEndHooks = (shippedHooksConfig.hooks.SessionEnd || [])
+        .flatMap(eachMatcherGroup => eachMatcherGroup.hooks);
+
+    assert.ok(allSessionEndHooks.length > 0, 'shipped hooks.json must register SessionEnd hooks');
+    for (const eachSessionEndHook of allSessionEndHooks) {
+        assert.ok(
+            eachSessionEndHook.timeout <= 3,
+            `${eachSessionEndHook.command} exceeds the Codex SessionEnd runtime limit`,
+        );
+    }
+});
+
+
 test('shipped hooks.json keeps only nonblocking policy handlers and lifecycle hooks', () => {
     const shippedHooksConfig = JSON.parse(
         readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')
