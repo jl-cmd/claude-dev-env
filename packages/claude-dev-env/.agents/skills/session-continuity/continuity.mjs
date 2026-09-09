@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const skillDirectory = dirname(fileURLToPath(import.meta.url));
 const hosts = new Set(['claude', 'codex', 'cursor']);
-const potetoNames = new Set(['poteto-mode', 'pstack:poteto-mode', 'pstack-poteto-mode']);
+const potetoNames = new Set(['poteto-mode', 'pstack:poteto-mode']);
 const companionNames = new Set(['session-continuity', 'claude-dev-env:session-continuity']);
 const cursorEvents = new Set(['sessionStart', 'beforeSubmitPrompt', 'preCompact', 'postToolUse']);
 const automaticQuote = 'Automatic activation configured in the installed host hook';
@@ -78,8 +78,8 @@ function invocation(prompt) {
     const firstLine = prompt.replace(/^(?:[ \t]*\r?\n)+/, '').split(/\r?\n/, 1)[0];
     if (/^(?: {4}|\t)/.test(firstLine)) return null;
     const line = firstLine.trimStart();
-    const token = line.match(/^[/$]((?:pstack[:-])?poteto-mode|(?:claude-dev-env:)?session-continuity)(?=\s|$)/);
-    const linked = line.match(/^\[\$((?:pstack[:-])?poteto-mode|session-continuity)\]\([^\r\n]+\)(?=\s|$)/);
+    const token = line.match(/^[/$]((?:pstack:)?poteto-mode|(?:claude-dev-env:)?session-continuity)(?=\s|$)/);
+    const linked = line.match(/^\[\$((?:pstack:)?poteto-mode|session-continuity)\]\([^\r\n]+\)(?=\s|$)/);
     const natural = /^(?:poteto|(?:use|activate|invoke) poteto mode|poteto mode applies)(?: (?:for )?this (?:entire )?(?:task|session))?[.!]?$/i.test(line);
     if (!token && !linked && !natural) return null;
     const name = token?.[1] || linked?.[1] || 'poteto-mode';
@@ -91,39 +91,17 @@ function invocation(prompt) {
     return { name, scope: explicitSession ? 'session' : explicitTask ? 'task' : null, text: line };
 }
 
-function potetoSource(payload) {
+function potetoSource() {
     const agentsHome = resolve(skillDirectory, '..', '..');
     const configured = process.env.CDE_POTETO_SOURCE;
-    const launched = process.env.CDE_PSTACK_RELEASE;
-    const candidateGroups = [];
-    if (configured) candidateGroups.push([configured]);
-    else if (launched) candidateGroups.push([join(launched, 'runtime', 'pstack', 'skills', 'poteto-mode', 'SKILL.md')]);
-    else {
-        const workspace = payload.cwd || payload.workspace_roots?.[0] || process.env.CLAUDE_PROJECT_DIR;
-        if (workspace) {
-            let directory = resolve(workspace);
-            while (true) {
-                candidateGroups.push(['.claude', '.agents'].map(home => join(directory, home, 'skills', 'pstack-poteto-mode', 'SKILL.md')));
-                if (existsSync(join(directory, '.git')) || dirname(directory) === directory) break;
-                directory = dirname(directory);
-            }
-        }
-        if (process.env.CLAUDE_CONFIG_DIR) {
-            candidateGroups.push([join(process.env.CLAUDE_CONFIG_DIR, 'skills', 'pstack-poteto-mode', 'SKILL.md')]);
-        }
-        candidateGroups.push([join(agentsHome, 'skills', 'pstack-poteto-mode', 'SKILL.md')]);
-        candidateGroups.push([
-            join(agentsHome, 'skills', 'pstack', 'poteto-mode', 'SKILL.md'),
-            join(agentsHome, 'skills', 'pstack', 'skills', 'poteto-mode', 'SKILL.md'),
-        ]);
-    }
-    let source = resolve(candidateGroups.at(-1)[0]);
-    for (const candidates of candidateGroups) {
-        const found = [...new Set(candidates.filter(existsSync).map(path => realpathSync(path)))];
-        if (found.length > 1) throw new Error('Multiple Poteto sources found. Set CDE_POTETO_SOURCE to the installed source used by this host.');
-        if (found.length) { source = found[0]; break; }
-    }
-    if (existsSync(source) && !/^name:\s*["']?(?:Poteto Mode|poteto-mode|pstack-poteto-mode)["']?\s*$/m.test(readFileSync(source, 'utf8'))) {
+    const candidates = configured ? [configured] : [
+        join(agentsHome, 'skills', 'pstack', 'poteto-mode', 'SKILL.md'),
+        join(agentsHome, 'skills', 'pstack', 'skills', 'poteto-mode', 'SKILL.md'),
+    ];
+    const found = [...new Set(candidates.filter(existsSync).map(path => realpathSync(path)))];
+    if (found.length > 1) throw new Error('Multiple Poteto sources found. Set CDE_POTETO_SOURCE to the installed source used by this host.');
+    const source = resolve(found[0] || candidates[0]);
+    if (existsSync(source) && !/^name:\s*["']?Poteto Mode["']?\s*$/m.test(readFileSync(source, 'utf8'))) {
         throw new Error(`The selected source does not declare Poteto Mode: ${source}`);
     }
     return source;
@@ -159,7 +137,7 @@ function automaticRecord(host, session, payload) {
         id: 'skill:pstack:poteto-mode', kind: 'skill', name: 'pstack:poteto-mode', active: true,
         scope: 'session', task_id: null, duration: automaticDuration, automatic: true,
         evidence: { prompt_id: null, quote: automaticQuote },
-        ...sourceSnapshot(potetoSource(payload)),
+        ...sourceSnapshot(potetoSource()),
     });
     return record;
 }
@@ -176,7 +154,7 @@ function activate(previous, host, session, payload, trigger) {
         const id = 'skill:pstack:poteto-mode';
         const current = record.requirements.find(requirement => requirement.id === id && requirement.active);
         const scope = trigger.scope || current?.scope || 'task';
-        const selectedSource = current?.source ?? potetoSource(payload);
+        const selectedSource = potetoSource();
         const snapshot = current?.source === selectedSource
             ? { source: current.source, sha256: current.sha256, comparison_text: current.comparison_text }
             : sourceSnapshot(selectedSource);

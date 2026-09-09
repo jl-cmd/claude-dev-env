@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { continuityHookConfiguration } from '../../../bin/install-session-continuity.mjs';
-import { installPstack } from '../../../bin/pstack.mjs';
 
 const sourceDirectory = dirname(fileURLToPath(import.meta.url));
 const potetoText = '---\nname: Poteto Mode\n---\nPOTETO_SOURCE_EXPECTATION: prove the requested result.\n';
@@ -50,7 +49,7 @@ function fixture(t, host) {
     };
     const submit = (session, prompt) => fire('UserPromptSubmit', session, { prompt })[0];
     const read = session => JSON.parse(readFileSync(pathFor(session), 'utf8'));
-    return { root, script, skill, poteto, second, pathFor, cli, fire, submit, read, env };
+    return { root, script, skill, poteto, second, pathFor, cli, fire, submit, read };
 }
 
 for (const host of ['claude', 'codex']) {
@@ -371,78 +370,4 @@ test('a new explicit invocation after task completion starts a distinct task wit
     assert.notEqual(f.read('completed').task.id, before.task.id);
     assert.equal(f.read('completed').task.completed, false);
     assert.ok(output.hookSpecificOutput.additionalContext.includes(potetoText));
-});
-
-
-for (const host of ['claude', 'codex', 'cursor']) {
-    test(`${host}: generated pstack entry pins one release across reinvocation, compaction and resume`, t => {
-        const f = fixture(t, host);
-        const packageRoot = join(sourceDirectory, '..', '..', '..');
-        const lock = JSON.parse(readFileSync(join(packageRoot, 'scripts', 'pstack.lock.json'), 'utf8'));
-        const checkout = join(f.root, 'upstream-fixture');
-        for (const [component, names] of Object.entries(lock.requiredSkills)) {
-            for (const name of names) {
-                const path = join(checkout, component, 'skills', name, 'SKILL.md');
-                mkdirSync(dirname(path), { recursive: true });
-                writeFileSync(path, `---\nname: ${name}\ndescription: Installed ${name}.\n---\nINSTALLED_RELEASE_ONE\n`);
-            }
-        }
-        const playbook = join(checkout, 'pstack', 'skills', 'poteto-mode', 'playbooks', 'feature.md');
-        mkdirSync(dirname(playbook), { recursive: true });
-        writeFileSync(playbook, 'Feature playbook from release one.\n');
-        const dependencies = { fetchSource: (_lock, destination) => cpSync(checkout, destination, { recursive: true }) };
-        const first = installPstack({ project: f.root, lock }, dependencies);
-        const entry = join(f.root, '.claude', 'skills', 'pstack-poteto-mode', 'SKILL.md');
-        const firstSource = realpathSync(entry);
-        const promptEvent = host === 'cursor' ? 'beforeSubmitPrompt' : 'UserPromptSubmit';
-        const startEvent = host === 'cursor' ? 'sessionStart' : 'SessionStart';
-        const invoke = session => f.fire(promptEvent, session, { prompt: `${host === 'codex' ? '$' : '/'}pstack-poteto-mode for this entire session` })[0];
-        invoke('pinned');
-        assert.equal(existsSync(f.pathFor('pinned')), true, 'the generated name must activate the companion');
-        assert.equal(f.read('pinned').requirements[0].source, firstSource);
-        assert.equal(f.read('pinned').requirements[0].scope, 'session');
-        assert.match(readFileSync(firstSource, 'utf8'), /compat.*common\.md/);
-        assert.equal(readFileSync(join(dirname(firstSource), 'playbooks', 'feature.md'), 'utf8'), 'Feature playbook from release one.\n');
-        const replacement = join(checkout, 'pstack', 'skills', 'poteto-mode', 'SKILL.md');
-        writeFileSync(replacement, readFileSync(replacement, 'utf8').replace('INSTALLED_RELEASE_ONE', 'INSTALLED_RELEASE_TWO'));
-        const second = installPstack({ project: f.root, lock: { ...lock, commit: 'b'.repeat(40) } }, dependencies);
-        assert.notEqual(second.release, first.release);
-        invoke('pinned');
-        assert.equal(f.read('pinned').requirements[0].source, firstSource, 'reinvocation keeps the active release');
-        const resumed = f.fire(startEvent, 'pinned', { source: 'resume' })[0];
-        const resumedContext = host === 'cursor' ? resumed.additional_context : resumed.hookSpecificOutput.additionalContext;
-        assert.match(resumedContext, /INSTALLED_RELEASE_ONE/);
-        assert.doesNotMatch(resumedContext, /INSTALLED_RELEASE_TWO/);
-        const compacted = host === 'cursor'
-            ? (f.fire('preCompact', 'pinned'), f.fire('postToolUse', 'pinned', { tool_name: 'Read' })[0].additional_context)
-            : f.fire('SessionStart', 'pinned', { source: 'compact' })[0].hookSpecificOutput.additionalContext;
-        assert.match(compacted, /INSTALLED_RELEASE_ONE/);
-        assert.doesNotMatch(compacted, /INSTALLED_RELEASE_TWO/);
-        f.fire(startEvent, 'next-session', { source: 'startup' });
-        assert.equal(f.read('next-session').requirements[0].source, realpathSync(entry));
-        assert.notEqual(f.read('next-session').requirements[0].source, firstSource);
-        assert.equal(f.read('next-session').requirements[0].name, 'pstack:poteto-mode');
-        f.env.CDE_PSTACK_RELEASE = join(f.root, '.claude', 'pstack', 'releases', first.release);
-        f.fire(startEvent, 'launched-session', { source: 'startup' });
-        assert.equal(f.read('launched-session').requirements[0].source, firstSource);
-        f.env.CDE_POTETO_SOURCE = f.poteto;
-        f.fire(startEvent, 'explicit-source', { source: 'startup' });
-        assert.equal(f.read('explicit-source').requirements[0].source, f.poteto);
-    });
-}
-
-test('Claude expansion and Codex linked invocation recognize the generated name without activating quoted text', t => {
-    const claude = fixture(t, 'claude');
-    const expanded = claude.fire('UserPromptExpansion', 'generated', {
-        expansion_type: 'slash_command', command_name: 'pstack-poteto-mode', prompt: '/pstack-poteto-mode',
-    });
-    assert.equal(existsSync(claude.pathFor('generated')), true);
-    assert.match(expanded[0].hookSpecificOutput.additionalContext, /POTETO_SOURCE_EXPECTATION/);
-    const codex = fixture(t, 'codex');
-    codex.submit('linked', '[$pstack-poteto-mode](/sample/SKILL.md) for this entire session');
-    assert.equal(codex.read('linked').requirements[0].scope, 'session');
-    for (const prompt of ['`$pstack-poteto-mode`', '> /pstack-poteto-mode', '    /pstack-poteto-mode', 'Discuss pstack-poteto-mode.']) {
-        assert.deepEqual(codex.submit('quoted-generated', prompt), {});
-        assert.equal(existsSync(codex.pathFor('quoted-generated')), false);
-    }
 });

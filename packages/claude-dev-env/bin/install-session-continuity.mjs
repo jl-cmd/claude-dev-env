@@ -14,7 +14,7 @@ export function continuityHookConfiguration(host, script) {
     const events = host === 'claude' ? ['UserPromptSubmit', 'UserPromptExpansion', 'SessionStart'] : ['UserPromptSubmit', 'SessionStart'];
     return Object.fromEntries(events.map(event => [event, [{
         ...(event === 'SessionStart' ? { matcher: host === 'claude' ? 'startup|resume|compact|clear|fork' : 'startup|resume|compact|clear' } : {}),
-        ...(event === 'UserPromptExpansion' ? { matcher: '^(pstack[:-])?poteto-mode$|^(claude-dev-env:)?session-continuity$' } : {}),
+        ...(event === 'UserPromptExpansion' ? { matcher: '^(pstack:)?poteto-mode$|^(claude-dev-env:)?session-continuity$' } : {}),
         hooks: [{ type: 'command', command, timeout: 10 }],
     }]]));
 }

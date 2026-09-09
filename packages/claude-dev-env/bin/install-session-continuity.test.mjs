@@ -49,7 +49,6 @@ for (const host of ['claude', 'codex']) {
         assert.equal(new RegExp(configuration.SessionStart[0].matcher).test('compact'), true);
         if (host === 'claude') {
             assert.equal(new RegExp(configuration.UserPromptExpansion[0].matcher).test('pstack:poteto-mode'), true);
-            assert.equal(new RegExp(configuration.UserPromptExpansion[0].matcher).test('pstack-poteto-mode'), true);
             assert.equal(new RegExp(configuration.UserPromptExpansion[0].matcher).test('explain-poteto-mode'), false);
         }
     });

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "adapterVersion": 1,
   "repository": "https://github.com/cursor/plugins.git",
-  "commit": "2b8ae2ee306f823d54879d3da7f8496b73c31d5d",
+  "commit": "27e2a62ff94f9af4b5e68435e41cdceacadb840c",
   "components": ["pstack", "cursor-team-kit"],
   "requiredSkills": {
     "pstack": ["poteto-mode"],

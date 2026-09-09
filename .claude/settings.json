@@ -21,16 +21,6 @@
             "timeout": 630
           }
         ]
-      },
-      {
-        "matcher": "startup|resume|clear|compact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/packages/claude-dev-env/bin/pstack.mjs\" hook",
-            "timeout": 300
-          }
-        ]
       }
     ]
   }
