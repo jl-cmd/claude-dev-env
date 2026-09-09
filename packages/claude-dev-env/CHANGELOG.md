@@ -1,5 +1,35 @@
 # Changelog
 
+## [7.4.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.3.0...claude-dev-env-v7.4.0) (2026-09-09)
+
+
+### Features
+
+* **pstack:** install the pinned release from the base installer ([978c062](https://github.com/jl-cmd/claude-dev-env/commit/978c0622ded332b095f8c89422124d9c05f72e36))
+* **pstack:** install the pinned release from the base installer ([7f1ff83](https://github.com/jl-cmd/claude-dev-env/commit/7f1ff835d3161eed17a35917a0b3e3a359d44554))
+
+
+### Bug Fixes
+
+* **continuity:** use one Poteto command identity ([9e3a570](https://github.com/jl-cmd/claude-dev-env/commit/9e3a570268f2ade702629e851cfc0fde6bf73cd6))
+* **installer:** skip python3 probe on Windows ([a17a868](https://github.com/jl-cmd/claude-dev-env/commit/a17a868a21a66b69fb506ee8e0457063868e1607))
+* **installer:** stop probing python3 on Windows ([af776ea](https://github.com/jl-cmd/claude-dev-env/commit/af776ea1b7905d86ee1c8118694aa5af6fe2b348))
+* **pstack:** pair the installer change with its canonical test ([0096c06](https://github.com/jl-cmd/claude-dev-env/commit/0096c06dd485670b9114e9702bc2bcf7e42fa638))
+* **session-continuity:** accept Poteto hyphen name ([69cc92e](https://github.com/jl-cmd/claude-dev-env/commit/69cc92e7c0accffda007230974a66ee9975b7684))
+* **session-continuity:** use Poteto command path ([9f8c51e](https://github.com/jl-cmd/claude-dev-env/commit/9f8c51ea3ab0561e5ac8a20c133c59d90876c6d2))
+
+
+### Documentation
+
+* **agents:** ban the word real in agent prose ([2858317](https://github.com/jl-cmd/claude-dev-env/commit/2858317c0533a02d5caab898989c1fc78a2add9e))
+* **agents:** ban the word real in agent prose ([77ab0e7](https://github.com/jl-cmd/claude-dev-env/commit/77ab0e714fb48935abb2c829271891306e5c07c5))
+
+
+### Tests
+
+* **session-continuity:** cover Poteto hyphen name ([1d9d526](https://github.com/jl-cmd/claude-dev-env/commit/1d9d5266939e394579d14b1cb9b3f59bcaf2699d))
+* **session-continuity:** use command path identity ([4048024](https://github.com/jl-cmd/claude-dev-env/commit/4048024929653b164106ed644df00b8da05eac0d))
+
 ## [7.3.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.2.1...claude-dev-env-v7.3.0) (2026-09-09)
 
 
