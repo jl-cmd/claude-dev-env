@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import TextIO
@@ -14,6 +15,10 @@ from everything_search_command_constants.config.constants import (
     EXECUTION_ERROR_EXIT_CODE,
     INFORMATIONAL_ARGUMENT,
     INVALID_INPUT_EXIT_CODE,
+    IPC_CLIENT_DID_NOT_ANSWER_MESSAGE,
+    IPC_WINDOW_NOT_FOUND_EXIT_CODE,
+    IPC_WINDOW_RETRY_COUNT,
+    IPC_WINDOW_RETRY_DELAY_SECONDS,
     PROJECT_PATHS_FILE_NAME,
     REGISTRY_META_KEY,
     SEARCH_SCOPE_REQUIRED_MESSAGE,
@@ -115,21 +120,32 @@ def _run_search(
     search_stdout: TextIO,
     search_stderr: TextIO,
 ) -> int:
-    try:
-        search_run = subprocess.run(
-            [executable_path, *all_search_arguments],
-            capture_output=True,
-            check=False,
-            encoding=UTF8_ENCODING,
-            shell=False,
-            text=True,
-        )
-    except OSError as error:
-        search_stderr.write(f"{error}\n")
-        return EXECUTION_ERROR_EXIT_CODE
-    search_stdout.write(search_run.stdout)
-    search_stderr.write(search_run.stderr)
-    return search_run.returncode
+    ipc_client_did_not_answer_message = IPC_CLIENT_DID_NOT_ANSWER_MESSAGE
+    ipc_window_not_found_exit_code = IPC_WINDOW_NOT_FOUND_EXIT_CODE
+    ipc_window_retry_count = IPC_WINDOW_RETRY_COUNT
+    ipc_window_retry_delay_seconds = IPC_WINDOW_RETRY_DELAY_SECONDS
+    last_search_run = None
+    for each_attempt_index in range(ipc_window_retry_count + 1):
+        try:
+            last_search_run = subprocess.run(
+                [executable_path, *all_search_arguments],
+                capture_output=True,
+                check=False,
+                encoding=UTF8_ENCODING,
+                shell=False,
+                text=True,
+            )
+        except OSError as error:
+            search_stderr.write(f"{error}\n")
+            return EXECUTION_ERROR_EXIT_CODE
+        if last_search_run.returncode != ipc_window_not_found_exit_code:
+            search_stdout.write(last_search_run.stdout)
+            search_stderr.write(last_search_run.stderr)
+            return last_search_run.returncode
+        if each_attempt_index < ipc_window_retry_count:
+            time.sleep(ipc_window_retry_delay_seconds)
+    search_stderr.write(ipc_client_did_not_answer_message)
+    return ipc_window_not_found_exit_code
 
 
 def _run_registered_search(
