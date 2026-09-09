@@ -301,10 +301,9 @@ test('collectPackageSourceConflicts surfaces both-added and deleted-by-them entr
 });
 
 
-test('pythonCandidatesForPlatform prefers py -3 ahead of python on win32 so the Microsoft Store stub is never probed first', () => {
+test('pythonCandidatesForPlatform uses Windows Python launchers on win32', () => {
     const commands = pythonCandidatesForPlatform('win32').map(candidate => candidate.command);
-    assert.equal(commands[0], 'py -3');
-    assert.ok(commands.indexOf('py -3') < commands.indexOf('python'));
+    assert.deepEqual(commands, ['py -3', 'python']);
 });
 
 
@@ -314,7 +313,7 @@ test('pythonCandidatesForPlatform keeps python3 first on non-Windows platforms',
 });
 
 
-test('pythonCandidatesForPlatform still offers python as a win32 fallback when py -3 and python3 are absent', () => {
+test('pythonCandidatesForPlatform still offers python as a win32 fallback when py -3 is absent', () => {
     const commands = pythonCandidatesForPlatform('win32').map(candidate => candidate.command);
     assert.ok(commands.includes('python'));
 });

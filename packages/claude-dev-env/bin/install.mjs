@@ -326,19 +326,9 @@ export const INSTALL_GROUPS = {
     ...dependencyDiscovery.groups,
 };
 
-/**
- * Returns the ordered python interpreter candidates to probe for the given
- * platform. On win32 the `py -3` launcher is probed first because it resolves
- * through the Windows registry and is immune to the Microsoft Store
- * `python.exe` App Execution Alias that otherwise gets baked into settings.json.
- *
- * @param {string} platform A value from `process.platform` (e.g. 'win32', 'linux').
- * @returns {{command: string, versionFlag: string}[]} Candidates in probe order.
- */
 export function pythonCandidatesForPlatform(platform) {
     const windowsOrder = [
         { command: 'py -3', versionFlag: '--version' },
-        { command: 'python3', versionFlag: '--version' },
         { command: 'python', versionFlag: '--version' },
     ];
     const defaultOrder = [
