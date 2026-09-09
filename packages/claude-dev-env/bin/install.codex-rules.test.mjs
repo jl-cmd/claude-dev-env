@@ -56,6 +56,7 @@ function runInstaller(homeDirectory, extraArguments) {
         encoding: 'utf8',
         env: {
             ...process.env,
+            CDE_INSTALL_PSTACK: '0',
             HOME: homeDirectory,
             USERPROFILE: homeDirectory,
             GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
@@ -83,6 +84,7 @@ function scanTextWithProductionPiiScanner(scannedText) {
                 encoding: 'utf8',
                 env: {
                     ...process.env,
+                    CDE_INSTALL_PSTACK: '0',
                     PYTHONPATH: BLOCKING_HOOKS_DIRECTORY,
                     CLAUDE_LOCAL_IDENTITY_PATH: join(
                         temporaryDirectory,

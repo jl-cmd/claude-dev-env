@@ -11,6 +11,8 @@ import {
     readdirSync,
     existsSync,
     copyFileSync,
+    cpSync,
+    lstatSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -18,6 +20,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
     collectPackageSourceConflicts,
+    installPstackRelease,
+    shouldInstallPstackRelease,
     CONTENT_DIRECTORIES,
     CORE_INCLUDE_DIRECTORIES,
     CORE_SKILLS,
@@ -2973,4 +2977,114 @@ test('pruneRetiredHookEntriesFromSettings warns and returns 0 when the host conf
     } finally {
         rmSync(sandboxRoot, { recursive: true, force: true });
     }
+});
+
+const PSTACK_TEST_PACKAGE_ROOT = dirname(fileURLToPath(new URL('./install.mjs', import.meta.url)));
+const PSTACK_TEST_INSTALLER_PATH = fileURLToPath(new URL('./install.mjs', import.meta.url));
+const PSTACK_TEST_LOCK = JSON.parse(readFileSync(
+    new URL('../scripts/pstack.lock.json', import.meta.url),
+    'utf8',
+));
+
+function writePstackFixtureFile(filePath, fileContent) {
+    mkdirSync(dirname(filePath), { recursive: true });
+    writeFileSync(filePath, fileContent);
+}
+
+function pstackUpstreamFixture(t) {
+    const temporaryRoot = mkdtempSync(join(tmpdir(), 'cdev-install-pstack-'));
+    t.after(() => rmSync(temporaryRoot, { recursive: true, force: true }));
+    const checkout = join(temporaryRoot, 'checkout');
+    for (const [component, allSkillNames] of Object.entries(PSTACK_TEST_LOCK.requiredSkills)) {
+        for (const skillName of allSkillNames) {
+            writePstackFixtureFile(
+                join(checkout, component, 'skills', skillName, 'SKILL.md'),
+                `---\nname: ${skillName}\ndescription: Test ${skillName}.\n---\n\nRun ${skillName}.\n`,
+            );
+        }
+    }
+    const managedRoot = join(temporaryRoot, 'home', '.claude');
+    return {
+        managedRoot,
+        options: {
+            root: managedRoot,
+            lock: structuredClone(PSTACK_TEST_LOCK),
+            packageRoot: dirname(PSTACK_TEST_PACKAGE_ROOT),
+        },
+        dependencies: {
+            fetchSource: (_lock, destination) => cpSync(checkout, destination, { recursive: true }),
+        },
+    };
+}
+
+function runPstackInstaller(homeDirectory, extraArguments) {
+    return execFileSync('node', [PSTACK_TEST_INSTALLER_PATH, ...extraArguments], {
+        cwd: dirname(PSTACK_TEST_PACKAGE_ROOT),
+        encoding: 'utf8',
+        env: {
+            ...process.env,
+            HOME: homeDirectory,
+            USERPROFILE: homeDirectory,
+            CODEX_HOME: join(homeDirectory, '.codex'),
+            CLAUDE_CONFIG_DIR: join(homeDirectory, '.claude'),
+            GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
+            CDE_INSTALL_PSTACK: '1',
+            GIT_ALLOW_PROTOCOL: 'none',
+        },
+    });
+}
+
+function withPstackTemporaryHome(t, runAssertions) {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-install-pstack-run-'));
+    t.after(() => rmSync(homeDirectory, { recursive: true, force: true }));
+    runAssertions(homeDirectory);
+}
+
+test('the base install publishes the pstack poteto-mode entry into the managed skills home', t => {
+    const fixture = pstackUpstreamFixture(t);
+
+    const outcome = installPstackRelease(fixture.options, fixture.dependencies);
+
+    assert.equal(outcome.status, 'installed');
+    assert.equal(outcome.warning, null);
+    const entryPath = join(fixture.managedRoot, 'skills', 'pstack-poteto-mode');
+    assert.equal(lstatSync(entryPath).isSymbolicLink(), true, 'the entry is a pointer into the release');
+    assert.equal(existsSync(join(entryPath, 'SKILL.md')), true, 'the pointer resolves to a skill');
+});
+
+test('an unreachable pstack upstream reports a warning and keeps the base install going', t => {
+    const fixture = pstackUpstreamFixture(t);
+
+    const outcome = installPstackRelease(fixture.options, {
+        fetchSource: () => { throw new Error('network unavailable'); },
+    });
+
+    assert.equal(outcome.status, 'failed');
+    assert.equal(outcome.release, null);
+    assert.match(outcome.warning, /network unavailable/);
+});
+
+test('--no-pstack and CDE_INSTALL_PSTACK=0 each turn the pstack step off', () => {
+    assert.equal(shouldInstallPstackRelease([], {}), true);
+    assert.equal(shouldInstallPstackRelease(['--no-pstack'], {}), false);
+    assert.equal(shouldInstallPstackRelease([], { CDE_INSTALL_PSTACK: '0' }), false);
+    assert.equal(shouldInstallPstackRelease([], { CDE_INSTALL_PSTACK: '1' }), true);
+});
+
+test('a full install runs the pstack step and reports an upstream failure without stopping', t => {
+    withPstackTemporaryHome(t, homeDirectory => {
+        const installerOutput = runPstackInstaller(homeDirectory, []);
+
+        assert.match(installerOutput, /Pstack:/, 'the run reports the pstack step');
+        assert.equal(existsSync(join(homeDirectory, '.claude', 'pstack')), true);
+    });
+});
+
+test('--no-pstack leaves the pstack store absent', t => {
+    withPstackTemporaryHome(t, homeDirectory => {
+        const installerOutput = runPstackInstaller(homeDirectory, ['--no-pstack']);
+
+        assert.doesNotMatch(installerOutput, /Pstack:/);
+        assert.equal(existsSync(join(homeDirectory, '.claude', 'pstack')), false);
+    });
 });

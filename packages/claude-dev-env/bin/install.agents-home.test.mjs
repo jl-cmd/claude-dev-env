@@ -82,6 +82,7 @@ const PREFLIGHT_PROPOSAL_FILE_NAME = 'preflight-proposal.md';
 function runInstaller(homeDirectory, extraArguments, environmentOverrides = {}) {
     const installerEnvironment = {
         ...process.env,
+        CDE_INSTALL_PSTACK: '0',
         HOME: homeDirectory,
         USERPROFILE: homeDirectory,
         GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
