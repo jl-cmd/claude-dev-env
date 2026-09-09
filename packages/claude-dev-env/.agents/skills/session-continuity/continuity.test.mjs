@@ -283,6 +283,14 @@ for (const host of ['claude', 'codex']) {
         assert.deepEqual(f.fire('SessionStart', 'auto', { source: 'startup' }), [{}]);
     });
 
+    test(`${host}: session start accepts Poteto-Mode frontmatter`, t => {
+        const f = fixture(t, host);
+        writeFileSync(f.poteto, '---\nname: Poteto-Mode\n---\nPOTETO_SOURCE_EXPECTATION: prove the requested result.\n');
+        const started = f.fire('SessionStart', 'hyphenated-name', { source: 'startup' })[0];
+        assert.ok(started.hookSpecificOutput, started.systemMessage);
+        assert.ok(started.hookSpecificOutput.additionalContext.includes('POTETO_SOURCE_EXPECTATION'));
+    });
+
     test(`${host}: an unavailable Poteto source stops automatic activation without writing a record`, t => {
         const f = fixture(t, host);
         writeFileSync(f.poteto, '---\nname: Something Else\n---\n');
