@@ -29,7 +29,7 @@ jobs:
       - name: Test install and rollback behavior
         shell: bash
         run: node --test --test-reporter=tap packages/claude-dev-env/bin/pstack.test.mjs packages/claude-dev-env/bin/install-session-continuity.test.mjs packages/claude-dev-env/.agents/skills/session-continuity/continuity.test.mjs | tee "$RUNNER_TEMP/pstack-tests.tap"
-      - name: Fetch and install the real pinned upstream
+      - name: Install the pinned upstream
         shell: bash
         run: |
           set -euo pipefail
