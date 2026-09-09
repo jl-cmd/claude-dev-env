@@ -42,7 +42,7 @@ The pstack store keeps its own state and its own entry pointers. The install man
 
 Project pstack entries live under `.claude/skills/pstack/<subskill>` with matching `.agents/skills/pstack/<subskill>` paths. User entries use the selected Claude config root and its existing sibling agents home. The installer publishes one managed `pstack` pointer per distinct skills home. The pointed-to tree carries `.claude-plugin/plugin.json` with every pstack subskill path, so the release is self-contained. Existing shared skills-directory pointers stay intact. The installer creates no `.cursor/skills` directory.
 
-The generated pstack skill names remain `pstack-poteto-mode`, `pstack-how`, and other pstack-prefixed names. Dependency names such as `cursor-team-kit-deslop`, `cursor-team-kit-control-cli`, and `cursor-team-kit-control-ui` remain flat entries beside the `pstack` folder. The mapping resolves upstream component and short names through `release.json`.
+Pstack skills use plugin names such as `pstack:poteto-mode` and `pstack:how`. Dependency names such as `cursor-team-kit-deslop`, `cursor-team-kit-control-cli`, and `cursor-team-kit-control-ui` remain flat entries beside the `pstack` folder. The mapping resolves upstream component and short names through `release.json`.
 
 If an unmanaged `pstack` path already exists in a skills home, the installer leaves it in place and reports the collision. A managed update swaps the one pstack pointer to the new immutable release, so added and removed subskills converge with the release tree.
 
@@ -76,7 +76,7 @@ The adapter digest covers the installer code and compatibility files with consis
 
 ## Acceptance before enabling the default
 
-Run a fresh Claude cloud session and a fresh Codex cloud session against this branch. In each, invoke pstack-poteto-mode, load its Feature playbook, dispatch one supported native subagent with the adapter and upstream agent-definition paths, and complete a small repository task. Save the host version, selected models, exact skill and playbook paths, child final response, changed artifact, and observed verification result.
+Run a fresh Claude cloud session and a fresh Codex cloud session against this branch. In each, invoke `pstack:poteto-mode`, load its Feature playbook, dispatch one supported native subagent with the adapter and upstream agent-definition paths, and complete a small repository task. Save the host version, selected models, exact skill and playbook paths, child final response, changed artifact, and observed verification result.
 
 Repeat on the actual local Claude, Codex, and Cursor profiles. Confirm the separate session-continuity companion loads the generated entry and restores the same immutable release after compaction. Test a real changed, added, and removed upstream skill across the environments, then an unreachable upstream and an incompatible dependency.
 
