@@ -44,7 +44,7 @@ Project pstack entries live under `.claude/skills/pstack/<subskill>` with matchi
 
 The generated pstack skill names remain `pstack-poteto-mode`, `pstack-how`, and other pstack-prefixed names. Dependency names such as `cursor-team-kit-deslop`, `cursor-team-kit-control-cli`, and `cursor-team-kit-control-ui` remain flat entries beside the `pstack` folder. The mapping resolves upstream component and short names through `release.json`.
 
-If an unmanaged `pstack` path already exists in a skills home, the installer leaves it in place and reports the collision instead of replacing it. A managed update swaps the one pstack pointer to the new immutable release, so added and removed subskills converge with the release tree.
+If an unmanaged `pstack` path already exists in a skills home, the installer leaves it in place and reports the collision. A managed update swaps the one pstack pointer to the new immutable release, so added and removed subskills converge with the release tree.
 
 Each skill entry loads the common mapping and one of host-claude.md, host-codex.md, or host-cursor.md. Delegation prompts carry those paths and the upstream agent definition to the child. Required independent or cross-model work reports a missing host capability rather than substituting a weaker review. The copied model selector receives an explicit preferencesDirectory outside the release, preserving host settings through updates. cde-create-skill provides the portable authoring workflow when the native creator is absent.
 
