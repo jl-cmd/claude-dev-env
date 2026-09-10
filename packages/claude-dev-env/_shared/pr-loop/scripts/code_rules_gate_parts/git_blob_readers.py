@@ -11,6 +11,14 @@ from pathlib import Path
 
 from terminology_sweep import repository_environment
 
+import sys  # noqa: E402
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[4] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def read_prior_committed_content(
     repository_root: Path, relative_path_posix: str, ref: str = "HEAD"
@@ -38,6 +46,7 @@ def read_prior_committed_content(
         errors="replace",
         check=False,
         env=repository_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     if completed.returncode != 0:
         return ""
@@ -61,6 +70,7 @@ def read_staged_content(repository_root: Path, relative_path_posix: str) -> str 
         capture_output=True,
         check=False,
         env=repository_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     if completed.returncode != 0:
         return None
@@ -87,5 +97,6 @@ def staged_blob_exists(repository_root: Path, relative_path_posix: str) -> bool:
         capture_output=True,
         check=False,
         env=repository_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     return completed.returncode == 0

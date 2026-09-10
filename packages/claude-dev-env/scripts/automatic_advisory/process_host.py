@@ -8,6 +8,14 @@ from pr_verification.config.constants import INCOMPLETE_EXIT_CODE
 
 from .config.constants import WINDOWS_PROCESS_START_SIGNAL
 
+from pathlib import Path  # noqa: E402
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import inherited_stream_startup_info  # noqa: E402
+
 
 def run_owned_child(all_arguments: Sequence[str]) -> int:
     """Wait for ownership, then run the advisory child.
@@ -24,6 +32,7 @@ def run_owned_child(all_arguments: Sequence[str]) -> int:
         tuple(all_arguments),
         shell=False,
         check=False,
+        startupinfo=inherited_stream_startup_info(),
     )
     return completed_process.returncode
 

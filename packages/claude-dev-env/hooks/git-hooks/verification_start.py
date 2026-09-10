@@ -13,7 +13,6 @@ from git_hooks_constants.verification_notice_constants import (
     ALL_RUNNER_FIELDS,
     AUTOMATIC_ADVISORY_CLI_FILE_NAME,
     AUTOMATIC_ADVISORY_DIRECTORY_NAME,
-    CREATE_NO_WINDOW_ATTRIBUTE,
     EXECUTOR_DIRECTORY_NAME,
     GIT_DIRECTORY_NAME,
     JSON_ENCODING,
@@ -22,9 +21,14 @@ from git_hooks_constants.verification_notice_constants import (
     RUNNER_PYTHON_FIELD,
     RUNNER_SETTINGS_FIELD,
     TARGET_REPOSITORY_REMOTE,
-    WINDOWS_PLATFORM,
 )
 from verification_notice_context import VerificationNoticeContext
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
 
 
 def start_automatic_advisory(context: VerificationNoticeContext) -> None:
@@ -66,7 +70,7 @@ def _launch_advisory(
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        creationflags=_windows_creation_flags(),
+        creationflags=hidden_window_creation_flags(),
     )
 
 
@@ -93,8 +97,3 @@ def load_runner_configuration(
         return None
     return python_path, settings_path
 
-
-def _windows_creation_flags() -> int:
-    if sys.platform != WINDOWS_PLATFORM:
-        return 0
-    return getattr(subprocess, CREATE_NO_WINDOW_ATTRIBUTE, 0)

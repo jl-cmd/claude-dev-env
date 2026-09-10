@@ -36,6 +36,14 @@ from git_hooks_constants.verification_notice_constants import (
 )
 from local_verification.manifest import ManifestRunFatal, load_manifest
 
+import sys  # noqa: E402
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 @dataclass(frozen=True)
 class VerificationNoticeContext:
@@ -202,6 +210,7 @@ def _run_git_query(
             encoding=GIT_OUTPUT_ENCODING_NAME,
             errors=GIT_OUTPUT_DECODE_ERRORS_POLICY,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except (OSError, subprocess.SubprocessError, UnicodeError):
         return None

@@ -85,6 +85,12 @@ from process_tree_kill import (  # noqa: E402
     terminate_process_tree,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 runner_popen = subprocess.Popen
 
 
@@ -361,6 +367,7 @@ def _invoke_process(
             encoding=UTF8_ENCODING,
             errors=UTF8_DECODE_ERRORS,
             start_new_session=should_start_new_session(),
+            creationflags=hidden_window_creation_flags(),
         )
     except FileNotFoundError:
         return _missing_binary_outcome()

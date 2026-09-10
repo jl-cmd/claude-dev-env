@@ -68,6 +68,12 @@ from dev_env_scripts_constants.verify_installable_package_constants import (
     VERIFICATION_PASSED_MESSAGE,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def package_root_path() -> Path:
     """Return the claude-dev-env package root that holds package.json."""
@@ -303,6 +309,7 @@ def run_npm_pack(into_directory: Path, from_package_root: Path) -> Path:
         capture_output=True,
         text=True,
         encoding=UTF8_ENCODING,
+        creationflags=hidden_window_creation_flags(),
     )
     tarball_name = _npm_pack_filename_from_json(completed.stdout)
     return into_directory / tarball_name
@@ -439,6 +446,7 @@ def list_git_tracked_paths_under(
         capture_output=True,
         text=True,
         encoding=UTF8_ENCODING,
+        creationflags=hidden_window_creation_flags(),
     )
     return frozenset(
         each_line.replace("\\", "/")
@@ -520,6 +528,7 @@ def smoke_check_install_entrypoint(from_package_root: Path) -> str | None:
         capture_output=True,
         text=True,
         encoding=UTF8_ENCODING,
+        creationflags=hidden_window_creation_flags(),
     )
     if completed.returncode == 0:
         return None

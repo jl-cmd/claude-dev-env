@@ -11,6 +11,12 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 try:
     hooks_root_directory = str(Path(__file__).resolve().parent.parent)
     if hooks_root_directory not in sys.path:
@@ -62,6 +68,7 @@ def _read_added_lines_from_git(all_git_arguments: tuple[str, ...], file_path: st
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=working_directory,
             env=_git_environment(),
+            creationflags=hidden_window_creation_flags(),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return []
@@ -106,6 +113,7 @@ def is_new_file(file_path: str) -> bool:
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=working_directory,
             env=_git_environment(),
+            creationflags=hidden_window_creation_flags(),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return False

@@ -46,6 +46,18 @@ from submodule_sync_constants.config.constants import (
     UTF8_ENCODING,
 )
 
+import sys  # noqa: E402
+
+_subprocess_window_hooks_directory = ""
+for each_ancestor_directory in Path(__file__).resolve().parents:
+    if (each_ancestor_directory / "hooks" / "hooks_constants").is_dir():
+        _subprocess_window_hooks_directory = str(each_ancestor_directory / "hooks")
+        break
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 class SyncStatus(StrEnum):
     """States reported by one parent-pointer sync."""
@@ -123,6 +135,7 @@ def _execute_git(
             errors=DECODE_ERRORS_POLICY,
             env=_build_child_environment(),
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except subprocess.TimeoutExpired as error:
         raise _GitCommandFailure(
@@ -179,6 +192,7 @@ def lookup_pull_request_url(repository: Path) -> str | None:
             errors=DECODE_ERRORS_POLICY,
             env=_build_child_environment(),
             timeout=GH_COMMAND_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except (OSError, subprocess.SubprocessError):
         return None

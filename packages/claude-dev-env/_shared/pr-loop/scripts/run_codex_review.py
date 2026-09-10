@@ -90,6 +90,12 @@ from codex_review_scripts_constants.run_constants import (  # noqa: E402
     VERSION_PROBE_PATTERN,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def _open_codex_popen(
     all_arguments: list[str],
@@ -110,6 +116,7 @@ def _open_codex_popen(
         encoding=stream_encoding if isinstance(stream_encoding, str) else None,
         env=process_environment if isinstance(process_environment, dict) else None,
         start_new_session=should_start_new_session(),
+        creationflags=hidden_window_creation_flags(),
     )
 
 

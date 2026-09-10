@@ -10,7 +10,14 @@ from .config.constants import (
     GIT_EXECUTABLE,
 )
 from .model import AdvisoryRegistration, LocalCheckout
-from .window_flags import hidden_window_creation_flags
+
+import sys  # noqa: E402
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
 
 
 def read_local_checkout(checkout_path: Path) -> LocalCheckout:

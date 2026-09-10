@@ -9,6 +9,14 @@ from git_hooks_constants import (
     GH_PR_VIEW_TIMEOUT_SECONDS,
 )
 
+import sys  # noqa: E402
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def get_pull_request_url(repo_dir: Path) -> str | None:
     try:
@@ -19,6 +27,7 @@ def get_pull_request_url(repo_dir: Path) -> str | None:
             capture_output=True,
             text=True,
             timeout=GH_PR_VIEW_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except (OSError, subprocess.SubprocessError):
         return None

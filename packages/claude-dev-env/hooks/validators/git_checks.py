@@ -6,6 +6,14 @@ import sys
 from dataclasses import dataclass
 from typing import List
 
+from pathlib import Path  # noqa: E402
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 SUBPROCESS_TIMEOUT_SECONDS = 30
 
 
@@ -26,6 +34,7 @@ def get_current_branch() -> str:
             text=True,
             check=True,
             timeout=SUBPROCESS_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
         return result.stdout.strip()
     except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
@@ -55,6 +64,7 @@ def check_draft_pr_state() -> List[Violation]:
             text=True,
             check=True,
             timeout=SUBPROCESS_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except FileNotFoundError:
         return []

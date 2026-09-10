@@ -9,6 +9,14 @@ import stat
 import subprocess
 from pathlib import Path
 
+import sys  # noqa: E402
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 git_directory_name = ".git"
 git_listing_commands = (
     (("git", "ls-files", "--stage", "-z"), True),
@@ -32,6 +40,7 @@ def _read_git_paths_and_modes(
             cwd=repository_root,
             capture_output=True,
             check=True,
+            creationflags=hidden_window_creation_flags(),
         )
         for each_record in completed_process.stdout.split(b"\0"):
             if not each_record:

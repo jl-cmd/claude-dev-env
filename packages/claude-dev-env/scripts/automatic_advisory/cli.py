@@ -38,7 +38,14 @@ from automatic_advisory.runner import (
     AdvisoryGitHub,
     AutomaticAdvisoryRunner,
 )
-from automatic_advisory.window_flags import detached_poller_creation_flags
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import (  # noqa: E402
+    detached_hidden_window_creation_flags,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -134,7 +141,6 @@ def start_polling(settings_path: Path) -> int:
     Returns:
         Zero after the child process starts.
     """
-    process_flags = detached_poller_creation_flags()
     resolved_settings_path = settings_path.resolve()
     subprocess.Popen(
         (
@@ -148,7 +154,7 @@ def start_polling(settings_path: Path) -> int:
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        creationflags=process_flags,
+        creationflags=detached_hidden_window_creation_flags(),
         start_new_session=True,
     )
     return SUCCESS_EXIT_CODE

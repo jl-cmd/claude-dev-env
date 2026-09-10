@@ -19,6 +19,12 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
 )
 from terminology_sweep import repository_environment
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[4] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 __all__ = [
     "repository_environment",
     "resolve_merge_base",
@@ -57,6 +63,7 @@ def _git_text_or_exit(
         errors="replace",
         check=False,
         env=repository_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     if completed.returncode != 0:
         sys.stderr.write(f"{failure_prefix}:\n{completed.stderr}\n")
@@ -86,6 +93,7 @@ def _git_bytes_or_exit(
         capture_output=True,
         check=False,
         env=repository_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     if completed.returncode != 0:
         stderr_text = completed.stderr.decode("utf-8", errors="replace")

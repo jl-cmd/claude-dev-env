@@ -43,6 +43,12 @@ from pr_converge_skill_constants.constants import (
     GH_CHECK_RUNS_PATH_TEMPLATE,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def _run_check_runs_api(
     *, owner: str, repo: str, sha: str
@@ -62,6 +68,7 @@ def _run_check_runs_api(
         encoding="utf-8",
         errors="replace",
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
 
 

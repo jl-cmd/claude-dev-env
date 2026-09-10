@@ -75,6 +75,12 @@ from pr_loop_shared_constants.terminology_sweep_constants import (
     TEST_FILE_SUFFIX,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 IdentifierTuple = tuple[str, ...]
 
 
@@ -656,6 +662,7 @@ def _base_tree_names(
                 timeout=GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
                 check=False,
                 env=repository_environment(),
+                creationflags=hidden_window_creation_flags(),
             )
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             continue
@@ -678,6 +685,7 @@ def _run_strict_git(
             timeout=GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
             check=False,
             env=repository_environment(),
+            creationflags=hidden_window_creation_flags(),
         )
     except (subprocess.TimeoutExpired, OSError) as e:
         raise RuntimeError(str(e)) from e
@@ -807,6 +815,7 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
         timeout=GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
         check=False,
         env=repository_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     if diff_process.returncode != 0:
         return []

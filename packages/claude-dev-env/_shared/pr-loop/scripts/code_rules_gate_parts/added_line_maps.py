@@ -24,6 +24,12 @@ from code_rules_gate_parts.git_file_sets import (
 )
 from code_rules_gate_parts.violation_scoping import parse_added_line_numbers
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[4] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def _run_git_text_capture(
     repository_root: Path, all_git_arguments: list[str]
@@ -38,6 +44,7 @@ def _run_git_text_capture(
         errors="replace",
         check=False,
         env=repository_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
 
 

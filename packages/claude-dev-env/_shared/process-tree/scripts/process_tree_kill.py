@@ -39,6 +39,12 @@ from process_tree_scripts_constants.process_tree_kill_constants import (  # noqa
     WINDOWS_TASKKILL_TREE_FLAG,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 process_tree_subprocess_run = subprocess.run
 
 
@@ -73,6 +79,7 @@ def _kill_windows_process_tree(process_identifier: int) -> None:
             stderr=subprocess.DEVNULL,
             check=False,
             timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except (subprocess.TimeoutExpired, OSError):
         return

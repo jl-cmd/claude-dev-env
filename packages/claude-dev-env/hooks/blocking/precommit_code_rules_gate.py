@@ -18,6 +18,12 @@ from hooks_constants.precommit_code_rules_gate_constants import (  # noqa: E402
     GIT_COMMAND_TIMEOUT_SECONDS,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def resolve_repository_root(working_directory: str | None) -> Path | None:
     """Resolve the Git repository root for a directory.
@@ -36,6 +42,7 @@ def resolve_repository_root(working_directory: str | None) -> Path | None:
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=working_directory,
+            creationflags=hidden_window_creation_flags(),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return None

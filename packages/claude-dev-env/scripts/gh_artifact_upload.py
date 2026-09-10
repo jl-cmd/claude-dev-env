@@ -41,6 +41,12 @@ from dev_env_scripts_constants.gh_artifact_upload_constants import (
     UTF8_ENCODING,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 class ArtifactUploadError(Exception):
     """Raised when creating the release or uploading the asset fails."""
@@ -53,6 +59,7 @@ def _run_gh(all_arguments: list[str]) -> subprocess.CompletedProcess[str]:
         text=True,
         encoding=UTF8_ENCODING,
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
 
 

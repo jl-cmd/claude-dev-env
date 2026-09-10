@@ -118,6 +118,12 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (  # noqa
     WINDOWS_OS_NAME,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 class AppServerExchange(Protocol):
     """Callable that sends JSON-RPC request objects and returns stdout lines."""
@@ -464,6 +470,7 @@ def _exchange_app_server_messages_via_subprocess(
         encoding=UTF8_ENCODING,
         shell=False,
         start_new_session=should_start_new_session(),
+        creationflags=hidden_window_creation_flags(),
     ) as server_process:
         server_stdin = server_process.stdin
         server_stdout = server_process.stdout

@@ -66,6 +66,12 @@ from terminology_sweep import repository_environment
 
 from code_rules_gate_parts import baseline_import_isolation, staged_test_running
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[4] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 TestIdentity = tuple[str, str]
 
 
@@ -93,6 +99,7 @@ def _run_git(
         text=True,
         check=False,
         env=repository_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
 
 

@@ -11,6 +11,14 @@ from .config import (
 )
 from .model import CommandCapture
 
+import sys  # noqa: E402
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def run_command(
     all_arguments: tuple[str, ...], check_directory: Path, timeout_seconds: float
@@ -73,6 +81,7 @@ def _run_subprocess(
         encoding=UTF8_ENCODING,
         errors="replace",
         timeout=timeout_seconds,
+        creationflags=hidden_window_creation_flags(),
     )
 
 

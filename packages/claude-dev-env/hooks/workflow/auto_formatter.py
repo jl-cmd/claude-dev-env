@@ -14,6 +14,12 @@ from collections.abc import Mapping
 from pathlib import Path
 from types import ModuleType
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 NOTIFICATION_UTILS_DIRECTORY = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "notification"
 )
@@ -118,6 +124,7 @@ def is_untracked_in_git(file_path: str) -> bool:
             cwd=containing_directory,
             timeout=GIT_LS_FILES_TIMEOUT_SECONDS,
             env=_build_git_command_environment(),
+            creationflags=hidden_window_creation_flags(),
         )
         return git_check.returncode != 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -198,6 +205,7 @@ def _run_command(
             capture_output=True,
             text=True,
             timeout=timeout_seconds,
+            creationflags=hidden_window_creation_flags(),
         )
     except FileNotFoundError:
         return None, False

@@ -55,6 +55,16 @@ from test_runner_constants.config.constants import (
     SERVER_URL_PATTERN,
 )
 
+_subprocess_window_hooks_directory = ""
+for each_ancestor_directory in Path(__file__).resolve().parents:
+    if (each_ancestor_directory / "hooks" / "hooks_constants").is_dir():
+        _subprocess_window_hooks_directory = str(each_ancestor_directory / "hooks")
+        break
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import inherited_stream_startup_info  # noqa: E402
+
 build_frontend = preflight_checks.build_frontend
 check_django_database = preflight_checks.check_django_database
 check_runserver_port_conflicts = preflight_checks.check_runserver_port_conflicts
@@ -277,6 +287,7 @@ def run_child_process(
             list(all_child_arguments),
             cwd=project_root,
             check=False,
+            startupinfo=inherited_stream_startup_info(),
         )
     except OSError as error:
         print(ERROR_CHILD_LAUNCH_TEMPLATE.format(error), file=sys.stderr)

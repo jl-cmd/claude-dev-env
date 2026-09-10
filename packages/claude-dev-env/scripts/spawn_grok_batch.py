@@ -117,6 +117,12 @@ from dev_env_scripts_constants.timing import WORKER_STAGGER_SECONDS
 from grok_headless_runner import GrokRunnerOutcome, run_headless_worker
 from grok_worker_preflight import PreflightOutcome, run_preflight
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 class AdvisorFailureError(ValueError):
     """Raised when an advisor bind, resume, or launcher call fails closed."""
 
@@ -263,6 +269,7 @@ def invoke_advisor_launcher(
             encoding=UTF8_ENCODING,
             check=False,
             timeout=MAXIMUM_ADVISOR_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except FileNotFoundError as missing_launcher:
         raise AdvisorFailureError(

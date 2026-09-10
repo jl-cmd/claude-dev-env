@@ -49,6 +49,12 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
     PYTHONPATH_ENV_VAR,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[4] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def _resolved_directory(path_text: str) -> Path | None:
     """Return *path_text* resolved to an absolute path, or None when it is unusable."""
@@ -152,6 +158,7 @@ def _completed_import_root_probe(
             text=True,
             check=False,
             timeout=BASELINE_IMPORT_PROBE_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except subprocess.TimeoutExpired:
         sys.stderr.write(

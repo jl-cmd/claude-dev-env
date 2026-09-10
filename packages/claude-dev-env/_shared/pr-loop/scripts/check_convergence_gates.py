@@ -32,6 +32,14 @@ from pr_converge_scripts_constants.convergence_gate_constants import (
     SHORT_SHA_LENGTH,
 )
 
+from pathlib import Path  # noqa: E402
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 JsonObject = dict[str, object]
 ReviewStateGroup = tuple[str, ...]
 
@@ -44,6 +52,7 @@ def _run_gh_command(all_arguments: list[str]) -> tuple[int, str]:
         encoding="utf-8",
         errors="replace",
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
     return completed_process.returncode, completed_process.stdout
 

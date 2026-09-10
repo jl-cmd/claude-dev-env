@@ -30,6 +30,12 @@ from pr_converge_skill_constants.constants import (
     GH_ISSUE_COMMENT_CREATE_PATH_TEMPLATE,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def post_inline_reply(
     *,
@@ -67,6 +73,7 @@ def post_inline_reply(
         encoding="utf-8",
         errors="replace",
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
     if completed_process.returncode != 0:
         print(f"gh api error: {completed_process.stderr}", file=sys.stderr)
@@ -108,6 +115,7 @@ def post_pr_comment(
         encoding="utf-8",
         errors="replace",
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
     if completed_process.returncode != 0:
         print(f"gh api error: {completed_process.stderr}", file=sys.stderr)

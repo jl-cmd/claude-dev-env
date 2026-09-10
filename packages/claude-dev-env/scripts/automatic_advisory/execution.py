@@ -26,13 +26,18 @@ from .config.constants import (
 )
 from .config.timing import CHILD_CLEANUP_TIMEOUT_SECONDS
 from .model import AdvisoryRegistration, ChildOutcome
-from .window_flags import hidden_window_creation_flags
 from .windows_job import (
     _assign_process,
     _close_handle,
     _create_kill_on_close_job,
     _terminate_job,
 )
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -165,6 +170,7 @@ def _start_posix_child(
             text=True,
             env=all_child_environment,
             start_new_session=True,
+            creationflags=hidden_window_creation_flags(),
         )
     except OSError:
         return None

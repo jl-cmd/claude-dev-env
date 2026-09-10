@@ -44,6 +44,12 @@ from hooks_constants.enter_worktree_prefetch_constants import (  # noqa: E402
 )
 from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def is_enter_worktree_creation(payload_by_field: dict[str, object]) -> bool:
     """Return True when this hook invocation is an EnterWorktree creation call.
@@ -91,6 +97,7 @@ def _run_git_quietly(
             timeout=timeout_seconds,
             cwd=repo_directory,
             check=False,
+            creationflags=hidden_window_creation_flags(),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return None

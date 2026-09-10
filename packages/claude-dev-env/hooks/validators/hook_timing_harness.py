@@ -41,6 +41,12 @@ from pathlib import Path
 from types import ModuleType
 from typing import TextIO
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def _load_module_from_path(module_name: str, module_path: Path) -> ModuleType:
     """Load and execute the module found at module_path, under module_name.
@@ -197,6 +203,7 @@ def run_hosted_command_once_milliseconds(
         text=True,
         timeout=_harness_constants.SUBPROCESS_TIMEOUT_SECONDS,
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
     finished_at = time.perf_counter()
     return (finished_at - started_at) * 1000.0

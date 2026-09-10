@@ -29,6 +29,14 @@ from tdd_enforcer_parts.config.tdd_enforcer_constants import (
     GIT_PATHSPEC_SEPARATOR,
 )
 
+import sys  # noqa: E402
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def _git_ls_files_command(file_name: str) -> list[str]:
     return [GIT_EXECUTABLE_NAME, GIT_LS_FILES_SUBCOMMAND, GIT_PATHSPEC_SEPARATOR, file_name]
@@ -57,6 +65,7 @@ def _git_tracks_path(path: Path) -> bool:
             text=True,
             check=False,
             timeout=GIT_LS_FILES_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except (OSError, subprocess.SubprocessError):
         return False
@@ -80,6 +89,7 @@ def _working_tree_differs_from_head(path: Path) -> bool:
             text=True,
             check=False,
             timeout=GIT_DIFF_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except (OSError, subprocess.SubprocessError):
         return True

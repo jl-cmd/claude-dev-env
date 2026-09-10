@@ -17,6 +17,12 @@ from pr_loop_shared_constants.fix_hookspath_constants import (  # noqa: E402
 )
 from pr_loop_shared_constants.preflight_constants import GIT_DIRECTORY_NAME  # noqa: E402
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags, inherited_stream_startup_info  # noqa: E402
+
 
 def resolve_canonical_hooks_directory(
     all_environment_overrides: dict[str, str] | None,
@@ -74,6 +80,7 @@ def list_local_core_hooks_path_values(
         errors="replace",
         check=False,
         env=all_environment_overrides,
+        creationflags=hidden_window_creation_flags(),
     )
     if completed_process.returncode != 0:
         diagnostic_stderr = completed_process.stderr.strip()
@@ -115,6 +122,7 @@ def read_global_core_hooks_path(
         errors="replace",
         check=False,
         env=all_environment_overrides,
+        creationflags=hidden_window_creation_flags(),
     )
     if completed_process.returncode != 0:
         diagnostic_stderr = completed_process.stderr.strip()
@@ -156,6 +164,7 @@ def unset_local_core_hooks_path(
         text=True,
         check=False,
         env=all_environment_overrides,
+        creationflags=hidden_window_creation_flags(),
     )
     return completed_process.returncode
 
@@ -181,6 +190,7 @@ def set_global_core_hooks_path(
         text=True,
         check=False,
         env=all_environment_overrides,
+        creationflags=hidden_window_creation_flags(),
     )
     return completed_process.returncode
 
@@ -241,6 +251,7 @@ def rerun_preflight(
         rerun_command,
         check=False,
         env=all_environment_overrides,
+        startupinfo=inherited_stream_startup_info(),
     )
     return completed_process.returncode
 

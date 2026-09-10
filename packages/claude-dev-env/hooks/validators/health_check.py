@@ -16,6 +16,12 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Dict, Optional
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 VALIDATOR_FILES = [
     "python_style_checks.py",
     "test_safety_checks.py",
@@ -144,6 +150,7 @@ def check_optional_tool(tool_name: str) -> bool:
             check=False,
             capture_output=True,
             text=True,
+            creationflags=hidden_window_creation_flags(),
         )
         return result.returncode == 0
     except FileNotFoundError:

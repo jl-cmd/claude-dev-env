@@ -104,6 +104,12 @@ from dev_env_scripts_constants.timing import (  # noqa: E402
     DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 @dataclass(frozen=True)
 class CodeReviewOutcome:
@@ -265,6 +271,7 @@ def is_working_tree_dirty(working_directory: Path) -> bool:
         capture_output=True,
         text=True,
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
     if completion.returncode != 0:
         return True

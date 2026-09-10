@@ -48,6 +48,12 @@ from reviews_disabled import (
     is_bugteam_disabled_via_env,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags, inherited_stream_startup_info  # noqa: E402
+
 
 def verify_git_hooks_path(repository_root: Path | None = None) -> int:
     """Check that core.hooksPath resolves to the claude-dev-env git-hooks directory.
@@ -95,6 +101,7 @@ def verify_git_hooks_path(repository_root: Path | None = None) -> int:
             encoding="utf-8",
             errors="replace",
             check=False,
+            creationflags=hidden_window_creation_flags(),
         )
     except FileNotFoundError:
         print(
@@ -201,6 +208,7 @@ def has_discoverable_tests(root: Path) -> bool | None:
             encoding="utf-8",
             errors="replace",
             check=True,
+            creationflags=hidden_window_creation_flags(),
         )
     except FileNotFoundError:
         print(
@@ -260,6 +268,7 @@ def run_pytest(
         command,
         cwd=str(repository_root),
         check=False,
+        startupinfo=inherited_stream_startup_info(),
     )
     if completed.returncode == _pytest_exit_code_no_tests_collected():
         return 0
@@ -302,6 +311,7 @@ def get_changed_files(repository_root: Path, base_ref: str) -> list[Path] | None
             encoding="utf-8",
             errors="replace",
             check=False,
+            creationflags=hidden_window_creation_flags(),
         )
     except FileNotFoundError:
         print(
@@ -398,6 +408,7 @@ def run_pre_commit(repository_root: Path) -> int:
         list(ALL_PRE_COMMIT_RUN_ALL_FILES_COMMAND),
         cwd=str(repository_root),
         check=False,
+        startupinfo=inherited_stream_startup_info(),
     )
     return completed.returncode
 

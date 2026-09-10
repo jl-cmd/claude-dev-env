@@ -24,6 +24,12 @@ from pr_loop_shared_constants.preflight_self_heal_constants import (  # noqa: E4
     ALL_GIT_CONFIG_LOCAL_UNSET_ALL_HOOKS_PATH_ARGUMENTS,
 )
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+
 
 def _is_canonical_hooks_path_entry(
     raw_hooks_path_entry: str,
@@ -71,6 +77,7 @@ def _canonical_global_hooks_path_is_set(expected_hooks_path_suffix: str) -> bool
             encoding="utf-8",
             errors="replace",
             check=False,
+            creationflags=hidden_window_creation_flags(),
         )
     except (FileNotFoundError, OSError):
         return False
@@ -127,6 +134,7 @@ def silently_clear_stale_local_hooks_path_override(
             encoding="utf-8",
             errors="replace",
             check=False,
+            creationflags=hidden_window_creation_flags(),
         )
     except (FileNotFoundError, OSError):
         return
@@ -159,6 +167,7 @@ def silently_clear_stale_local_hooks_path_override(
             encoding="utf-8",
             errors="replace",
             check=False,
+            creationflags=hidden_window_creation_flags(),
         )
     except (FileNotFoundError, OSError):
         return
