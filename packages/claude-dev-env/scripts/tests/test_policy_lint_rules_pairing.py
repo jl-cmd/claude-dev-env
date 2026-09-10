@@ -70,6 +70,37 @@ def test_approved_pairs_name_files_that_exist() -> None:
             assert (repository_root / each_test_path).is_file(), each_test_path
 
 
+def test_every_approved_pair_actually_waives_its_production_file(tmp_path: Path) -> None:
+    """Each mapping entry must silence the rule when its production file changes.
+
+    File existence alone leaves an entry inert when its key carries a suffix the
+    rule skips, or when its value is not a name the rule reads as a test.
+    """
+    for (
+        production_path,
+        all_test_paths,
+    ) in APPROVED_TEST_PATHS_BY_PRODUCTION_PATH.items():
+        production_document = Document(
+            production_path,
+            _BODY_AFTER,
+            _BODY_BEFORE,
+            frozenset({1}),
+            ContentOrigin.REVISION_DIFF,
+        )
+        for each_test_path in all_test_paths:
+            test_document = Document(
+                each_test_path,
+                _BODY_AFTER,
+                _BODY_BEFORE,
+                frozenset({1}),
+                ContentOrigin.REVISION_DIFF,
+            )
+            document_set = DocumentSet(
+                (production_document, test_document), SelectionKind.BASE, tmp_path
+            )
+            assert adapters.test_pairing_diagnostics(document_set) == (), production_path
+
+
 def test_pairing_ignores_python_docstring_only_changes(tmp_path: Path) -> None:
     all_diagnostics = _pairing_diagnostics(
         tmp_path,

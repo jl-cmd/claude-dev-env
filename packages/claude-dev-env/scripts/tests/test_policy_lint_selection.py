@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -18,6 +19,9 @@ from policy_lint.model import (
     SelectionKind,
 )
 from policy_lint.selection import SelectionRunFatal, select_documents
+
+WINDOWS_NO_WINDOW_FLAG = 0x08000000
+EXPECTED_HIDDEN_WINDOW_FLAGS = WINDOWS_NO_WINDOW_FLAG if sys.platform == "win32" else 0
 
 NON_UTF8_PNG_BYTES = bytes(
     (0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0xFF, 0xFE, 0xFF)
@@ -501,3 +505,33 @@ def test_files_missing_path_should_still_raise(tmp_path: Path) -> None:
 
     with pytest.raises(SelectionRunFatal, match="does not exist"):
         select_documents(LintRequest.files(repository_root, [Path("missing.py")]))
+
+
+def _record_git_creation_flags(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    all_recorded_keyword_arguments: dict[str, object] = {}
+
+    def _record(*args: object, **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        del args
+        all_recorded_keyword_arguments.update(kwargs)
+        return subprocess.CompletedProcess([], 0, stdout=b"abc123\n", stderr=b"")
+
+    monkeypatch.setattr(selection_git.subprocess, "run", _record)
+    return all_recorded_keyword_arguments
+
+
+def test_git_bytes_for_should_start_without_a_console_window(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    all_recorded_keyword_arguments = _record_git_creation_flags(monkeypatch)
+
+    assert selection_git.git_bytes_for(tmp_path, ("status",)) == b"abc123\n"
+    assert all_recorded_keyword_arguments["creationflags"] == EXPECTED_HIDDEN_WINDOW_FLAGS
+
+
+def test_head_revision_should_start_without_a_console_window(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    all_recorded_keyword_arguments = _record_git_creation_flags(monkeypatch)
+
+    assert selection_git.head_revision(tmp_path) == "abc123"
+    assert all_recorded_keyword_arguments["creationflags"] == EXPECTED_HIDDEN_WINDOW_FLAGS

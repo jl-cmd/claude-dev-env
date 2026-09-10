@@ -35,6 +35,8 @@ HOOKS_JSON_PATH = os.path.join(HOOKS_DIRECTORY_PATH, "hooks.json")
 POST_TOOL_USE_DISPATCHER_COMMAND_FRAGMENT = "validation/post_tool_use_dispatcher.py"
 UNUSED_IMPORT_SOURCE = "import os\n\n\nVALUE = 1\n"
 HOOK_RUN_TIMEOUT_SECONDS = 60
+WINDOWS_NO_WINDOW_FLAG = 0x08000000
+EXPECTED_HIDDEN_WINDOW_FLAGS = WINDOWS_NO_WINDOW_FLAG if sys.platform == "win32" else 0
 
 
 def build_fixture_git_environment() -> dict[str, str]:
@@ -415,3 +417,40 @@ class TestPythonFormatTimeoutBudget:
         budgeted_total = auto_formatter_module.budgeted_python_format_seconds()
 
         assert budgeted_total < _registered_auto_formatter_timeout()
+
+
+def _record_creation_flags(
+    auto_formatter_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> dict[str, object]:
+    all_recorded_keyword_arguments: dict[str, object] = {}
+
+    def _record(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del args
+        all_recorded_keyword_arguments.update(kwargs)
+        return subprocess.CompletedProcess([], 1, stdout="", stderr="")
+
+    monkeypatch.setattr(auto_formatter_module.subprocess, "run", _record)
+    return all_recorded_keyword_arguments
+
+
+def test_untracked_probe_should_start_without_a_console_window(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    auto_formatter_module = _load_auto_formatter_module()
+    all_recorded_keyword_arguments = _record_creation_flags(auto_formatter_module, monkeypatch)
+
+    assert auto_formatter_module.is_untracked_in_git(str(tmp_path / "module.py")) is True
+    assert all_recorded_keyword_arguments["creationflags"] == EXPECTED_HIDDEN_WINDOW_FLAGS
+
+
+def test_formatter_command_should_start_without_a_console_window(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    auto_formatter_module = _load_auto_formatter_module()
+    all_recorded_keyword_arguments = _record_creation_flags(auto_formatter_module, monkeypatch)
+
+    auto_formatter_module._run_command(
+        ["ruff", "format"], str(tmp_path / "module.py"), HOOK_RUN_TIMEOUT_SECONDS
+    )
+
+    assert all_recorded_keyword_arguments["creationflags"] == EXPECTED_HIDDEN_WINDOW_FLAGS
