@@ -292,6 +292,21 @@ def accepts_markdown(document: Document) -> bool:
     return document.path.suffix.lower() in constants.ALL_MARKDOWN_SUFFIXES
 
 
+def _is_generated_document(document: Document) -> bool:
+    """Return whether a release tool writes the document from commit history.
+
+    A changelog is rebuilt from merged commit subjects, so its wording belongs
+    to the commits rather than to an author. Prose rules skip it.
+
+    Args:
+        document: Candidate document.
+
+    Returns:
+        True for a generated document name.
+    """
+    return document.path.name.lower() in constants.ALL_GENERATED_DOCUMENT_NAMES
+
+
 def accepts_source_or_markdown(document: Document) -> bool:
     """Return whether a state-description rule can inspect the document.
 
@@ -299,8 +314,10 @@ def accepts_source_or_markdown(document: Document) -> bool:
         document: Candidate document.
 
     Returns:
-        True for supported source or Markdown.
+        True for authored source or Markdown, and False for a generated document.
     """
+    if _is_generated_document(document):
+        return False
     return accepts_code(document) or accepts_markdown(document)
 
 
@@ -311,8 +328,10 @@ def accepts_stored_prompt(document: Document) -> bool:
         document: Candidate document.
 
     Returns:
-        True for Markdown in an instruction directory.
+        True for authored Markdown in an instruction directory.
     """
+    if _is_generated_document(document):
+        return False
     normalized_path = f"/{document.path.as_posix().lower()}"
     return accepts_markdown(document) and any(
         each_segment in normalized_path
