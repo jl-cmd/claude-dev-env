@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -12,6 +14,7 @@ from repository_checks.config.constants import (
     CHECK_ID_TRACKED_PERSONAL_DATA,
     FAILED_CHECK_EXIT_CODE,
     FINDINGS_EXIT_CODE,
+    SUCCESS_EXIT_CODE,
 )
 from repository_checks.hook_modules import load_hooks_module
 from repository_checks.tracked_secrets import collect_tracked_secret_findings
@@ -35,6 +38,8 @@ _OTHER_FIXTURE_EMAIL = "other-owner@company.io"
 _OTHER_FIXTURE_HOME_PATH = "C:/Users/realname/notes.txt"
 _FIXTURE_NOTES_RELATIVE_PATH = "src/notes.py"
 _OTHER_NOTES_RELATIVE_PATH = "src/other_notes.py"
+_FROZEN_RELATIVE_PATH = "evidence/manifest.json"
+_STALE_DIGEST = hashlib.sha256(b"different bytes").hexdigest()
 _PII_PREVENTION_CONSTANTS = load_hooks_module(
     "hooks_constants.pii_prevention_constants"
 )
@@ -149,6 +154,80 @@ def test_should_keep_owned_checker_modules_free_of_tracked_secret_findings() -> 
         if each_path.is_file()
     ]
     assert collect_tracked_secret_findings(_REPOSITORY_ROOT, all_relative_paths) == []
+
+
+def test_should_skip_every_category_in_a_frozen_file_whose_digest_matches(
+    tmp_path: Path,
+) -> None:
+    """One recorded digest silences the whole file, not one matched value."""
+    repository_root = tmp_path / "repo"
+    initialize_repository(repository_root)
+    _write_frozen_path_exemption_fixture(repository_root, _matching_digest)
+    commit_tracked_files(repository_root)
+    exit_code, stdout_text, _stderr_text = run_policy(repository_root)
+    assert exit_code == SUCCESS_EXIT_CODE
+    assert _pii_categories_for_path(stdout_text, _FROZEN_RELATIVE_PATH) == []
+
+
+def test_should_keep_reporting_a_frozen_file_whose_digest_is_stale(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    initialize_repository(repository_root)
+    _write_frozen_path_exemption_fixture(repository_root, _stale_digest)
+    commit_tracked_files(repository_root)
+    exit_code, stdout_text, _stderr_text = run_policy(repository_root)
+    assert exit_code == FINDINGS_EXIT_CODE
+    assert _pii_categories_for_path(stdout_text, _FROZEN_RELATIVE_PATH) == [
+        _PII_CATEGORY_HOME_PATH,
+        _PII_PREVENTION_CONSTANTS.CATEGORY_SECRET,
+    ]
+
+
+def test_should_exempt_a_frozen_file_named_by_a_windows_tracked_path(
+    tmp_path: Path,
+) -> None:
+    """Git on Windows can hand back backslashes, and the entry records slashes."""
+    repository_root = tmp_path / "repo"
+    repository_root.mkdir()
+    _write_frozen_path_exemption_fixture(repository_root, _matching_digest)
+    windows_tracked_path = _FROZEN_RELATIVE_PATH.replace("/", "\\")
+    assert (
+        collect_tracked_secret_findings(repository_root, [windows_tracked_path]) == []
+    )
+
+
+def _write_frozen_path_exemption_fixture(
+    repository_root: Path, choose_digest: Callable[[Path], str]
+) -> None:
+    frozen_path = repository_root / _FROZEN_RELATIVE_PATH
+    write_text(
+        frozen_path,
+        f"home = '{_OTHER_FIXTURE_HOME_PATH}'\ntoken = '{_SYNTHETIC_GITHUB_TOKEN}'\n",
+    )
+    write_text(
+        repository_root / "config" / "repository-policy.json",
+        json.dumps(
+            {
+                "version": 1,
+                "path_exemptions": [
+                    {
+                        "path": _FROZEN_RELATIVE_PATH,
+                        "sha256": choose_digest(frozen_path),
+                        "reason": "Frozen evidence file pinned by its consumers",
+                    }
+                ],
+            }
+        ),
+    )
+
+
+def _matching_digest(frozen_path: Path) -> str:
+    return hashlib.sha256(frozen_path.read_bytes()).hexdigest()
+
+
+def _stale_digest(_frozen_path: Path) -> str:
+    return _STALE_DIGEST
 
 
 def _write_exact_exemption_fixture(repository_root: Path) -> None:
