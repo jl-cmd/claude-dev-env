@@ -7,20 +7,27 @@ from hooks_constants.bash_post_call_dispatcher_constants import (
 from hooks_constants.bash_pre_tool_use_dispatcher_constants import BASH_TOOL_NAME
 
 
-def test_roster_runs_the_recorder_then_the_pr_done_reminder() -> None:
+def test_roster_runs_the_recorder_then_the_pr_reminder_then_the_msys_advisor() -> None:
     all_script_paths = [
         each_entry.script_relative_path for each_entry in ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES
     ]
     assert all_script_paths == [
         "observability/test_failure_recorder.py",
         "advisory/pr_done_reminder.py",
+        "advisory/msys_path_conversion_advisor.py",
     ]
 
 
 def test_pr_done_reminder_also_serves_the_powershell_tool() -> None:
-    reminder_entry = ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES[-1]
+    reminder_entry = ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES[1]
     assert reminder_entry.script_relative_path == "advisory/pr_done_reminder.py"
     assert "PowerShell" in reminder_entry.applicable_tool_names
+
+
+def test_msys_advisor_serves_the_bash_tool_only() -> None:
+    advisor_entry = ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES[-1]
+    assert advisor_entry.script_relative_path == "advisory/msys_path_conversion_advisor.py"
+    assert advisor_entry.applicable_tool_names == frozenset({"Bash"})
 
 
 def test_context_forwarding_keys_match_the_hook_output_contract() -> None:
