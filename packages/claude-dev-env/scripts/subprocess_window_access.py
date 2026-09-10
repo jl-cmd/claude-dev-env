@@ -26,7 +26,7 @@ _subprocess_window_hooks_directory = str(
 if _subprocess_window_hooks_directory not in sys.path:
     sys.path.append(_subprocess_window_hooks_directory)
 
-from hooks_constants.subprocess_window import (  # noqa: E402
+from hooks_constants.subprocess_window import (
     HiddenWindowStartupInfo,
     detached_hidden_window_creation_flags,
     hidden_window_creation_flags,
