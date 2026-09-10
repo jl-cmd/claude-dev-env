@@ -198,8 +198,26 @@ def test_main_should_stay_quiet_for_a_non_bash_tool(
     assert _run_main(monkeypatch, capsys, json.dumps(payload)) == ""
 
 
-def test_should_report_a_backslash_argument_as_carrying_a_mangling_mark() -> None:
+def test_should_return_an_argument_whose_only_mangling_mark_is_the_semicolon() -> None:
+    semicolon_only_response = (
+        "Error: Exit code 128\nfatal: invalid object name 'HEAD;.gitignore'."
+    )
+
+    mangled_argument = msys_path_conversion_advisor.mangled_revision_path_argument(
+        "git show HEAD:.gitignore", semicolon_only_response
+    )
+
+    assert mangled_argument == "HEAD;.gitignore"
+
+
+def test_should_stay_quiet_when_the_command_exports_only_the_path_conversion_switch() -> None:
+    path_conversion_only_command = (
+        "export MSYS_NO_PATHCONV=1 && git show origin/main:.claude/skills/x/test_run_evals.py"
+    )
+
     assert (
-        msys_path_conversion_advisor.argument_carries_msys_mangling_marks(_MANGLED_ARGUMENT)
-        is True
+        msys_path_conversion_advisor.mangled_revision_path_argument(
+            path_conversion_only_command, _MANGLED_FAILURE_RESPONSE
+        )
+        is None
     )

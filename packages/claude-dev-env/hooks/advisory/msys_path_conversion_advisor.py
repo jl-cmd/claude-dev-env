@@ -18,9 +18,16 @@ command text the agent wrote looks correct and the error names an argument the
 agent never typed. The note arrives at the moment the failure lands, which is
 the only moment the two names line up.
 
-Quiet branches: a non-Bash tool, a zero-exit call, a failure carrying neither
-marker, a quoted argument free of both mangling marks, and
-a command that already names either workaround variable each emit nothing.
+Six quiet branches emit nothing: a non-Bash tool, a zero-exit call, a failure
+carrying neither marker, a quoted argument whose closing quote never arrives, a
+quoted argument free of both mangling marks, and a command that already names
+either workaround variable.
+
+The verdict rests on the failure text alone and never parses the command, so
+two shapes get the note without deserving it: an argument the agent typed with
+a semicolon or a backslash of its own, and a failing call whose stdout quotes
+one of the two git messages. Both are rare, and the note costs a reader one
+paragraph, so the detector keeps its single read of the failure text.
 
 Hosted by ``blocking/bash_post_call_dispatcher.py``, which forwards the
 ``hookSpecificOutput.additionalContext`` this hook prints.
@@ -35,6 +42,9 @@ try:
     _hooks_root_directory = str(Path(__file__).resolve().parent.parent)
     if _hooks_root_directory not in sys.path:
         sys.path.insert(0, _hooks_root_directory)
+    from hooks_constants.bash_post_call_dispatcher_constants import (
+        EXIT_CODE_ERROR_PREFIX,
+    )
     from hooks_constants.bash_pre_tool_use_dispatcher_constants import (
         ALL_BASH_ONLY_TOOL_NAMES,
     )
@@ -53,7 +63,6 @@ try:
     from hooks_constants.post_tool_use_context import (
         write_post_tool_use_context_to_stdout,
     )
-    from hooks_constants.pr_done_reminder_constants import EXIT_CODE_ERROR_PREFIX
     from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
 except ImportError as import_error:
     raise ImportError(

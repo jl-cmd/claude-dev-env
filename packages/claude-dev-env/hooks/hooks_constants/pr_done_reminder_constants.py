@@ -19,7 +19,6 @@ __all__ = [
     "ALL_GH_PR_VIEW_ARGUMENTS",
     "GH_PR_VIEW_TIMEOUT_SECONDS",
     "NO_PULL_REQUEST_MARKER",
-    "EXIT_CODE_ERROR_PREFIX",
     "DONE_LABEL_NAME",
     "MERGEABLE_CLEAN_VALUE",
     "MERGEABLE_CONFLICTING_VALUE",
@@ -59,7 +58,6 @@ ALL_GH_PR_VIEW_ARGUMENTS: tuple[str, ...] = (
 )
 GH_PR_VIEW_TIMEOUT_SECONDS: int = 20
 NO_PULL_REQUEST_MARKER: str = "no pull requests found"
-EXIT_CODE_ERROR_PREFIX: str = "Error: Exit code "
 
 DONE_LABEL_NAME: str = "done"
 

@@ -16,9 +16,10 @@ from hooks_constants.bash_post_call_dispatcher_constants import (
 def write_post_tool_use_context_to_stdout(context_text: str) -> None:
     """Write one PostToolUse additionalContext payload to stdout.
 
-    The hosting dispatcher reads this payload back and forwards the text to
-    the agent, so every PostToolUse advisory shares this one emitter rather
-    than carrying its own copy of the payload shape.
+    A hosted hook writes its note here and the Bash PostToolUse dispatcher
+    reads it back, joins it with the other hooks' notes, and writes the joined
+    text here in turn. Both ends of that hop share this one payload shape
+    rather than each carrying a copy of it.
 
     Args:
         context_text: The advisory text the dispatcher forwards.
