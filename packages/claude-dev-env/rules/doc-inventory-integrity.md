@@ -11,13 +11,13 @@ paths:
 
 # Documentation Inventory Integrity
 
-A doc that inventories code is a contract: a reader trusts the listing to map the directory, trusts a shown command to run, and trusts a table row to name the file that reads the variable. Three hooks hold the three inventory shapes in step with the code.
+A doc that inventories code is a contract: a reader trusts the listing to map the directory, trusts a shown command to run, and trusts a table row to name the file that reads the variable. Three repository checks hold the three inventory shapes in step with the code. No write-time hook runs them. Run `python packages/claude-dev-env/scripts/repository_policy.py` before you commit, and CI runs the same command.
 
 ## 1. A per-directory `CLAUDE.md` names files that exist
 
 Every bare filename a per-directory `CLAUDE.md` names points at a file in the subtree that `CLAUDE.md` describes — both the filenames its table cells list and the scripts its fenced run commands invoke (`python script.py`). Add the row and the run command in the change that adds the file; drop both in the change that removes it.
 
-`claude_md_orphan_file_blocker.py` (PreToolUse on Write|Edit|MultiEdit of any `CLAUDE.md`) reads the content the tool would leave on disk. For an Edit or MultiEdit it reconstructs the post-edit file and notes which orphans the file already held, so a pre-existing orphan on an untouched line is excluded and only an orphan the edit introduces is reported; when the existing file cannot be read it scans the raw `new_string` fragments instead.
+`repository_checks/claude_md.py` scans every tracked `CLAUDE.md` in the committed tree and reports each orphan it holds, loading its detection logic from `claude_md_orphan_file_blocker.py`. It reads committed files rather than a pending write, so it reports a pre-existing orphan alongside a new one.
 
 It collects two kinds of reference:
 
@@ -32,7 +32,7 @@ The check stays quiet for a target that is not a `CLAUDE.md`, for a cell holding
 
 A package directory that documents its own files in a `README.md` Layout table, a `CLAUDE.md` "Key files" list, or a skill `SKILL.md` Layout table keeps that inventory in step with the directory. A new production file in such a directory gets its entry — a table row or a list bullet naming the file in backticks and saying what it does — in the same change.
 
-`package_inventory_stale_blocker.py` (PreToolUse on Write) blocks a new production file whose basename appears in no present inventory and names the fix. A skill `SKILL.md` Layout table that maps `scripts/` counts as the inventory for files in that subdirectory.
+`repository_checks/package_inventory.py` scans the committed tree and reports a production file whose basename appears in no present inventory, loading its detection logic from `package_inventory_stale_blocker.py`. It names the fix. A skill `SKILL.md` Layout table that maps `scripts/` counts as the inventory for files in that subdirectory.
 
 Two free-prose slices stay with judgment and belong in the same change:
 
@@ -45,4 +45,4 @@ This is the `category-o-docstring-vs-impl-drift` (O8) orphaned-doc-claim shape a
 
 Every row in an env-var summary table pairs an UPPER_SNAKE variable with a code-file path that reads it — written as `` | `GOOGLE_APPLICATION_CREDENTIALS` | `auth/google_auth.py` | … | ``. When a code change removes the last read of a variable from a file, the same change drops or corrects the row naming that file.
 
-`env_var_table_code_drift_blocker.py` (PreToolUse on Write|Edit|MultiEdit of `.md`) blocks a row whose named code file exists yet never references the variable, and names the fix. For an Edit, drift a file already held on an untouched row is excluded; a row whose code file resolves nowhere stays quiet, since the hook cannot prove the drift.
+`repository_checks/env_var_documentation.py` scans tracked `.md` files and reports a row whose named code file exists yet never references the variable, loading its detection logic from `env_var_table_code_drift_blocker.py`. It names the fix. A row whose code file resolves nowhere stays quiet, since the check cannot prove the drift.

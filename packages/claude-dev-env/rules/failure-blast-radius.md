@@ -64,9 +64,11 @@ The report then presents each candidate to the owner for a durable-fix decision,
 
 ## Enforcement
 
-`code_rules_blast_radius.py` (PreToolUse on Write and Edit, hosted by `code_rules_enforcer.py`) requires each raised type written directly inside a loop body to end in `RunFatal` or `ItemBlocked`. The lexical check covers raises written directly in loop bodies. Shared helpers carry multiple caller contexts, so their callers classify the boundary.
+`code_rules_blast_radius.py` runs inside `code_rules_enforcer.py`, which the staged policy lint applies to each changed file under its `code-rules` rule. No write-time hook runs it, so run `python packages/claude-dev-env/scripts/cde_lint.py --staged` before you commit. CI runs the same lint against the merge base.
 
-Findings use baseline content for each edit. A raise present on disk remains accepted during the edit; the gate evaluates newly written raises.
+The check requires each raised type written directly inside a loop body to end in `RunFatal` or `ItemBlocked`. The lexical check covers raises written directly in loop bodies. Shared helpers carry multiple caller contexts, so their callers classify the boundary.
+
+Findings compare each changed file against its baseline. A raise already present in the baseline stays accepted, so the check reports only newly written raises.
 
 ## Excerpt for repository-instruction sessions
 

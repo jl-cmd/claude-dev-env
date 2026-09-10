@@ -16,9 +16,9 @@ Every public function a production module defines is exercised by a test in the 
 
 When you add a public function to a module whose test suite already exercises that module — covering a sibling public function, or testing one of its private helpers — add a behavioral test that calls the new function and asserts on its return value or side effect — in the same change that adds the function. A suite that exercises only a private helper (such as a color-conversion helper) while leaving the module's public renderers untested is the exact gap this rule closes. This is the function-level half of the project rule "Every new production code path gets a paired behavioral test ... call the path and assert on what it does."
 
-## What the gate checks
+## What the check covers
 
-Two complementary checks in `code_rules_paired_test.py` (both dispatched from `code_rules_enforcer.py`) cover the two write orders.
+Two complementary checks in `code_rules_paired_test.py` reach changed files through `code_rules_enforcer.py`, which the staged policy lint runs under its `code-rules` rule. No write-time hook runs them, so run `python packages/claude-dev-env/scripts/cde_lint.py --staged` before you commit. CI runs the same lint against the merge base. The two checks cover the two write orders.
 
 `check_public_function_missing_paired_test` runs on a production Python write or edit and flags a public function when all of these hold:
 
@@ -31,10 +31,10 @@ Two complementary checks in `code_rules_paired_test.py` (both dispatched from `c
 
 A public function counts as covered when its name appears — imported, called, or named — in any `test_*.py` or `*_test.py` file in the suite directory, so a function exercised by a differently-named sibling test still counts. `main` and underscore-prefixed functions are never required to carry a test.
 
-## Relationship to the file-level TDD gate
+## Relationship to the file-level TDD order
 
-`tdd_enforcer.py` requires a fresh test file to exist before a production module is written; it judges coverage one file at a time. This check judges coverage one function at a time for a module that already carries such a test file. The two compose: the file-level gate ensures a test file exists, and this check ensures that file covers every public function the module exposes.
+`tdd_enforcer.py` once required a fresh test file to exist before a production module was written, judging coverage one file at a time. Nothing runs it now, and the staged policy lint carries no replacement, so the test-first order is yours to hold. This check judges coverage one function at a time for a module that already carries such a test file. Write the test file first, and the lint then reports any public function that file leaves uncovered.
 
-## Why this is a hook, not a lint pass
+## Why this check is mechanical
 
-A public function with no test reads as covered when the module's test file sits right beside it and exercises its siblings. The gap survives review because the suite looks complete. Catching it as the function is written keeps the module's public surface and its test suite in step.
+A public function with no test reads as covered when the module's test file sits right beside it and exercises its siblings. The gap survives review because the suite looks complete. Running the lint on every staged change keeps the module's public surface and its test suite in step.

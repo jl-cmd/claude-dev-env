@@ -16,9 +16,9 @@ which cannot be answered unattended, or belong to other hosts.
 
 The runner loads the key with paramiko and signs in the same process. The command-line clients check
 the key file's permissions first and refuse it, and Git Bash's `ssh` then falls back to a password
-prompt that hangs an unattended run. `nas_ssh_binary_enforcer.py` (PreToolUse on Bash) denies a bare
-ssh-family word aimed at the NAS, and denies the full `System32/OpenSSH` binary when
-`-o BatchMode=yes` is missing.
+prompt that hangs an unattended run. No hook denies an ssh-family word aimed at the NAS, so keep to
+the runner yourself. When the `System32/OpenSSH` binary is unavoidable, pass `-o BatchMode=yes` so it
+fails fast on a refused key.
 
 Host, ssh port and ssh user are constants inside the runner and are also under the `nas` key in
 `~/.claude/local-identity.json`. Keep all three out of anything committed or posted.
