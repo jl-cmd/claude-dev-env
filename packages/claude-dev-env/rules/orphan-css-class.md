@@ -13,16 +13,16 @@ Every class name a markup string references has a matching `.<class>` selector i
 
 When you add a `class="..."` attribute, add its `.<class>` selector to the `<style>` block in the same change. When you drop a selector, drop the class attribute it styled.
 
-## What the gate checks
+## What the check covers
 
-The `check_orphan_css_classes` check in `code_rules_orphan_css_class.py` (wired into `code_rules_enforcer.py`) runs on every production Python write. It:
+The `check_orphan_css_classes` check in `code_rules_orphan_css_class.py` reaches production Python through the staged policy lint, whose `code-rules` rule loads `code_rules_enforcer.py` and applies it to each changed file. Run `python packages/claude-dev-env/scripts/cde_lint.py --staged` before you commit. CI runs the same lint against the merge base. It:
 
 1. Collects each class name referenced in a `class="..."` attribute across the file's string literals.
 2. Collects each class selector defined in a `<style>` block — both in the file under edit and in every Python module beside it (its own directory and immediate child directories), since a markup module commonly imports its style constant from a companion package directory.
 3. Flags each referenced class with no matching selector in that whole set.
 
-The check stays quiet for a file that emits no `class="..."` markup, and for a file whose markup has no `<style>` source nearby (its stylesheet lives outside the scan, so the gate cannot judge it). Test files are exempt, since a fixture may carry intentional orphan markup.
+The check stays quiet for a file that emits no `class="..."` markup, and for a file whose markup has no `<style>` source nearby (its stylesheet lives outside the scan, so the check cannot judge it). Test files are exempt, since a fixture may carry intentional orphan markup.
 
-## Why this is a hook, not a lint pass
+## Why this check is mechanical
 
-A class attribute with no matching selector reads as styled but renders unstyled. Native elements such as `<details>` stay functional without CSS, so the gap survives review as a cosmetic defect rather than a crash — exactly the class of issue that slips past a manual pass and lands as a deferred code-standard finding. Catching it at Write time keeps the markup and the stylesheet in step as each line is written.
+A class attribute with no matching selector reads as styled but renders unstyled. Native elements such as `<details>` stay functional without CSS, so the gap survives review as a cosmetic defect rather than a crash. That is the class of issue a manual pass slips past, and it lands later as a deferred code-standard finding. Running the lint on every staged change keeps the markup and the stylesheet in step.
