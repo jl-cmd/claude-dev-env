@@ -1,8 +1,9 @@
 """Tests for what the Bash and PowerShell PreToolUse chain costs to run.
 
-Each roster entry is one hosted-hook interpreter start per Bash tool call, so
-the roster's exact content is the chain's cost. One allow-and-rewrite hook is
-the whole roster; a blocking hook added here fails this test.
+A Bash tool call starts one interpreter, the dispatcher's own. Each roster
+entry then runs in that process through runpy, so the roster's exact content is
+the chain's cost after that single start. One allow-and-rewrite hook is the
+whole roster; a blocking hook added here fails this test.
 """
 
 import sys

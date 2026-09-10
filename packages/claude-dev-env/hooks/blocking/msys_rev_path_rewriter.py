@@ -37,6 +37,7 @@ try:
     )
     from hooks_constants.msys_rev_path_rewriter_constants import (
         ALL_CONVERTED_PATH_START_CHARACTERS,
+        ALL_REVISION_FORBIDDEN_CHARACTERS,
         ALL_UNCONVERTED_PATH_START_PREFIXES,
         EXCLUSION_EXPORT_TEMPLATE,
         EXCLUSION_PREFIX_JOIN_SEPARATOR,
@@ -56,7 +57,7 @@ try:
     )
 except ImportError as import_error:
     raise ImportError(
-        "msys_rev_path_rewriter: cannot import its dependencies; "
+        "The MSYS revision-path rewriter cannot import its dependencies; "
         "ensure the hooks directory is importable."
     ) from import_error
 
@@ -77,6 +78,27 @@ def _all_git_segment_tokens(command: str) -> list[list[str]]:
     return all_git_segments
 
 
+def _is_revision_shaped(revision_text: str) -> bool:
+    """Return True when the text can name a git revision.
+
+    ::
+
+        origin/main                 -> True
+        HEAD                        -> False, no slash
+        don't touch a/b             -> False, a quoted message, not a revision
+
+    Args:
+        revision_text: The part of a token before its first colon.
+    """
+    if not revision_text or REVISION_SLASH_CHARACTER not in revision_text:
+        return False
+    if any(each_character.isspace() for each_character in revision_text):
+        return False
+    return not any(
+        each_character in revision_text for each_character in ALL_REVISION_FORBIDDEN_CHARACTERS
+    )
+
+
 def _converted_revision_prefix(token: str) -> str | None:
     """Return the ``<rev>:`` prefix MSYS would convert in this token, or None.
 
@@ -86,13 +108,28 @@ def _converted_revision_prefix(token: str) -> str | None:
     if REVISION_PATH_SEPARATOR not in token:
         return None
     revision_text, path_text = token.split(REVISION_PATH_SEPARATOR, REVISION_PATH_SPLIT_COUNT)
-    if not revision_text or REVISION_SLASH_CHARACTER not in revision_text:
+    if not _is_revision_shaped(revision_text):
         return None
     if not path_text.startswith(ALL_CONVERTED_PATH_START_CHARACTERS):
         return None
     if path_text.startswith(ALL_UNCONVERTED_PATH_START_PREFIXES):
         return None
     return revision_text + REVISION_PATH_SEPARATOR
+
+
+def _extend_with_new_prefixes(
+    all_ordered_prefixes: list[str], all_segment_tokens: list[str]
+) -> None:
+    """Append each convertible prefix this segment adds, skipping repeats.
+
+    Args:
+        all_ordered_prefixes: The prefixes collected so far, appended in place.
+        all_segment_tokens: One git segment's shell tokens.
+    """
+    for each_token in all_segment_tokens:
+        revision_prefix = _converted_revision_prefix(each_token)
+        if revision_prefix is not None and revision_prefix not in all_ordered_prefixes:
+            all_ordered_prefixes.append(revision_prefix)
 
 
 def all_exclusion_prefixes(command: str) -> tuple[str, ...]:
@@ -107,10 +144,7 @@ def all_exclusion_prefixes(command: str) -> tuple[str, ...]:
     """
     all_ordered_prefixes: list[str] = []
     for each_segment in _all_git_segment_tokens(command):
-        for each_token in each_segment:
-            revision_prefix = _converted_revision_prefix(each_token)
-            if revision_prefix is not None and revision_prefix not in all_ordered_prefixes:
-                all_ordered_prefixes.append(revision_prefix)
+        _extend_with_new_prefixes(all_ordered_prefixes, each_segment)
     return tuple(all_ordered_prefixes)
 
 
