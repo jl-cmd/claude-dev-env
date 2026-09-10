@@ -31,6 +31,7 @@ The checks live in `python_style_checks.py`. Shared source-line splitting, funct
 | `ruff_integration.py` | Ruff lint integration |
 | `run_all_validators.py` | Pre-push validator orchestration and report |
 | `security_checks.py` | Hardcoded-secret, SQL injection, and XSS checks |
+| `subprocess_window_access.py` | Deployed-path shim re-exporting the hidden-window helpers |
 | `system_temporary_roots.py` | System temp-root membership for staged copies |
 | `todo_checks.py` | TODO/FIXME tracking with issue-reference requirement |
 | `type_safety_checks.py` | Missing type hints and Any usage checks |

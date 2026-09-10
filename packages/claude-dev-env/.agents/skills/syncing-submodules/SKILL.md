@@ -89,6 +89,7 @@ If `/pr-title-description` is not installed, report `pull_request_url` and finis
 | `reference/run-tasks.md` | Task seeds for each repository-changing run |
 | `scripts/sync_parent_pointer.py` | Execute the parent pointer sync and return one JSON result |
 | `scripts/submodule_sync.py` | Own the Git operation and typed sync report |
+| `scripts/subprocess_window_access.py` | Re-export the hidden-window helpers from the deployed hooks directory |
 | `scripts/test_sync_parent_pointer.py` | Prove command parsing, JSON output, and hook deletion |
 | `scripts/test_submodule_sync.py` | Prove exact commits, preserved staging, no-op states, and failures |
 | `scripts/submodule_sync_constants/__init__.py` | Mark the constants package |
