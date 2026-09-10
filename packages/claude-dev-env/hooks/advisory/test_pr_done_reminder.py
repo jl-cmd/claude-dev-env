@@ -247,3 +247,4 @@ def test_main_should_stay_quiet_on_any_other_gh_failure(
     gh_down = _fake_gh(None, stderr="error connecting to api.github.com")
 
     assert _run_main(monkeypatch, capsys, _payload("git push"), gh_down) == ""
+

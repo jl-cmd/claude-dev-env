@@ -8,7 +8,13 @@ from types import ModuleType
 
 from shared_tree_paths import resolve_shared_scripts_directory
 
-from . import adapter_configuration, adapter_detectors, adapter_pairing, adapter_support
+from . import (
+    adapter_configuration,
+    adapter_detectors,
+    adapter_pairing,
+    adapter_retired_hook_prose,
+    adapter_support,
+)
 from .config import constants
 from .model import Diagnostic, Document, DocumentSet
 
@@ -286,6 +292,21 @@ def accepts_markdown(document: Document) -> bool:
     return document.path.suffix.lower() in constants.ALL_MARKDOWN_SUFFIXES
 
 
+def _is_generated_document(document: Document) -> bool:
+    """Return whether a release tool writes the document from commit history.
+
+    A changelog is rebuilt from merged commit subjects, so its wording belongs
+    to the commits rather than to an author. Prose rules skip it.
+
+    Args:
+        document: Candidate document.
+
+    Returns:
+        True for a generated document name.
+    """
+    return document.path.name.lower() in constants.ALL_GENERATED_DOCUMENT_NAMES
+
+
 def accepts_source_or_markdown(document: Document) -> bool:
     """Return whether a state-description rule can inspect the document.
 
@@ -293,8 +314,10 @@ def accepts_source_or_markdown(document: Document) -> bool:
         document: Candidate document.
 
     Returns:
-        True for supported source or Markdown.
+        True for authored source or Markdown, and False for a generated document.
     """
+    if _is_generated_document(document):
+        return False
     return accepts_code(document) or accepts_markdown(document)
 
 
@@ -305,8 +328,10 @@ def accepts_stored_prompt(document: Document) -> bool:
         document: Candidate document.
 
     Returns:
-        True for Markdown in an instruction directory.
+        True for authored Markdown in an instruction directory.
     """
+    if _is_generated_document(document):
+        return False
     normalized_path = f"/{document.path.as_posix().lower()}"
     return accepts_markdown(document) and any(
         each_segment in normalized_path
@@ -376,4 +401,33 @@ def accepts_plans(document: Document) -> bool:
                 plans_constants.DOCS_PLANS_PATH_PREFIX,
             )
         )
+    )
+
+
+def accepts_rules_markdown(document: Document) -> bool:
+    """Return whether the document is Markdown in a rules directory.
+
+    Args:
+        document: Candidate document.
+
+    Returns:
+        True for a Markdown file directly under a ``rules`` directory.
+    """
+    return adapter_retired_hook_prose.accepts_rules_markdown(document)
+
+
+def retired_hook_prose_diagnostics(
+    document: Document, repository_root: Path
+) -> tuple[Diagnostic, ...]:
+    """Report rules prose that credits an unregistered hook with a live action.
+
+    Args:
+        document: Current rules Markdown text and path.
+        repository_root: Request repository root for package resolution.
+
+    Returns:
+        Retired-hook prose diagnostics.
+    """
+    return adapter_retired_hook_prose.retired_hook_prose_diagnostics(
+        document, repository_root
     )

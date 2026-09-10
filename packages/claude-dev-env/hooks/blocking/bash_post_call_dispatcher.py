@@ -18,7 +18,8 @@ decision -- it is an observer, not a gate -- so this dispatcher runs the whole
 roster unconditionally and never blocks. The one thing it forwards is context:
 a hosted hook may print a ``hookSpecificOutput.additionalContext`` string (the
 PR done reminder does), and the dispatcher joins every such string into one
-PostToolUse payload. A hook that prints nothing adds nothing.
+PostToolUse payload through the shared emitter every PostToolUse hook here
+writes with. A hook that prints nothing adds nothing.
 
 A single hosted hook crash fails open: ``run_hook_capturing_output`` isolates
 it, so it contributes nothing and does not stop the remaining hosted hooks.
@@ -30,7 +31,6 @@ imports load once into this process rather than once per hook.
 from __future__ import annotations
 
 import json
-import sys
 
 import _path_setup  # noqa: F401
 
@@ -39,8 +39,8 @@ from hooks_constants.bash_post_call_dispatcher_constants import (
     ADDITIONAL_CONTEXT_KEY,
     ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES,
     HOOK_SPECIFIC_OUTPUT_KEY,
-    POST_TOOL_USE_HOOK_EVENT_NAME,
 )
+from hooks_constants.post_tool_use_context import write_post_tool_use_context_to_stdout
 from hooks_constants.bash_pre_tool_use_dispatcher_constants import BashHostedHookEntry
 from hooks_constants.hosted_hook_runner import (
     run_hook_capturing_output,
@@ -98,14 +98,9 @@ def dispatch(payload_text: str, tool_name: str) -> None:
             all_additional_context.append(additional_context)
     if not all_additional_context:
         return
-    payload = {
-        HOOK_SPECIFIC_OUTPUT_KEY: {
-            "hookEventName": POST_TOOL_USE_HOOK_EVENT_NAME,
-            ADDITIONAL_CONTEXT_KEY: ADDITIONAL_CONTEXT_JOIN_SEPARATOR.join(all_additional_context),
-        }
-    }
-    sys.stdout.write(json.dumps(payload))
-    sys.stdout.flush()
+    write_post_tool_use_context_to_stdout(
+        ADDITIONAL_CONTEXT_JOIN_SEPARATOR.join(all_additional_context)
+    )
 
 
 def main() -> None:

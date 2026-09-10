@@ -49,13 +49,18 @@ try:
     from hooks_constants.bash_pre_tool_use_dispatcher_constants import (
         ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
     )
+    from hooks_constants.bash_post_call_dispatcher_constants import (
+        EXIT_CODE_ERROR_PREFIX,
+    )
+    from hooks_constants.post_tool_use_context import (
+        write_post_tool_use_context_to_stdout,
+    )
     from hooks_constants.pr_done_reminder_constants import (
         ADD_LABEL_COMMAND_TEMPLATE,
         ALL_FAILING_CHECK_CONCLUSIONS,
         ALL_PASSING_CHECK_CONCLUSIONS,
         CHECK_COMPLETED_STATUS,
         DONE_LABEL_NAME,
-        EXIT_CODE_ERROR_PREFIX,
         GH_PR_CREATE_ACTION,
         GH_PR_SUBCOMMAND,
         ALL_GH_PR_VIEW_ARGUMENTS,
@@ -311,17 +316,6 @@ def _probe_pull_request(cwd: str) -> str | None:
     return build_reminder_context(all_pr_fields)
 
 
-def _emit_context(context_text: str) -> None:
-    payload = {
-        "hookSpecificOutput": {
-            "hookEventName": "PostToolUse",
-            "additionalContext": context_text,
-        }
-    }
-    sys.stdout.write(json.dumps(payload))
-    sys.stdout.flush()
-
-
 def main() -> None:
     """Add the PR done checklist to context after a successful push or PR creation.
 
@@ -342,7 +336,7 @@ def main() -> None:
         return
     context_text = _probe_pull_request(str(hook_payload.get("cwd") or ""))
     if context_text is not None:
-        _emit_context(context_text)
+        write_post_tool_use_context_to_stdout(context_text)
 
 
 if __name__ == "__main__":
