@@ -1,5 +1,67 @@
 # Changelog
 
+## [7.5.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.4.1...claude-dev-env-v7.5.0) (2026-09-10)
+
+
+### Features
+
+* **hooks:** advise the MSYS export fix when Git Bash mangles a rev-path argument ([1486a86](https://github.com/jl-cmd/claude-dev-env/commit/1486a8647c590fdbeb51dcf7daf52292c9442ab7))
+* **hooks:** keep Git Bash from converting a &lt;rev&gt;:&lt;path&gt; git argument ([5e232af](https://github.com/jl-cmd/claude-dev-env/commit/5e232afe0ddf718bd208e802b66fe99405fd9710))
+* **hooks:** stop MSYS converting a &lt;rev&gt;:&lt;path&gt; git argument ([8a23051](https://github.com/jl-cmd/claude-dev-env/commit/8a23051a8eaa6b5568b1e32ad078fdea00b8ea9f))
+* **policy-lint:** catch rules prose that credits a hook running nowhere ([3da52c1](https://github.com/jl-cmd/claude-dev-env/commit/3da52c1b7e200ea8e1c6ba81e13a84deb5792753))
+* **policy-lint:** report rules prose that names a hook nothing runs ([7af3dcd](https://github.com/jl-cmd/claude-dev-env/commit/7af3dcd3fbec9151c8cfc1192aa5114ace72d257))
+
+
+### Bug Fixes
+
+* **advisory:** reword the import failure message ([c0c19ee](https://github.com/jl-cmd/claude-dev-env/commit/c0c19ee08cfbe598e37d75c264587f5eb9cf81be))
+* **durable-post-lint:** require only the headings both rule sets name ([00aeda4](https://github.com/jl-cmd/claude-dev-env/commit/00aeda4931031057ef50b9581199bd5c82681ce4)), closes [#1340](https://github.com/jl-cmd/claude-dev-env/issues/1340)
+* **hooks:** keep a quoted git message out of the exclusion export ([6f10dde](https://github.com/jl-cmd/claude-dev-env/commit/6f10dde4990bed275b65f33e220250466b6e874e))
+* **hooks:** widen the MSYS quiet branch to both workaround variables ([75cff7a](https://github.com/jl-cmd/claude-dev-env/commit/75cff7a6b8ff9c940a115f54d7b8cc67c1a55ec3))
+* **msys-advisor:** walk both git mangled-argument markers ([50d4523](https://github.com/jl-cmd/claude-dev-env/commit/50d45234869fb2fbc04438c8a5cdf71b7cc9695c))
+* **policy-lint:** exempt the Bash PreToolUse dispatcher from the boundary check ([f6dd63b](https://github.com/jl-cmd/claude-dev-env/commit/f6dd63b1daef064c4e5f5e0cb73ddc1b09ef6f66))
+* **policy-lint:** let a binary file block its own item, not the run ([0c6c2a4](https://github.com/jl-cmd/claude-dev-env/commit/0c6c2a4c71098260b35535104d7b2d55bf611014))
+
+
+### Documentation
+
+* **rules:** add stacked PR and verification lessons from a stack rebuild ([55c610e](https://github.com/jl-cmd/claude-dev-env/commit/55c610e57da23d6c030c75f2b965e0d819e6ee35))
+* **rules:** add stacked PR and verification lessons from a stack rebuild ([14fffde](https://github.com/jl-cmd/claude-dev-env/commit/14fffde238a648f2f31c63d2184fec0b54e8e332))
+* **rules:** correct hook claims for gates that no longer run ([7ef75fa](https://github.com/jl-cmd/claude-dev-env/commit/7ef75fabb6bd7164fe94788c794ac621d7c5bf2a))
+* **rules:** correct the Bash hook count and the trigger wording ([184b641](https://github.com/jl-cmd/claude-dev-env/commit/184b6413d64f9b58667724d8f1dac6912cd796e5))
+* **rules:** drop a banned word from the git-workflow port ([f7eceae](https://github.com/jl-cmd/claude-dev-env/commit/f7eceaed895426c1cc747f60d83209d48aa0b058))
+* **rules:** record the PreToolUse rewriter beside the advisory ([ec6b164](https://github.com/jl-cmd/claude-dev-env/commit/ec6b164dd5c749035b701d345079e9af6d8c3d15))
+* **rules:** replace retired hook claims with what runs now ([02c31fa](https://github.com/jl-cmd/claude-dev-env/commit/02c31faf5adc4960ccb1cef2f17f3b95d458c61e))
+* **rules:** replace the retired Bash gate with the MSYS advisory ([f14471d](https://github.com/jl-cmd/claude-dev-env/commit/f14471dbd13f7a533967aad97fc00e6870cc7a0a))
+
+
+### Maintenance
+
+* **hooks:** delete four constants files no hook loads ([9010a97](https://github.com/jl-cmd/claude-dev-env/commit/9010a979c8449ce757a4417408ed5aed681efa7e))
+* **hooks:** remove constants modules for retired hooks ([b4f77e5](https://github.com/jl-cmd/claude-dev-env/commit/b4f77e58122286a236d352cda69a741075ef8316))
+
+
+### Refactoring
+
+* **advisory:** extract the MSYS mangling-mark predicate ([2699b8b](https://github.com/jl-cmd/claude-dev-env/commit/2699b8b37e4f28c9cf7b7525432d55a808575e7e))
+* **hooks-constants:** drop the MSYS export building block from __all__ ([054685e](https://github.com/jl-cmd/claude-dev-env/commit/054685e602296e9a0d4631818a733744ecc2087f))
+* **hooks:** give the PostToolUse output contract one home ([827236f](https://github.com/jl-cmd/claude-dev-env/commit/827236fbb62ac3b002d24090ce87750c92754609))
+* **hooks:** share one PostToolUse context emitter ([e37002a](https://github.com/jl-cmd/claude-dev-env/commit/e37002afda159311d900a6dd00a03eaad01a38f3))
+* **hooks:** tighten the MSYS advisory constants surface ([e6952d8](https://github.com/jl-cmd/claude-dev-env/commit/e6952d8d59f1d440d427ebe4ca7584b2c9ae9c2e))
+
+
+### Tests
+
+* **advisory:** pin the MSYS mangling-mark predicate ([a31b387](https://github.com/jl-cmd/claude-dev-env/commit/a31b387e8e46dca61c9c98ad38a92f5efdcac535))
+* **durable-post-lint:** drop the heading cases the checker cannot read ([44ccc1f](https://github.com/jl-cmd/claude-dev-env/commit/44ccc1f6259fa1b980107e0e5842a95866e5b49b))
+* **durable-post-lint:** pin the PR headings both rule sets name ([5791e06](https://github.com/jl-cmd/claude-dev-env/commit/5791e06907e5bd98016112dba297d09bc1c3baaa)), closes [#1340](https://github.com/jl-cmd/claude-dev-env/issues/1340)
+* **hooks:** carry the roster addition into the dispatcher tests ([e7a066e](https://github.com/jl-cmd/claude-dev-env/commit/e7a066e5daba67edd4ad40d5b45dfc72beadde56))
+* **hooks:** pin a quoted git message out of the exclusion prefixes ([189efb6](https://github.com/jl-cmd/claude-dev-env/commit/189efb696f4005d652259330112b6ffe2188b441))
+* **hooks:** pin the MSYS &lt;rev&gt;:&lt;path&gt; PreToolUse rewriter ([084d798](https://github.com/jl-cmd/claude-dev-env/commit/084d7985a7e29fb69310c4b3653d4196800981b8))
+* **hooks:** pin the MSYS path-conversion advisory contract ([3646312](https://github.com/jl-cmd/claude-dev-env/commit/36463127e17224b496ce088e4ca1c656b552d1cb))
+* **hooks:** pin the quiet branch for the argument-exclusion export ([aa72bd7](https://github.com/jl-cmd/claude-dev-env/commit/aa72bd7506d60f979158393b5c15f996f089b861))
+* **msys-advisor:** pin the invalid-object-name mangling fingerprint ([109e81a](https://github.com/jl-cmd/claude-dev-env/commit/109e81a750b1cf085f917cf4a596d4373d9c2b0c))
+
 ## [7.4.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.4.0...claude-dev-env-v7.4.1) (2026-09-09)
 
 
