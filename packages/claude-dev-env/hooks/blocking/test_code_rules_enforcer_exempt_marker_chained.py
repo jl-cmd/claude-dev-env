@@ -156,6 +156,16 @@ def test_should_exempt_fixme_with_trailing_prose() -> None:
     assert _is_exempt_python_comment(token) is True
 
 
+def test_should_exempt_stealth_keep_with_trailing_reason() -> None:
+    token = _build_comment_token("# STEALTH: Keep bypass reviewed in incident 4021")
+    assert _is_exempt_python_comment(token) is True
+
+
+def test_should_flag_stealth_marker_missing_required_space_after_colon() -> None:
+    token = _build_comment_token("# STEALTH:Keep bypass reviewed in incident 4021")
+    assert _is_exempt_python_comment(token) is False
+
+
 def test_should_exempt_shebang_at_line_one_column_zero() -> None:
     token = tokenize.TokenInfo(
         type=tokenize.COMMENT,
