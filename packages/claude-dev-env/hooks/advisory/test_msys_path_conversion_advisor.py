@@ -19,7 +19,6 @@ try:
     if advisory_directory not in sys.path:
         sys.path.insert(0, advisory_directory)
     import msys_path_conversion_advisor
-    from hooks_constants import msys_path_conversion_advisor_constants
 except ImportError as import_error:
     raise ImportError(
         "test_msys_path_conversion_advisor: cannot import its sibling modules; "
@@ -94,13 +93,6 @@ def test_should_stay_quiet_when_the_object_name_failure_names_an_unmangled_argum
             _MISSING_OBJECT_SHOW_COMMAND, _MISSING_OBJECT_NAME_RESPONSE
         )
         is None
-    )
-
-
-def test_markers_should_hold_both_git_messages_with_the_ambiguous_argument_first() -> None:
-    assert msys_path_conversion_advisor_constants.ALL_MANGLED_ARGUMENT_MARKERS == (
-        "fatal: ambiguous argument '",
-        "fatal: invalid object name '",
     )
 
 

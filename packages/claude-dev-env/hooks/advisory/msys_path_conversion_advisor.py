@@ -43,11 +43,10 @@ try:
         ADVISORY_LINE_SEPARATOR,
         ALL_MANGLED_ARGUMENT_MARKERS,
         ALL_MSYS_MANGLING_CHARACTERS,
-        AMBIGUOUS_ARGUMENT_CLOSING_QUOTE,
-        FIX_LINE_TEMPLATE,
+        FIX_LINE,
+        MANGLED_ARGUMENT_CLOSING_QUOTE,
         MANGLED_ARGUMENT_LINE_TEMPLATE,
         MANGLING_EXPLANATION_LINE,
-        MSYS_EXPORT_FIX_LINE,
         MSYS_PATH_CONVERSION_VARIABLE_NAME,
         SAME_COMMAND_LINE,
     )
@@ -121,7 +120,7 @@ def mangled_revision_path_argument(command_text: str, tool_response: object) -> 
     text_after_marker = text_after_first_mangled_argument_marker(tool_response)
     if text_after_marker is None:
         return None
-    argument_text, closing_quote, _ = text_after_marker.partition(AMBIGUOUS_ARGUMENT_CLOSING_QUOTE)
+    argument_text, closing_quote, _ = text_after_marker.partition(MANGLED_ARGUMENT_CLOSING_QUOTE)
     if not closing_quote:
         return None
     if not argument_carries_msys_mangling_marks(argument_text):
@@ -144,7 +143,7 @@ def build_advisory_context(mangled_argument: str) -> str:
         ADVISORY_HEADER,
         MANGLED_ARGUMENT_LINE_TEMPLATE.format(argument=mangled_argument),
         MANGLING_EXPLANATION_LINE,
-        FIX_LINE_TEMPLATE.format(export_line=MSYS_EXPORT_FIX_LINE),
+        FIX_LINE,
         SAME_COMMAND_LINE,
     ]
     return ADVISORY_LINE_SEPARATOR.join(all_lines)
