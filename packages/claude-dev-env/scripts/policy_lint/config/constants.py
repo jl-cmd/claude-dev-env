@@ -84,6 +84,8 @@ TERMINOLOGY_MESSAGE_GROUP = "message"
 
 PR_LOOP_DIRECTORY_NAME = "pr-loop"
 SHARED_ROOT_PARENT_INDEX = 2
+POSIX_PATH_SEPARATOR = "/"
+VIOLATION_SCOPING_MODULE_NAME = "code_rules_gate_parts.violation_scoping"
 
 RETIRED_HOOK_PROSE_RULE_ID = "retired-hook-prose"
 RULES_DIRECTORY_NAME = "rules"

@@ -33,9 +33,13 @@ def _hooks_module(module_name: str) -> ModuleType:
 
 
 def _pr_loop_script_module(module_name: str) -> ModuleType:
+    marker_relative_path = (
+        module_name.replace(".", constants.POSIX_PATH_SEPARATOR)
+        + constants.PYTHON_SUFFIX
+    )
     scripts_directory = str(resolve_shared_scripts_directory(
         __file__, os.environ, constants.PR_LOOP_DIRECTORY_NAME,
-        f"{module_name}{constants.PYTHON_SUFFIX}", constants.SHARED_ROOT_PARENT_INDEX
+        marker_relative_path, constants.SHARED_ROOT_PARENT_INDEX
     ))
     if scripts_directory not in sys.path:
         sys.path.insert(0, scripts_directory)
@@ -72,7 +76,7 @@ def code_rule_diagnostics(
         Diagnostics from the code-rule engine.
     """
     return adapter_detectors.code_rule_diagnostics(
-        document, repository_root, _hooks_module
+        document, repository_root, _hooks_module, _pr_loop_script_module
     )
 
 
@@ -274,6 +278,25 @@ def hook_format_diagnostics(
 
 def accepts_python(document: Document) -> bool:
     return document.path.suffix.lower() == constants.PYTHON_SUFFIX
+
+
+def accepts_production_python(document: Document) -> bool:
+    """Return whether the document is Python outside the test tree.
+
+    The hook lane exempts a test module so a test can stage an undercounting
+    fixture freely. This gate reuses the hook lane's own ``is_test_file``
+    predicate, so the two lanes cannot drift on what counts as a test file.
+
+    Args:
+        document: Candidate document.
+
+    Returns:
+        True for a Python document whose path is not a test path.
+    """
+    if not accepts_python(document):
+        return False
+    shared_module = _hooks_module("blocking.code_rules_shared")
+    return not shared_module.is_test_file(f"/{document.path.as_posix()}")
 
 
 def accepts_code(document: Document) -> bool:
