@@ -8,7 +8,13 @@ from types import ModuleType
 
 from shared_tree_paths import resolve_shared_scripts_directory
 
-from . import adapter_configuration, adapter_detectors, adapter_pairing, adapter_support
+from . import (
+    adapter_configuration,
+    adapter_detectors,
+    adapter_pairing,
+    adapter_retired_hook_prose,
+    adapter_support,
+)
 from .config import constants
 from .model import Diagnostic, Document, DocumentSet
 
@@ -376,4 +382,33 @@ def accepts_plans(document: Document) -> bool:
                 plans_constants.DOCS_PLANS_PATH_PREFIX,
             )
         )
+    )
+
+
+def accepts_rules_markdown(document: Document) -> bool:
+    """Return whether the document is Markdown in a rules directory.
+
+    Args:
+        document: Candidate document.
+
+    Returns:
+        True for a Markdown file directly under a ``rules`` directory.
+    """
+    return adapter_retired_hook_prose.accepts_rules_markdown(document)
+
+
+def retired_hook_prose_diagnostics(
+    document: Document, repository_root: Path
+) -> tuple[Diagnostic, ...]:
+    """Report rules prose that credits an unregistered hook with a live action.
+
+    Args:
+        document: Current rules Markdown text and path.
+        repository_root: Request repository root for package resolution.
+
+    Returns:
+        Retired-hook prose diagnostics.
+    """
+    return adapter_retired_hook_prose.retired_hook_prose_diagnostics(
+        document, repository_root
     )
