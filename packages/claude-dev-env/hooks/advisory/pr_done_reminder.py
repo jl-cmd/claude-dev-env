@@ -43,6 +43,9 @@ try:
     from hooks_constants.bash_pre_tool_use_dispatcher_constants import (
         ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
     )
+    from hooks_constants.bash_post_call_dispatcher_constants import (
+        EXIT_CODE_ERROR_PREFIX,
+    )
     from hooks_constants.post_tool_use_context import (
         write_post_tool_use_context_to_stdout,
     )
@@ -52,7 +55,6 @@ try:
         ALL_PASSING_CHECK_CONCLUSIONS,
         CHECK_COMPLETED_STATUS,
         DONE_LABEL_NAME,
-        EXIT_CODE_ERROR_PREFIX,
         GH_PR_CREATE_ACTION,
         GH_PR_SUBCOMMAND,
         ALL_GH_PR_VIEW_ARGUMENTS,
