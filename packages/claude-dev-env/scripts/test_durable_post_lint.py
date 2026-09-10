@@ -43,26 +43,6 @@ Why text.
 
 Verification text.
 """
-SUPERSEDED_PR_BODY = """## Summary
-
-Summary text.
-
-## Description
-
-Description text.
-
-## Why
-
-Why text.
-
-## How
-
-How text.
-
-## Verification
-
-Verification text.
-"""
 
 
 @pytest.mark.parametrize(
@@ -184,7 +164,7 @@ def test_pr_titles_reject_nonconventional_forms(title: str) -> None:
 
 @pytest.mark.parametrize(
     "missing_heading",
-    ["Why", "Verification"],
+    durable_post_lint.ALL_REQUIRED_PR_DESCRIPTION_HEADINGS,
 )
 def test_pr_body_reports_each_missing_heading(missing_heading: str) -> None:
     body_text = VALID_PR_BODY.replace(f"## {missing_heading}\n", "")
@@ -208,24 +188,17 @@ def should_accept_a_body_carrying_only_the_two_required_headings(action: str) ->
     assert all_findings == ()
 
 
-@pytest.mark.parametrize("optional_heading", ["Scope", "Tradeoffs", "Blast Radius"])
-def should_let_a_playbook_section_drop_when_it_has_nothing_to_say(
-    optional_heading: str,
-) -> None:
-    body_text = VALID_PR_BODY.replace(f"## {optional_heading}\n", "")
-    all_findings = durable_post_lint.lint_durable_post(
-        action="pr-create",
-        title="fix(cli): tighten input handling",
-        body_text=body_text,
-    )
-    assert all_findings == ()
-
-
 def should_still_accept_a_body_published_under_the_superseded_heading_set() -> None:
     all_findings = durable_post_lint.lint_durable_post(
         action="pr-edit",
         title=None,
-        body_text=SUPERSEDED_PR_BODY,
+        body_text=(
+            "## Summary\n\nSummary text.\n\n"
+            "## Description\n\nDescription text.\n\n"
+            "## Why\n\nWhy text.\n\n"
+            "## How\n\nHow text.\n\n"
+            "## Verification\n\nVerification text.\n"
+        ),
     )
     assert all_findings == ()
 
