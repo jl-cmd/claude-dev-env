@@ -25,6 +25,16 @@ from everything_search_command_constants.config.constants import (
     UTF8_ENCODING,
 )
 
+_subprocess_window_hooks_directory = ""
+for each_ancestor_directory in Path(__file__).resolve().parents:
+    if (each_ancestor_directory / "hooks" / "hooks_constants").is_dir():
+        _subprocess_window_hooks_directory = str(each_ancestor_directory / "hooks")
+        break
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags
+
 
 class RegistryRunFatal(ValueError):
     """Stop the run when the project-path registry is unreadable or invalid."""
@@ -134,6 +144,7 @@ def _run_search(
                 encoding=UTF8_ENCODING,
                 shell=False,
                 text=True,
+                creationflags=hidden_window_creation_flags(),
             )
         except OSError as error:
             search_stderr.write(f"{error}\n")

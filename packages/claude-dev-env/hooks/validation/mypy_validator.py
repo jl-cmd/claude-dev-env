@@ -57,6 +57,8 @@ from hooks_constants.mypy_validator_cache_constants import (  # noqa: E402
 )
 from json_file_reader import read_json_object  # noqa: E402
 
+from hooks_constants.subprocess_window import hidden_window_creation_flags
+
 
 def load_notification_utils() -> ModuleType | None:
     try:
@@ -88,6 +90,7 @@ def discover_project_root(target_file: str) -> Path | None:
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=str(Path(target_file).parent),
+            creationflags=hidden_window_creation_flags(),
         )
         if completed_process.returncode != 0:
             return None
@@ -493,6 +496,7 @@ def run_mypy(target_file: str, project_root: str) -> tuple[int, str]:
         env=os.environ.copy(),
         timeout=MYPY_TIMEOUT_SECONDS,
         cwd=project_root,
+        creationflags=hidden_window_creation_flags(),
     )
 
     stdout_output = completed_process.stdout.strip()

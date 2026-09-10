@@ -49,6 +49,8 @@ from pr_loop_shared_constants.code_rules_gate_constants import (
     PYTHONPATH_ENV_VAR,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def _resolved_directory(path_text: str) -> Path | None:
     """Return *path_text* resolved to an absolute path, or None when it is unusable."""
@@ -152,6 +154,7 @@ def _completed_import_root_probe(
             text=True,
             check=False,
             timeout=BASELINE_IMPORT_PROBE_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except subprocess.TimeoutExpired:
         sys.stderr.write(

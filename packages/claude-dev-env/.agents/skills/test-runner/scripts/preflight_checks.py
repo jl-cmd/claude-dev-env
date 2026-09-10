@@ -48,6 +48,8 @@ from test_runner_constants.config.constants import (
     UNREACHABLE_ERROR_TEMPLATE,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 try:
     import psutil
 except ImportError:
@@ -70,6 +72,7 @@ def check_server_health(target_url: str) -> str | None:
             text=True,
             timeout=HEALTH_CHECK_TIMEOUT_SECONDS,
             check=False,
+            creationflags=hidden_window_creation_flags(),
         )
         http_status_code = int(completed_process.stdout.strip())
     except (OSError, ValueError, subprocess.TimeoutExpired):
@@ -215,6 +218,7 @@ def _read_process_listing() -> str | None:
             text=True,
             timeout=PROCESS_CURL_TIMEOUT_SECONDS,
             check=False,
+            creationflags=hidden_window_creation_flags(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -359,6 +363,7 @@ def _run_preparation(
             text=True,
             timeout=BUILD_TIMEOUT_SECONDS,
             check=False,
+            creationflags=hidden_window_creation_flags(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return True

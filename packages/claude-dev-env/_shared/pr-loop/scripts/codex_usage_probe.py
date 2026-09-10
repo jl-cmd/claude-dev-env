@@ -118,6 +118,8 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (  # noqa
     WINDOWS_OS_NAME,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 class AppServerExchange(Protocol):
     """Callable that sends JSON-RPC request objects and returns stdout lines."""
@@ -464,6 +466,7 @@ def _exchange_app_server_messages_via_subprocess(
         encoding=UTF8_ENCODING,
         shell=False,
         start_new_session=should_start_new_session(),
+        creationflags=hidden_window_creation_flags(),
     ) as server_process:
         server_stdin = server_process.stdin
         server_stdout = server_process.stdout

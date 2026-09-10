@@ -128,13 +128,15 @@ def test_main_runs_plain_pytest_without_django_preflight(
     )
 
     assert exit_code == 7
-    assert all_calls == [
-        {
-            "arguments": ["python", "-m", "pytest", "tests"],
-            "cwd": tmp_path.resolve(),
-            "check": False,
-        }
-    ]
+    assert len(all_calls) == 1
+    recorded_call = dict(all_calls[0])
+    recorded_startup_information = recorded_call.pop("startupinfo")
+    assert recorded_call == {
+        "arguments": ["python", "-m", "pytest", "tests"],
+        "cwd": tmp_path.resolve(),
+        "check": False,
+    }
+    assert (recorded_startup_information is None) == (sys.platform != "win32")
 
 
 def test_missing_django_database_stops_before_child_launch(

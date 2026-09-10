@@ -41,6 +41,8 @@ from dev_env_scripts_constants.gh_artifact_upload_constants import (
     UTF8_ENCODING,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 class ArtifactUploadError(Exception):
     """Raised when creating the release or uploading the asset fails."""
@@ -53,6 +55,7 @@ def _run_gh(all_arguments: list[str]) -> subprocess.CompletedProcess[str]:
         text=True,
         encoding=UTF8_ENCODING,
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
 
 

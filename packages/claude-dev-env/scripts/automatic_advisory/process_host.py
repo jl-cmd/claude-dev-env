@@ -8,6 +8,8 @@ from pr_verification.config.constants import INCOMPLETE_EXIT_CODE
 
 from .config.constants import WINDOWS_PROCESS_START_SIGNAL
 
+from subprocess_window_access import inherited_stream_startup_info
+
 
 def run_owned_child(all_arguments: Sequence[str]) -> int:
     """Wait for ownership, then run the advisory child.
@@ -24,6 +26,7 @@ def run_owned_child(all_arguments: Sequence[str]) -> int:
         tuple(all_arguments),
         shell=False,
         check=False,
+        startupinfo=inherited_stream_startup_info(),
     )
     return completed_process.returncode
 

@@ -16,6 +16,14 @@ from .config.constants import (
     UTF8_ENCODING,
 )
 
+import sys
+
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags
+
 
 class GitSelectionError(ValueError):
     """Raised when Git cannot provide the requested source bytes."""
@@ -44,6 +52,7 @@ def git_bytes_for(repository_root: Path, all_arguments: tuple[str, ...]) -> byte
         capture_output=True,
         check=False,
         env=_git_subprocess_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     if completed.returncode != 0:
         error_text = completed.stderr.decode(UTF8_ENCODING, errors="replace").strip()
@@ -69,6 +78,7 @@ def head_revision(repository_root: Path) -> str | None:
         capture_output=True,
         check=False,
         env=_git_subprocess_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     if completed.returncode != 0:
         error_text = completed.stderr.decode(UTF8_ENCODING, errors="replace").strip()
@@ -125,6 +135,7 @@ def _read_blob_bytes(repository_root: Path, revision: str, relative_path: str) -
         capture_output=True,
         check=False,
         env=_git_subprocess_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     if completed.returncode == 0:
         return completed.stdout

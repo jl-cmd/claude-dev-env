@@ -163,15 +163,6 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
         }
     ),
     PurePosixPath(
-        "packages/claude-dev-env/scripts/automatic_advisory/window_flags.py"
-    ): frozenset(
-        {
-            PurePosixPath(
-                "packages/claude-dev-env/scripts/tests/test_automatic_advisory_window_flags.py"
-            ),
-        }
-    ),
-    PurePosixPath(
         "packages/claude-dev-env/scripts/automatic_advisory/windows_job.py"
     ): frozenset(
         {

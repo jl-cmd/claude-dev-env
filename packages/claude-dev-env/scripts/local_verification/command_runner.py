@@ -11,6 +11,8 @@ from .config import (
 )
 from .model import CommandCapture
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def run_command(
     all_arguments: tuple[str, ...], check_directory: Path, timeout_seconds: float
@@ -73,6 +75,7 @@ def _run_subprocess(
         encoding=UTF8_ENCODING,
         errors="replace",
         timeout=timeout_seconds,
+        creationflags=hidden_window_creation_flags(),
     )
 
 

@@ -36,6 +36,8 @@ from git_hooks_constants.verification_notice_constants import (
 )
 from local_verification.manifest import ManifestRunFatal, load_manifest
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 @dataclass(frozen=True)
 class VerificationNoticeContext:
@@ -202,6 +204,7 @@ def _run_git_query(
             encoding=GIT_OUTPUT_ENCODING_NAME,
             errors=GIT_OUTPUT_DECODE_ERRORS_POLICY,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except (OSError, subprocess.SubprocessError, UnicodeError):
         return None

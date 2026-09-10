@@ -23,6 +23,8 @@ from .config import (
 )
 from .config.timing import GIT_METADATA_TIMEOUT_SECONDS
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 @dataclass(frozen=True)
 class CandidateSnapshot:
@@ -82,6 +84,7 @@ def _run_git_bytes(
             capture_output=True,
             check=False,
             timeout=GIT_METADATA_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except (OSError, subprocess.SubprocessError):
         return None

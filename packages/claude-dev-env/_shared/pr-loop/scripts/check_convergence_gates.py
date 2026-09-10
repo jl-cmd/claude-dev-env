@@ -32,6 +32,8 @@ from pr_converge_scripts_constants.convergence_gate_constants import (
     SHORT_SHA_LENGTH,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 JsonObject = dict[str, object]
 ReviewStateGroup = tuple[str, ...]
 
@@ -44,6 +46,7 @@ def _run_gh_command(all_arguments: list[str]) -> tuple[int, str]:
         encoding="utf-8",
         errors="replace",
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
     return completed_process.returncode, completed_process.stdout
 
