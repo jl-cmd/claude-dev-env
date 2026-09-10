@@ -43,7 +43,12 @@ jobs:
           repository: jl-cmd/claude-dev-env
           ref: ${{ inputs.validator-ref }}
           path: .instruction-pair-validator
-          sparse-checkout: packages/claude-dev-env/scripts/validate_instruction_pairs.py
+          sparse-checkout: |
+            packages/claude-dev-env/scripts/validate_instruction_pairs.py
+            packages/claude-dev-env/scripts/subprocess_window_access.py
+            packages/claude-dev-env/hooks/hooks_constants/__init__.py
+            packages/claude-dev-env/hooks/hooks_constants/subprocess_window.py
+            packages/claude-dev-env/hooks/hooks_constants/subprocess_window_constants.py
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
