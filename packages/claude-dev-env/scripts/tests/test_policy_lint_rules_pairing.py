@@ -461,3 +461,21 @@ def work(command: list[str]) -> int:
 
 def test_pairing_reports_added_mapping_unpacking_on_a_call(tmp_path: Path) -> None:
     assert len(_mechanical_diagnostics(tmp_path, _MAPPING_UNPACKING_ADDED)) == 1
+_INSTALLER_PRODUCTION_PATHS = (
+    PurePosixPath("packages/claude-dev-env/bin/install-constants.mjs"),
+    PurePosixPath("packages/claude-dev-env/bin/install.mjs"),
+)
+_INSTALLER_SUITE_PATH = PurePosixPath(
+    "packages/claude-dev-env/bin/install.cursor-rules.test.mjs"
+)
+
+
+def test_pairing_accepts_installer_modules_with_the_cursor_rules_suite(
+    tmp_path: Path,
+) -> None:
+    all_paths = _diagnostic_paths(
+        tmp_path,
+        *(_body_change_at(each_path) for each_path in _INSTALLER_PRODUCTION_PATHS),
+        _body_change_at(_INSTALLER_SUITE_PATH),
+    )
+    assert all_paths == ()
