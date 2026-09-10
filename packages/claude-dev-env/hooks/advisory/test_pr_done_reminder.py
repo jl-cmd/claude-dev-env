@@ -247,3 +247,12 @@ def test_main_should_stay_quiet_on_any_other_gh_failure(
     gh_down = _fake_gh(None, stderr="error connecting to api.github.com")
 
     assert _run_main(monkeypatch, capsys, _payload("git push"), gh_down) == ""
+
+
+def test_main_should_emit_the_shared_post_tool_use_payload_shape(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stdout_text = _run_main(monkeypatch, capsys, _payload("git push"), _fake_gh(_CLEAN_PR_OBJECT))
+
+    hook_specific_output = json.loads(stdout_text)["hookSpecificOutput"]
+    assert sorted(hook_specific_output) == ["additionalContext", "hookEventName"]

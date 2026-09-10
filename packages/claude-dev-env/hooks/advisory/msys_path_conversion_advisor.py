@@ -28,7 +28,6 @@ Hosted by ``blocking/bash_post_call_dispatcher.py``, which forwards the
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -51,6 +50,9 @@ try:
         MSYS_EXPORT_FIX_LINE,
         MSYS_PATH_CONVERSION_VARIABLE_NAME,
         SAME_COMMAND_LINE,
+    )
+    from hooks_constants.post_tool_use_context import (
+        write_post_tool_use_context_to_stdout,
     )
     from hooks_constants.pr_done_reminder_constants import EXIT_CODE_ERROR_PREFIX
     from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
@@ -148,17 +150,6 @@ def build_advisory_context(mangled_argument: str) -> str:
     return ADVISORY_LINE_SEPARATOR.join(all_lines)
 
 
-def _emit_context(context_text: str) -> None:
-    payload = {
-        "hookSpecificOutput": {
-            "hookEventName": "PostToolUse",
-            "additionalContext": context_text,
-        }
-    }
-    sys.stdout.write(json.dumps(payload))
-    sys.stdout.flush()
-
-
 def main() -> None:
     """Add the MSYS path-conversion note after a git call the shell mangled.
 
@@ -176,7 +167,7 @@ def main() -> None:
         command_text, hook_payload.get("tool_response")
     )
     if mangled_argument is not None:
-        _emit_context(build_advisory_context(mangled_argument))
+        write_post_tool_use_context_to_stdout(build_advisory_context(mangled_argument))
 
 
 if __name__ == "__main__":
