@@ -25,12 +25,22 @@ streams straight to the operator, and those pass
 ``startupinfo=inherited_stream_startup_info()`` instead. That startup record
 keeps the inherited streams and hides the console window, so the operator still
 reads the output and still sees no window.
+
+``subprocess.STARTUPINFO`` is a Windows-only name. Typeshed declares it under a
+``sys.platform == "win32"`` guard, so a type check that runs on Linux, as this
+repository's continuous integration does, cannot see the name at all. The
+startup record is therefore described here as a structural ``Protocol`` naming
+the two fields this module sets, and the record itself is fetched through
+``getattr`` at call time. Both moves match what the module already does for the
+creation flags, and they keep the runtime ``sys.platform`` test in one place, so
+one function serves every platform.
 """
 
 from __future__ import annotations
 
 import subprocess
 import sys
+from typing import Protocol
 
 from hooks_constants.subprocess_window_constants import (
     CREATE_NEW_PROCESS_GROUP_ATTRIBUTE,
@@ -38,14 +48,23 @@ from hooks_constants.subprocess_window_constants import (
     HIDE_WINDOW_COMMAND_ATTRIBUTE,
     NO_CREATION_FLAGS,
     SHOW_WINDOW_FLAG_ATTRIBUTE,
+    STARTUP_INFO_ATTRIBUTE,
     WINDOWS_PLATFORM,
 )
 
 __all__ = [
+    "HiddenWindowStartupInfo",
     "detached_hidden_window_creation_flags",
     "hidden_window_creation_flags",
     "inherited_stream_startup_info",
 ]
+
+
+class HiddenWindowStartupInfo(Protocol):
+    """The two ``subprocess.STARTUPINFO`` fields that hide a child's console."""
+
+    dwFlags: int
+    wShowWindow: int
 
 
 def _windows_flag(flag_attribute_name: str) -> int:
@@ -95,7 +114,7 @@ def detached_hidden_window_creation_flags() -> int:
     return _windows_flag(CREATE_NEW_PROCESS_GROUP_ATTRIBUTE) | hidden_window_creation_flags()
 
 
-def inherited_stream_startup_info() -> subprocess.STARTUPINFO | None:
+def inherited_stream_startup_info() -> HiddenWindowStartupInfo | None:
     """Return a startup record that hides the console of a stream-inheriting child.
 
     Use this at a call site that lets the child write straight to the operator's
@@ -112,7 +131,7 @@ def inherited_stream_startup_info() -> subprocess.STARTUPINFO | None:
     """
     if sys.platform != WINDOWS_PLATFORM:
         return None
-    startup_information = subprocess.STARTUPINFO()
+    startup_information = getattr(subprocess, STARTUP_INFO_ATTRIBUTE)()
     startup_information.dwFlags |= getattr(
         subprocess, SHOW_WINDOW_FLAG_ATTRIBUTE, NO_CREATION_FLAGS
     )
