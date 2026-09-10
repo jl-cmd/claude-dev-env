@@ -1292,7 +1292,6 @@ export const RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS = new Set([
     'blocking/nas_ssh_binary_enforcer.py',
     'blocking/block_main_commit.py',
     'blocking/session_edit_stage_gate.py',
-    'blocking/bash_pre_tool_use_dispatcher.py',
     'blocking/stop_dispatcher.py',
     'blocking/bot_mention_comment_blocker.py',
     'blocking/fable_spawn_gate.py',
