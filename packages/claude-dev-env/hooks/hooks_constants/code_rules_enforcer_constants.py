@@ -138,6 +138,7 @@ ALL_FREE_FORM_EXEMPT_COMMENT_BODIES: tuple[str, ...] = (
     "FIXME",
     "HACK",
     "XXX",
+    "STEALTH: Keep",
 )
 CHAINED_INLINE_COMMENT_PATTERN = re.compile(r"#")
 ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES: tuple[str, ...] = (
