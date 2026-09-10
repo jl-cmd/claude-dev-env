@@ -32,13 +32,7 @@ from pr_converge_scripts_constants.convergence_gate_constants import (
     SHORT_SHA_LENGTH,
 )
 
-from pathlib import Path
-
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import hidden_window_creation_flags
+from subprocess_window_access import hidden_window_creation_flags
 
 JsonObject = dict[str, object]
 ReviewStateGroup = tuple[str, ...]

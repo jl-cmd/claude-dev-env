@@ -17,11 +17,7 @@ from pr_loop_shared_constants.fix_hookspath_constants import (  # noqa: E402
 )
 from pr_loop_shared_constants.preflight_constants import GIT_DIRECTORY_NAME  # noqa: E402
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import hidden_window_creation_flags, inherited_stream_startup_info
+from subprocess_window_access import hidden_window_creation_flags, inherited_stream_startup_info
 
 
 def resolve_canonical_hooks_directory(

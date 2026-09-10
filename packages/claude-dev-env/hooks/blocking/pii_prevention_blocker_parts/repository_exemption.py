@@ -16,10 +16,6 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
 from hooks_constants.subprocess_window import hidden_window_creation_flags
 
 try:

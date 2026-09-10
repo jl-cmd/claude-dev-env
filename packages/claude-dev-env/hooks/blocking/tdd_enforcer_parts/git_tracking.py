@@ -29,12 +29,6 @@ from tdd_enforcer_parts.config.tdd_enforcer_constants import (
     GIT_PATHSPEC_SEPARATOR,
 )
 
-import sys
-
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
 from hooks_constants.subprocess_window import hidden_window_creation_flags
 
 

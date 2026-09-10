@@ -66,11 +66,7 @@ from terminology_sweep import repository_environment
 
 from code_rules_gate_parts import baseline_import_isolation, staged_test_running
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[4] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import hidden_window_creation_flags
+from subprocess_window_access import hidden_window_creation_flags
 
 TestIdentity = tuple[str, str]
 

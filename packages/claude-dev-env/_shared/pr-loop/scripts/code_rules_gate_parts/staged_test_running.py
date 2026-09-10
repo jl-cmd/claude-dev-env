@@ -59,11 +59,7 @@ from terminology_sweep import repository_environment
 from code_rules_gate_parts.git_file_sets import paths_from_git_staged
 from code_rules_gate_parts.wrapper_plumb_check import is_test_path
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[4] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import inherited_stream_startup_info
+from subprocess_window_access import inherited_stream_startup_info
 
 
 def _is_conftest_path(file_path: Path) -> bool:

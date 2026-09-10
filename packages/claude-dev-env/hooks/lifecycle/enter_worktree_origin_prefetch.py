@@ -44,10 +44,6 @@ from hooks_constants.enter_worktree_prefetch_constants import (  # noqa: E402
 )
 from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin  # noqa: E402
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
 from hooks_constants.subprocess_window import hidden_window_creation_flags
 
 

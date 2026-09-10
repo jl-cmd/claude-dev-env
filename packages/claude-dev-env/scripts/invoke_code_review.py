@@ -104,11 +104,7 @@ from dev_env_scripts_constants.timing import (  # noqa: E402
     DEFAULT_CODE_REVIEW_TIMEOUT_SECONDS,
 )
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import hidden_window_creation_flags
+from subprocess_window_access import hidden_window_creation_flags
 
 
 @dataclass(frozen=True)

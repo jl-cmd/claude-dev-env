@@ -75,11 +75,7 @@ from pr_loop_shared_constants.terminology_sweep_constants import (
     TEST_FILE_SUFFIX,
 )
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import hidden_window_creation_flags
+from subprocess_window_access import hidden_window_creation_flags
 
 IdentifierTuple = tuple[str, ...]
 

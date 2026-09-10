@@ -46,17 +46,7 @@ from fresh_branch_scripts_constants.fresh_branch_cli_constants import (
     GIT_WORKTREE_ADD,
 )
 
-import sys
-
-_subprocess_window_hooks_directory = ""
-for each_ancestor_directory in Path(__file__).resolve().parents:
-    if (each_ancestor_directory / "hooks" / "hooks_constants").is_dir():
-        _subprocess_window_hooks_directory = str(each_ancestor_directory / "hooks")
-        break
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import hidden_window_creation_flags
+from subprocess_window_access import hidden_window_creation_flags
 
 
 def run_git(

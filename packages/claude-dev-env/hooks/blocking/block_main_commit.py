@@ -23,10 +23,6 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
 from hooks_constants.subprocess_window import hidden_window_creation_flags
 
 GIT_COMMAND_TIMEOUT_SECONDS = 5

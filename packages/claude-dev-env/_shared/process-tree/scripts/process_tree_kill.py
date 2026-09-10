@@ -39,11 +39,7 @@ from process_tree_scripts_constants.process_tree_kill_constants import (  # noqa
     WINDOWS_TASKKILL_TREE_FLAG,
 )
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import hidden_window_creation_flags
+from subprocess_window_access import hidden_window_creation_flags
 
 process_tree_subprocess_run = subprocess.run
 

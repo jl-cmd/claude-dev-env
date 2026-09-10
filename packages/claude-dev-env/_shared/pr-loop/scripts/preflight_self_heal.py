@@ -24,11 +24,7 @@ from pr_loop_shared_constants.preflight_self_heal_constants import (  # noqa: E4
     ALL_GIT_CONFIG_LOCAL_UNSET_ALL_HOOKS_PATH_ARGUMENTS,
 )
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import hidden_window_creation_flags
+from subprocess_window_access import hidden_window_creation_flags
 
 
 def _is_canonical_hooks_path_entry(

@@ -118,11 +118,7 @@ from codex_review_scripts_constants.codex_usage_probe_constants import (  # noqa
     WINDOWS_OS_NAME,
 )
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import hidden_window_creation_flags
+from subprocess_window_access import hidden_window_creation_flags
 
 
 class AppServerExchange(Protocol):

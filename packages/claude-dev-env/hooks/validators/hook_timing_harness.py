@@ -41,11 +41,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import TextIO
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import hidden_window_creation_flags
+from subprocess_window_access import hidden_window_creation_flags
 
 
 def _load_module_from_path(module_name: str, module_path: Path) -> ModuleType:

@@ -117,11 +117,7 @@ from dev_env_scripts_constants.timing import WORKER_STAGGER_SECONDS
 from grok_headless_runner import GrokRunnerOutcome, run_headless_worker
 from grok_worker_preflight import PreflightOutcome, run_preflight
 
-_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
-if _subprocess_window_hooks_directory not in sys.path:
-    sys.path.append(_subprocess_window_hooks_directory)
-
-from hooks_constants.subprocess_window import hidden_window_creation_flags
+from subprocess_window_access import hidden_window_creation_flags
 
 class AdvisorFailureError(ValueError):
     """Raised when an advisor bind, resume, or launcher call fails closed."""
