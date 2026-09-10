@@ -130,6 +130,20 @@ def test_should_stay_quiet_when_the_command_already_exports_the_workaround() -> 
     )
 
 
+def test_should_stay_quiet_when_the_command_exports_only_the_argument_exclusion() -> None:
+    argument_exclusion_only_command = (
+        "export MSYS2_ARG_CONV_EXCL='*' && "
+        "git show origin/main:.claude/skills/x/test_run_evals.py"
+    )
+
+    assert (
+        msys_path_conversion_advisor.mangled_revision_path_argument(
+            argument_exclusion_only_command, _MANGLED_FAILURE_RESPONSE
+        )
+        is None
+    )
+
+
 def test_should_stay_quiet_without_the_ambiguous_argument_marker() -> None:
     other_failure = "Error: Exit code 1\nfatal: not a git repository"
 
