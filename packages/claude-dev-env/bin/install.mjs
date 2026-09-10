@@ -34,7 +34,7 @@ import {
     CURSOR_SYNC_SCRIPT_FILE_NAME,
     CURSOR_RULES_DIRECTORY_NAME,
     PSTACK_MODEL_RULE_FILE_NAME,
-    PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME,
+    PSTACK_SEEDED_MODEL_PREFERENCES_FILE_NAMES,
     WINDOWS_PYTHON_LAUNCHER_COMMAND,
     PYTHON_PROBE_TIMEOUT_MILLISECONDS,
 } from './install-constants.mjs';
@@ -491,17 +491,10 @@ export function refreshInstalledPstackPluginManifest(
     return join(pluginRoot, PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH);
 }
 
-function seedCodexPstackPreferences() {
+function seedPstackPreferences(preferenceFileName) {
     const preferenceDirectory = join(AGENTS_HOME, CURSOR_RULES_DIRECTORY_NAME);
-    const preferencePath = join(
-        preferenceDirectory,
-        PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME,
-    );
-    const preferenceSource = join(
-        PACKAGE_ROOT,
-        'bin',
-        PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME,
-    );
+    const preferencePath = join(preferenceDirectory, preferenceFileName);
+    const preferenceSource = join(PACKAGE_ROOT, 'bin', preferenceFileName);
     mkdirSync(preferenceDirectory, { recursive: true });
     try {
         copyFileSync(
@@ -2756,10 +2749,12 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         copyFileSync(pstackRuleSource, sharedRulePath);
         allInstalledFiles.push(sharedRulePath);
         syncWrittenPaths(allInstalledFiles);
-        const seededPreferencePath = seedCodexPstackPreferences();
-        if (seededPreferencePath) {
-            allInstalledFiles.push(seededPreferencePath);
-            allUserOwnedPreferencePaths.add(seededPreferencePath);
+        for (const eachPreferenceFileName of PSTACK_SEEDED_MODEL_PREFERENCES_FILE_NAMES) {
+            const seededPreferencePath = seedPstackPreferences(eachPreferenceFileName);
+            if (seededPreferencePath) {
+                allInstalledFiles.push(seededPreferencePath);
+                allUserOwnedPreferencePaths.add(seededPreferencePath);
+            }
         }
         syncWrittenPaths(allInstalledFiles);
     }

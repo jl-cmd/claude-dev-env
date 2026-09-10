@@ -1,0 +1,23 @@
+{
+    "host": "claude",
+    "modelsByRole": {
+        "feature, refactoring": ["opus"],
+        "bug-fix": ["opus"],
+        "perf-issue": ["fable"],
+        "hillclimb": ["fable"],
+        "judgment and prose": ["fable"],
+        "hardest tasks": ["fable"],
+        "how explorer": ["sonnet"],
+        "how explainer": ["opus"],
+        "how critics": ["sonnet", "opus", "fable"],
+        "why investigators": ["sonnet"],
+        "why synthesizer": ["fable"],
+        "reflect tooling": ["opus"],
+        "reflect judgment, divergent, synthesizer": ["fable"],
+        "arena runners": ["sonnet", "opus", "fable"],
+        "arena cross-judge pool": ["opus", "fable"],
+        "swarm workers": ["sonnet"],
+        "architect runners": ["opus", "fable"],
+        "interrogate reviewers": ["sonnet", "opus", "fable"]
+    }
+}
