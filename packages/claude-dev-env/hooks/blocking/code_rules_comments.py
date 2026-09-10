@@ -346,12 +346,14 @@ def _is_exempt_python_comment(comment_token: tokenize.TokenInfo) -> bool:
     token-anchored directive body never legitimately carries a ``#``
     (noqa codes, pylint symbols, and pragma directives contain none), so
     any inner ``#`` reliably marks chained prose. Free-form markers
-    (``type:``, ``TODO``, ``FIXME``, ``HACK``, ``XXX``) accept any
-    trailing prose:
+    (``type:``, ``TODO``, ``FIXME``, ``HACK``, ``XXX``, ``STEALTH: Keep``)
+    accept any trailing prose:
     ``# type:`` participates in the documented justification
     convention enforced by ``check_type_escape_hatches`` (which
-    requires a trailing reason), and the TODO-family markers carry
-    annotation text by convention.
+    requires a trailing reason), the TODO-family markers carry
+    annotation text by convention, and ``STEALTH: Keep`` is the
+    acknowledged-bypass marker the CDP runtime-usage scanner reads
+    from the flagged line together with its reason.
     """
     comment_string = comment_token.string
     if comment_string.startswith("#!") and comment_token.start == (1, 0):

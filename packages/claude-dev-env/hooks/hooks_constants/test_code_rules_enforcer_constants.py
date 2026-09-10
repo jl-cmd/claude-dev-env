@@ -17,6 +17,7 @@ if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
 from hooks_constants.code_rules_enforcer_constants import (
+    ALL_FREE_FORM_EXEMPT_COMMENT_BODIES,
     ALL_VALIDATION_PHASES,
     CONFIG_DIRECTORY_SEGMENT,
     CONSTANTS_MODULE_SUFFIX,
@@ -104,6 +105,10 @@ def test_schema_property_key_pattern_matches_only_the_options_key() -> None:
 def test_constants_module_suffix_and_config_directory_segment_are_defined() -> None:
     assert CONSTANTS_MODULE_SUFFIX == "_constants.py"
     assert CONFIG_DIRECTORY_SEGMENT == "config"
+
+
+def test_free_form_exempt_comment_bodies_include_stealth_keep_marker() -> None:
+    assert "STEALTH: Keep" in ALL_FREE_FORM_EXEMPT_COMMENT_BODIES
 
 
 def test_validation_phase_constants_are_reexported_and_render() -> None:
