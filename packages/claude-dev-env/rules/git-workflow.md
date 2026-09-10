@@ -50,6 +50,40 @@ untouched.
    - Before push: `gh pr ready --undo`
    - After review approved: `gh pr ready`
 
+## Run the required checks locally before the first push
+
+Read the branch ruleset for the required check contexts before you push a branch,
+or any level of a stack: `gh api repos/<owner>/<repo>/rules/branches/<trunk>`.
+Then run that exact gate command locally against that level's own base, on every
+level. A required check that never fired is invisible debt at every level, and it
+surfaces only after the whole stack is pushed, when the repair costs a second pass
+over every branch.
+
+A checks listing that reports nothing on the branch is a finding, not a neutral
+state. Find out whether the workflow's event filters exclude the branch, or whether
+the check simply never ran, before you treat that branch as clean.
+
+## Each stack level stands on its own
+
+A symbol belongs at the level that first **uses** it, not the level that first
+mentions it. A bottom pull request that declares the imports its descendants will
+need fails the linter on unused imports. A test helper that calls a function three
+levels above it fails on an undefined name. Both defects stay invisible while you
+read the finished tip, and both are obvious the moment you check one level alone.
+
+Prove each level before you push it: import the modules that level changes, and run
+the required linter against that level's own base. To repair a level, rebuild its
+import header as the union of what that level actually references, let the linter's
+autofix strip the rest, and move a premature helper up to the level that defines
+what it calls.
+
+## A force-push that moves content obliges a description refresh
+
+Force-with-lease protects the ref. It protects nobody's understanding of what the
+branch now holds. When a rewrite moves content between levels of a stack, or
+otherwise changes what a branch contains, refresh that pull request's description
+through the `pr-description-writer` agent before you ask anyone to read or merge it.
+
 ## Never commit working documents or images
 
 **NEVER commit these files to the repo:**
