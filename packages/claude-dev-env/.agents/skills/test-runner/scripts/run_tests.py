@@ -63,7 +63,7 @@ for each_ancestor_directory in Path(__file__).resolve().parents:
 if _subprocess_window_hooks_directory not in sys.path:
     sys.path.append(_subprocess_window_hooks_directory)
 
-from hooks_constants.subprocess_window import inherited_stream_startup_info  # noqa: E402
+from hooks_constants.subprocess_window import inherited_stream_startup_info
 
 build_frontend = preflight_checks.build_frontend
 check_django_database = preflight_checks.check_django_database

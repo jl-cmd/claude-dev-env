@@ -63,7 +63,7 @@ _subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[4] / "
 if _subprocess_window_hooks_directory not in sys.path:
     sys.path.append(_subprocess_window_hooks_directory)
 
-from hooks_constants.subprocess_window import inherited_stream_startup_info  # noqa: E402
+from hooks_constants.subprocess_window import inherited_stream_startup_info
 
 
 def _is_conftest_path(file_path: Path) -> bool:

@@ -21,7 +21,7 @@ _subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "
 if _subprocess_window_hooks_directory not in sys.path:
     sys.path.append(_subprocess_window_hooks_directory)
 
-from hooks_constants.subprocess_window import hidden_window_creation_flags, inherited_stream_startup_info  # noqa: E402
+from hooks_constants.subprocess_window import hidden_window_creation_flags, inherited_stream_startup_info
 
 
 def resolve_canonical_hooks_directory(

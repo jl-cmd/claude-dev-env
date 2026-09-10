@@ -121,7 +121,7 @@ _subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[1] / "
 if _subprocess_window_hooks_directory not in sys.path:
     sys.path.append(_subprocess_window_hooks_directory)
 
-from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+from hooks_constants.subprocess_window import hidden_window_creation_flags
 
 class AdvisorFailureError(ValueError):
     """Raised when an advisor bind, resume, or launcher call fails closed."""

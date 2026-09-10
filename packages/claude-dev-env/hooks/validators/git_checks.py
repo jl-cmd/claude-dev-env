@@ -6,13 +6,13 @@ import sys
 from dataclasses import dataclass
 from typing import List
 
-from pathlib import Path  # noqa: E402
+from pathlib import Path
 
 _subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
 if _subprocess_window_hooks_directory not in sys.path:
     sys.path.append(_subprocess_window_hooks_directory)
 
-from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+from hooks_constants.subprocess_window import hidden_window_creation_flags
 
 SUBPROCESS_TIMEOUT_SECONDS = 30
 

@@ -18,7 +18,7 @@ _subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "
 if _subprocess_window_hooks_directory not in sys.path:
     sys.path.append(_subprocess_window_hooks_directory)
 
-from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+from hooks_constants.subprocess_window import hidden_window_creation_flags
 
 NOTIFICATION_UTILS_DIRECTORY = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "notification"

@@ -135,7 +135,7 @@ _subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[1] / "
 if _subprocess_window_hooks_directory not in sys.path:
     sys.path.append(_subprocess_window_hooks_directory)
 
-from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+from hooks_constants.subprocess_window import hidden_window_creation_flags
 
 
 def _decode_captured_stream(raw_bytes: bytes, encoding: str, errors: str) -> str:

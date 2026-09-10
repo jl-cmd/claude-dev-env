@@ -21,7 +21,7 @@ _subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "
 if _subprocess_window_hooks_directory not in sys.path:
     sys.path.append(_subprocess_window_hooks_directory)
 
-from hooks_constants import subprocess_window  # noqa: E402
+from hooks_constants import subprocess_window
 
 WINDOWS_ONLY = pytest.mark.skipif(
     sys.platform != "win32", reason="Windows console flags"

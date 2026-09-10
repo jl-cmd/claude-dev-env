@@ -48,7 +48,7 @@ from test_runner_constants.config.constants import (
     UNREACHABLE_ERROR_TEMPLATE,
 )
 
-import sys  # noqa: E402
+import sys
 
 _subprocess_window_hooks_directory = ""
 for each_ancestor_directory in Path(__file__).resolve().parents:
@@ -58,7 +58,7 @@ for each_ancestor_directory in Path(__file__).resolve().parents:
 if _subprocess_window_hooks_directory not in sys.path:
     sys.path.append(_subprocess_window_hooks_directory)
 
-from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+from hooks_constants.subprocess_window import hidden_window_creation_flags
 
 try:
     import psutil

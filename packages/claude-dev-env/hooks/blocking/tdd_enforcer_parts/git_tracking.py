@@ -29,13 +29,13 @@ from tdd_enforcer_parts.config.tdd_enforcer_constants import (
     GIT_PATHSPEC_SEPARATOR,
 )
 
-import sys  # noqa: E402
+import sys
 
 _subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[3] / "hooks")
 if _subprocess_window_hooks_directory not in sys.path:
     sys.path.append(_subprocess_window_hooks_directory)
 
-from hooks_constants.subprocess_window import hidden_window_creation_flags  # noqa: E402
+from hooks_constants.subprocess_window import hidden_window_creation_flags
 
 
 def _git_ls_files_command(file_name: str) -> list[str]:
