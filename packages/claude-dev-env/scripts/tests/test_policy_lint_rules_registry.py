@@ -22,6 +22,24 @@ from policy_lint.model import (
 
 _FUNCTION_SOURCE = "def work() -> None:\n    pass\n"
 _CHANGED_RULE_SETS = frozenset({"changed"})
+_UNDERCOUNTED_SUBPROCESS_BUDGET_TEXT = (
+    "import subprocess\n"
+    "PYTHON_FORMAT_TIMEOUT_SECONDS = 12\n"
+    "GIT_CHECK_TIMEOUT_SECONDS = 5\n"
+    "def worst_case_python_format_seconds() -> int:\n"
+    "    return PYTHON_FORMAT_TIMEOUT_SECONDS + PYTHON_FORMAT_TIMEOUT_SECONDS\n"
+    "def is_untracked_in_git(file_path: str) -> bool:\n"
+    "    git_check = subprocess.run(['git', 'ls-files', file_path], "
+    "timeout=GIT_CHECK_TIMEOUT_SECONDS)\n"
+    "    return git_check.returncode != 0\n"
+    "def run_format(file_path: str) -> None:\n"
+    "    subprocess.run(['ruff', 'format', file_path], "
+    "timeout=PYTHON_FORMAT_TIMEOUT_SECONDS)\n"
+    "def main(file_path: str) -> None:\n"
+    "    if is_untracked_in_git(file_path):\n"
+    "        return\n"
+    "    run_format(file_path)\n"
+)
 _GENERATED_CHANGELOG_TEXT = (
     "## 7.5.0\n\n* **rules:** correct hook claims for gates that " + "no" + " longer run\n"
 )
@@ -629,3 +647,53 @@ def test_lint_keeps_skipped_rules_out_of_executed_rules(tmp_path: Path) -> None:
     all_rules_report = lint(request, all_registry=(skipped_rule,))
     assert all_rules_report.executed_rules == ()
     assert all_rules_report.skipped_rules == ("skipped",)
+
+
+def test_subprocess_budget_skips_a_test_module_and_keeps_production() -> None:
+    subprocess_budget_rule = _rule_named("subprocess-budget")
+    prefixed_test_document = Document.from_text(
+        "packages/claude-dev-env/hooks/workflow/test_auto_formatter.py",
+        _UNDERCOUNTED_SUBPROCESS_BUDGET_TEXT,
+    )
+    repository_root_test_document = Document.from_text(
+        "tests/timing.py", _UNDERCOUNTED_SUBPROCESS_BUDGET_TEXT
+    )
+    production_document = Document.from_text(
+        "src/timing.py", _UNDERCOUNTED_SUBPROCESS_BUDGET_TEXT
+    )
+    assert subprocess_budget_rule.accepts(prefixed_test_document) is False
+    assert subprocess_budget_rule.accepts(repository_root_test_document) is False
+    assert subprocess_budget_rule.accepts(production_document) is True
+
+
+def _subprocess_budget_rule_identifiers(
+    repository_root: Path, document_path: str
+) -> tuple[str, ...]:
+    document_set = DocumentSet(
+        (Document.from_text(document_path, _UNDERCOUNTED_SUBPROCESS_BUDGET_TEXT),),
+        SelectionKind.TEXT,
+        repository_root,
+    )
+    lint_report = lint(
+        LintRequest(repository_root, document_set),
+        all_registry=(_rule_named("subprocess-budget"),),
+    )
+    return tuple(
+        each_diagnostic.rule_id for each_diagnostic in lint_report.diagnostics
+    )
+
+
+def test_lint_reports_an_undercounted_budget_only_in_the_production_module(
+    tmp_path: Path,
+) -> None:
+    _ensure_git_repository(tmp_path)
+    assert _subprocess_budget_rule_identifiers(tmp_path, "src/timing.py") == (
+        "subprocess-budget",
+    )
+    assert (
+        _subprocess_budget_rule_identifiers(
+            tmp_path, "packages/claude-dev-env/hooks/workflow/test_auto_formatter.py"
+        )
+        == ()
+    )
+    assert _subprocess_budget_rule_identifiers(tmp_path, "tests/timing.py") == ()
