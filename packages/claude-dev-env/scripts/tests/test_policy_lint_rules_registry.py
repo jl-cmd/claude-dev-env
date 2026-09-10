@@ -22,6 +22,9 @@ from policy_lint.model import (
 
 _FUNCTION_SOURCE = "def work() -> None:\n    pass\n"
 _CHANGED_RULE_SETS = frozenset({"changed"})
+_GENERATED_CHANGELOG_TEXT = (
+    "## 7.5.0\n\n* **rules:** correct hook claims for gates that " + "no" + " longer run\n"
+)
 
 
 def _rule_named(rule_id: str) -> DocumentRule:
@@ -264,6 +267,51 @@ def test_hook_format_accepts_claude_settings() -> None:
     assert format_rule.accepts(hooks_document) is False
     assert configuration_rule.accepts(hooks_document) is True
     assert configuration_rule.accepts(settings_document) is False
+
+
+def test_prose_rules_skip_a_generated_changelog() -> None:
+    changelog_document = Document.from_text(
+        "packages/claude-dev-env/CHANGELOG.md", _GENERATED_CHANGELOG_TEXT
+    )
+    handwritten_document = Document.from_text("docs/notes.md", _GENERATED_CHANGELOG_TEXT)
+    stored_prompt_changelog = Document.from_text("rules/CHANGELOG.md", _GENERATED_CHANGELOG_TEXT)
+    stored_prompt_document = Document.from_text("rules/notes.md", _GENERATED_CHANGELOG_TEXT)
+    state_rule = _rule_named("state-description")
+    plain_language_rule = _rule_named("plain-language")
+    assert state_rule.accepts(changelog_document) is False
+    assert state_rule.accepts(handwritten_document) is True
+    assert plain_language_rule.accepts(stored_prompt_changelog) is False
+    assert plain_language_rule.accepts(stored_prompt_document) is True
+
+
+def test_lint_reports_the_changelog_phrase_only_in_the_handwritten_document(
+    tmp_path: Path,
+) -> None:
+    _ensure_git_repository(tmp_path)
+    document_set = DocumentSet(
+        (
+            Document.from_text("packages/claude-dev-env/CHANGELOG.md", _GENERATED_CHANGELOG_TEXT),
+            Document.from_text("docs/notes.md", _GENERATED_CHANGELOG_TEXT),
+        ),
+        SelectionKind.TEXT,
+        tmp_path,
+    )
+    lint_report = lint(
+        LintRequest(tmp_path, document_set), all_registry=(_rule_named("state-description"),)
+    )
+    all_reported_paths = {
+        each_diagnostic.location.path.as_posix()
+        for each_diagnostic in lint_report.diagnostics
+        if each_diagnostic.location is not None
+    }
+    assert all_reported_paths == {"docs/notes.md"}
+
+
+def test_non_prose_markdown_rules_still_run_on_a_generated_changelog() -> None:
+    changelog_document = Document.from_text(
+        "packages/claude-dev-env/CHANGELOG.md", _GENERATED_CHANGELOG_TEXT
+    )
+    assert _rule_named("docstring-gate-count").accepts(changelog_document) is True
 
 
 def test_workflow_substitution_accepts_workflow_js_suffix() -> None:
