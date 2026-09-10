@@ -163,6 +163,304 @@ def test_pairing_rejects_an_unrelated_module_beside_a_changed_approved_suite(
     assert all_paths == (_UNRELATED_PRODUCTION_PATH,)
 
 
+_MECHANICAL_BEFORE = '''"""Before."""
+
+import subprocess
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(command, timeout=TIMEOUT_SECONDS, check=False)
+        return completed.returncode
+    return 1
+'''
+_KEYWORD_ADDED = '''"""Before."""
+
+import subprocess
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(
+            command, timeout=TIMEOUT_SECONDS, check=False, creationflags=0
+        )
+        return completed.returncode
+    return 1
+'''
+_IMPORT_AND_KEYWORD_ADDED = '''"""Before."""
+
+import os
+import subprocess
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(
+            command, timeout=TIMEOUT_SECONDS, check=False, creationflags=os.O_RDONLY
+        )
+        return completed.returncode
+    return 1
+'''
+_DOCSTRING_AND_KEYWORD_CHANGED = '''"""After."""
+
+import subprocess
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command and report its exit status."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(
+            command, timeout=TIMEOUT_SECONDS, check=False, creationflags=0
+        )
+        return completed.returncode
+    return 1
+'''
+_KEYWORD_ADDED_AND_LITERAL_CHANGED = '''"""Before."""
+
+import subprocess
+
+TIMEOUT_SECONDS = 6
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(
+            command, timeout=TIMEOUT_SECONDS, check=False, creationflags=0
+        )
+        return completed.returncode
+    return 1
+'''
+_KEYWORD_VALUE_CHANGED = '''"""Before."""
+
+import subprocess
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(command, timeout=TIMEOUT_SECONDS, check=True)
+        return completed.returncode
+    return 1
+'''
+_KEYWORD_VALUE_TYPE_CHANGED = '''"""Before."""
+
+import subprocess
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(command, timeout=TIMEOUT_SECONDS, check=0)
+        return completed.returncode
+    return 1
+'''
+_KEYWORD_REMOVED = '''"""Before."""
+
+import subprocess
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(command, timeout=TIMEOUT_SECONDS)
+        return completed.returncode
+    return 1
+'''
+_POSITIONAL_CHANGED = '''"""Before."""
+
+import subprocess
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(
+            command[:1], timeout=TIMEOUT_SECONDS, check=False, creationflags=0
+        )
+        return completed.returncode
+    return 1
+'''
+_STATEMENT_ADDED_IN_BODY = '''"""Before."""
+
+import subprocess
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(
+            command, timeout=TIMEOUT_SECONDS, check=False, creationflags=0
+        )
+        completed.check_returncode()
+        return completed.returncode
+    return 1
+'''
+_CONDITION_CHANGED = '''"""Before."""
+
+import subprocess
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 1:
+        completed = subprocess.run(
+            command, timeout=TIMEOUT_SECONDS, check=False, creationflags=0
+        )
+        return completed.returncode
+    return 1
+'''
+_IMPORT_REMOVED = '''"""Before."""
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(
+            command, timeout=TIMEOUT_SECONDS, check=False, creationflags=0
+        )
+        return completed.returncode
+    return 1
+'''
+_UNPARSEABLE = "def work(:\n    return None\n"
+
+
+def _mechanical_diagnostics(
+    temporary_path: Path, current_source: str, suffix: str = ".py"
+) -> tuple[Diagnostic, ...]:
+    return _pairing_diagnostics(
+        temporary_path,
+        _changed_document(current_source, _MECHANICAL_BEFORE, suffix),
+    )
+
+
+def test_pairing_waives_one_added_keyword_argument(tmp_path: Path) -> None:
+    assert _mechanical_diagnostics(tmp_path, _KEYWORD_ADDED) == ()
+
+
+def test_pairing_waives_an_added_import_beside_an_added_keyword(
+    tmp_path: Path,
+) -> None:
+    assert _mechanical_diagnostics(tmp_path, _IMPORT_AND_KEYWORD_ADDED) == ()
+
+
+def test_pairing_waives_a_docstring_edit_beside_an_added_keyword(
+    tmp_path: Path,
+) -> None:
+    assert _mechanical_diagnostics(tmp_path, _DOCSTRING_AND_KEYWORD_CHANGED) == ()
+
+
+def test_pairing_reports_an_added_keyword_beside_a_changed_literal(
+    tmp_path: Path,
+) -> None:
+    assert (
+        len(_mechanical_diagnostics(tmp_path, _KEYWORD_ADDED_AND_LITERAL_CHANGED)) == 1
+    )
+
+
+def test_pairing_reports_a_changed_keyword_value(tmp_path: Path) -> None:
+    assert len(_mechanical_diagnostics(tmp_path, _KEYWORD_VALUE_CHANGED)) == 1
+
+
+def test_pairing_reports_a_keyword_value_that_changed_literal_type(
+    tmp_path: Path,
+) -> None:
+    assert len(_mechanical_diagnostics(tmp_path, _KEYWORD_VALUE_TYPE_CHANGED)) == 1
+
+
+def test_pairing_reports_a_removed_keyword(tmp_path: Path) -> None:
+    assert len(_mechanical_diagnostics(tmp_path, _KEYWORD_REMOVED)) == 1
+
+
+def test_pairing_reports_a_changed_positional_argument(tmp_path: Path) -> None:
+    assert len(_mechanical_diagnostics(tmp_path, _POSITIONAL_CHANGED)) == 1
+
+
+def test_pairing_reports_a_statement_added_inside_a_function(tmp_path: Path) -> None:
+    assert len(_mechanical_diagnostics(tmp_path, _STATEMENT_ADDED_IN_BODY)) == 1
+
+
+def test_pairing_reports_a_changed_if_condition(tmp_path: Path) -> None:
+    assert len(_mechanical_diagnostics(tmp_path, _CONDITION_CHANGED)) == 1
+
+
+def test_pairing_reports_a_removed_import(tmp_path: Path) -> None:
+    assert len(_mechanical_diagnostics(tmp_path, _IMPORT_REMOVED)) == 1
+
+
+def test_pairing_reports_a_non_python_document_with_the_same_shape(
+    tmp_path: Path,
+) -> None:
+    assert len(_mechanical_diagnostics(tmp_path, _KEYWORD_ADDED, ".ts")) == 1
+
+
+def test_pairing_reports_unparseable_current_source(tmp_path: Path) -> None:
+    assert len(_mechanical_diagnostics(tmp_path, _UNPARSEABLE)) == 1
+
+
+def test_pairing_reports_unparseable_prior_source(tmp_path: Path) -> None:
+    all_diagnostics = _pairing_diagnostics(
+        tmp_path, _changed_document(_KEYWORD_ADDED, _UNPARSEABLE)
+    )
+    assert len(all_diagnostics) == 1
+
+
+def test_pairing_reports_an_added_document_without_prior_text(tmp_path: Path) -> None:
+    added_document = Document(
+        PurePosixPath("src/feature.py"),
+        _KEYWORD_ADDED,
+        None,
+        frozenset({1}),
+        ContentOrigin.REVISION_DIFF,
+    )
+    assert len(_pairing_diagnostics(tmp_path, added_document)) == 1
+
+
+_MAPPING_UNPACKING_ADDED = '''"""Before."""
+
+import subprocess
+
+TIMEOUT_SECONDS = 5
+
+
+def work(command: list[str]) -> int:
+    """Run one command."""
+    if TIMEOUT_SECONDS > 0:
+        completed = subprocess.run(
+            command, timeout=TIMEOUT_SECONDS, check=False, **{"creationflags": 0}
+        )
+        return completed.returncode
+    return 1
+'''
+
+
+def test_pairing_reports_added_mapping_unpacking_on_a_call(tmp_path: Path) -> None:
+    assert len(_mechanical_diagnostics(tmp_path, _MAPPING_UNPACKING_ADDED)) == 1
 _INSTALLER_PRODUCTION_PATHS = (
     PurePosixPath("packages/claude-dev-env/bin/install-constants.mjs"),
     PurePosixPath("packages/claude-dev-env/bin/install.mjs"),
