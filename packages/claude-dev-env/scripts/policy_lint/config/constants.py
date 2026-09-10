@@ -34,6 +34,7 @@ RENAME_PATH_COUNT = 2
 PYTHON_SUFFIX = ".py"
 ALL_CODE_SUFFIXES = frozenset({".py", ".js", ".jsx", ".ts", ".tsx", ".mjs"})
 ALL_MARKDOWN_SUFFIXES = frozenset({".md", ".mdx"})
+ALL_GENERATED_DOCUMENT_NAMES = frozenset({"changelog.md"})
 ALL_STORED_PROMPT_SEGMENTS = (
     "/.agents/",
     "/commands/",
