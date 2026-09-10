@@ -28,6 +28,7 @@ from tdd_enforcer_parts import content_hash_store
 _ALL_EXPECTED_ROSTER_PATHS = [
     "observability/test_failure_recorder.py",
     "advisory/pr_done_reminder.py",
+    "advisory/msys_path_conversion_advisor.py",
 ]
 
 
@@ -66,6 +67,7 @@ def test_dispatch_forwards_hosted_hook_additional_context_as_one_payload(
         "pr_done_reminder.py": json.dumps(
             {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "PR #42"}}
         ),
+        "msys_path_conversion_advisor.py": "",
     }
 
     def _fake_run_hook(script_path: str, payload_text: str) -> HostedHookRun:
