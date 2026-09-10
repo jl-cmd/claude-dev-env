@@ -510,3 +510,29 @@ def test_pairing_accepts_installer_modules_with_the_cursor_rules_suite(
         _body_change_at(_INSTALLER_SUITE_PATH),
     )
     assert all_paths == ()
+
+
+_COMMENT_RULES_PRODUCTION_PATH = PurePosixPath(
+    "packages/claude-dev-env/hooks/blocking/code_rules_comments.py"
+)
+_COMMENT_RULES_SUITE_PATH = PurePosixPath(
+    "packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_comment_string_awareness.py"
+)
+
+
+def test_pairing_accepts_comment_rules_module_with_one_approved_suite(
+    tmp_path: Path,
+) -> None:
+    all_paths = _diagnostic_paths(
+        tmp_path,
+        _body_change_at(_COMMENT_RULES_PRODUCTION_PATH),
+        _body_change_at(_COMMENT_RULES_SUITE_PATH),
+    )
+    assert all_paths == ()
+
+
+def test_pairing_rejects_comment_rules_module_without_any_approved_suite(
+    tmp_path: Path,
+) -> None:
+    all_paths = _diagnostic_paths(tmp_path, _body_change_at(_COMMENT_RULES_PRODUCTION_PATH))
+    assert all_paths == (_COMMENT_RULES_PRODUCTION_PATH,)

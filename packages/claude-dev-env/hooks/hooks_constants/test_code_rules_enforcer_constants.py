@@ -27,6 +27,7 @@ from hooks_constants.code_rules_enforcer_constants import (
     JSDOC_RETURNS_STRUCTURED_OBJECT_PROMISE_PATTERN,
     RETURN_CALL_OPENING_PARENTHESIS_PATTERN,
     SCHEMA_OPTIONS_PROPERTY_KEY_PATTERN,
+    STEALTH_KEEP_COMMENT_MARKER,
     UNKNOWN_VALIDATION_PHASE_MESSAGE_TEMPLATE,
     apply_edits,
     edits_for_tool,
@@ -108,7 +109,7 @@ def test_constants_module_suffix_and_config_directory_segment_are_defined() -> N
 
 
 def test_free_form_exempt_comment_bodies_include_stealth_keep_marker() -> None:
-    assert "STEALTH: Keep" in ALL_FREE_FORM_EXEMPT_COMMENT_BODIES
+    assert STEALTH_KEEP_COMMENT_MARKER in ALL_FREE_FORM_EXEMPT_COMMENT_BODIES
 
 
 def test_validation_phase_constants_are_reexported_and_render() -> None:

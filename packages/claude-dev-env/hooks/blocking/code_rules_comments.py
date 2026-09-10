@@ -30,6 +30,7 @@ from hooks_constants.code_rules_enforcer_constants import (  # noqa: E402
     ALL_TOKEN_ANCHORED_EXEMPT_COMMENT_BODIES,
     CHAINED_INLINE_COMMENT_PATTERN,
     MAX_COMMENT_ISSUES,
+    STEALTH_KEEP_COMMENT_MARKER,
 )
 _javascript_comment_scanner = importlib.import_module("javascript_comment_scanner")
 extract_javascript_comment_occurrences = (
@@ -152,10 +153,36 @@ def _python_comment_occurrences(
     return all_occurrences, True
 
 
+def _is_stealth_keep_occurrence(comment_text: str) -> bool:
+    """Return True for a ``# STEALTH: Keep`` occurrence.
+
+    ``STEALTH: Keep`` is meant to be freely added and to survive edits to
+    the line it sits on, unlike ``noqa`` or ``TODO``, which AGENTS.md
+    requires to be removed rather than added or justified. It is excluded
+    here rather than through the shared exempt-marker set that
+    ``check_comment_changes`` deliberately still blocks on add.
+    """
+    return comment_text.startswith("#") and comment_text[1:].lstrip().startswith(
+        STEALTH_KEEP_COMMENT_MARKER
+    )
+
+
+def _without_stealth_keep_occurrences(
+    all_occurrences: list[tuple[str, int, bool]]
+) -> list[tuple[str, int, bool]]:
+    return [
+        each_occurrence
+        for each_occurrence in all_occurrences
+        if not _is_stealth_keep_occurrence(each_occurrence[0])
+    ]
+
+
 def check_comment_changes(old_content: str, new_content: str, file_path: str) -> list[str]:
     """Check for comment additions or removals between old and new content.
 
-    Inline and standalone comments are blocking findings when added.
+    Inline and standalone comments are blocking findings when added, except
+    ``STEALTH: Keep`` occurrences, which are excluded entirely so the marker
+    can be added and can persist across edits to its line.
     Existing comments can be removed when the touched code no longer needs them.
 
     When the file is Python and either *old_content* or *new_content* cannot
@@ -177,6 +204,9 @@ def check_comment_changes(old_content: str, new_content: str, file_path: str) ->
     else:
         old_occurrences = extract_javascript_comment_occurrences(old_content, True)
         new_occurrences = extract_javascript_comment_occurrences(new_content, True)
+
+    old_occurrences = _without_stealth_keep_occurrences(old_occurrences)
+    new_occurrences = _without_stealth_keep_occurrences(new_occurrences)
 
     old_occurrence_counts = Counter(
         (each_text, is_inline)
@@ -264,6 +294,8 @@ def _retained_comment_issues(
     (old_occurrences, old_tokenize_ok), (new_occurrences, new_tokenize_ok) = (_comment_occurrences(old_content, file_path, True), _comment_occurrences(new_content, file_path, True))
     if not (old_tokenize_ok and new_tokenize_ok):
         return []
+    old_occurrences = _without_stealth_keep_occurrences(old_occurrences)
+    new_occurrences = _without_stealth_keep_occurrences(new_occurrences)
     all_changed_lines, all_deleted_lines, old_line_by_new_line = _line_diff_data(old_content, new_content)
     old_line_by_key = {
         each_key: [each_line for each_text, each_line, each_is_inline in old_occurrences if (each_text, each_is_inline) == each_key]
