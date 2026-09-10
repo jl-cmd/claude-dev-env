@@ -131,5 +131,10 @@ ALL_TRACKED_SECRET_EXACT_EXEMPTIONS: frozenset[tuple[str, str, str]] = frozenset
             "home-path",
             "5d956228802fbd4a65af8fa7fb4183f5a9f8793dbe218877aefe887b905f726d",
         ),
+        (
+            "shared_utils/theme_assets/contracts/evidence/theme_editor_asset_resolution_master.oneui9.v1.json",
+            "home-path",
+            "ec69fe88e2f9d3f1ed3504532c7484120591cbec7ae6fda017b0f9ca57a3fc25",
+        ),
     )
 )
