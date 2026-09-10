@@ -34,6 +34,7 @@ RENAME_PATH_COUNT = 2
 PYTHON_SUFFIX = ".py"
 ALL_CODE_SUFFIXES = frozenset({".py", ".js", ".jsx", ".ts", ".tsx", ".mjs"})
 ALL_MARKDOWN_SUFFIXES = frozenset({".md", ".mdx"})
+ALL_GENERATED_DOCUMENT_NAMES = frozenset({"changelog.md"})
 ALL_STORED_PROMPT_SEGMENTS = (
     "/.agents/",
     "/commands/",
@@ -57,6 +58,9 @@ ALL_ACTION_BOUNDARY_SEGMENTS = frozenset(
     }
 )
 ALL_ACTION_BOUNDARY_PREFIXES = ("deny_", "block_", "ask_")
+ALL_ACTION_BOUNDARY_EXEMPT_REGISTRATION_PATHS = (
+    "blocking/bash_pre_tool_use_dispatcher.py",
+)
 ALL_TEST_DIRECTORY_NAMES = frozenset({"tests"})
 ALL_TEST_FILE_PREFIXES = ("test_",)
 ALL_TEST_FILE_SUFFIXES = ("_test.py",)
@@ -80,3 +84,74 @@ TERMINOLOGY_MESSAGE_GROUP = "message"
 
 PR_LOOP_DIRECTORY_NAME = "pr-loop"
 SHARED_ROOT_PARENT_INDEX = 2
+
+RETIRED_HOOK_PROSE_RULE_ID = "retired-hook-prose"
+RULES_DIRECTORY_NAME = "rules"
+HOOKS_DIRECTORY_NAME = "hooks"
+HOOKS_CONFIGURATION_FILE_NAME = "hooks.json"
+HOOK_CONSTANTS_DIRECTORY_NAME = "hooks_constants"
+DISPATCHER_CONSTANTS_GLOB = "*dispatcher_constants.py"
+ALL_INSTALLER_PATH_SEGMENTS = ("bin", "install.mjs")
+PYTHON_GLOB = "*.py"
+REPLACEMENT_CHARACTER_ERRORS = "replace"
+ALL_HOOK_MODULE_NAME_SUFFIXES = (
+    "_advisor",
+    "_blocker",
+    "_dispatcher",
+    "_enforcer",
+    "_gate",
+    "_guard",
+    "_recorder",
+    "_rewriter",
+    "_tracker",
+    "_validator",
+)
+ALL_LIVE_CLAIM_VERBS = frozenset(
+    {
+        "allows",
+        "applies",
+        "blocks",
+        "catches",
+        "checks",
+        "denies",
+        "enforces",
+        "fires",
+        "flags",
+        "gates",
+        "hosts",
+        "matches",
+        "prevents",
+        "reads",
+        "records",
+        "refuses",
+        "rejects",
+        "reports",
+        "requires",
+        "runs",
+        "scans",
+        "stops",
+        "watches",
+    }
+)
+ALL_REPLACEMENT_DELIVERY_PHRASES = (
+    "staged policy lint",
+    "policy lint",
+    "cde_lint",
+    "repository_checks/",
+    "repository_policy.py",
+    "repository check",
+)
+INLINE_CODE_PATTERN = r"`([^`\n]+)`"
+HOOK_MODULE_NAME_PATTERN = r"[a-z_][a-z0-9_]*"
+PROSE_WORD_PATTERN = r"[a-z]+"
+RETIRED_ROSTER_PATTERN = (
+    r"(?s)RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS\s*=\s*new Set\(\[(.*?)\]\)"
+)
+QUOTED_HOOK_PATH_PATTERN = r"['\"]([a-z_]+/[a-z_0-9]+\.py)['\"]"
+HOOKS_JSON_PATH_PATTERN = r"hooks/[a-z_]+/([a-z_0-9]+)\.py"
+SENTENCE_BOUNDARY_PATTERN = r"[.!?](?:\s|$)"
+RETIRED_HOOK_PROSE_MESSAGE = (
+    "{hook_name} is named by no hooks.json entry and no dispatcher roster, so it "
+    "reaches no tool call. Say what the reader faces now, or drop the "
+    "present-tense action."
+)

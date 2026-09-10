@@ -1,7 +1,7 @@
 """Constants for the failing-test-run PostToolUse recorder hook.
 
 Holds the cheap substring check the hook runs before any shell parsing, the
-harness's own exit-code error prefix, the chaining and redirection operator
+chaining and redirection operator
 tokens that keep the recognizer to one unchained command, the pytest program
 and Python interpreter basenames, and the flag-token marker the path
 extractor uses to skip an option rather than an existing test file argument.
@@ -20,7 +20,6 @@ import re
 BASH_TOOL_NAME = "Bash"
 
 ALL_PYTEST_MENTION_SUBSTRINGS: tuple[str, ...] = ("pytest", "py.test")
-EXIT_CODE_ERROR_PREFIX: str = "Error: Exit code "
 OPTION_TOKEN_PREFIX: str = "-"
 NODE_ID_FILE_PATH_SEPARATOR: str = "::"
 ALL_CHAINING_OPERATOR_SUBSTRINGS: tuple[str, ...] = ("&&", "||", ";", "|", "\n")

@@ -54,4 +54,9 @@ class BashHostedHookEntry:
     applicable_tool_names: frozenset[str]
 
 
-ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = ()
+ALL_BASH_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
+    BashHostedHookEntry(
+        script_relative_path="blocking/msys_rev_path_rewriter.py",
+        applicable_tool_names=ALL_BASH_ONLY_TOOL_NAMES,
+    ),
+)

@@ -101,6 +101,9 @@ try:
     for each_bootstrap_directory in (_hooks_root_directory, _blocking_directory):
         if each_bootstrap_directory not in sys.path:
             sys.path.insert(0, each_bootstrap_directory)
+    from hooks_constants.bash_post_call_dispatcher_constants import (
+        EXIT_CODE_ERROR_PREFIX,
+    )
     from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
     from hooks_constants.test_failure_recorder_constants import (
         ALL_CHAINING_OPERATOR_SUBSTRINGS,
@@ -108,7 +111,6 @@ try:
         ALL_PYTEST_PROGRAM_BASENAMES,
         ALL_REDIRECTION_TOKENS,
         BASH_TOOL_NAME,
-        EXIT_CODE_ERROR_PREFIX,
         MODULE_RUN_FLAG,
         NODE_ID_FILE_PATH_SEPARATOR,
         OPTION_TOKEN_PREFIX,
