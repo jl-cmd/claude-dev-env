@@ -55,10 +55,7 @@ CONVENTIONAL_TITLE_PATTERN: re.Pattern[str] = re.compile(
     rf"^(?:{'|'.join(ALL_CONVENTIONAL_TITLE_TYPES)})(?:\([^)\r\n]+\))?!?: [^\s].*$"
 )
 ALL_REQUIRED_PR_DESCRIPTION_HEADINGS: tuple[str, ...] = (
-    "Summary",
-    "Description",
     "Why",
-    "How",
     "Verification",
 )
 ALL_PATH_ANCHORED_VOLATILE_PATH_MARKERS: tuple[str, ...] = (

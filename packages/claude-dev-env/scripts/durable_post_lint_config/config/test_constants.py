@@ -4,6 +4,7 @@ from durable_post_lint_config.config.constants import (
     ALL_CONVENTIONAL_TITLE_TYPES,
     ALL_POST_ACTIONS,
     ALL_RELEASE_BODY_MARKERS,
+    ALL_REQUIRED_PR_DESCRIPTION_HEADINGS,
     CONVENTIONAL_TITLE_PATTERN,
     RELEASE_BRANCH_PREFIX,
 )
@@ -36,3 +37,7 @@ def should_carry_both_markers_release_automation_writes() -> None:
 
 def should_name_the_branch_prefix_release_automation_pushes() -> None:
     assert RELEASE_BRANCH_PREFIX == "release-please--branches--"
+
+
+def should_require_only_the_headings_both_pull_request_rule_sets_name() -> None:
+    assert ALL_REQUIRED_PR_DESCRIPTION_HEADINGS == ("Why", "Verification")

@@ -15,21 +15,29 @@ if str(_SCRIPTS_DIRECTORY) not in sys.path:
 import durable_post_lint
 
 SCRIPT_PATH = _SCRIPTS_DIRECTORY / "durable_post_lint.py"
-VALID_PR_BODY = """## Summary
-
-Summary text.
-
-## Description
-
-Description text.
-
-## Why
+VALID_PR_BODY = """## Why
 
 Why text.
 
-## How
+## Scope
 
-How text.
+Scope text.
+
+## Tradeoffs
+
+Tradeoffs text.
+
+## Blast Radius
+
+Blast radius text.
+
+## Verification
+
+Verification text.
+"""
+MINIMAL_PR_BODY = """## Why
+
+Why text.
 
 ## Verification
 
@@ -156,7 +164,7 @@ def test_pr_titles_reject_nonconventional_forms(title: str) -> None:
 
 @pytest.mark.parametrize(
     "missing_heading",
-    ["Summary", "Description", "Why", "How", "Verification"],
+    durable_post_lint.ALL_REQUIRED_PR_DESCRIPTION_HEADINGS,
 )
 def test_pr_body_reports_each_missing_heading(missing_heading: str) -> None:
     body_text = VALID_PR_BODY.replace(f"## {missing_heading}\n", "")
@@ -168,6 +176,31 @@ def test_pr_body_reports_each_missing_heading(missing_heading: str) -> None:
     assert [each_finding.message for each_finding in all_findings] == [
         f"body is missing required heading: {missing_heading}"
     ]
+
+
+@pytest.mark.parametrize("action", ["pr-create", "pr-edit"])
+def should_accept_a_body_carrying_only_the_two_required_headings(action: str) -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action=action,
+        title="fix(cli): tighten input handling",
+        body_text=MINIMAL_PR_BODY,
+    )
+    assert all_findings == ()
+
+
+def should_still_accept_a_body_published_under_the_superseded_heading_set() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-edit",
+        title=None,
+        body_text=(
+            "## Summary\n\nSummary text.\n\n"
+            "## Description\n\nDescription text.\n\n"
+            "## Why\n\nWhy text.\n\n"
+            "## How\n\nHow text.\n\n"
+            "## Verification\n\nVerification text.\n"
+        ),
+    )
+    assert all_findings == ()
 
 
 def test_non_pr_body_needs_no_pr_headings() -> None:
