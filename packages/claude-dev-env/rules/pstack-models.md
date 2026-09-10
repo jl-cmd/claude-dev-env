@@ -28,9 +28,10 @@ The file contains this shape:
 ```
 
 Offer only model IDs the active native tool accepts. Keep the user's order.
-Treat `inherit-parent` and `auto` as parent inheritance, not model IDs. A
-different host starts with its own confirmed choices. It never copies the Codex
-preference file.
+Treat `inherit-parent` and `auto` as parent inheritance, not model IDs. A full
+install seeds the Claude file and the Codex file from the package when a host
+file is absent, and leaves an existing file untouched. A different host never
+copies another host's preference file.
 
 ## Selection before every delegation
 
