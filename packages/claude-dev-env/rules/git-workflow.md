@@ -73,7 +73,7 @@ read the finished tip, and both are obvious the moment you check one level alone
 
 Prove each level before you push it: import the modules that level changes, and run
 the required linter against that level's own base. To repair a level, rebuild its
-import header as the union of what that level actually references, let the linter's
+import header as the union of what that level references, let the linter's
 autofix strip the rest, and move a premature helper up to the level that defines
 what it calls.
 
