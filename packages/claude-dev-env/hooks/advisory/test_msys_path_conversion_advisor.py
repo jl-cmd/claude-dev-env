@@ -190,3 +190,10 @@ def test_main_should_stay_quiet_for_a_non_bash_tool(
     payload["tool_name"] = "PowerShell"
 
     assert _run_main(monkeypatch, capsys, json.dumps(payload)) == ""
+
+
+def test_should_report_a_backslash_argument_as_carrying_a_mangling_mark() -> None:
+    assert (
+        msys_path_conversion_advisor.argument_carries_msys_mangling_marks(_MANGLED_ARGUMENT)
+        is True
+    )
