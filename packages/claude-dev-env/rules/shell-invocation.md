@@ -20,9 +20,9 @@ When a script file's literal body needs `$(...)`, author it with the Write tool,
 
 No PreToolUse hook denies a Bash command. Commit `0f21faf8e` retired the blocking policy hooks and left the Bash PreToolUse roster empty. `shell_substitution_blocker.py` was one of them. The substitution constraint above is guidance a reader follows, and a permission prompt on a wrapped command is the signal that one slipped through.
 
-One Bash hook still runs, after the call rather than before it. `advisory/msys_path_conversion_advisor.py` (PostToolUse on Bash, hosted by `bash_post_call_dispatcher`) reads a failed git call and looks for the mark MSYS leaves on a `<rev>:<path>` argument.
+One hook does cover a Bash command, and it runs after the call rather than before it. `advisory/msys_path_conversion_advisor.py` (PostToolUse on Bash, hosted by `bash_post_call_dispatcher`) reads a failed git call and looks for the mark MSYS leaves on a `<rev>:<path>` argument.
 
-Git Bash rewrites that argument when the revision holds a slash and the path after the colon starts with a dot-directory or a slash. It turns the colon into a semicolon and the slashes into backslashes, so `git show origin/main:.claude/settings.json` reaches git as `origin\main;.claude\settings.json` and git reports a revision that does not exist. `git show origin/main:packages/app.py` passes through untouched, and so does any path after the colon that starts with `./`, `../`, or `~/`.
+Git Bash rewrites that argument when the revision holds a slash and the path after the colon starts with a slash or a dot-directory name such as `.claude/`. It turns the colon into a semicolon and the slashes into backslashes, so `git show origin/main:.claude/settings.json` reaches git as `origin\main;.claude\settings.json` and git reports a revision that does not exist. `git show origin/main:packages/app.py` passes through untouched, and so does any path after the colon that starts with `./`, `../`, or `~/`.
 
 On the rewritten shape the hook names the two exports that turn path conversion off:
 
@@ -30,4 +30,4 @@ On the rewritten shape the hook names the two exports that turn path conversion 
 export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
 ```
 
-Put that export and the git command in one command. The hook never blocks, so the advice lands on the first failure instead of the fourth.
+Put that export and the git command in one command. The hook never blocks, so the advice lands on the first failure.
