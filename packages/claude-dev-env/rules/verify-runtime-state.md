@@ -22,7 +22,7 @@ Before stating a runtime claim, gather the matching live signal:
 | The config is in effect | Print the loaded config at runtime and read the value. |
 | The server is up | Probe the port; a refused connection means it is down. |
 | The process is running | List processes and match the name or PID. |
-| The change took effect | Drive the flow and watch the new behavior. |
+| The change took effect | Drive the flow and watch the new behavior. A script that proves a branch's behavior names the module file it loaded, as its first step, because an installed copy of the same package shadows the checkout you meant to test. |
 | The dependency is reachable | Send one real request and read the response. |
 | The release or deploy shipped | Read what it makes: the tag, the published version, the file on disk. |
 | The pipeline did the work | Read each job's own result. A run reports success while a job inside it is skipped. |
