@@ -20,7 +20,7 @@ the only moment the two names line up.
 
 Quiet branches: a non-Bash tool, a zero-exit call, a failure carrying neither
 marker, a quoted argument free of both mangling marks, and
-a command that already exports the workaround each emit nothing.
+a command that already names either workaround variable each emit nothing.
 
 Hosted by ``blocking/bash_post_call_dispatcher.py``, which forwards the
 ``hookSpecificOutput.additionalContext`` this hook prints.
@@ -43,11 +43,11 @@ try:
         ADVISORY_LINE_SEPARATOR,
         ALL_MANGLED_ARGUMENT_MARKERS,
         ALL_MSYS_MANGLING_CHARACTERS,
+        ALL_MSYS_PATH_CONVERSION_VARIABLE_NAMES,
         FIX_LINE,
         MANGLED_ARGUMENT_CLOSING_QUOTE,
         MANGLED_ARGUMENT_LINE_TEMPLATE,
         MANGLING_EXPLANATION_LINE,
-        MSYS_PATH_CONVERSION_VARIABLE_NAME,
         SAME_COMMAND_LINE,
     )
     from hooks_constants.post_tool_use_context import (
@@ -98,6 +98,24 @@ def argument_carries_msys_mangling_marks(argument_text: str) -> bool:
     return any(each_character in argument_text for each_character in ALL_MSYS_MANGLING_CHARACTERS)
 
 
+def command_names_a_path_conversion_variable(command_text: str) -> bool:
+    """Return whether the command already names a variable that stops conversion.
+
+    The advisory names two exports, and either one on its own suppresses the
+    rewriting, so a command carrying either has nothing left to learn.
+
+    Args:
+        command_text: The Bash command text the agent ran.
+
+    Returns:
+        True when one of those variable names is present, else False.
+    """
+    return any(
+        each_variable_name in command_text
+        for each_variable_name in ALL_MSYS_PATH_CONVERSION_VARIABLE_NAMES
+    )
+
+
 def mangled_revision_path_argument(command_text: str, tool_response: object) -> str | None:
     """Return the argument git reported, when MSYS mangled it, else None.
 
@@ -105,8 +123,8 @@ def mangled_revision_path_argument(command_text: str, tool_response: object) -> 
     reported a non-zero exit status, which arrives as a string carrying the
     exit-code prefix. Git printed either its ambiguous-argument error or its
     invalid-object-name error, and the quoted argument after it closes. That
-    argument carries a path-conversion mark, and the command does not already
-    export the workaround.
+    argument carries a path-conversion mark, and the command names neither of
+    the two variables the workaround exports.
 
     Args:
         command_text: The Bash command text the agent ran.
@@ -125,7 +143,7 @@ def mangled_revision_path_argument(command_text: str, tool_response: object) -> 
         return None
     if not argument_carries_msys_mangling_marks(argument_text):
         return None
-    if MSYS_PATH_CONVERSION_VARIABLE_NAME in command_text:
+    if command_names_a_path_conversion_variable(command_text):
         return None
     return argument_text
 
