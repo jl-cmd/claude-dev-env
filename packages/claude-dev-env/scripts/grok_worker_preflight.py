@@ -90,6 +90,8 @@ from dev_env_scripts_constants.grok_worker_constants import (
     UTF8_ENCODING,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 preflight_which = shutil.which
 preflight_subprocess_runner = subprocess.run
 preflight_time = time.time
@@ -259,6 +261,7 @@ def _run_grok_command(
             errors=UTF8_DECODE_ERRORS,
             timeout=timeout_seconds,
             check=False,
+            creationflags=hidden_window_creation_flags(),
         )
     except OSError:
         return None

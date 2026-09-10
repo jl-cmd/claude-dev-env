@@ -41,6 +41,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import TextIO
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def _load_module_from_path(module_name: str, module_path: Path) -> ModuleType:
     """Load and execute the module found at module_path, under module_name.
@@ -197,6 +199,7 @@ def run_hosted_command_once_milliseconds(
         text=True,
         timeout=_harness_constants.SUBPROCESS_TIMEOUT_SECONDS,
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
     finished_at = time.perf_counter()
     return (finished_at - started_at) * 1000.0

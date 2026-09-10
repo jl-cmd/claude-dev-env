@@ -43,6 +43,8 @@ from pr_converge_skill_constants.constants import (
     GH_CHECK_RUNS_PATH_TEMPLATE,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def _run_check_runs_api(
     *, owner: str, repo: str, sha: str
@@ -62,6 +64,7 @@ def _run_check_runs_api(
         encoding="utf-8",
         errors="replace",
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
 
 

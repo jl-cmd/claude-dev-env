@@ -59,6 +59,8 @@ from terminology_sweep import repository_environment
 from code_rules_gate_parts.git_file_sets import paths_from_git_staged
 from code_rules_gate_parts.wrapper_plumb_check import is_test_path
 
+from subprocess_window_access import inherited_stream_startup_info
+
 
 def _is_conftest_path(file_path: Path) -> bool:
     """Return True when *file_path* is a pytest ``conftest.py`` fixture module."""
@@ -411,6 +413,7 @@ def _pytest_batch_exit_code(
         timeout=STAGED_PYTEST_TIMEOUT_SECONDS,
         check=False,
         env=environment,
+        startupinfo=inherited_stream_startup_info(),
     )
     if pytest_process.returncode == PYTEST_NO_TESTS_COLLECTED_EXIT_CODE:
         return 0

@@ -27,6 +27,8 @@ from pr_converge_skill_constants.constants import (
     REVIEWS_PER_PAGE,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def fetch_pending_reviews(
     *, owner: str, repo: str, number: int, user_filter: str | None = None
@@ -56,6 +58,7 @@ def fetch_pending_reviews(
         encoding="utf-8",
         errors="replace",
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
     if completed_process.returncode != 0:
         print(f"gh api error: {completed_process.stderr}", file=sys.stderr)

@@ -27,6 +27,8 @@ from dev_env_scripts_constants.grok_run_ledger_constants import (
     UTF8_ENCODING,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def compute_sha256_hex(content: bytes) -> str:
     """Return the hex SHA-256 digest of raw bytes.
@@ -58,11 +60,13 @@ def extract_worktree_diff(
         ["git", "-C", str(worktree_path), "diff", base_sha],
         text=True,
         encoding=UTF8_ENCODING,
+        creationflags=hidden_window_creation_flags(),
     )
     changed_paths_listing = subprocess.check_output(
         ["git", "-C", str(worktree_path), "diff", "--name-only", base_sha],
         text=True,
         encoding=UTF8_ENCODING,
+        creationflags=hidden_window_creation_flags(),
     )
     changed_paths = tuple(
         each_line.strip()

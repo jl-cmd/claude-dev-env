@@ -23,6 +23,8 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.hook_block_logger import log_hook_block  # noqa: E402
 
+from hooks_constants.subprocess_window import hidden_window_creation_flags
+
 GIT_COMMAND_TIMEOUT_SECONDS = 5
 PROTECTED_BRANCHES = ("main", "master")
 PROTECTED_REMOTE_PATTERNS: list[str] = []
@@ -111,6 +113,7 @@ def get_branch_at_directory(working_dir: str | None = None) -> str | None:
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=working_dir,
+            creationflags=hidden_window_creation_flags(),
         )
         if completed_process.returncode == 0:
             return completed_process.stdout.strip()
@@ -130,6 +133,7 @@ def is_protected_repo(working_dir: str | None = None) -> bool:
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=working_dir,
+            creationflags=hidden_window_creation_flags(),
         )
         if completed_process.returncode == 0:
             remote_url = completed_process.stdout.strip()

@@ -38,6 +38,8 @@ from hooks_constants.setup_project_paths_constants import (  # noqa: E402
     WROTE_ENTRIES_STATUS_TEMPLATE,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 class SchemaMismatchError(Exception):
     """Raised when the on-disk config declares a schema newer than this script supports."""
@@ -238,6 +240,7 @@ def _run_es_exe_folders_query() -> list[str]:
         text=True,
         encoding=UTF8_ENCODING,
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
     if completion.returncode != 0:
         truncated_stderr = completion.stderr[:STDERR_TRUNCATION_LENGTH].strip()
