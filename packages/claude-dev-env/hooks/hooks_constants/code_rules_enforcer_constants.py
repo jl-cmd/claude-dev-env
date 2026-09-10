@@ -132,13 +132,14 @@ ALL_TOKEN_ANCHORED_EXEMPT_COMMENT_BODIES: tuple[str, ...] = (
     "pragma:",
 )
 ALL_TOKEN_ANCHORED_DIRECTIVE_BOUNDARY_CHARACTERS: frozenset[str] = frozenset({":"})
+STEALTH_KEEP_COMMENT_MARKER: str = "STEALTH: Keep"
 ALL_FREE_FORM_EXEMPT_COMMENT_BODIES: tuple[str, ...] = (
     "type:",
     "TODO",
     "FIXME",
     "HACK",
     "XXX",
-    "STEALTH: Keep",
+    STEALTH_KEEP_COMMENT_MARKER,
 )
 CHAINED_INLINE_COMMENT_PATTERN = re.compile(r"#")
 ALL_JAVASCRIPT_EXEMPT_COMMENT_PREFIXES: tuple[str, ...] = (
