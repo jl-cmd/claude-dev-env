@@ -276,6 +276,25 @@ def accepts_python(document: Document) -> bool:
     return document.path.suffix.lower() == constants.PYTHON_SUFFIX
 
 
+def accepts_production_python(document: Document) -> bool:
+    """Return whether the document is Python outside the test tree.
+
+    The hook lane exempts a test module so a test can stage an undercounting
+    fixture freely. This gate reuses the hook lane's own ``is_test_file``
+    predicate, so the two lanes cannot drift on what counts as a test file.
+
+    Args:
+        document: Candidate document.
+
+    Returns:
+        True for a Python document whose path is not a test path.
+    """
+    if not accepts_python(document):
+        return False
+    shared_module = _hooks_module("blocking.code_rules_shared")
+    return not shared_module.is_test_file(f"/{document.path.as_posix()}")
+
+
 def accepts_code(document: Document) -> bool:
     """Return whether the document contains supported source code.
 

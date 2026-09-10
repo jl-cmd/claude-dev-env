@@ -73,7 +73,7 @@ def _python_document_rules() -> tuple[model.Rule, ...]:
         ),
         build_document_rule(
             "subprocess-budget",
-            adapters.accepts_python,
+            adapters.accepts_production_python,
             adapters.subprocess_budget_diagnostics,
         ),
         build_document_rule(
