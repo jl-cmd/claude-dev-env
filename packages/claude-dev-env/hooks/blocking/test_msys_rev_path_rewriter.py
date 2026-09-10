@@ -92,6 +92,12 @@ def test_colon_token_in_a_non_git_segment_is_left_alone() -> None:
     assert rewriter.all_exclusion_prefixes("echo origin/main:.gitignore") == ()
 
 
+def test_quoted_message_token_carrying_a_slash_and_a_dot_is_left_alone() -> None:
+    command = "git commit -m \"don't touch a/b:.x\""
+    assert rewriter.all_exclusion_prefixes(command) == ()
+    assert rewriter.command_with_exclusion_export(command) == command
+
+
 def test_url_token_in_a_curl_command_is_left_alone() -> None:
     assert rewriter.all_exclusion_prefixes("curl https://example.com/x") == ()
 
