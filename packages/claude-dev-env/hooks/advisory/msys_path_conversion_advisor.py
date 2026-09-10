@@ -82,6 +82,21 @@ def text_after_first_mangled_argument_marker(response_text: str) -> str | None:
     return None
 
 
+def argument_carries_msys_mangling_marks(argument_text: str) -> bool:
+    """Return whether an argument carries a mark left behind by path conversion.
+
+    Path conversion leaves a backslash or a semicolon in the argument, and that
+    is what separates this failure from a revision that is simply absent.
+
+    Args:
+        argument_text: The quoted argument git named in its failure.
+
+    Returns:
+        True when one of those marks is present, else False.
+    """
+    return any(each_character in argument_text for each_character in ALL_MSYS_MANGLING_CHARACTERS)
+
+
 def mangled_revision_path_argument(command_text: str, tool_response: object) -> str | None:
     """Return the argument git reported, when MSYS mangled it, else None.
 
@@ -89,9 +104,8 @@ def mangled_revision_path_argument(command_text: str, tool_response: object) -> 
     reported a non-zero exit status, which arrives as a string carrying the
     exit-code prefix. Git printed either its ambiguous-argument error or its
     invalid-object-name error, and the quoted argument after it closes. That
-    argument carries a backslash or a semicolon, which is what path conversion
-    leaves behind and what separates this failure from a revision that is
-    simply absent. The command does not already export the workaround.
+    argument carries a path-conversion mark, and the command does not already
+    export the workaround.
 
     Args:
         command_text: The Bash command text the agent ran.
@@ -108,7 +122,7 @@ def mangled_revision_path_argument(command_text: str, tool_response: object) -> 
     argument_text, closing_quote, _ = text_after_marker.partition(AMBIGUOUS_ARGUMENT_CLOSING_QUOTE)
     if not closing_quote:
         return None
-    if not any(each_character in argument_text for each_character in ALL_MSYS_MANGLING_CHARACTERS):
+    if not argument_carries_msys_mangling_marks(argument_text):
         return None
     if MSYS_PATH_CONVERSION_VARIABLE_NAME in command_text:
         return None
