@@ -26,6 +26,7 @@ __all__ = [
 ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
     BashHostedHookEntry("observability/test_failure_recorder.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("advisory/pr_done_reminder.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
+    BashHostedHookEntry("advisory/msys_path_conversion_advisor.py", ALL_BASH_ONLY_TOOL_NAMES),
 )
 
 POST_TOOL_USE_HOOK_EVENT_NAME: str = "PostToolUse"
