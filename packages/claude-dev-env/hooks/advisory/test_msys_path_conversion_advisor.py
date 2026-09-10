@@ -19,6 +19,7 @@ try:
     if advisory_directory not in sys.path:
         sys.path.insert(0, advisory_directory)
     import msys_path_conversion_advisor
+    from hooks_constants import msys_path_conversion_advisor_constants
 except ImportError as import_error:
     raise ImportError(
         "test_msys_path_conversion_advisor: cannot import its sibling modules; "
@@ -37,7 +38,15 @@ _MISSING_REVISION_RESPONSE = (
     "fatal: ambiguous argument 'origin/nope:packages/app/main.py': "
     "unknown revision or path not in the working tree."
 )
+_MANGLED_OBJECT_NAME_RESPONSE = (
+    "Error: Exit code 128\n" + r"fatal: invalid object name 'origin\main;C'."
+)
+_MISSING_OBJECT_NAME_RESPONSE = (
+    "Error: Exit code 128\nfatal: invalid object name 'nosuchbranch'."
+)
 _SHOW_COMMAND = "git show origin/main:.claude/skills/x/test_run_evals.py"
+_ABSOLUTE_PATH_SHOW_COMMAND = "git show origin/main:/nope"
+_MISSING_OBJECT_SHOW_COMMAND = "git show nosuchbranch:AGENTS.md"
 _EXPORT_LINE = "export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'"
 
 
@@ -69,6 +78,30 @@ def test_should_return_the_mangled_argument_word_for_word() -> None:
     )
 
     assert mangled_argument == r"origin\main;.claude\skills\x\test_run_evals.py"
+
+
+def test_should_return_the_mangled_argument_from_an_invalid_object_name_failure() -> None:
+    mangled_argument = msys_path_conversion_advisor.mangled_revision_path_argument(
+        _ABSOLUTE_PATH_SHOW_COMMAND, _MANGLED_OBJECT_NAME_RESPONSE
+    )
+
+    assert mangled_argument == r"origin\main;C"
+
+
+def test_should_stay_quiet_when_the_object_name_failure_names_an_unmangled_argument() -> None:
+    assert (
+        msys_path_conversion_advisor.mangled_revision_path_argument(
+            _MISSING_OBJECT_SHOW_COMMAND, _MISSING_OBJECT_NAME_RESPONSE
+        )
+        is None
+    )
+
+
+def test_markers_should_hold_both_git_messages_with_the_ambiguous_argument_first() -> None:
+    assert msys_path_conversion_advisor_constants.ALL_MANGLED_ARGUMENT_MARKERS == (
+        "fatal: ambiguous argument '",
+        "fatal: invalid object name '",
+    )
 
 
 def test_should_stay_quiet_when_the_command_succeeded() -> None:
