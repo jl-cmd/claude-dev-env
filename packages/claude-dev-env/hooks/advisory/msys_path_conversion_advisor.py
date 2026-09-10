@@ -56,7 +56,7 @@ try:
     from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
 except ImportError as import_error:
     raise ImportError(
-        "msys_path_conversion_advisor: cannot import its dependencies; "
+        "msys_path_conversion_advisor is unable to import its dependencies; "
         "ensure the hooks directory is importable."
     ) from import_error
 
