@@ -3,18 +3,10 @@
 from __future__ import annotations
 
 import json
-import sys
 from io import StringIO
-from pathlib import Path
 from unittest.mock import patch
 
-_HOOKS_DIRECTORY = str(Path(__file__).resolve().parent.parent)
-if _HOOKS_DIRECTORY not in sys.path:
-    sys.path.insert(0, _HOOKS_DIRECTORY)
-
-from hooks_constants.pre_tool_use_allow_output import (  # noqa: E402
-    write_pre_tool_use_allow_to_stdout,
-)
+from hooks_constants.pre_tool_use_allow_output import write_pre_tool_use_allow_to_stdout
 
 
 def _emitted_payload(updated_tool_input: dict[str, object]) -> dict[str, object]:

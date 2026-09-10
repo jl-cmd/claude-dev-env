@@ -3,18 +3,10 @@
 from __future__ import annotations
 
 import json
-import sys
 from io import StringIO
-from pathlib import Path
 from unittest.mock import patch
 
-_BLOCKING_DIRECTORY = Path(__file__).resolve().parent
-_HOOKS_DIRECTORY = _BLOCKING_DIRECTORY.parent
-for each_import_directory in (str(_BLOCKING_DIRECTORY), str(_HOOKS_DIRECTORY)):
-    if each_import_directory not in sys.path:
-        sys.path.insert(0, each_import_directory)
-
-import msys_rev_path_rewriter as rewriter  # noqa: E402
+import msys_rev_path_rewriter as rewriter
 
 SETTINGS_SHOW_COMMAND = "git show origin/main:.claude/settings.json"
 SETTINGS_SHOW_REWRITTEN = (
