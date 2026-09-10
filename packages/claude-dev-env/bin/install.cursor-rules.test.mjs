@@ -220,18 +220,60 @@ for (const targetName of [null, 'profile']) {
                 model: 'gpt-5.6-sol',
             });
 
-            const foreignPreferencesPath = join(
+            const claudePreferencesPath = join(
                 resolution.agentsHome,
                 'rules',
                 'pstack-model-preferences.claude.json',
             );
-            writeFileSync(foreignPreferencesPath, JSON.stringify({
+            const seededClaudePreferences = JSON.parse(
+                readFileSync(claudePreferencesPath, 'utf8'),
+            );
+            assert.deepEqual(seededClaudePreferences, {
+                host: 'claude',
+                modelsByRole: {
+                    'feature, refactoring': ['opus'],
+                    'bug-fix': ['opus'],
+                    'perf-issue': ['fable'],
+                    hillclimb: ['fable'],
+                    'judgment and prose': ['fable'],
+                    'hardest tasks': ['fable'],
+                    'how explorer': ['sonnet'],
+                    'how explainer': ['opus'],
+                    'how critics': ['sonnet', 'opus', 'fable'],
+                    'why investigators': ['sonnet'],
+                    'why synthesizer': ['fable'],
+                    'reflect tooling': ['opus'],
+                    'reflect judgment, divergent, synthesizer': ['fable'],
+                    'arena runners': ['sonnet', 'opus', 'fable'],
+                    'arena cross-judge pool': ['opus', 'fable'],
+                    'swarm workers': ['sonnet'],
+                    'architect runners': ['opus', 'fable'],
+                    'interrogate reviewers': ['sonnet', 'opus', 'fable'],
+                },
+            });
+            const claudeSelection = runSelector(selectorPath, {
+                host: 'claude',
+                inventoryHost: 'claude',
+                role: 'swarm workers',
+                delegationIndex: 0,
+                availableModelIds: ['sonnet', 'opus', 'fable'],
+                confirmedSuitableModelIds: [],
+                parentFallback: {
+                    isAllowed: false,
+                    hasMaterialCapabilityLoss: false,
+                },
+            });
+            assert.deepEqual(claudeSelection.nativeSpawnArguments, {
+                model: 'sonnet',
+            });
+
+            writeFileSync(claudePreferencesPath, JSON.stringify({
                 host: 'claude',
                 modelsByRole: {
                     'feature, refactoring': ['confirmed-claude-model'],
                 },
             }));
-            const foreignSelection = runSelector(selectorPath, {
+            const editedClaudeSelection = runSelector(selectorPath, {
                 host: 'claude',
                 inventoryHost: 'claude',
                 role: 'feature, refactoring',
@@ -243,7 +285,7 @@ for (const targetName of [null, 'profile']) {
                     hasMaterialCapabilityLoss: false,
                 },
             });
-            assert.deepEqual(foreignSelection.nativeSpawnArguments, {
+            assert.deepEqual(editedClaudeSelection.nativeSpawnArguments, {
                 model: 'confirmed-claude-model',
             });
 
@@ -251,7 +293,7 @@ for (const targetName of [null, 'profile']) {
             assert.equal(manifest.files.includes(sharedPath), true);
             assert.equal(manifest.files.includes(managedSelectorPath), true);
             assert.equal(manifest.files.includes(preferencesPath), false);
-            assert.equal(manifest.files.includes(foreignPreferencesPath), false);
+            assert.equal(manifest.files.includes(claudePreferencesPath), false);
 
             writeFileSync(sharedPath, 'stale');
             writeFileSync(preferencesPath, JSON.stringify({
@@ -268,7 +310,7 @@ for (const targetName of [null, 'profile']) {
                 ['user-edited-codex-model'],
             );
             assert.deepEqual(
-                JSON.parse(readFileSync(foreignPreferencesPath, 'utf8'))
+                JSON.parse(readFileSync(claudePreferencesPath, 'utf8'))
                     .modelsByRole['feature, refactoring'],
                 ['confirmed-claude-model'],
             );
@@ -295,7 +337,7 @@ for (const targetName of [null, 'profile']) {
             assert.equal(existsSync(cursorPath), false);
             assert.equal(existsSync(selectorPath), false);
             assert.equal(existsSync(preferencesPath), true);
-            assert.equal(existsSync(foreignPreferencesPath), true);
+            assert.equal(existsSync(claudePreferencesPath), true);
         } finally {
             rmSync(homeDirectory, { recursive: true, force: true });
         }
@@ -317,21 +359,21 @@ test('a blocked shared rule destination rolls back generated Cursor files', () =
     }
 });
 
-test('a failed install rolls back a newly seeded Codex preference file', () => {
+test('a failed install rolls back newly seeded host preference files', () => {
     const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-pstack-seed-rollback-'));
     try {
-        const preferencesPath = join(
-            homeDirectory,
-            '.agents',
-            'rules',
-            'pstack-model-preferences.codex.json',
-        );
+        const preferencesDirectory = join(homeDirectory, '.agents', 'rules');
         assert.throws(() => runInstaller(
             homeDirectory,
             ['--only', 'core'],
             { CLAUDE_DEV_ENV_INSTALL_FAULT: 'after_file_staging' },
         ));
-        assert.equal(existsSync(preferencesPath), false);
+        for (const hostName of ['claude', 'codex']) {
+            assert.equal(
+                existsSync(join(preferencesDirectory, 'pstack-model-preferences.' + hostName + '.json')),
+                false,
+            );
+        }
     } finally {
         rmSync(homeDirectory, { recursive: true, force: true });
     }

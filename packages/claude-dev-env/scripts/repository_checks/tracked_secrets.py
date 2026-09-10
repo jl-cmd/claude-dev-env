@@ -13,6 +13,7 @@ from repository_checks.config import constants as repository_constants
 from repository_checks.email_exemptions import load_email_exemptions
 from repository_checks.hook_modules import load_hooks_module
 from repository_checks.models import RepositoryFinding
+from repository_checks.path_exemptions import load_path_exemptions
 
 
 def collect_tracked_secret_findings(
@@ -32,6 +33,7 @@ def collect_tracked_secret_findings(
     all_allowlisted_literals = exemption.repository_allowlisted_values(repository_root)
     all_exact_exemptions = load_email_exemptions(repository_root)
     all_exact_exemptions |= repository_constants.ALL_TRACKED_SECRET_EXACT_EXEMPTIONS
+    all_path_exemptions = load_path_exemptions(repository_root)
     all_findings: list[RepositoryFinding] = []
     for each_relative_path in all_tracked_paths:
         all_findings.extend(
@@ -41,6 +43,7 @@ def collect_tracked_secret_findings(
                 scanner,
                 all_allowlisted_literals,
                 all_exact_exemptions,
+                all_path_exemptions,
             )
         )
     return all_findings
@@ -52,6 +55,7 @@ def _find_secrets_for_path(
     scanner: ModuleType,
     all_allowlisted_literals: frozenset[str],
     all_exact_exemptions: frozenset[tuple[str, str, str]],
+    all_path_exemptions: frozenset[tuple[str, str]],
 ) -> list[RepositoryFinding]:
     posix_relative_path = relative_path.replace(
         repository_constants.WINDOWS_PATH_SEPARATOR,
@@ -59,11 +63,11 @@ def _find_secrets_for_path(
     )
     if scanner.is_path_exempt_from_pii_scan(posix_relative_path):
         return []
-    maybe_content = _read_utf8_text(
-        repository_root,
-        repository_root / relative_path,
-    )
+    absolute_path = repository_root / relative_path
+    maybe_content = _read_utf8_text(repository_root, absolute_path)
     if maybe_content is None:
+        return []
+    if _is_frozen_file_exempt(absolute_path, posix_relative_path, all_path_exemptions):
         return []
     return _find_secret_matches(
         posix_relative_path,
@@ -145,6 +149,25 @@ def _should_report_match(
     if exact_exemption_identity in all_exact_exemptions:
         return False
     return matched_text not in all_allowlisted_literals
+
+
+def _is_frozen_file_exempt(
+    absolute_path: Path,
+    posix_relative_path: str,
+    all_path_exemptions: frozenset[tuple[str, str]],
+) -> bool:
+    all_recorded_digests = {
+        each_digest
+        for each_exempt_path, each_digest in all_path_exemptions
+        if each_exempt_path == posix_relative_path
+    }
+    if not all_recorded_digests:
+        return False
+    return _file_digest(absolute_path) in all_recorded_digests
+
+
+def _file_digest(absolute_path: Path) -> str:
+    return hashlib.sha256(absolute_path.read_bytes()).hexdigest()
 
 
 def _secret_digest(matched_text: str) -> str:

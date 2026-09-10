@@ -5,6 +5,16 @@ from pathlib import PurePosixPath
 APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
     PurePosixPath, frozenset[PurePosixPath]
 ] = {
+    PurePosixPath("packages/claude-dev-env/bin/install-constants.mjs"): frozenset(
+        {
+            PurePosixPath("packages/claude-dev-env/bin/install.cursor-rules.test.mjs"),
+        }
+    ),
+    PurePosixPath("packages/claude-dev-env/bin/install.mjs"): frozenset(
+        {
+            PurePosixPath("packages/claude-dev-env/bin/install.cursor-rules.test.mjs"),
+        }
+    ),
     PurePosixPath(
         "packages/claude-dev-env/hooks/git-hooks/verification_notice_context.py"
     ): frozenset(
