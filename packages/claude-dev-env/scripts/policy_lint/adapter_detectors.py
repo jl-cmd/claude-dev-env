@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path, PurePosixPath
+from types import ModuleType
 
 from . import adapter_support
 from .config import constants
@@ -118,10 +119,49 @@ def validator_diagnostics(
     return adapter_support._diagnostics_for_messages(document, "validators", all_messages)
 
 
+def _is_untouched_function(
+    message: str, all_changed_lines: frozenset[int], scoping_module: ModuleType
+) -> bool:
+    span_range = scoping_module.function_length_span_range(message)
+    return span_range is not None and all_changed_lines.isdisjoint(span_range)
+
+
+def _change_scoped_messages(
+    all_messages: Iterable[str],
+    document: Document,
+    load_pr_loop_module: adapter_support.HookModuleLoader,
+) -> tuple[str, ...]:
+    """Drop function-length messages for functions the change never touched.
+
+    ::
+
+        an import added above an existing long ``main`` -> dropped
+        a statement added inside that ``main``          -> kept
+
+    Args:
+        all_messages: Every message the code-rule engine returned.
+        document: Current document and the lines this change touched.
+        load_pr_loop_module: Loader for the shared pull-request-loop scripts.
+
+    Returns:
+        The messages that remain in scope for this change.
+    """
+    all_changed_lines = document.changed_lines
+    if all_changed_lines is None:
+        return tuple(all_messages)
+    scoping_module = load_pr_loop_module(constants.VIOLATION_SCOPING_MODULE_NAME)
+    return tuple(
+        each_message
+        for each_message in all_messages
+        if not _is_untouched_function(each_message, all_changed_lines, scoping_module)
+    )
+
+
 def code_rule_diagnostics(
     document: Document,
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
+    load_pr_loop_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
     """Run the code-rule engine on one document.
 
@@ -129,9 +169,10 @@ def code_rule_diagnostics(
         document: Current text and optional prior text.
         repository_root: Request repository root for sibling-file resolution.
         load_module: Hook module loader.
+        load_pr_loop_module: Loader for the shared pull-request-loop scripts.
 
     Returns:
-        Diagnostics from the code-rule engine.
+        Diagnostics from the code-rule engine, scoped to the change.
     """
     absolute_path = adapter_support._document_path(repository_root, document)
     legacy_module = load_module("blocking.code_rules_enforcer")
@@ -146,7 +187,12 @@ def code_rule_diagnostics(
             sibling_directory=absolute_path.parent,
             include_comment_policy=True,
         )
-    return adapter_support._diagnostics_for_messages(document, "code-rules", all_messages)
+    all_scoped_messages = _change_scoped_messages(
+        all_messages, document, load_pr_loop_module
+    )
+    return adapter_support._diagnostics_for_messages(
+        document, "code-rules", all_scoped_messages
+    )
 
 
 def state_description_diagnostics(
