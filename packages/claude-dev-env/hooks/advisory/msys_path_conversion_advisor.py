@@ -2,8 +2,9 @@
 """PostToolUse context advisory: Git Bash rewrote a ``<rev>:<path>`` argument.
 
 This hook never blocks. It watches every Bash call finish and, when git failed
-with an ambiguous-argument error whose quoted argument carries the marks of
-MSYS path conversion, adds one loud note to the agent's context::
+with either its ambiguous-argument error or its invalid-object-name error and
+the quoted argument carries the marks of MSYS path conversion, adds one loud
+note to the agent's context::
 
     === MSYS PATH CONVERSION (context reminder, never a block) ===
     Git saw:     origin\\main;.claude\\skills\\x\\test_run_evals.py
@@ -17,8 +18,8 @@ command text the agent wrote looks correct and the error names an argument the
 agent never typed. The note arrives at the moment the failure lands, which is
 the only moment the two names line up.
 
-Quiet branches: a non-Bash tool, a zero-exit call, a failure without the
-ambiguous-argument marker, a quoted argument free of both mangling marks, and
+Quiet branches: a non-Bash tool, a zero-exit call, a failure carrying neither
+marker, a quoted argument free of both mangling marks, and
 a command that already exports the workaround each emit nothing.
 
 Hosted by ``blocking/bash_post_call_dispatcher.py``, which forwards the
@@ -41,9 +42,9 @@ try:
     from hooks_constants.msys_path_conversion_advisor_constants import (
         ADVISORY_HEADER,
         ADVISORY_LINE_SEPARATOR,
+        ALL_MANGLED_ARGUMENT_MARKERS,
         ALL_MSYS_MANGLING_CHARACTERS,
         AMBIGUOUS_ARGUMENT_CLOSING_QUOTE,
-        AMBIGUOUS_ARGUMENT_MARKER,
         FIX_LINE_TEMPLATE,
         MANGLED_ARGUMENT_LINE_TEMPLATE,
         MANGLING_EXPLANATION_LINE,
@@ -60,16 +61,37 @@ except ImportError as import_error:
     ) from import_error
 
 
+def text_after_first_mangled_argument_marker(response_text: str) -> str | None:
+    """Return what follows the first marker present in a git failure, else None.
+
+    Git names a mangled ``<rev>:<path>`` argument under two messages, one for a
+    path after the colon and one for an absolute path after the colon. The
+    markers are walked in order and the first one present wins.
+
+    Args:
+        response_text: The harness response text for the failed call.
+
+    Returns:
+        The text following the opening quote of the first marker present, or
+        None when the response carries no marker.
+    """
+    for each_marker in ALL_MANGLED_ARGUMENT_MARKERS:
+        _, marker_text, text_after_marker = response_text.partition(each_marker)
+        if marker_text:
+            return text_after_marker
+    return None
+
+
 def mangled_revision_path_argument(command_text: str, tool_response: object) -> str | None:
     """Return the argument git reported, when MSYS mangled it, else None.
 
     Four conditions all hold before an argument is returned. The harness
     reported a non-zero exit status, which arrives as a string carrying the
-    exit-code prefix. Git printed its ambiguous-argument error and the quoted
-    argument after it closes. That argument carries a backslash or a
-    semicolon, which is what path conversion leaves behind and what separates
-    this failure from a revision that is simply absent. The command does not
-    already export the workaround.
+    exit-code prefix. Git printed either its ambiguous-argument error or its
+    invalid-object-name error, and the quoted argument after it closes. That
+    argument carries a backslash or a semicolon, which is what path conversion
+    leaves behind and what separates this failure from a revision that is
+    simply absent. The command does not already export the workaround.
 
     Args:
         command_text: The Bash command text the agent ran.
@@ -80,8 +102,8 @@ def mangled_revision_path_argument(command_text: str, tool_response: object) -> 
     """
     if not isinstance(tool_response, str) or not tool_response.startswith(EXIT_CODE_ERROR_PREFIX):
         return None
-    _, marker_text, text_after_marker = tool_response.partition(AMBIGUOUS_ARGUMENT_MARKER)
-    if not marker_text:
+    text_after_marker = text_after_first_mangled_argument_marker(tool_response)
+    if text_after_marker is None:
         return None
     argument_text, closing_quote, _ = text_after_marker.partition(AMBIGUOUS_ARGUMENT_CLOSING_QUOTE)
     if not closing_quote:
