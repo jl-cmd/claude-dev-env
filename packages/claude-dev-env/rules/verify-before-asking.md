@@ -29,6 +29,10 @@ A path, port, branch name, or config value you recall from an earlier session co
 - When a tool can settle it, re-check in silence and act on the fresh result — no question to the user.
 - When no tool can settle it and the user has a stake in the answer, ask through `AskUserQuestion` (see [`confirm-implementation-forks`](confirm-implementation-forks.md)).
 
+A probe result expires the same way, and the boundary is not only a new session. A probe is bound to the tool roster it ran against, so a host respawn or any change to the available tools expires it inside one session. A probe that proved a subagent could reach a browser through one integration proves nothing once that integration is gone and a different one has taken its place. Carrying the old result across that boundary is memory dressed as evidence. Re-probe, or say the claim is unverified.
+
+A search proves absence only when you can state its pattern, its case handling, and how many matches it read. A case-sensitive pattern against an uppercase constant returns nothing and reads exactly like the code is not there. So does a pattern piped through `head -N`. Neither is a sweep.
+
 ## Questions That Belong to the User
 
 Reserve user questions for:

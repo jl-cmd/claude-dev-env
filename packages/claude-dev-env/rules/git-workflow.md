@@ -50,6 +50,40 @@ untouched.
    - Before push: `gh pr ready --undo`
    - After review approved: `gh pr ready`
 
+## Stash before a fast-forward, then check what the stash actually did
+
+`git stash push -u` is a save followed by a clean, and its "Saved working
+directory and index state" line proves only the save. The clean half can fail
+partway, on a locked directory or a network share, and leave the tree dirty
+while the message still reads like success. Run `git status --porcelain` after
+the stash and read the result before you trust it.
+
+Check the contents before you discard anything. `git stash show --stat` names
+what the stash holds, and running `git checkout -- .` on the strength of the
+success message alone is how tracked edits go missing.
+
+Untracked files land in a separate commit. They are in `stash@{0}^3`, not in
+`stash@{0}`, so a restore by pathspec against `stash@{0}` fails with a pathspec
+error even though the files are sitting right there. Restore them from
+`stash@{0}^3`.
+
+An untracked evidence or records directory is the common casualty, because
+nothing in the repository protects it. Commit it or copy it outside the tree
+before the stash, and confirm it is still on disk afterwards.
+
+## Keep a mid-task skill fix in its own pull request
+
+A broken skill, reference, or rule found while doing feature work gets fixed in
+its own pull request, apart from the feature. Do not block on it and do not
+silently work around it.
+
+This one needs saying out loud when you delegate, because a directive you hold
+does not reach a child agent. A prompt that ends "commit your fixes and open a
+pull request" gives the child one pull request to put everything in, and its
+diff comes back with skill edits mixed into the code change. Put the partition
+in the prompt, and ask the child's final message to list skill-file edits
+separately from code edits.
+
 ## Run the required checks locally before the first push
 
 Read the branch ruleset for the required check contexts before you push a branch,

@@ -3,7 +3,8 @@ name: fresh-branch
 description: >-
   Fresh git branch from origin/main in an isolated worktree under a configured root (default: <repo>/.claude/worktrees/<agent>/; never checkout -b in the caller tree).
   Triggers: fresh branch, new branch from main, /fresh-branch, start fresh, clean branch off main,
-  worktree branch, branch in temp.
+  worktree branch, branch in temp, new worktree, isolated worktree, work tree off origin main,
+  git worktree add, do the work in a worktree.
 ---
 
 # fresh-branch
@@ -112,6 +113,8 @@ Further edits for the new branch belong in `worktree_path`, not in the caller's 
 - **Path already occupied.** A leftover folder at the preferred worktree path gets a numeric suffix (`-2`, …); report the path from JSON, not the path you assumed.
 - **Relative `--worktree-root` is refused before fetch.** Only an absolute path is accepted; the default root applies when the flag is omitted. Validation runs before `git fetch`, so a bad root never touches the network or remote-tracking refs.
 - **External roots and stale permission rules.** `stale_worktree_rule_sweep` only walks `~/.claude/worktrees`. Edit rules granted under an external `--worktree-root` are not swept when that tree is deleted.
+- **A repository on a network share needs a local `--worktree-root`.** The default root sits under the repository, so a repository reached over UNC or a mapped drive puts the worktree on the share. `git worktree add` there checked out a fraction of the tree and still printed its success line, `git worktree list` flagged the path `locked`, a later `git checkout -f` inside it printed `remove the file manually to continue` and exited 0, and `git worktree remove --force` was refused with `cannot remove a locked working tree, lock reason: initializing`. Pass an absolute local root instead. To clear a wedged one: delete `.git/worktrees/<name>/index.lock`, then `git worktree remove -f -f <path>`, then `git branch -D <branch>`, then `git worktree prune`. The same operation against a local path completed every entry first try. A rebase on a share can also destroy the worktree's admin files mid-operation, which leaves the commits intact in the object store but the worktree unusable.
+- **A new worktree is not runnable yet.** It carries none of the repository's gitignored local configuration. List it in the source checkout with `git status --ignored --short` and copy what the code reads before the first run. Where the repository is installed editable, an import can still resolve to the source checkout rather than the new worktree, so print the module file of the package you changed and pin `PYTHONPATH` to the worktree root when it resolves elsewhere.
 
 ## File index
 

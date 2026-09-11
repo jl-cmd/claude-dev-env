@@ -22,6 +22,8 @@ Before stating a runtime claim, gather the matching live signal:
 | The config is in effect | Print the loaded config at runtime and read the value. |
 | The server is up | Probe the port; a refused connection means it is down. |
 | The process is running | List processes and match the name or PID. |
+| The run is stalled or hung | Read the process tree, not the parent. A parent blocked on a busy child sits at near-zero CPU with a silent log, which is the normal shape of a stage that delegates, not a stall. List the children and read their CPU and I/O before you call it stalled or kill it. |
+| A dependency path resolves | Call the code's own resolver from the interpreter that will do the work. A shell path probe is not authority: one returned False twice for a directory that exists while the resolver found it. A probe that shells out to a tool resolves it through the running process's `PATH`, so a child that loses `PATH` fails a gate the parent passes. |
 | The change took effect | Drive the flow and watch the new behavior. A script that proves a branch's behavior names the module file it loaded, as its first step, because an installed copy of the same package shadows the checkout you meant to test. |
 | The dependency is reachable | Send one real request and read the response. |
 | The release or deploy shipped | Read what it makes: the tag, the published version, the file on disk. |
