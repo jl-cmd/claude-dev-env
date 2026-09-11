@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.6.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.6.0...claude-dev-env-v7.6.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **install:** clean the companion out of the Codex and Cursor hook files too ([81171da](https://github.com/jl-cmd/claude-dev-env/commit/81171da391da081223dfcf1305862ba39243dc20))
+* **install:** register the session-continuity companion during a full install ([1c9d3f4](https://github.com/jl-cmd/claude-dev-env/commit/1c9d3f42e2cc109b387bb9faff35fb45df11c78a))
+* **install:** register the session-continuity hook during a full install ([f4f930c](https://github.com/jl-cmd/claude-dev-env/commit/f4f930cc0c03c6bbe35b31886b66cc140d8d6c1b))
+
 ## [7.6.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.5.0...claude-dev-env-v7.6.0) (2026-09-10)
 
 
