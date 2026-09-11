@@ -3104,35 +3104,44 @@ function runContinuityInstaller(homeDirectory, extraArguments) {
     });
 }
 
-function sessionStartHookCommands(settingsPath) {
-    if (!existsSync(settingsPath)) return [];
-    const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
-    return (settings.hooks?.SessionStart || [])
-        .flatMap(entry => (entry.hooks || []).map(eachHook => eachHook.command));
+function continuityCommandCount(configurationPath) {
+    if (!existsSync(configurationPath)) return 0;
+    const configuration = JSON.parse(readFileSync(configurationPath, 'utf8'));
+    const allCommands = Object.values(configuration.hooks || {})
+        .flat()
+        .flatMap(entry => (entry.hooks ? entry.hooks.map(eachHook => eachHook.command) : [entry.command]));
+    return allCommands.filter(
+        eachCommand => typeof eachCommand === 'string'
+            && eachCommand.includes('session-continuity/continuity.mjs'),
+    ).length;
 }
 
-test('a full install registers the session-continuity companion, and uninstall takes it back out', t => {
+test('a full install registers the session-continuity companion in every host, and uninstall takes it back out', t => {
     const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-continuity-install-'));
     t.after(() => rmSync(homeDirectory, { recursive: true, force: true }));
-    const settingsPath = join(homeDirectory, '.claude', 'settings.json');
+    const allConfigurationPaths = [
+        join(homeDirectory, '.claude', 'settings.json'),
+        join(homeDirectory, '.codex', 'hooks.json'),
+        join(homeDirectory, '.cursor', 'hooks.json'),
+    ];
 
     runContinuityInstaller(homeDirectory, []);
 
-    assert.equal(
-        sessionStartHookCommands(settingsPath).some(
-            eachCommand => eachCommand.includes('session-continuity/continuity.mjs'),
-        ),
-        true,
-        'the install registers the companion without a second setup command',
-    );
+    for (const configurationPath of allConfigurationPaths) {
+        assert.equal(
+            continuityCommandCount(configurationPath) > 0,
+            true,
+            `the install registers the companion in ${configurationPath} without a second setup command`,
+        );
+    }
 
     runContinuityInstaller(homeDirectory, ['--uninstall']);
 
-    assert.equal(
-        sessionStartHookCommands(settingsPath).some(
-            eachCommand => eachCommand.includes('session-continuity/continuity.mjs'),
-        ),
-        false,
-        'uninstall leaves no registration pointing at a removed script',
-    );
+    for (const configurationPath of allConfigurationPaths) {
+        assert.equal(
+            continuityCommandCount(configurationPath),
+            0,
+            `uninstall leaves no registration in ${configurationPath} pointing at a removed script`,
+        );
+    }
 });

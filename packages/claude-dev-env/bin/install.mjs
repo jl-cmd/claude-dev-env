@@ -547,6 +547,31 @@ function registerSessionContinuityHooks() {
 }
 
 /**
+ * Removes the companion's registrations from the Codex and Cursor hook files
+ * during an uninstall. The Claude settings.json copy is pruned inside the
+ * settings block, which owns that file's single write.
+ *
+ * Each host this installer registered is a host it has to clean, or the host
+ * keeps calling a script the uninstall deleted.
+ *
+ * @returns {string[]} The host configuration paths this run changed.
+ */
+function removeSessionContinuityHooksFromOtherHosts() {
+    const configurationPaths = continuityHostConfigurationPaths(INSTALL_ROOT_RESOLUTION);
+    const changedPaths = [];
+    for (const host of ['codex', 'cursor']) {
+        const configurationPath = configurationPaths[host];
+        if (!existsSync(configurationPath)) continue;
+        const configuration = JSON.parse(readFileSync(configurationPath, 'utf8'));
+        if (removeContinuityHooks(configuration) === 0) continue;
+        writeFileSync(configurationPath, JSON.stringify(configuration, null, 2) + '\n');
+        changedPaths.push(configurationPath);
+        console.log(`  Session continuity: hook registrations removed from ${configurationPath}`);
+    }
+    return changedPaths;
+}
+
+/**
  * Formats an absolute interpreter path as a settings.json hook command prefix:
  * forward-slash separators, double-quoted when the path contains a space so the
  * harness parses the interpreter as a single argument.
@@ -3200,6 +3225,7 @@ function executeUninstallPlan(plan, helpers = {}) {
             writeFileSync(plan.settingsPath, JSON.stringify(settings, null, 4) + '\n');
         }
     }
+    removeSessionContinuityHooksFromOtherHosts();
     throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
 
     unsetGlobalGitHooksPathIfOurs();
