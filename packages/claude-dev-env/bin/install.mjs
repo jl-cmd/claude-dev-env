@@ -45,6 +45,11 @@ import {
 } from '../scripts/refresh_pstack_plugin_skills.mjs';
 import { installPstack } from './pstack.mjs';
 import {
+    configureContinuityHosts,
+    continuityHostConfigurationPaths,
+    removeContinuityHooks,
+} from './install-session-continuity.mjs';
+import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
     isAllowedInstallDestination,
@@ -506,6 +511,38 @@ function seedPstackPreferences(preferenceFileName) {
     } catch (copyError) {
         if (copyError.code === 'EEXIST') return null;
         throw copyError;
+    }
+}
+
+/**
+ * Registers the session-continuity companion in each host configuration this
+ * install root resolves. Without this step the companion ships to the agents
+ * home but no host ever calls it, so Poteto Mode only activates when someone
+ * remembers a second setup command.
+ *
+ * A competing profile's registration, or an unwritable host configuration, is
+ * reported and leaves the rest of the install intact.
+ *
+ * @returns {string[]} The host configuration paths this run registered.
+ */
+function registerSessionContinuityHooks() {
+    const configurationPaths = continuityHostConfigurationPaths(INSTALL_ROOT_RESOLUTION);
+    const hosts = Object.keys(configurationPaths)
+        .filter(host => existsSync(dirname(configurationPaths[host])));
+    if (hosts.length === 0) return [];
+    try {
+        const results = configureContinuityHosts(INSTALL_ROOT_RESOLUTION, hosts);
+        for (const result of results) {
+            const state = result.changed ? 'registered' : 'already registered';
+            console.log(`  Session continuity: ${state} in ${result.path}`);
+        }
+        return results.map(result => result.path);
+    } catch (registrationError) {
+        console.warn(
+            `  Warning: session-continuity hooks were not registered (${registrationError.message}) — `
+            + 'run bin/install-session-continuity.mjs once the cause is resolved.',
+        );
+        return [];
     }
 }
 
@@ -2922,6 +2959,9 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         console.log(`  \u2713 ${relative(CLAUDE_HOME, agentsHubDest)} (canonical guidance)`);
     }
     const isFullInstall = !selectedGroups;
+    if (isFullInstall && shouldInstallAnyHooks) {
+        summary.sessionContinuity = { configuredPaths: registerSessionContinuityHooks() };
+    }
     const didPruneRun = isFullInstall && UNRESOLVED_DEPENDENCY_NAMES.length === 0;
     let failedPrunePaths = [];
     let stalePrunedTotal = 0;
@@ -3139,6 +3179,10 @@ function executeUninstallPlan(plan, helpers = {}) {
             pruneManagedHooksFromSettings(settings, managedHookRelativePaths);
             didSettingsChange = true;
             console.log('  Hook entries removed from settings.json');
+            const removedContinuityCount = removeContinuityHooks(settings);
+            if (removedContinuityCount > 0) {
+                console.log(`  Session continuity: ${removedContinuityCount} hook registration(s) removed from settings.json`);
+            }
         }
         const managedDenyFromPlan = plan.managedPermissionDenyEntries.length > 0
             ? plan.managedPermissionDenyEntries

@@ -3088,3 +3088,51 @@ test('--no-pstack leaves the pstack store absent', t => {
         assert.equal(existsSync(join(homeDirectory, '.claude', 'pstack')), false);
     });
 });
+
+function runContinuityInstaller(homeDirectory, extraArguments) {
+    return execFileSync('node', [PSTACK_TEST_INSTALLER_PATH, ...extraArguments], {
+        cwd: dirname(PSTACK_TEST_PACKAGE_ROOT),
+        encoding: 'utf8',
+        env: {
+            ...process.env,
+            CDE_INSTALL_PSTACK: '0',
+            HOME: homeDirectory,
+            USERPROFILE: homeDirectory,
+            GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
+            CODEX_HOME: join(homeDirectory, '.codex'),
+        },
+    });
+}
+
+function sessionStartHookCommands(settingsPath) {
+    if (!existsSync(settingsPath)) return [];
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    return (settings.hooks?.SessionStart || [])
+        .flatMap(entry => (entry.hooks || []).map(eachHook => eachHook.command));
+}
+
+test('a full install registers the session-continuity companion, and uninstall takes it back out', t => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-continuity-install-'));
+    t.after(() => rmSync(homeDirectory, { recursive: true, force: true }));
+    const settingsPath = join(homeDirectory, '.claude', 'settings.json');
+
+    runContinuityInstaller(homeDirectory, []);
+
+    assert.equal(
+        sessionStartHookCommands(settingsPath).some(
+            eachCommand => eachCommand.includes('session-continuity/continuity.mjs'),
+        ),
+        true,
+        'the install registers the companion without a second setup command',
+    );
+
+    runContinuityInstaller(homeDirectory, ['--uninstall']);
+
+    assert.equal(
+        sessionStartHookCommands(settingsPath).some(
+            eachCommand => eachCommand.includes('session-continuity/continuity.mjs'),
+        ),
+        false,
+        'uninstall leaves no registration pointing at a removed script',
+    );
+});
