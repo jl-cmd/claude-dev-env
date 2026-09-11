@@ -58,4 +58,8 @@ ALL_POST_HOSTED_HOOK_ENTRIES: tuple[PostHostedHookEntry, ...] = (
         script_relative_path="workflow/auto_formatter.py",
         is_blocking=False,
     ),
+    PostHostedHookEntry(
+        script_relative_path="blocking/write_byte_hygiene.py",
+        is_blocking=True,
+    ),
 )

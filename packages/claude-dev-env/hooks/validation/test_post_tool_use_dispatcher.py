@@ -1,4 +1,4 @@
-"""Behavior tests for the nonblocking PostToolUse dispatcher roster."""
+"""Behavior tests for the PostToolUse dispatcher hosted-hook roster."""
 
 from __future__ import annotations
 
@@ -220,23 +220,29 @@ def test_formatter_formats_only_untracked_write_and_never_blocks(tmp_path: Path)
     )
     unformatted_source = "x=1\ny  =  2\n"
     untracked_file = tmp_path / "untracked_module.py"
-    untracked_file.write_text(unformatted_source, encoding="utf-8")
+    untracked_file.write_bytes(unformatted_source.encode("utf-8"))
 
     write_payload_text = _write_payload(str(untracked_file), unformatted_source)
     dispatcher_result = _run_dispatcher(write_payload_text)
     is_block, _reason = _parse_block_decision(dispatcher_result)
-    assert not is_block, "Formatter must never block a Write through the dispatcher"
+    assert not is_block, (
+        "An LF-only untracked Write must not block through the dispatcher.\n"
+        f"stdout={dispatcher_result.stdout!r} stderr={dispatcher_result.stderr!r}"
+    )
     formatted_source = untracked_file.read_text(encoding="utf-8")
     assert formatted_source != unformatted_source, (
         "Formatter must reformat an untracked-file Write through the dispatcher.\n"
         f"On-disk content unchanged: {formatted_source!r}"
     )
 
-    untracked_file.write_text(unformatted_source, encoding="utf-8")
+    untracked_file.write_bytes(unformatted_source.encode("utf-8"))
     edit_payload_text = _edit_payload(str(untracked_file), "x=1", "x = 1")
     edit_dispatcher_result = _run_dispatcher(edit_payload_text)
     edit_is_block, _edit_reason = _parse_block_decision(edit_dispatcher_result)
-    assert not edit_is_block, "Formatter must never block an Edit through the dispatcher"
+    assert not edit_is_block, (
+        "An LF-only Edit must not block through the dispatcher.\n"
+        f"stdout={edit_dispatcher_result.stdout!r} stderr={edit_dispatcher_result.stderr!r}"
+    )
     after_edit_source = untracked_file.read_text(encoding="utf-8")
     assert after_edit_source == unformatted_source, (
         "Formatter must not reformat on an Edit (it acts only on an untracked Write).\n"
@@ -361,9 +367,14 @@ def test_blocking_hook_crash_surfaces_a_block() -> None:
         f"Got: {aggregated_decision.all_block_reasons!r}"
     )
 
-def test_live_roster_contains_only_nonblocking_hooks() -> None:
-    assert ALL_POST_HOSTED_HOOK_ENTRIES
-    assert all(not each_entry.is_blocking for each_entry in ALL_POST_HOSTED_HOOK_ENTRIES)
-    assert tuple(each_entry.script_relative_path for each_entry in ALL_POST_HOSTED_HOOK_ENTRIES) == (
-        "workflow/auto_formatter.py",
+def test_live_roster_order_and_blocking_flags() -> None:
+    assert ALL_POST_HOSTED_HOOK_ENTRIES == (
+        PostHostedHookEntry(
+            script_relative_path="workflow/auto_formatter.py",
+            is_blocking=False,
+        ),
+        PostHostedHookEntry(
+            script_relative_path="blocking/write_byte_hygiene.py",
+            is_blocking=True,
+        ),
     )
