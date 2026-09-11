@@ -3088,3 +3088,60 @@ test('--no-pstack leaves the pstack store absent', t => {
         assert.equal(existsSync(join(homeDirectory, '.claude', 'pstack')), false);
     });
 });
+
+function runContinuityInstaller(homeDirectory, extraArguments) {
+    return execFileSync('node', [PSTACK_TEST_INSTALLER_PATH, ...extraArguments], {
+        cwd: dirname(PSTACK_TEST_PACKAGE_ROOT),
+        encoding: 'utf8',
+        env: {
+            ...process.env,
+            CDE_INSTALL_PSTACK: '0',
+            HOME: homeDirectory,
+            USERPROFILE: homeDirectory,
+            GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
+            CODEX_HOME: join(homeDirectory, '.codex'),
+        },
+    });
+}
+
+function continuityCommandCount(configurationPath) {
+    if (!existsSync(configurationPath)) return 0;
+    const configuration = JSON.parse(readFileSync(configurationPath, 'utf8'));
+    const allCommands = Object.values(configuration.hooks || {})
+        .flat()
+        .flatMap(entry => (entry.hooks ? entry.hooks.map(eachHook => eachHook.command) : [entry.command]));
+    return allCommands.filter(
+        eachCommand => typeof eachCommand === 'string'
+            && eachCommand.includes('session-continuity/continuity.mjs'),
+    ).length;
+}
+
+test('a full install registers the session-continuity companion in every host, and uninstall takes it back out', t => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-continuity-install-'));
+    t.after(() => rmSync(homeDirectory, { recursive: true, force: true }));
+    const allConfigurationPaths = [
+        join(homeDirectory, '.claude', 'settings.json'),
+        join(homeDirectory, '.codex', 'hooks.json'),
+        join(homeDirectory, '.cursor', 'hooks.json'),
+    ];
+
+    runContinuityInstaller(homeDirectory, []);
+
+    for (const configurationPath of allConfigurationPaths) {
+        assert.equal(
+            continuityCommandCount(configurationPath) > 0,
+            true,
+            `the install registers the companion in ${configurationPath} without a second setup command`,
+        );
+    }
+
+    runContinuityInstaller(homeDirectory, ['--uninstall']);
+
+    for (const configurationPath of allConfigurationPaths) {
+        assert.equal(
+            continuityCommandCount(configurationPath),
+            0,
+            `uninstall leaves no registration in ${configurationPath} pointing at a removed script`,
+        );
+    }
+});

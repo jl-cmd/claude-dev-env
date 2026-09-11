@@ -1,6 +1,30 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { continuityHookConfiguration, mergeContinuityHooks } from './install-session-continuity.mjs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+    configureContinuityHosts,
+    continuityHookConfiguration,
+    mergeContinuityHooks,
+    removeContinuityHooks,
+} from './install-session-continuity.mjs';
+
+function installRootFixture() {
+    const root = mkdtempSync(join(tmpdir(), 'continuity-roots-'));
+    const skillsInstallDirectory = join(root, 'agents', 'skills');
+    const companionDirectory = join(skillsInstallDirectory, 'session-continuity');
+    mkdirSync(companionDirectory, { recursive: true });
+    writeFileSync(join(companionDirectory, 'continuity.mjs'), 'export default null;\n');
+    writeFileSync(join(companionDirectory, 'SKILL.md'), '# companion\n');
+    const managedRoot = join(root, 'claude');
+    const codexRulesInstallDirectory = join(root, 'codex', 'rules');
+    const cursorInstallDirectory = join(root, 'cursor');
+    for (const directory of [managedRoot, codexRulesInstallDirectory, cursorInstallDirectory]) {
+        mkdirSync(directory, { recursive: true });
+    }
+    return { managedRoot, skillsInstallDirectory, codexRulesInstallDirectory, cursorInstallDirectory };
+}
 
 test('setup preserves other hooks and settings, is idempotent, and rejects competing profiles', () => {
     const existing = { permissions: { deny: ['secret'] }, hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'existing-hook' }] }] } };
@@ -53,3 +77,30 @@ for (const host of ['claude', 'codex']) {
         }
     });
 }
+
+test('configureContinuityHosts writes each host config, reads it back, and repeats without a change', () => {
+    const roots = installRootFixture();
+    const settingsPath = join(roots.managedRoot, 'settings.json');
+    writeFileSync(settingsPath, JSON.stringify({ permissions: { deny: ['secret'] } }, null, 2) + '\n');
+    const first = configureContinuityHosts(roots, ['claude', 'codex', 'cursor']);
+    assert.deepEqual(first.map(result => result.changed), [true, true, true]);
+    const written = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    assert.deepEqual(written.permissions.deny, ['secret']);
+    const command = written.hooks.SessionStart[0].hooks[0].command;
+    assert.equal(command.endsWith('session-continuity/continuity.mjs" hook claude'), true);
+    const second = configureContinuityHosts(roots, ['claude', 'codex', 'cursor']);
+    assert.deepEqual(second.map(result => result.changed), [false, false, false]);
+});
+
+test('removeContinuityHooks takes out only the companion registrations', () => {
+    const roots = installRootFixture();
+    configureContinuityHosts(roots, ['claude']);
+    const settingsPath = join(roots.managedRoot, 'settings.json');
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    settings.hooks.SessionStart.unshift({ hooks: [{ type: 'command', command: 'python other_hook.py' }] });
+    const removedCount = removeContinuityHooks(settings);
+    assert.equal(removedCount, 3);
+    assert.deepEqual(Object.keys(settings.hooks), ['SessionStart']);
+    assert.equal(settings.hooks.SessionStart.length, 1);
+    assert.equal(settings.hooks.SessionStart[0].hooks[0].command, 'python other_hook.py');
+});

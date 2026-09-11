@@ -45,6 +45,11 @@ import {
 } from '../scripts/refresh_pstack_plugin_skills.mjs';
 import { installPstack } from './pstack.mjs';
 import {
+    configureContinuityHosts,
+    continuityHostConfigurationPaths,
+    removeContinuityHooks,
+} from './install-session-continuity.mjs';
+import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
     isAllowedInstallDestination,
@@ -507,6 +512,63 @@ function seedPstackPreferences(preferenceFileName) {
         if (copyError.code === 'EEXIST') return null;
         throw copyError;
     }
+}
+
+/**
+ * Registers the session-continuity companion in each host configuration this
+ * install root resolves. Without this step the companion ships to the agents
+ * home but no host ever calls it, so Poteto Mode only activates when someone
+ * remembers a second setup command.
+ *
+ * A competing profile's registration, or an unwritable host configuration, is
+ * reported and leaves the rest of the install intact.
+ *
+ * @returns {string[]} The host configuration paths this run registered.
+ */
+function registerSessionContinuityHooks() {
+    const configurationPaths = continuityHostConfigurationPaths(INSTALL_ROOT_RESOLUTION);
+    const hosts = Object.keys(configurationPaths)
+        .filter(host => existsSync(dirname(configurationPaths[host])));
+    if (hosts.length === 0) return [];
+    try {
+        const results = configureContinuityHosts(INSTALL_ROOT_RESOLUTION, hosts);
+        for (const result of results) {
+            const state = result.changed ? 'registered' : 'already registered';
+            console.log(`  Session continuity: ${state} in ${result.path}`);
+        }
+        return results.map(result => result.path);
+    } catch (registrationError) {
+        console.warn(
+            `  Warning: session-continuity hooks were not registered (${registrationError.message}) — `
+            + 'run bin/install-session-continuity.mjs once the cause is resolved.',
+        );
+        return [];
+    }
+}
+
+/**
+ * Removes the companion's registrations from the Codex and Cursor hook files
+ * during an uninstall. The Claude settings.json copy is pruned inside the
+ * settings block, which owns that file's single write.
+ *
+ * Each host this installer registered is a host it has to clean, or the host
+ * keeps calling a script the uninstall deleted.
+ *
+ * @returns {string[]} The host configuration paths this run changed.
+ */
+function removeSessionContinuityHooksFromOtherHosts() {
+    const configurationPaths = continuityHostConfigurationPaths(INSTALL_ROOT_RESOLUTION);
+    const changedPaths = [];
+    for (const host of ['codex', 'cursor']) {
+        const configurationPath = configurationPaths[host];
+        if (!existsSync(configurationPath)) continue;
+        const configuration = JSON.parse(readFileSync(configurationPath, 'utf8'));
+        if (removeContinuityHooks(configuration) === 0) continue;
+        writeFileSync(configurationPath, JSON.stringify(configuration, null, 2) + '\n');
+        changedPaths.push(configurationPath);
+        console.log(`  Session continuity: hook registrations removed from ${configurationPath}`);
+    }
+    return changedPaths;
 }
 
 /**
@@ -2922,6 +2984,9 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         console.log(`  \u2713 ${relative(CLAUDE_HOME, agentsHubDest)} (canonical guidance)`);
     }
     const isFullInstall = !selectedGroups;
+    if (isFullInstall && shouldInstallAnyHooks) {
+        summary.sessionContinuity = { configuredPaths: registerSessionContinuityHooks() };
+    }
     const didPruneRun = isFullInstall && UNRESOLVED_DEPENDENCY_NAMES.length === 0;
     let failedPrunePaths = [];
     let stalePrunedTotal = 0;
@@ -3139,6 +3204,10 @@ function executeUninstallPlan(plan, helpers = {}) {
             pruneManagedHooksFromSettings(settings, managedHookRelativePaths);
             didSettingsChange = true;
             console.log('  Hook entries removed from settings.json');
+            const removedContinuityCount = removeContinuityHooks(settings);
+            if (removedContinuityCount > 0) {
+                console.log(`  Session continuity: ${removedContinuityCount} hook registration(s) removed from settings.json`);
+            }
         }
         const managedDenyFromPlan = plan.managedPermissionDenyEntries.length > 0
             ? plan.managedPermissionDenyEntries
@@ -3156,6 +3225,7 @@ function executeUninstallPlan(plan, helpers = {}) {
             writeFileSync(plan.settingsPath, JSON.stringify(settings, null, 4) + '\n');
         }
     }
+    removeSessionContinuityHooksFromOtherHosts();
     throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
 
     unsetGlobalGitHooksPathIfOurs();

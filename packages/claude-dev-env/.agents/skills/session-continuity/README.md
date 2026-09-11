@@ -1,7 +1,10 @@
 # Session continuity companion
 
 Status: draft implementation. Claude, Codex, and Cursor adapters have
-repository-level contract tests. Installed-host activation, reload, and agent
+repository-level contract tests. Claude installed-host automatic activation is
+verified: a headless `claude -p` session on Claude Code 2.1.268 created a new
+session-scope record carrying the `automatic` flag, with no user invocation.
+Codex and Cursor installed-host activation, post-compaction reload, and agent
 compliance remain unverified.
 
 Every supported host activates Poteto Mode automatically when a session starts
@@ -27,21 +30,28 @@ pstack manifest refresher exposes namespaced Claude skills and leaves pstack
 content with its existing owner. The companion edits none of that source,
 manifest, invocation code, or model policy.
 
-From this checkout, run the full existing installer, then the focused hook setup:
+From this checkout, run the full existing installer:
 
 ```sh
 node packages/claude-dev-env/bin/install.mjs
+```
+
+The full installer publishes this skill under the canonical agents home and
+registers its hooks in every host configuration the install root resolves. No
+second command is needed. A selective `--only <group>` install skips both steps,
+and a plugin-only installation needs the canonical installed skill first. For
+either of those, or to configure one host alone, run the focused setup:
+
+```sh
 node packages/claude-dev-env/bin/install-session-continuity.mjs
 ```
 
-The full installer publishes this skill under the canonical agents home. This
-setup is required once for each selected host/profile, not once per invocation.
-The existing selective `--only core` list does not include the companion in this
-draft. Use the full install above. Plugin-only installations need the same
-canonical installed skill before this setup can run.
+The focused setup defaults to `claude codex cursor`. Pass one or more host names
+to configure that subset alone. Registration is idempotent, so running it after a
+full install reports each host as already configured.
 
-The setup defaults to `claude codex cursor`. Pass one or more host names to
-configure that subset alone.
+An uninstall removes the companion's registrations along with its files, so no
+host keeps a hook pointing at a script that is gone.
 It uses `bin/resolve-install-root.mjs`, including `CLAUDE_CONFIG_DIR` and
 `CODEX_HOME`. It merges only its own hook groups into Claude `settings.json` and
 Codex `hooks.json`, preserves other settings, writes a one-time backup before
