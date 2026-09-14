@@ -1,4 +1,4 @@
-# Automatic subagent model routing
+# Automatic child model choices
 
 The package routes native subagent requests before the child starts. It keeps
 approved pairs, aliases, replacements, and the advisor default in one file.
@@ -18,8 +18,14 @@ example, change the `terra` and `medium` entry in `replacements` to:
 
 ```json
 {
-  "requested": {"model": "terra", "effort": "medium"},
-  "selected": {"model": "luna", "effort": "max"}
+  "requested": {
+    "model": "terra",
+    "effort": "medium"
+  },
+  "selected": {
+    "model": "luna",
+    "effort": "max"
+  }
 }
 ```
 

@@ -292,7 +292,7 @@ function validateApprovedPairs(rawPairs, modelByName, effortNames, roleByAlias) 
             ? null
             : validateCanonicalRoles(rawPair.roles, roleByAlias, 'approved pair roles');
         const scopeKey = `${pairKey(pair)}|${roles ? roles.join(',') : '*'}`;
-        if (pairScopes.has(scopeKey)) throw new SubagentModelPolicyError(`duplicate approved pair: ${scopeKey}`);
+        if (pairScopes.has(scopeKey)) throw new SubagentModelPolicyError(`duplicate pair key: ${scopeKey}`);
         pairScopes.add(scopeKey);
         pairs.push({ ...pair, roles });
     }
