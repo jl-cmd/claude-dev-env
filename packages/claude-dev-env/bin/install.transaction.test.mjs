@@ -134,6 +134,44 @@ test('capture and restore recover settings, manifest, files, and hooksPath', () 
     rmSync(box.root, { recursive: true, force: true });
 });
 
+test('capture and restore recover an additional host settings file', () => {
+    const box = sandbox();
+    const gitConfigPath = join(box.root, '.gitconfig');
+    const codexHooksPath = join(box.root, '.codex', 'hooks.json');
+    writeFileSync(gitConfigPath, '');
+    writeFileWithParents(box.settingsPath, '{"host":"claude"}\n');
+    writeFileWithParents(codexHooksPath, '{"host":"codex"}\n');
+    const io = {
+        env: {
+            ...process.env,
+            CDE_INSTALL_PSTACK: '0',
+            HOME: box.root,
+            USERPROFILE: box.root,
+            GIT_CONFIG_GLOBAL: gitConfigPath,
+        },
+        execFileSync,
+    };
+
+    const snapshot = capturePriorInstallSnapshot({
+        managedRoot: box.managedRoot,
+        manifestFilePath: box.manifestFilePath,
+        settingsPath: box.settingsPath,
+        additionalSettingsPaths: [codexHooksPath],
+        priorManifestFiles: [],
+        journalParentDirectory: box.journalParent,
+        io,
+    });
+    writeFileSync(box.settingsPath, '{"host":"changed"}\n');
+    writeFileSync(codexHooksPath, '{"host":"changed"}\n');
+
+    restorePriorInstallSnapshot(snapshot, { io });
+
+    assert.equal(readFileSync(box.settingsPath, 'utf8'), '{"host":"claude"}\n');
+    assert.equal(readFileSync(codexHooksPath, 'utf8'), '{"host":"codex"}\n');
+    discardInstallTransactionJournal(snapshot);
+    rmSync(box.root, { recursive: true, force: true });
+});
+
 test('runWithInstallTransaction restores prior state on injected fault', () => {
     const box = sandbox();
     const gitConfigPath = join(box.root, '.gitconfig');
@@ -312,16 +350,39 @@ test('installer fault after_settings_write restores prior settings and files', (
     try {
         const { claudeDirectory, rulesFile } = seedPriorInstall(homeDirectory);
         const priorSettings = readFileSync(join(claudeDirectory, 'settings.json'), 'utf8');
+        const codexHooksPath = join(homeDirectory, '.codex', 'hooks.json');
+        writeFileWithParents(codexHooksPath, '{"hooks":{"PreToolUse":[{"matcher":"custom"}]}}\n');
+        const priorCodexHooks = readFileSync(codexHooksPath, 'utf8');
 
         const failedRun = runInstaller(homeDirectory, [], {
             faultPhase: FAULT_PHASES.AFTER_SETTINGS_WRITE,
         });
         assert.notEqual(failedRun.status, 0, failedRun.stdout + failedRun.stderr);
         assert.equal(readFileSync(join(claudeDirectory, 'settings.json'), 'utf8'), priorSettings);
+        assert.equal(readFileSync(codexHooksPath, 'utf8'), priorCodexHooks);
         assert.equal(readFileSync(rulesFile, 'utf8'), 'prior-body\n');
         assert.match(
             readFileSync(join(claudeDirectory, '.claude-dev-env-manifest.json'), 'utf8'),
             /prior\.md|prior-body|claude-dev-env/,
+        );
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('installer fault after_settings_write removes a newly created Codex hooks file', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-txn-e2e-absent-codex-hooks-'));
+    try {
+        const { claudeDirectory } = seedPriorInstall(homeDirectory);
+        const codexHooksPath = join(homeDirectory, '.codex', 'hooks.json');
+        const failedRun = runInstaller(homeDirectory, [], {
+            faultPhase: FAULT_PHASES.AFTER_SETTINGS_WRITE,
+        });
+        assert.notEqual(failedRun.status, 0, failedRun.stdout + failedRun.stderr);
+        assert.equal(existsSync(codexHooksPath), false);
+        assert.equal(
+            existsSync(join(claudeDirectory, '.claude-dev-env-manifest.json')),
+            true,
         );
     } finally {
         rmSync(homeDirectory, { recursive: true, force: true });
@@ -404,4 +465,3 @@ test('successful install after prior install leaves one manifest and no fault', 
         rmSync(homeDirectory, { recursive: true, force: true });
     }
 });
-

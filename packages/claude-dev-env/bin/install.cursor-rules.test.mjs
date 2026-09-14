@@ -150,6 +150,11 @@ for (const targetName of [null, 'profile']) {
                 'rules',
                 'pstack-model-preferences.codex.json',
             );
+            const policyPath = join(
+                resolution.agentsHome,
+                'rules',
+                'subagent-model-policy.json',
+            );
             const selectorPath = join(
                 resolution.agentsHome,
                 'scripts',
@@ -172,10 +177,12 @@ for (const targetName of [null, 'profile']) {
             assert.equal(readFileSync(cursorPath, 'utf8'), installedText);
             assert.equal(isAllowedInstallDestination(sharedPath, resolution), true);
             assert.equal(existsSync(selectorPath), true);
+            assert.equal(existsSync(policyPath), true);
 
             const savedPreferences = JSON.parse(readFileSync(preferencesPath, 'utf8'));
             assert.deepEqual(savedPreferences, {
                 host: 'codex',
+                defaultEffort: 'medium',
                 modelsByRole: {
                     'feature, refactoring': ['gpt-5.6-sol'],
                     'bug-fix': ['gpt-5.6-sol'],
@@ -218,6 +225,7 @@ for (const targetName of [null, 'profile']) {
             });
             assert.deepEqual(codexSelection.nativeSpawnArguments, {
                 model: 'gpt-5.6-sol',
+                reasoning_effort: 'medium',
             });
 
             const claudePreferencesPath = join(
@@ -343,6 +351,231 @@ for (const targetName of [null, 'profile']) {
         }
     });
 }
+
+test('seeds one editable policy and one native Codex routing hook', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-routing-install-'));
+    try {
+        const resolution = resolveInstallRoot({
+            homeDirectory,
+            environment: {},
+            explicitTarget: null,
+        });
+        const policyPath = join(resolution.agentsHome, 'rules', 'subagent-model-policy.json');
+        const installedRulesPolicyPath = join(
+            resolution.managedRoot,
+            'rules',
+            'subagent-model-policy.json',
+        );
+        const codexHooksPath = join(homeDirectory, '.codex', 'hooks.json');
+
+        runInstaller(homeDirectory, ['--only', 'core']);
+
+        assert.equal(existsSync(policyPath), true);
+        assert.equal(existsSync(installedRulesPolicyPath), false);
+        const firstCodexHooks = JSON.parse(readFileSync(codexHooksPath, 'utf8'));
+        const firstRoutingGroups = firstCodexHooks.hooks.PreToolUse.filter(
+            group => group.matcher === 'multi_agent_v1__spawn_agent',
+        );
+        assert.equal(firstRoutingGroups.length, 1);
+        assert.equal(firstRoutingGroups[0].hooks.length, 1);
+        assert.match(firstRoutingGroups[0].hooks[0].command, /subagent_model_routing\.mjs/);
+        assert.equal(
+            firstCodexHooks.hooks.PreToolUse.some(group => group.matcher === 'Write|Edit|MultiEdit|apply_patch'),
+            false,
+        );
+
+        const editedPolicy = '{"schemaVersion":1,"edited":true}\n';
+        writeFileSync(policyPath, editedPolicy);
+        firstCodexHooks.hooks.PreToolUse.push({
+            matcher: 'custom',
+            hooks: [{ type: 'command', command: 'python user-hook.py' }],
+        });
+        writeFileSync(codexHooksPath, JSON.stringify(firstCodexHooks, null, 2) + '\n');
+
+        runInstaller(homeDirectory, ['--only', 'core']);
+
+        assert.equal(readFileSync(policyPath, 'utf8'), editedPolicy);
+        const secondCodexHooks = JSON.parse(readFileSync(codexHooksPath, 'utf8'));
+        assert.equal(
+            secondCodexHooks.hooks.PreToolUse.filter(
+                group => group.matcher === 'multi_agent_v1__spawn_agent',
+            ).length,
+            1,
+        );
+        assert.equal(
+            secondCodexHooks.hooks.PreToolUse.some(
+                group => group.matcher === 'custom'
+                    && group.hooks.some(hook => hook.command === 'python user-hook.py'),
+            ),
+            true,
+        );
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('uninstall removes the routing hook and keeps a Codex user hook', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-routing-uninstall-'));
+    try {
+        const profileRoot = join(homeDirectory, 'named-profile');
+        const codexHooksPath = join(profileRoot, '.codex', 'hooks.json');
+        const targetArguments = ['--target', profileRoot];
+        runInstaller(homeDirectory, [...targetArguments, '--only', 'core']);
+        const codexHooks = JSON.parse(readFileSync(codexHooksPath, 'utf8'));
+        codexHooks.hooks.PreToolUse.push({
+            matcher: 'custom',
+            hooks: [{ type: 'command', command: 'python user-hook.py' }],
+        });
+        writeFileSync(codexHooksPath, JSON.stringify(codexHooks, null, 2) + '\n');
+
+        runInstaller(homeDirectory, [...targetArguments, '--uninstall']);
+
+        const remainingHooks = JSON.parse(readFileSync(codexHooksPath, 'utf8'));
+        assert.equal(
+            remainingHooks.hooks.PreToolUse.some(group => group.matcher === 'multi_agent_v1__spawn_agent'),
+            false,
+        );
+        assert.equal(
+            remainingHooks.hooks.PreToolUse.some(
+                group => group.matcher === 'custom'
+                    && group.hooks.some(hook => hook.command === 'python user-hook.py'),
+            ),
+            true,
+        );
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('malformed Codex hooks restore the staged install', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-routing-malformed-'));
+    try {
+        const codexHooksPath = join(homeDirectory, '.codex', 'hooks.json');
+        const claudeSettingsPath = join(homeDirectory, '.claude', 'settings.json');
+        const originalCodexHooks = '{ malformed\n';
+        const originalClaudeSettings = '{"hooks":{"PreToolUse":[{"matcher":"user","hooks":[{"type":"command","command":"user-hook"}]}]}}\n';
+        mkdirSync(dirname(codexHooksPath), { recursive: true });
+        mkdirSync(dirname(claudeSettingsPath), { recursive: true });
+        writeFileSync(codexHooksPath, originalCodexHooks);
+        writeFileSync(claudeSettingsPath, originalClaudeSettings);
+
+        assert.throws(
+            () => runInstaller(homeDirectory, ['--only', 'core']),
+            error => error.status === 1,
+        );
+        assert.equal(readFileSync(codexHooksPath, 'utf8'), originalCodexHooks);
+        assert.equal(readFileSync(claudeSettingsPath, 'utf8'), originalClaudeSettings);
+        assert.equal(existsSync(join(homeDirectory, '.claude', 'hooks')), false);
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('malformed Codex hooks restore an uninstall', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-routing-uninstall-malformed-'));
+    try {
+        runInstaller(homeDirectory, ['--only', 'core']);
+        const codexHooksPath = join(homeDirectory, '.codex', 'hooks.json');
+        const manifestPath = join(homeDirectory, '.claude', '.claude-dev-env-manifest.json');
+        const managedHookPath = join(
+            homeDirectory,
+            '.claude',
+            'hooks',
+            'blocking',
+            'subagent_model_routing.mjs',
+        );
+        writeFileSync(codexHooksPath, '{ malformed\n');
+
+        assert.throws(
+            () => runInstaller(homeDirectory, ['--uninstall']),
+            error => error.status === 1,
+        );
+        assert.equal(existsSync(manifestPath), true);
+        assert.equal(existsSync(managedHookPath), true);
+        assert.equal(readFileSync(codexHooksPath, 'utf8'), '{ malformed\n');
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('two profiles keep separate Codex routing hooks', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-routing-profiles-'));
+    try {
+        const profileRoot = join(homeDirectory, 'named-profile');
+        const mainCodexHooksPath = join(homeDirectory, '.codex', 'hooks.json');
+        const profileCodexHooksPath = join(profileRoot, '.codex', 'hooks.json');
+        runInstaller(homeDirectory, ['--only', 'core']);
+        runInstaller(homeDirectory, ['--target', profileRoot, '--only', 'core']);
+
+        const mainCodexHooks = JSON.parse(readFileSync(mainCodexHooksPath, 'utf8'));
+        const profileCodexHooks = JSON.parse(readFileSync(profileCodexHooksPath, 'utf8'));
+        const mainRoutingGroups = (mainCodexHooks.hooks?.PreToolUse ?? []).filter(
+            group => group.matcher === 'multi_agent_v1__spawn_agent',
+        );
+        const profileRoutingGroups = profileCodexHooks.hooks.PreToolUse.filter(
+            group => group.matcher === 'multi_agent_v1__spawn_agent',
+        );
+        assert.equal(mainRoutingGroups.length, 1);
+        assert.equal(profileRoutingGroups.length, 1);
+        assert.match(mainRoutingGroups[0].hooks[0].command, /[\\/]\.codex[\\/]hooks[\\/]blocking[\\/]subagent_model_routing\.mjs/);
+        assert.match(profileRoutingGroups[0].hooks[0].command, /named-profile[\\/]\.codex[\\/]hooks[\\/]blocking[\\/]subagent_model_routing\.mjs/);
+        assert.notEqual(mainRoutingGroups[0].hooks[0].command, profileRoutingGroups[0].hooks[0].command);
+
+        const profileHookPath = join(
+            profileRoot,
+            '.codex',
+            'hooks',
+            'blocking',
+            'subagent_model_routing.mjs',
+        );
+        const profileHookResponse = JSON.parse(execFileSync(
+            'node',
+            [profileHookPath],
+            {
+                encoding: 'utf8',
+                input: JSON.stringify({
+                    tool_name: 'multi_agent_v1__spawn_agent',
+                    tool_input: { model: 'Terra', reasoning_effort: 'medium' },
+                }),
+            },
+        ));
+        assert.equal(
+            profileHookResponse.hookSpecificOutput.updatedInput.model,
+            'gpt-5.6-luna',
+        );
+        assert.equal(
+            profileHookResponse.hookSpecificOutput.updatedInput.reasoning_effort,
+            'xhigh',
+        );
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
+
+test('uninstalling one profile keeps routing for another installed profile', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-routing-profile-uninstall-'));
+    try {
+        const profileRoot = join(homeDirectory, 'named-profile');
+        const mainCodexHooksPath = join(homeDirectory, '.codex', 'hooks.json');
+        const profileCodexHooksPath = join(profileRoot, '.codex', 'hooks.json');
+        runInstaller(homeDirectory, ['--only', 'core']);
+        runInstaller(homeDirectory, ['--target', profileRoot, '--only', 'core']);
+        runInstaller(homeDirectory, ['--uninstall']);
+
+        const mainCodexHooks = JSON.parse(readFileSync(mainCodexHooksPath, 'utf8'));
+        const profileCodexHooks = JSON.parse(readFileSync(profileCodexHooksPath, 'utf8'));
+        const mainRoutingGroups = (mainCodexHooks.hooks?.PreToolUse ?? []).filter(
+            group => group.matcher === 'multi_agent_v1__spawn_agent',
+        );
+        const profileRoutingGroups = profileCodexHooks.hooks.PreToolUse.filter(
+            group => group.matcher === 'multi_agent_v1__spawn_agent',
+        );
+        assert.equal(mainRoutingGroups.length, 0);
+        assert.equal(profileRoutingGroups.length, 1);
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
 
 test('a blocked shared rule destination rolls back generated Cursor files', () => {
     const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-pstack-rollback-'));

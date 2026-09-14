@@ -46,6 +46,26 @@ for (const host of ['claude', 'codex', 'cursor']) {
         const release = join(f.store, 'releases', result.release);
         const releaseManifest = JSON.parse(readFileSync(join(release, 'release.json'), 'utf8'));
         assert.equal(releaseManifest.skills.find(skill => skill.component === 'pstack').name, 'pstack:poteto-mode');
+        assert.equal(
+            releaseManifest.policyPath,
+            join(f.options.project, '.agents', 'rules', 'subagent-model-policy.json'),
+        );
+        assert.equal(
+            readFileSync(join(release, 'compat', 'subagent_model_policy.mjs'), 'utf8'),
+            readFileSync(join(packageRoot, 'scripts', 'subagent_model_policy.mjs'), 'utf8'),
+        );
+        assert.equal(
+            readFileSync(join(release, 'compat', 'subagent-model-policy.json'), 'utf8'),
+            readFileSync(join(packageRoot, 'rules', 'subagent-model-policy.json'), 'utf8'),
+        );
+        assert.equal(
+            readFileSync(join(release, 'compat', 'resolve_advisor_model_route.mjs'), 'utf8'),
+            readFileSync(join(packageRoot, 'scripts', 'resolve_advisor_model_route.mjs'), 'utf8'),
+        );
+        assert.equal(
+            readFileSync(join(f.options.project, '.agents', 'rules', 'subagent-model-policy.json'), 'utf8'),
+            readFileSync(join(packageRoot, 'rules', 'subagent-model-policy.json'), 'utf8'),
+        );
         const expected = ['cde-create-skill', 'cursor-team-kit-control-cli', 'cursor-team-kit-control-ui', 'cursor-team-kit-deslop', 'pstack'];
         for (const home of ['.claude', '.agents']) {
             const skillsHome = join(f.options.project, home, 'skills');
@@ -83,6 +103,34 @@ test('unchanged install avoids another upstream fetch', t => {
     assert.equal(second.status, 'unchanged');
     assert.equal(second.release, first.release);
     assert.deepEqual(second.links, first.links);
+});
+
+test('policy edits survive a pstack update', t => {
+    const f = fixture(t);
+    installPstack(f.options, f.dependencies);
+    const policyPath = join(f.options.project, '.agents', 'rules', 'subagent-model-policy.json');
+    const editedPolicy = '{"schemaVersion":1,"edited":true}\n';
+    writeFileSync(policyPath, editedPolicy);
+    installPstack({ ...f.options, lock: { ...baseLock, commit: 'b'.repeat(40) } }, f.dependencies);
+    assert.equal(readFileSync(policyPath, 'utf8'), editedPolicy);
+});
+
+test('a release cannot redirect the installed policy path', t => {
+    const f = fixture(t);
+    const first = installPstack(f.options, f.dependencies);
+    const releaseRoot = join(f.store, 'releases', first.release);
+    const releaseManifestPath = join(releaseRoot, 'release.json');
+    const releaseManifest = JSON.parse(readFileSync(releaseManifestPath, 'utf8'));
+    const outsidePolicyPath = join(f.temporary, 'outside-policy.json');
+    releaseManifest.policyPath = outsidePolicyPath;
+    writeFileSync(releaseManifestPath, JSON.stringify(releaseManifest));
+
+    assert.throws(
+        () => installPstack({ ...f.options, strict: true }, f.dependencies),
+        /Invalid release policy path/,
+    );
+    assert.equal(existsSync(outsidePolicyPath), false);
+    assert.equal(verifyInstallation(f.options).release, first.release);
 });
 
 test('changed, added, and removed skills converge while old releases remain readable', t => {

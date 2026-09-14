@@ -46,7 +46,8 @@
       "theme-prompt-generator",
       "translator"
     ],
-    "advisor": ["advisor", "session-advisor", "team-advisor", "code-advisor"]
+    "advisor": ["advisor", "session-advisor", "team-advisor", "code-advisor"],
+    "trustedAdvisor": ["session-advisor", "team-advisor", "code-advisor"]
   },
   "approvedPairs": [
     {"model": "luna", "effort": "high"},

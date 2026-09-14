@@ -33,3 +33,8 @@ The next routing call reads the file again. The resolver source stays unchanged.
 
 Unknown values, invalid policy data, and unavailable replacement models stop the
 spawn with a short diagnostic. Parent inheritance stays unchanged.
+
+The hook blocks advisor role claims because the current Codex hook input has no
+host-provided role binding. The Python advisor bridge passes trusted session
+metadata to the shared resolver. The native advisor hook path stays pending
+until the host supplies that binding.

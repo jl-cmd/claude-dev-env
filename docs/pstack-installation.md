@@ -46,7 +46,9 @@ Pstack skills use plugin names such as `pstack:poteto-mode` and `pstack:how`. De
 
 If an unmanaged `pstack` path already exists in a skills home, the installer leaves it in place and reports the collision. A managed update swaps the one pstack pointer to the new immutable release, so added and removed subskills converge with the release tree.
 
-Each skill entry loads the common mapping and one of host-claude.md, host-codex.md, or host-cursor.md. Delegation prompts carry those paths and the upstream agent definition to the child. Required independent or cross-model work reports a missing host capability rather than substituting a weaker review. The copied model selector receives an explicit preferencesDirectory outside the release, preserving host settings through updates. A full install seeds `rules/pstack-model-preferences.claude.json` and `rules/pstack-model-preferences.codex.json` in the agents home when a file is absent, and `setup-pstack` rewrites the current host's file. cde-create-skill provides the portable authoring workflow when the native creator is absent.
+Each skill entry loads the common mapping and one of host-claude.md, host-codex.md, or host-cursor.md. Delegation prompts carry those paths and the upstream agent definition to the child. Required independent or cross-model work reports a missing host capability rather than substituting a weaker review. The copied model selector receives an explicit preferencesDirectory outside the release, preserving host settings through updates. A full install seeds `rules/pstack-model-preferences.claude.json` and `rules/pstack-model-preferences.codex.json` in the agents home when a file is absent, and `setup-pstack` rewrites the current host's file. The same agents-home rules directory holds the editable `subagent-model-policy.json`; the installer creates it only when it is absent. cde-create-skill provides the portable authoring workflow when the native creator is absent.
+
+The default Claude target uses the configured `CODEX_HOME`. A named profile or another target uses `<managed-root>/.codex`; launch that profile with the same `CODEX_HOME` value.
 
 ## Cloud setup and maintenance
 

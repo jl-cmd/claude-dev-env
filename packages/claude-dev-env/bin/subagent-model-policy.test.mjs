@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -17,7 +18,17 @@ const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const POLICY_SOURCE = defaultSubagentModelPolicyPath();
 
 function route(request, options = {}) {
-    return resolveSubagentModelRoute(request, { trustedRole: true, ...options });
+    return resolveSubagentModelRoute(request, options);
+}
+
+function advisorRoute(request, options = {}) {
+    return route(request, {
+        trustedSessionMetadata: {
+            authorized: true,
+            registeredAgentType: 'session-advisor',
+        },
+        ...options,
+    });
 }
 
 const replacements = [
@@ -57,7 +68,7 @@ test('every approved pair returns its literal native pair', () => {
         assert.ok(['pass', 'remapped'].includes(result.status));
         assert.deepEqual(result.selected, { model: expectedModel, effort: expectedEffort });
     }
-    const advisor = route({
+    const advisor = advisorRoute({
         model: 'Astra',
         reasoning_effort: 'high',
         agent_type: 'session-advisor',
@@ -76,7 +87,7 @@ test('every automatic replacement returns its literal destination', () => {
 
 test('advisor and worker Astra restrictions use role-specific replacements', () => {
     assert.deepEqual(
-        route({ model: 'Astra', reasoning_effort: 'xhigh', agent_type: 'session-advisor' }).selected,
+        advisorRoute({ model: 'Astra', reasoning_effort: 'xhigh', agent_type: 'session-advisor' }).selected,
         { model: 'gpt-6-astra', effort: 'medium' },
     );
     assert.deepEqual(
@@ -84,9 +95,43 @@ test('advisor and worker Astra restrictions use role-specific replacements', () 
         { model: 'gpt-6-astra', effort: 'low' },
     );
     assert.deepEqual(
-        route({ model: 'Astra', reasoning_effort: 'high', agent_type: 'session-advisor' }).selected,
+        advisorRoute({ model: 'Astra', reasoning_effort: 'high', agent_type: 'session-advisor' }).selected,
         { model: 'gpt-6-astra', effort: 'high' },
     );
+});
+
+test('registered advisor roles satisfy advisory authorization', () => {
+    const result = advisorRoute({
+        model: 'Astra',
+        reasoning_effort: 'high',
+        agent_type: 'session-advisor',
+    });
+
+    assert.deepEqual(result.selected, { model: 'gpt-6-astra', effort: 'high' });
+});
+
+test('a policy from the first stack revision remains routable', () => {
+    const legacyPolicy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
+    delete legacyPolicy.roles.trustedAdvisor;
+    const result = advisorRoute(
+        {
+            model: 'Astra',
+            reasoning_effort: 'high',
+            agent_type: 'session-advisor',
+        },
+        { policy: legacyPolicy },
+    );
+    assert.deepEqual(result.selected, { model: 'gpt-6-astra', effort: 'high' });
+});
+
+test('an advisor role claim cannot grant advisory authorization', () => {
+    const result = route({
+        model: 'Astra',
+        reasoning_effort: 'high',
+        agent_type: 'session-advisor',
+    });
+    assert.equal(result.status, 'blocked');
+    assert.equal(result.diagnostic, 'advisor role is not trusted');
 });
 
 test('Astra Light resolves to Astra Low', () => {
@@ -95,8 +140,23 @@ test('Astra Light resolves to Astra Low', () => {
 });
 
 test('missing advisor settings use the policy default', () => {
-    const result = route({ agent_type: 'session-advisor' });
+    const result = advisorRoute({ agent_type: 'session-advisor' });
     assert.deepEqual(result.selected, { model: 'gpt-6-astra', effort: 'medium' });
+});
+
+test('the advisor bridge blocks malformed input', () => {
+    const bridgePath = join(PACKAGE_ROOT, 'scripts', 'resolve_advisor_model_route.mjs');
+    assert.throws(
+        () => execFileSync(process.execPath, [bridgePath], { encoding: 'utf8', input: '{' }),
+        error => {
+            assert.equal(error.status, 1);
+            assert.deepEqual(JSON.parse(error.stdout), {
+                status: 'blocked',
+                diagnostic: 'advisor route input is not valid JSON',
+            });
+            return true;
+        },
+    );
 });
 
 test('missing worker settings preserve parent inheritance', () => {
@@ -150,7 +210,7 @@ test('the tool route copies every non-routing field', () => {
         model: 'Terra',
         reasoning_effort: 'Medium',
     };
-    const result = routeSubagentToolInput(input, { trustedRole: true });
+    const result = routeSubagentToolInput(input);
     assert.deepEqual(result.updatedInput, {
         assignment: 'preserve',
         message: 'do the work',
@@ -172,9 +232,9 @@ test('the tool route copies every non-routing field', () => {
 test('a second route pass is idempotent', () => {
     const first = routeSubagentToolInput(
         { model: 'Terra', reasoning_effort: 'medium', message: 'keep' },
-        { trustedRole: true },
+        {},
     );
-    const second = routeSubagentToolInput(first.updatedInput, { trustedRole: true });
+    const second = routeSubagentToolInput(first.updatedInput);
     assert.equal(first.status, 'remapped');
     assert.equal(second.status, 'pass');
     assert.deepEqual(second.updatedInput, first.updatedInput);
@@ -221,6 +281,24 @@ test('malformed policy data fails validation', () => {
         }),
         /replacement target is not approved/,
     );
+    const blocked = resolveSubagentModelRoute(
+        { model: 'Terra', reasoning_effort: 'medium' },
+        { policy: { schemaVersion: 1 } },
+    );
+    assert.equal(blocked.status, 'blocked');
+    assert.match(blocked.diagnostic, /models must be an object/);
+});
+
+test('a copied policy cannot forge the validated-policy marker', () => {
+    const policy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
+    const validatedPolicy = validateSubagentModelPolicy(policy);
+    const copiedPolicy = { ...validatedPolicy, models: {} };
+    const result = resolveSubagentModelRoute(
+        { model: 'Terra', reasoning_effort: 'medium' },
+        { policy: copiedPolicy },
+    );
+    assert.equal(result.status, 'blocked');
+    assert.match(result.diagnostic, /models must not be empty/);
 });
 
 test('normalized effort aliases resolve from the validated policy', () => {
@@ -229,7 +307,7 @@ test('normalized effort aliases resolve from the validated policy', () => {
     const validatedPolicy = validateSubagentModelPolicy(policy);
     const result = resolveSubagentModelRoute(
         { model: 'Astra', reasoning_effort: 'Light' },
-        { policy: validatedPolicy, trustedRole: true },
+        { policy: validatedPolicy },
     );
     assert.deepEqual(result.selected, { model: 'gpt-6-astra', effort: 'low' });
 });

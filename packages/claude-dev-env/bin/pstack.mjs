@@ -67,6 +67,9 @@ function adapterFiles(root) {
         ...['common.md', ...hosts.map(host => `host-${host}.md`), 'create-skill.md'].map(name => [name, join(adapters, name)]),
         ...['pstack-host-mapping.md', 'pstack-models.md'].map(name => [name, join(root, 'rules', name)]),
         ['select_pstack_models.mjs', join(root, 'scripts', 'select_pstack_models.mjs')],
+        ['subagent_model_policy.mjs', join(root, 'scripts', 'subagent_model_policy.mjs')],
+        ['resolve_advisor_model_route.mjs', join(root, 'scripts', 'resolve_advisor_model_route.mjs')],
+        ['subagent-model-policy.json', join(root, 'rules', 'subagent-model-policy.json')],
     ].map(([name, path]) => [name, readFileSync(path, 'utf8')]));
 }
 
@@ -141,7 +144,7 @@ export function prepareRelease(checkout, stage, finalRoot, lock, adapters) {
     const fileDigests = Object.fromEntries(filesUnder(stage).map(path => [relative(stage, path), digest(readFileSync(path))]));
     const managedRoot = dirname(dirname(dirname(finalRoot)));
     const agentsRoot = basename(managedRoot) === '.claude' ? join(dirname(managedRoot), '.agents') : managedRoot + '.agents';
-    const release = { preferencesDirectory: join(agentsRoot, 'rules'), selectorPath: join(finalRoot, 'compat', 'select_pstack_models.mjs'), schemaVersion: 1, commit: lock.commit, adapterVersion: lock.adapterVersion, skills, agents, fileDigests, verification: 'filesystem-only' };
+    const release = { preferencesDirectory: join(agentsRoot, 'rules'), policyPath: join(agentsRoot, 'rules', 'subagent-model-policy.json'), selectorPath: join(finalRoot, 'compat', 'select_pstack_models.mjs'), schemaVersion: 1, commit: lock.commit, adapterVersion: lock.adapterVersion, skills, agents, fileDigests, verification: 'filesystem-only' };
     writeFileSync(join(stage, 'release.json'), json(release));
     return release;
 }
@@ -171,7 +174,7 @@ export function verifyRelease(root) {
 function layout(options) {
     const root = resolve(options.root ?? (options.project ? join(options.project, '.claude') : process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')));
     const agents = basename(root) === '.claude' ? join(dirname(root), '.agents') : root + '.agents';
-    return { root, store: join(root, 'pstack'), skillHomes: [join(root, 'skills'), join(agents, 'skills')] };
+    return { root, agents, store: join(root, 'pstack'), skillHomes: [join(root, 'skills'), join(agents, 'skills')] };
 }
 
 function loadState(store) {
@@ -224,6 +227,19 @@ function publish(releaseRoot, release, homes, prior) {
     return { links, restore };
 }
 
+function seedPolicy(releaseRoot, release, agentsRoot) {
+    const policyPath = join(agentsRoot, 'rules', 'subagent-model-policy.json');
+    if (typeof release.policyPath !== 'string') throw new Error('Invalid release policy path');
+    if (resolve(release.policyPath) !== resolve(policyPath)) throw new Error('Invalid release policy path');
+    mkdirSync(dirname(policyPath), { recursive: true });
+    if (entryExists(policyPath)) {
+        if (!lstatSync(policyPath).isFile()) throw new Error(`Keep existing unmanaged policy path: ${policyPath}`);
+        return () => {};
+    }
+    writeFileSync(policyPath, readFileSync(join(releaseRoot, 'compat', 'subagent-model-policy.json')), { flag: 'wx' });
+    return () => { if (entryExists(policyPath)) unlinkSync(policyPath); };
+}
+
 function liveLeases(store) {
     const root = join(store, 'sessions');
     if (!existsSync(root)) return false;
@@ -247,7 +263,7 @@ function readCentralLock(temporaryRoot) {
 }
 
 export function installPstack(options = {}, dependencies = {}) {
-    const { store, skillHomes } = layout(options);
+    const { agents, store, skillHomes } = layout(options);
     mkdirSync(store, { recursive: true });
     const lockDirectory = join(store, '.install-lock');
     mkdirSync(lockDirectory);
@@ -291,12 +307,18 @@ export function installPstack(options = {}, dependencies = {}) {
             renameSync(stage, releaseRoot);
         }
         const release = verifyRelease(releaseRoot);
-        const publication = publish(releaseRoot, release, skillHomes, prior);
-        const state = { release: id, commit: lock.commit, adapterVersion: lock.adapterVersion, adapterDigest, checkedAt, lock, links: publication.links };
+        const policyPublication = seedPolicy(releaseRoot, release, agents);
+        let publication;
         try {
+            publication = publish(releaseRoot, release, skillHomes, prior);
+            const state = { release: id, commit: lock.commit, adapterVersion: lock.adapterVersion, adapterDigest, checkedAt, lock, links: publication.links };
             writeFileSync(join(store, 'installed.next.json'), json(state));
             renameSync(join(store, 'installed.next.json'), join(store, 'installed.json'));
-        } catch (error) { publication.restore(); throw error; }
+        } catch (error) {
+            publication?.restore();
+            policyPublication();
+            throw error;
+        }
         return finish({ ...verifyInstallation(options), status: prior?.release === id ? 'unchanged' : 'installed' });
     } catch (error) {
         if (!options.strict) {

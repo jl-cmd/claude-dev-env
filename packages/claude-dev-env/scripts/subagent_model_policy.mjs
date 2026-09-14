@@ -8,6 +8,7 @@ const DEFAULT_ROLE = 'worker';
 const MODEL_FIELD = 'model';
 const EFFORT_FIELDS = ['reasoning_effort', 'effort'];
 const ROLE_FIELDS = ['role', 'agent_type', 'agentType'];
+const VALIDATED_POLICY_MARKER = Symbol('validatedPolicy');
 
 export class SubagentModelPolicyError extends Error {
     constructor(message) {
@@ -52,6 +53,7 @@ export function validateSubagentModelPolicy(policy) {
         throw new SubagentModelPolicyError('inheritance alias conflicts with a model alias');
     }
     const roleByAlias = validateRoles(policy.roles);
+    const trustedAdvisorRoles = validateTrustedAdvisorRoles(policy.roles, roleByAlias);
     const approvedPairs = validateApprovedPairs(policy.approvedPairs, modelByName, effortNames, roleByAlias);
     const approvedPairKeys = new Set(approvedPairs.map(pair => pairKey(pair)));
     const advisorDefault = validatePair(
@@ -80,7 +82,7 @@ export function validateSubagentModelPolicy(policy) {
     );
     validateReplacementGraph(replacements, roleReplacements, approvedPairKeys);
 
-    return {
+    const validatedPolicy = {
         ...policy,
         efforts: {
             ...policy.efforts,
@@ -91,16 +93,22 @@ export function validateSubagentModelPolicy(policy) {
         effortNames,
         inheritanceAliases: new Set(inheritanceAliases),
         roleByAlias,
+        trustedAdvisorRoles,
         approvedPairs,
         advisorDefault,
         replacements,
         roleReplacements,
     };
+    Object.defineProperty(validatedPolicy, VALIDATED_POLICY_MARKER, { value: true });
+    return validatedPolicy;
 }
 
 export function resolveSubagentModelRoute(request, options = {}) {
     try {
-        const policy = options.policy ?? loadSubagentModelPolicy(options.policyPath);
+        const loadedPolicy = options.policy ?? loadSubagentModelPolicy(options.policyPath);
+        const policy = isValidatedPolicy(loadedPolicy)
+            ? loadedPolicy
+            : validateSubagentModelPolicy(loadedPolicy);
         return resolveRouteWithPolicy(request, policy, options);
     } catch (error) {
         if (error instanceof SubagentModelPolicyError) return blockedRoute(error.message);
@@ -115,22 +123,23 @@ export function routeSubagentToolInput(toolInput, options = {}) {
     if (route.status === 'inherited' || route.status === 'pass') {
         return { ...route, updatedInput: toolInput };
     }
-    const updatedInput = { ...toolInput };
-    updatedInput[MODEL_FIELD] = route.selected.model;
-    const effortField = route.effortField ?? 'reasoning_effort';
-    updatedInput[effortField] = route.selected.effort;
-    if (effortField !== 'reasoning_effort' && Object.hasOwn(updatedInput, 'reasoning_effort')) {
-        delete updatedInput.reasoning_effort;
+    const updatedInput = { ...toolInput, [MODEL_FIELD]: route.selected.model };
+    if (route.selected.effort !== null) {
+        const effortField = route.effortField ?? 'reasoning_effort';
+        updatedInput[effortField] = route.selected.effort;
+        if (effortField !== 'reasoning_effort' && Object.hasOwn(updatedInput, 'reasoning_effort')) {
+            delete updatedInput.reasoning_effort;
+        }
     }
     return { ...route, updatedInput };
 }
 
 function resolveRouteWithPolicy(request, policy, options) {
     if (!isObject(request)) return blockedRoute('subagent tool input must be an object');
-    const roleResult = resolveRole(request, policy, options);
+    const roleResult = resolveRole(request, policy);
     if (roleResult.status === 'blocked') return roleResult;
     const { role } = roleResult;
-    if (role === 'advisor' && options.trustedRole !== true) {
+    if (role === 'advisor' && !hasTrustedAdvisorSession(policy, options)) {
         return blockedRoute('advisor role is not trusted');
     }
 
@@ -164,7 +173,13 @@ function resolveRouteWithPolicy(request, policy, options) {
         const modelEfforts = approvedEffortsForModel(modelName, role, policy.approvedPairs);
         if (modelEfforts.length === 1) effort = modelEfforts[0];
     }
-    if (effort === null) return blockedRoute('effort is required for this model');
+    if (effort === null) {
+        const modelEfforts = approvedEffortsForModel(modelName, role, policy.approvedPairs);
+        if (!options.allowMissingEffort || modelEfforts.length !== 1) {
+            return blockedRoute('effort is required for this model');
+        }
+        effort = modelEfforts[0];
+    }
 
     const requestedPair = { model: modelName, effort };
     const selectedPair = selectReplacement(requestedPair, role, policy);
@@ -280,6 +295,23 @@ function validateRoles(roles) {
     return roleByAlias;
 }
 
+function validateTrustedAdvisorRoles(roles, roleByAlias) {
+    const configuredRoles = roles.trustedAdvisor ?? roles.advisor.filter(
+        role => normalizeValue(role) !== 'advisor',
+    );
+    const trustedAdvisorRoles = validateStringList(
+        configuredRoles,
+        'roles.trustedAdvisor',
+    ).map(normalizeValue);
+    if (new Set(trustedAdvisorRoles).size !== trustedAdvisorRoles.length) {
+        throw new SubagentModelPolicyError('roles.trustedAdvisor must be unique');
+    }
+    if (trustedAdvisorRoles.some(role => roleByAlias.get(role) !== 'advisor')) {
+        throw new SubagentModelPolicyError('roles.trustedAdvisor must name advisor roles');
+    }
+    return new Set(trustedAdvisorRoles);
+}
+
 function validateApprovedPairs(rawPairs, modelByName, effortNames, roleByAlias) {
     if (!Array.isArray(rawPairs) || rawPairs.length === 0) {
         throw new SubagentModelPolicyError('approvedPairs must be a non-empty array');
@@ -389,11 +421,10 @@ function canonicalRole(rawRole, roleByAlias, label) {
     return role;
 }
 
-function resolveRole(request, policy, options) {
+function resolveRole(request, policy) {
     const suppliedRoles = ROLE_FIELDS
         .filter(field => Object.hasOwn(request, field))
         .map(field => request[field]);
-    if (options.trustedRoleName !== undefined) suppliedRoles.push(options.trustedRoleName);
     if (suppliedRoles.length === 0) return { status: 'pass', role: policy.roleByAlias.get(DEFAULT_ROLE) };
     if (suppliedRoles.some(role => typeof role !== 'string' || role.trim() === '')) {
         return blockedRoute('role must be a non-empty string');
@@ -403,6 +434,13 @@ function resolveRole(request, policy, options) {
         return blockedRoute('role is unknown or ambiguous');
     }
     return { status: 'pass', role: canonicalRoles[0] };
+}
+
+function hasTrustedAdvisorSession(policy, options) {
+    const metadata = options.trustedSessionMetadata;
+    if (!isObject(metadata) || metadata.authorized !== true) return false;
+    return typeof metadata.registeredAgentType === 'string'
+        && policy.trustedAdvisorRoles.has(normalizeValue(metadata.registeredAgentType));
 }
 
 function readModel(request, policy) {
@@ -532,6 +570,10 @@ function normalizeValue(value) {
 
 function isIdentifier(value) {
     return /^[a-z][a-z0-9_-]*$/.test(value);
+}
+
+function isValidatedPolicy(policy) {
+    return isObject(policy) && policy[VALIDATED_POLICY_MARKER] === true;
 }
 
 function isObject(value) {
