@@ -95,7 +95,9 @@ when `requiresUserChoice` is true.
 When a preference entry includes `{ "model": "model-id", "effort": "medium" }`,
 the selector routes the pair before it deduplicates candidates and checks panel
 diversity. The selected pair appears in `panel.selectedModelPairs`, and the
-native argument uses `reasoning_effort`.
+native argument uses `reasoning_effort`. The policy's `selectorExclusions` list
+removes matching routed pairs from panel contenders without blocking direct
+resolver or spawn-hook use.
 
 Run the selector again before the next agent call. Pass the same panel contract
 and the new delegation index with the refreshed inventory. Report

@@ -77,6 +77,21 @@ test('every approved pair returns its literal native pair', () => {
     assert.deepEqual(advisor.selected, { model: 'gpt-6-astra', effort: 'high' });
 });
 
+test('selector exclusions leave direct Sol Medium routing valid', () => {
+    const policy = loadSubagentModelPolicy();
+    assert.equal(policy.selectorExclusions.has('sol/medium'), true);
+    const result = route({ model: 'Sol', reasoning_effort: 'medium' });
+    assert.ok(['pass', 'remapped'].includes(result.status));
+    assert.deepEqual(result.selected, { model: 'gpt-5.6-sol', effort: 'medium' });
+
+    const rawPolicy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
+    rawPolicy.selectorExclusions = [{ model: 'missing', effort: 'medium' }];
+    assert.throws(
+        () => validateSubagentModelPolicy(rawPolicy),
+        /selectorExclusions entry has unknown model/,
+    );
+});
+
 test('every automatic replacement returns its literal destination', () => {
     for (const [[model, effort], [expectedModel, expectedEffort]] of replacements) {
         const result = route({ model, reasoning_effort: effort });

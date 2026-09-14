@@ -224,10 +224,9 @@ for (const targetName of [null, 'profile']) {
                     hasMaterialCapabilityLoss: false,
                 },
             });
-            assert.deepEqual(codexSelection.nativeSpawnArguments, {
-                model: 'gpt-5.6-sol',
-                reasoning_effort: 'medium',
-            });
+            assert.equal(codexSelection.canDelegate, false);
+            assert.equal(codexSelection.failure, 'no-supported-model');
+            assert.deepEqual(codexSelection.nativeSpawnArguments, {});
 
             const claudePreferencesPath = join(
                 resolution.agentsHome,

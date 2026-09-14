@@ -75,7 +75,7 @@ test('portable policy represents every pstack role without model ids', () => {
     assert.doesNotMatch(serializedRequirements, /gpt-|claude-|grok-/i);
 });
 
-test('Codex preferences select every available model in a diverse panel', () => {
+test('Codex preferences skip an excluded pair in a panel', () => {
     const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-codex-'));
     try {
         writeHostPreferences(preferencesDirectory, 'codex', {
@@ -96,12 +96,12 @@ test('Codex preferences select every available model in a diverse panel', () => 
         assert.equal(selection.selectionSource, 'host-preference');
         assert.deepEqual(selection.panel.selectedModelIds, [
             'gpt-5.6-luna',
-            'gpt-5.6-sol',
             'gpt-6-astra',
+            'gpt-5.6-luna',
         ]);
-        assert.equal(selection.panel.isCrossModelDiverse, true);
+        assert.equal(selection.panel.isCrossModelDiverse, false);
         assert.deepEqual(selection.nativeSpawnArguments, {
-            model: 'gpt-5.6-sol',
+            model: 'gpt-6-astra',
             reasoning_effort: 'medium',
         });
         assert.equal(selection.omitNativeModelArgument, false);
@@ -138,7 +138,7 @@ test('an unavailable preferred model stops before a confirmed host alternative',
     const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-alternative-'));
     try {
         writeHostPreferences(preferencesDirectory, 'codex', {
-            'feature, refactoring': ['gpt-5.6-sol'],
+            'feature, refactoring': ['gpt-5.6-terra'],
         });
         const policyPath = writePolicyWithModels(preferencesDirectory, {
             current: 'confirmed-current-model',
@@ -390,7 +390,7 @@ test('an optional-diversity review panel reports repeated models', () => {
     const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-review-panel-'));
     try {
         writeHostPreferences(preferencesDirectory, 'codex', {
-            'how critics': ['gpt-5.6-sol'],
+            'how critics': ['gpt-5.6-luna'],
         });
         const selection = selectWithPreferences(preferencesDirectory, {
             role: 'how critics',
@@ -399,13 +399,13 @@ test('an optional-diversity review panel reports repeated models', () => {
                 agentCount: 3,
                 requiresDistinctModels: false,
             },
-            availableModelIds: ['gpt-5.6-sol'],
+            availableModelIds: ['gpt-5.6-luna'],
         });
         assert.equal(selection.canDelegate, true);
         assert.deepEqual(selection.panel.selectedModelIds, [
-            'gpt-5.6-sol',
-            'gpt-5.6-sol',
-            'gpt-5.6-sol',
+            'gpt-5.6-luna',
+            'gpt-5.6-luna',
+            'gpt-5.6-luna',
         ]);
         assert.equal(selection.panel.isCrossModelDiverse, false);
     } finally {
@@ -585,13 +585,34 @@ test('panel diversity uses selected models after routing', () => {
                 'gpt-5.6-luna',
             ],
         });
-        assert.equal(selection.canDelegate, true);
+        assert.equal(selection.canDelegate, false);
+        assert.equal(selection.failure, 'distinct-models-unavailable');
         assert.deepEqual(selection.panel.selectedModelIds, [
             'gpt-5.6-luna',
-            'gpt-5.6-sol',
             'gpt-6-astra',
         ]);
-        assert.equal(selection.panel.isCrossModelDiverse, true);
+        assert.equal(selection.panel.isCrossModelDiverse, false);
+        assert.deepEqual(selection.routingDiagnostics, []);
+    } finally {
+        rmSync(preferencesDirectory, { recursive: true, force: true });
+    }
+});
+
+test('selector keeps other Sol remaps as contenders', () => {
+    const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-sol-remap-'));
+    try {
+        writeHostPreferences(preferencesDirectory, 'codex', {
+            'feature, refactoring': [{ model: 'gpt-5.6-sol', effort: 'high' }],
+        });
+        const selection = selectWithPreferences(preferencesDirectory, {
+            availableModelIds: ['gpt-5.6-sol', 'gpt-6-astra'],
+        });
+        assert.equal(selection.canDelegate, true);
+        assert.deepEqual(selection.panel.selectedModelIds, ['gpt-6-astra']);
+        assert.deepEqual(selection.panel.selectedModelPairs, [
+            { model: 'gpt-6-astra', effort: 'low' },
+        ]);
+        assert.deepEqual(selection.routingDiagnostics, []);
     } finally {
         rmSync(preferencesDirectory, { recursive: true, force: true });
     }

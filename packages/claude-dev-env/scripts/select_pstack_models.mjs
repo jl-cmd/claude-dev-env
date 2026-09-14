@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     defaultSubagentModelPolicyPath,
+    isSelectorPairExcluded,
     loadSubagentModelPolicy,
     resolveSubagentModelRoute,
 } from './subagent_model_policy.mjs';
@@ -225,6 +226,7 @@ function preferenceCandidate(
         return null;
     }
     const { modelId, effort } = resolvedEntry;
+    if (isSelectorPairExcluded(modelId, effort, policy)) return null;
     if (policy.inheritanceAliases.has(modelId.trim().toLowerCase())) {
         return input.parentFallback.isAllowed ? parentCandidate() : null;
     }
@@ -249,6 +251,7 @@ function preferenceCandidate(
         routingFailures.push(route.diagnostic);
         return null;
     }
+    if (isSelectorPairExcluded(route.selected.model, route.selected.effort, policy)) return null;
     if (route.status === 'inherited') return input.parentFallback.isAllowed ? parentCandidate() : null;
     return modelCandidate(route.selected.model, source, route);
 }

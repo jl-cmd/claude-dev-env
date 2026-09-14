@@ -56,6 +56,11 @@ export function validateSubagentModelPolicy(policy) {
     const trustedAdvisorRoles = validateTrustedAdvisorRoles(policy.roles, roleByAlias);
     const approvedPairs = validateApprovedPairs(policy.approvedPairs, modelByName, effortNames, roleByAlias);
     const approvedPairKeys = new Set(approvedPairs.map(pair => pairKey(pair)));
+    const selectorExclusions = validateSelectorExclusions(
+        policy.selectorExclusions ?? [],
+        modelByName,
+        effortNames,
+    );
     const advisorDefault = validatePair(
         policy.advisorDefault,
         modelByName,
@@ -95,6 +100,7 @@ export function validateSubagentModelPolicy(policy) {
         roleByAlias,
         trustedAdvisorRoles,
         approvedPairs,
+        selectorExclusions,
         advisorDefault,
         replacements,
         roleReplacements,
@@ -132,6 +138,18 @@ export function routeSubagentToolInput(toolInput, options = {}) {
         }
     }
     return { ...route, updatedInput };
+}
+
+export function isSelectorPairExcluded(model, effort, policy) {
+    if (effort === null || effort === undefined) return false;
+    const modelName = policy.modelByName.aliasOwner.get(normalizeValue(model));
+    if (!modelName) return false;
+    const normalizedEffort = normalizeValue(effort);
+    const effortName = policy.effortNames.has(normalizedEffort)
+        ? normalizedEffort
+        : policy.efforts.aliases[normalizedEffort];
+    return typeof effortName === 'string'
+        && policy.selectorExclusions.has(pairKey({ model: modelName, effort: effortName }));
 }
 
 function resolveRouteWithPolicy(request, policy, options) {
@@ -329,6 +347,27 @@ function validateApprovedPairs(rawPairs, modelByName, effortNames, roleByAlias) 
         pairs.push({ ...pair, roles });
     }
     return pairs;
+}
+
+function validateSelectorExclusions(rawExclusions, modelByName, effortNames) {
+    if (!Array.isArray(rawExclusions)) {
+        throw new SubagentModelPolicyError('selectorExclusions must be an array');
+    }
+    const exclusionKeys = new Set();
+    for (const rawExclusion of rawExclusions) {
+        const exclusion = validatePair(
+            rawExclusion,
+            modelByName,
+            effortNames,
+            'selectorExclusions entry',
+        );
+        const key = pairKey(exclusion);
+        if (exclusionKeys.has(key)) {
+            throw new SubagentModelPolicyError(`duplicate selector exclusion: ${key}`);
+        }
+        exclusionKeys.add(key);
+    }
+    return exclusionKeys;
 }
 
 function validateReplacements(rawReplacements, modelByName, effortNames, approvedPairs, label) {

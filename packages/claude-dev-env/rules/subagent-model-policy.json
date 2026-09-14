@@ -58,6 +58,9 @@
     {"model": "astra", "effort": "medium"},
     {"model": "astra", "effort": "high", "roles": ["advisor"]}
   ],
+  "selectorExclusions": [
+    {"model": "sol", "effort": "medium"}
+  ],
   "advisorDefault": {"model": "astra", "effort": "medium"},
   "replacements": [
     {"requested": {"model": "luna", "effort": "low"}, "selected": {"model": "luna", "effort": "high"}},
