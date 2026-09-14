@@ -6,6 +6,7 @@ import {
     writeFileSync,
     readFileSync,
     existsSync,
+    copyFileSync,
     rmSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -414,6 +415,81 @@ test('seeds one editable policy and one native Codex routing hook', () => {
     }
 });
 
+test('reinstall moves the old routing hook and keeps user hooks', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-routing-hook-upgrade-'));
+    try {
+        const resolution = resolveInstallRoot({
+            homeDirectory,
+            environment: {},
+            explicitTarget: null,
+        });
+        const codexHooksPath = join(homeDirectory, '.codex', 'hooks.json');
+        const manifestPath = resolution.manifestFilePath;
+        const routingHookPath = join(
+            homeDirectory,
+            '.codex',
+            'hooks',
+            'routing',
+            'subagent_model_routing.mjs',
+        );
+        const oldRoutingHookPath = join(
+            homeDirectory,
+            '.codex',
+            'hooks',
+            'blocking',
+            'subagent_model_routing.mjs',
+        );
+
+        runInstaller(homeDirectory, []);
+        const firstCodexHooks = JSON.parse(readFileSync(codexHooksPath, 'utf8'));
+        const firstRoutingGroup = firstCodexHooks.hooks.PreToolUse.find(
+            group => group.matcher === 'multi_agent_v1__spawn_agent',
+        );
+        firstRoutingGroup.hooks[0].command = firstRoutingGroup.hooks[0].command.replace(
+            /routing([\\/])subagent_model_routing\.mjs$/,
+            'blocking$1subagent_model_routing.mjs',
+        );
+        firstCodexHooks.hooks.PreToolUse.push({
+            matcher: 'custom',
+            hooks: [{ type: 'command', command: 'node user-hook.mjs' }],
+        });
+        writeFileSync(codexHooksPath, JSON.stringify(firstCodexHooks, null, 2) + '\n');
+        copyFileSync(routingHookPath, oldRoutingHookPath);
+        rmSync(routingHookPath);
+
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        manifest.files = manifest.files.map(file => file.replace(
+            /([\\/])routing([\\/]subagent_model_routing\.mjs)$/,
+            '$1blocking$2',
+        ));
+        writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+
+        runInstaller(homeDirectory, []);
+
+        const secondCodexHooks = JSON.parse(readFileSync(codexHooksPath, 'utf8'));
+        const routingGroups = secondCodexHooks.hooks.PreToolUse.filter(
+            group => group.matcher === 'multi_agent_v1__spawn_agent',
+        );
+        assert.equal(routingGroups.length, 1);
+        assert.match(routingGroups[0].hooks[0].command, /[\\/]hooks[\\/]routing[\\/]subagent_model_routing\.mjs/);
+        assert.doesNotMatch(
+            JSON.stringify(secondCodexHooks),
+            /[\\/]hooks[\\/]blocking[\\/]subagent_model_routing\.mjs/,
+        );
+        assert.equal(existsSync(routingHookPath), true);
+        assert.equal(existsSync(oldRoutingHookPath), false);
+        assert.equal(
+            secondCodexHooks.hooks.PreToolUse.some(
+                group => group.matcher === 'custom'
+                    && group.hooks.some(hook => hook.command === 'node user-hook.mjs'),
+            ),
+            true,
+        );
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
+
 test('uninstall removes the routing hook and keeps a Codex user hook', () => {
     const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-routing-uninstall-'));
     try {
@@ -481,7 +557,7 @@ test('malformed Codex hooks restore an uninstall', () => {
             homeDirectory,
             '.claude',
             'hooks',
-            'blocking',
+            'routing',
             'subagent_model_routing.mjs',
         );
         writeFileSync(codexHooksPath, '{ malformed\n');
@@ -517,15 +593,15 @@ test('two profiles keep separate Codex routing hooks', () => {
         );
         assert.equal(mainRoutingGroups.length, 1);
         assert.equal(profileRoutingGroups.length, 1);
-        assert.match(mainRoutingGroups[0].hooks[0].command, /[\\/]\.codex[\\/]hooks[\\/]blocking[\\/]subagent_model_routing\.mjs/);
-        assert.match(profileRoutingGroups[0].hooks[0].command, /named-profile[\\/]\.codex[\\/]hooks[\\/]blocking[\\/]subagent_model_routing\.mjs/);
+        assert.match(mainRoutingGroups[0].hooks[0].command, /[\\/]\.codex[\\/]hooks[\\/]routing[\\/]subagent_model_routing\.mjs/);
+        assert.match(profileRoutingGroups[0].hooks[0].command, /named-profile[\\/]\.codex[\\/]hooks[\\/]routing[\\/]subagent_model_routing\.mjs/);
         assert.notEqual(mainRoutingGroups[0].hooks[0].command, profileRoutingGroups[0].hooks[0].command);
 
         const profileHookPath = join(
             profileRoot,
             '.codex',
             'hooks',
-            'blocking',
+            'routing',
             'subagent_model_routing.mjs',
         );
         const profileHookResponse = JSON.parse(execFileSync(

@@ -9,25 +9,49 @@ ADVISOR_MODEL_TIER: str = "Astra"
 ADVISOR_FALLBACK_TIER: str = "Fable"
 ADVISOR_FALLBACK_RESULT: str = "fable"
 ADVISOR_EFFORT_ENV_VAR: str = "ADVISOR_EFFORT"
+ADVISOR_ROUTING_TIMEOUT_SECONDS: int = 10
 
 
 def _policy_path_candidates() -> tuple[Path, ...]:
     shared_root = Path(__file__).resolve().parents[5]
-    if shared_root.name == ".agents":
-        agents_root = shared_root
-    elif shared_root.name.lower() == ".claude":
-        agents_root = shared_root.parent / ".agents"
-    else:
-        agents_root = shared_root.parent / f"{shared_root.name}.agents"
-    if shared_root.name == ".agents":
-        policy_root = shared_root
-    elif shared_root.name.lower() == ".claude":
-        policy_root = agents_root
-    elif (shared_root / "package.json").is_file():
-        policy_root = shared_root
-    else:
-        policy_root = agents_root
+    agents_root = _agents_root(shared_root)
+    policy_root = _policy_root(shared_root, agents_root)
     return (policy_root / "rules" / "subagent-model-policy.json",)
+
+
+def _agents_root(shared_root: Path) -> Path:
+    if shared_root.name == ".agents":
+        return shared_root
+    if shared_root.name.lower() == ".claude":
+        return shared_root.parent / ".agents"
+    return shared_root.parent / f"{shared_root.name}.agents"
+
+
+def _policy_root(shared_root: Path, agents_root: Path) -> Path:
+    if shared_root.name == ".agents" or shared_root.name.lower() == ".claude":
+        return agents_root
+    if (shared_root / "package.json").is_file():
+        return shared_root
+    return agents_root
+
+
+def _policy_values(
+    policy_path: Path,
+) -> tuple[str, str, tuple[str, ...], dict[str, str]]:
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    default_pair = policy["advisorDefault"]
+    model_id = policy["models"][default_pair["model"]]["id"]
+    all_efforts = tuple(policy["efforts"]["values"])
+    effort_aliases = {
+        str(each_alias).strip().lower(): str(each_target).strip().lower()
+        for each_alias, each_target in policy["efforts"]["aliases"].items()
+    }
+    return (
+        model_id,
+        default_pair["effort"],
+        all_efforts,
+        effort_aliases,
+    )
 
 
 def _read_policy_values() -> tuple[str, str, tuple[str, ...], dict[str, str]]:
@@ -38,20 +62,7 @@ def _read_policy_values() -> tuple[str, str, tuple[str, ...], dict[str, str]]:
         )
         if policy_path is None:
             raise RuntimeError("subagent model policy is missing")
-        policy = json.loads(policy_path.read_text(encoding="utf-8"))
-        default_pair = policy["advisorDefault"]
-        model_id = policy["models"][default_pair["model"]]["id"]
-        all_efforts = tuple(policy["efforts"]["values"])
-        effort_aliases = {
-            str(each_alias).strip().lower(): str(each_target).strip().lower()
-            for each_alias, each_target in policy["efforts"]["aliases"].items()
-        }
-        return (
-            model_id,
-            default_pair["effort"],
-            all_efforts,
-            effort_aliases,
-        )
+        return _policy_values(policy_path)
     except (
         AttributeError,
         IndexError,

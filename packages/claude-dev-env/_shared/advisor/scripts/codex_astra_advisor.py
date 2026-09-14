@@ -24,6 +24,7 @@ from advisor_scripts_constants.advisor_route_constants import (
     ADVISOR_EFFORT_ALIASES,
     ADVISOR_EFFORT_DEFAULT,
     ADVISOR_EFFORT_ENV_VAR,
+    ADVISOR_ROUTING_TIMEOUT_SECONDS,
     ALL_ADVISOR_EFFORT_LEVELS,
     SPAWN_OUTCOME_KEY,
 )
@@ -63,7 +64,6 @@ from codex_astra_reply import (
     parse_codex_jsonl_reply,
 )
 
-
 def _resolved_settings(
     all_settings: Mapping[str, str] | None,
 ) -> Mapping[str, str]:
@@ -83,38 +83,22 @@ def is_astra_advisor_enabled(all_settings: Mapping[str, str] | None) -> bool:
     return raw_setting.strip().lower() in ALL_ASTRA_TRUTHY_VALUES
 
 
-def resolve_advisor_pair(
+def _advisor_route_request(
     all_settings: Mapping[str, str] | None,
-    policy_path: Path | None = None,
-) -> tuple[str, str]:
-    """Return the policy-selected advisor model and effort.
-
-    Args:
-        all_settings: Environment mapping, or None to read os.environ.
-        policy_path: Optional policy file path for the resolver.
-
-    Returns:
-        The selected native model ID and effort.
-    """
+    policy_path: Path | None,
+) -> dict[str, object]:
     requested = _resolved_settings(all_settings).get(ADVISOR_EFFORT_ENV_VAR, "")
     request: dict[str, object] = {}
     if requested.strip():
         request["reasoning_effort"] = requested
     if policy_path is not None:
         request["policyPath"] = str(policy_path)
-    resolver_path = _scripts_directory.parents[2] / "scripts" / "resolve_advisor_model_route.mjs"
-    try:
-        completed = subprocess.run(
-            ["node", str(resolver_path)],
-            input=json.dumps(request),
-            capture_output=True,
-            text=True,
-            check=False,
-            shell=False,
-            timeout=10,
-        )
-    except (OSError, subprocess.SubprocessError) as error:
-        raise RuntimeError(f"advisor model routing failed: {error}") from error
+    return request
+
+
+def _parse_advisor_route(
+    completed: subprocess.CompletedProcess[str],
+) -> Mapping[str, object]:
     try:
         route = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
@@ -122,13 +106,34 @@ def resolve_advisor_pair(
     if not isinstance(route, Mapping):
         raise TypeError("advisor model routing returned an invalid response")
     if completed.returncode != 0:
-        raise RuntimeError(
-            route.get("diagnostic")
-            or f"advisor model routing failed: process exit {completed.returncode}"
+        diagnostic = route.get("diagnostic")
+        message = str(diagnostic) if diagnostic else f"advisor model routing failed: process exit {completed.returncode}"
+        raise RuntimeError(message)
+    return route
+
+
+def _run_advisor_route(all_request: Mapping[str, object]) -> Mapping[str, object]:
+    resolver_path = _scripts_directory.parents[2] / "scripts" / "resolve_advisor_model_route.mjs"
+    try:
+        completed = subprocess.run(
+            ["node", str(resolver_path)],
+            input=json.dumps(all_request),
+            capture_output=True,
+            text=True,
+            check=False,
+            shell=False,
+            timeout=ADVISOR_ROUTING_TIMEOUT_SECONDS,
         )
-    if route.get("status") not in {"pass", "remapped"}:
-        raise RuntimeError(route.get("diagnostic") or "advisor model routing blocked")
-    selected = route.get("selected")
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError(f"advisor model routing failed: {error}") from error
+
+    return _parse_advisor_route(completed)
+
+
+def _selected_advisor_pair(all_route: Mapping[str, object]) -> tuple[str, str]:
+    if all_route.get("status") not in {"pass", "remapped"}:
+        raise RuntimeError(all_route.get("diagnostic") or "advisor model routing blocked")
+    selected = all_route.get("selected")
     if not isinstance(selected, Mapping):
         raise TypeError("advisor model routing returned no selected pair")
     model_id = selected.get("model")
@@ -136,6 +141,27 @@ def resolve_advisor_pair(
     if not isinstance(model_id, str) or not isinstance(effort, str):
         raise TypeError("advisor model routing returned an invalid selected pair")
     return model_id, effort
+
+
+def resolve_advisor_pair(
+    all_settings: Mapping[str, str] | None,
+    policy_path: Path | None,
+) -> tuple[str, str]:
+    """Return the policy-selected advisor model and effort.
+
+    Args:
+        all_settings: Environment mapping, or None to read os.environ.
+        policy_path: Policy file path for the resolver, or None for the installed path.
+
+    Returns:
+        The selected native model ID and effort.
+
+    Raises:
+        RuntimeError: If the bridge fails or returns a blocked route.
+        TypeError: If the bridge returns an invalid shape.
+    """
+    route = _run_advisor_route(_advisor_route_request(all_settings, policy_path))
+    return _selected_advisor_pair(route)
 
 
 def resolve_advisor_effort(all_settings: Mapping[str, str] | None) -> str:
@@ -147,7 +173,7 @@ def resolve_advisor_effort(all_settings: Mapping[str, str] | None) -> str:
     Returns:
         The selected effort.
     """
-    return resolve_advisor_pair(all_settings)[1]
+    return resolve_advisor_pair(all_settings, None)[1]
 
 
 def resolve_usage_probe_path(home_directory: Path) -> Path:
@@ -235,7 +261,7 @@ def _run_codex(
     executable: str,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> subprocess.CompletedProcess[str]:
-    model_id, effort = resolve_advisor_pair(all_settings)
+    model_id, effort = resolve_advisor_pair(all_settings, None)
     return process_runner(
         build_codex_arguments(
             executable,

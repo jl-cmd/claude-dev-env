@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/blocking/subagent_model_routing.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/routing/subagent_model_routing.mjs\"",
             "timeout": 10
           }
         ]

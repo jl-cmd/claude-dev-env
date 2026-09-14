@@ -1356,11 +1356,16 @@ export const RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS = new Set([
     'blocking/session_handoff_blocker.py',
 ]);
 
+export const MOVED_HOOK_RELATIVE_PATHS = new Set([
+    'blocking/subagent_model_routing.mjs',
+]);
+
 export function managedHookScriptRelativePaths(hooksConfig) {
     const relativePaths = new Set([
         ...FOLDED_HOOK_RELATIVE_PATHS,
         ...POST_FOLDED_HOOK_RELATIVE_PATHS,
         ...RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS,
+        ...MOVED_HOOK_RELATIVE_PATHS,
     ]);
     const scriptReferencePattern = /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/(\S+?\.(?:py|mjs))/g;
     for (const matcherGroups of Object.values(hooksConfig.hooks)) {
@@ -3196,7 +3201,7 @@ function pruneManagedHooksFromHostConfiguration(settingsPath, defaultIndentation
 function codexRoutingHookExists() {
     return existsSync(join(
         INSTALL_ROOT_RESOLUTION.codexHooksInstallDirectory,
-        'blocking',
+        'routing',
         'subagent_model_routing.mjs',
     ));
 }
