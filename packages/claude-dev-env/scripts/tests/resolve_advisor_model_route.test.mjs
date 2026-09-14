@@ -29,3 +29,12 @@ test('advisor bridge blocks malformed JSON', () => {
         diagnostic: 'advisor route input is not valid JSON',
     });
 });
+
+test('advisor bridge blocks non-object input', () => {
+    const result = runBridge('[]');
+    assert.equal(result.status, 1);
+    assert.deepEqual(JSON.parse(result.stdout), {
+        status: 'blocked',
+        diagnostic: 'advisor route input must be an object',
+    });
+});
