@@ -1,0 +1,306 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+    defaultSubagentModelPolicyPath,
+    loadSubagentModelPolicy,
+    resolveSubagentModelRoute,
+    routeSubagentToolInput,
+    SubagentModelPolicyError,
+    validateSubagentModelPolicy,
+} from '../scripts/subagent_model_policy.mjs';
+
+const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+const POLICY_SOURCE = defaultSubagentModelPolicyPath();
+
+function route(request, options = {}) {
+    return resolveSubagentModelRoute(request, { trustedRole: true, ...options });
+}
+
+const replacements = [
+    [['Luna', 'low'], ['gpt-5.6-luna', 'high']],
+    [['Luna', 'medium'], ['gpt-5.6-luna', 'high']],
+    [['Sol', 'low'], ['gpt-5.6-luna', 'xhigh']],
+    [['Terra', 'low'], ['gpt-5.6-luna', 'xhigh']],
+    [['Terra', 'medium'], ['gpt-5.6-luna', 'xhigh']],
+    [['Terra', 'high'], ['gpt-5.6-luna', 'xhigh']],
+    [['Terra', 'xhigh'], ['gpt-5.6-luna', 'max']],
+    [['Sol', 'high'], ['gpt-6-astra', 'low']],
+    [['Sol', 'xhigh'], ['gpt-6-astra', 'low']],
+    [['Sol', 'max'], ['gpt-6-astra', 'low']],
+    [['Terra', 'max'], ['gpt-6-astra', 'low']],
+];
+
+test('the shipped policy parses and names native model ids', () => {
+    const policy = loadSubagentModelPolicy();
+    assert.equal(policy.modelByName.astra.id, 'gpt-6-astra');
+    assert.equal(policy.modelByName.sol.id, 'gpt-5.6-sol');
+    assert.equal(policy.modelByName.terra.id, 'gpt-5.6-terra');
+    assert.equal(policy.modelByName.luna.id, 'gpt-5.6-luna');
+    assert.deepEqual(policy.advisorDefault, { model: 'astra', effort: 'medium' });
+});
+
+test('every approved pair returns its literal native pair', () => {
+    const expected = [
+        [['Luna', 'high'], ['gpt-5.6-luna', 'high']],
+        [['Luna', 'xhigh'], ['gpt-5.6-luna', 'xhigh']],
+        [['Luna', 'max'], ['gpt-5.6-luna', 'max']],
+        [['Sol', 'medium'], ['gpt-5.6-sol', 'medium']],
+        [['Astra', 'low'], ['gpt-6-astra', 'low']],
+        [['Astra', 'medium'], ['gpt-6-astra', 'medium']],
+    ];
+    for (const [[model, effort], [expectedModel, expectedEffort]] of expected) {
+        const result = route({ model, reasoning_effort: effort });
+        assert.ok(['pass', 'remapped'].includes(result.status));
+        assert.deepEqual(result.selected, { model: expectedModel, effort: expectedEffort });
+    }
+    const advisor = route({
+        model: 'Astra',
+        reasoning_effort: 'high',
+        agent_type: 'session-advisor',
+    });
+    assert.equal(advisor.status, 'remapped');
+    assert.deepEqual(advisor.selected, { model: 'gpt-6-astra', effort: 'high' });
+});
+
+test('every automatic replacement returns its literal destination', () => {
+    for (const [[model, effort], [expectedModel, expectedEffort]] of replacements) {
+        const result = route({ model, reasoning_effort: effort });
+        assert.equal(result.status, 'remapped');
+        assert.deepEqual(result.selected, { model: expectedModel, effort: expectedEffort });
+    }
+});
+
+test('advisor and worker Astra restrictions use role-specific replacements', () => {
+    assert.deepEqual(
+        route({ model: 'Astra', reasoning_effort: 'xhigh', agent_type: 'session-advisor' }).selected,
+        { model: 'gpt-6-astra', effort: 'medium' },
+    );
+    assert.deepEqual(
+        route({ model: 'Astra', reasoning_effort: 'max', agent_type: 'worker' }).selected,
+        { model: 'gpt-6-astra', effort: 'low' },
+    );
+    assert.deepEqual(
+        route({ model: 'Astra', reasoning_effort: 'high', agent_type: 'session-advisor' }).selected,
+        { model: 'gpt-6-astra', effort: 'high' },
+    );
+});
+
+test('Astra Light resolves to Astra Low', () => {
+    const result = route({ model: 'Astra', reasoning_effort: 'Light' });
+    assert.deepEqual(result.selected, { model: 'gpt-6-astra', effort: 'low' });
+});
+
+test('missing advisor settings use the policy default', () => {
+    const result = route({ agent_type: 'session-advisor' });
+    assert.deepEqual(result.selected, { model: 'gpt-6-astra', effort: 'medium' });
+});
+
+test('missing worker settings preserve parent inheritance', () => {
+    const input = { message: 'keep', agent_type: 'worker' };
+    const result = routeSubagentToolInput(input);
+    assert.equal(result.status, 'inherited');
+    assert.strictEqual(result.updatedInput, input);
+});
+
+test('unknown input holds with a short diagnostic', () => {
+    assert.match(route({ model: 'Unknown', reasoning_effort: 'medium' }).diagnostic, /model is unknown/);
+    assert.match(route({ model: 'Terra', reasoning_effort: 'future' }).diagnostic, /effort is unknown/);
+    assert.match(route({ model: 'Sol', reasoning_effort: 'medium', agent_type: 'unregistered' }).diagnostic, /role is unknown/);
+});
+
+test('dual effort fields hold instead of leaving one stale', () => {
+    const result = route({ model: 'Luna', reasoning_effort: 'low', effort: 'low' });
+    assert.equal(result.status, 'blocked');
+    assert.match(result.diagnostic, /effort fields are ambiguous/);
+});
+
+test('native values with case or whitespace differences are canonicalized', () => {
+    const result = routeSubagentToolInput({
+        model: ' gpt-5.6-sol ',
+        reasoning_effort: 'Medium',
+        message: 'keep',
+    });
+    assert.equal(result.status, 'remapped');
+    assert.deepEqual(result.updatedInput, {
+        model: 'gpt-5.6-sol',
+        reasoning_effort: 'medium',
+        message: 'keep',
+    });
+});
+
+test('unavailable replacements hold the spawn', () => {
+    const result = route(
+        { model: 'Terra', reasoning_effort: 'medium' },
+        { availableModelIds: ['gpt-5.6-terra'] },
+    );
+    assert.equal(result.status, 'blocked');
+    assert.match(result.diagnostic, /replacement model is unavailable/);
+});
+
+test('the tool route copies every non-routing field', () => {
+    const input = {
+        assignment: 'preserve',
+        message: 'do the work',
+        child_permissions: { shell: 'ask' },
+        output_contract: ['summary'],
+        model: 'Terra',
+        reasoning_effort: 'Medium',
+    };
+    const result = routeSubagentToolInput(input, { trustedRole: true });
+    assert.deepEqual(result.updatedInput, {
+        assignment: 'preserve',
+        message: 'do the work',
+        child_permissions: { shell: 'ask' },
+        output_contract: ['summary'],
+        model: 'gpt-5.6-luna',
+        reasoning_effort: 'xhigh',
+    });
+    assert.deepEqual(input, {
+        assignment: 'preserve',
+        message: 'do the work',
+        child_permissions: { shell: 'ask' },
+        output_contract: ['summary'],
+        model: 'Terra',
+        reasoning_effort: 'Medium',
+    });
+});
+
+test('a second route pass is idempotent', () => {
+    const first = routeSubagentToolInput(
+        { model: 'Terra', reasoning_effort: 'medium', message: 'keep' },
+        { trustedRole: true },
+    );
+    const second = routeSubagentToolInput(first.updatedInput, { trustedRole: true });
+    assert.equal(first.status, 'remapped');
+    assert.equal(second.status, 'pass');
+    assert.deepEqual(second.updatedInput, first.updatedInput);
+});
+
+test('a temporary policy copy changes the next route without source edits', () => {
+    const temporaryRoot = mkdtempSync(join(tmpdir(), 'subagent-policy-'));
+    try {
+        const temporaryPolicy = join(temporaryRoot, 'policy.json');
+        const sourceText = readFileSync(POLICY_SOURCE, 'utf8');
+        const policy = JSON.parse(sourceText);
+        policy.replacements = policy.replacements.map(replacement => (
+            replacement.requested.model === 'terra' && replacement.requested.effort === 'medium'
+                ? { ...replacement, selected: { model: 'luna', effort: 'max' } }
+                : replacement
+        ));
+        writeFileSync(temporaryPolicy, JSON.stringify(policy));
+        const result = route(
+            { model: 'Terra', reasoning_effort: 'medium' },
+            { policyPath: temporaryPolicy },
+        );
+        assert.deepEqual(result.selected, { model: 'gpt-5.6-luna', effort: 'max' });
+        assert.equal(readFileSync(POLICY_SOURCE, 'utf8'), sourceText);
+    } finally {
+        rmSync(temporaryRoot, { recursive: true, force: true });
+    }
+});
+
+test('malformed policy data fails validation', () => {
+    assert.throws(
+        () => validateSubagentModelPolicy({ schemaVersion: 1 }),
+        error => error instanceof SubagentModelPolicyError && /models must be an object/.test(error.message),
+    );
+    const policy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
+    assert.throws(
+        () => validateSubagentModelPolicy({
+            ...policy,
+            replacements: [
+                {
+                    requested: { model: 'terra', effort: 'medium' },
+                    selected: { model: 'terra', effort: 'medium' },
+                },
+            ],
+        }),
+        /replacement target is not approved/,
+    );
+});
+
+test('normalized effort aliases resolve from the validated policy', () => {
+    const policy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
+    policy.efforts.aliases = { Light: 'LOW' };
+    const validatedPolicy = validateSubagentModelPolicy(policy);
+    const result = resolveSubagentModelRoute(
+        { model: 'Astra', reasoning_effort: 'Light' },
+        { policy: validatedPolicy, trustedRole: true },
+    );
+    assert.deepEqual(result.selected, { model: 'gpt-6-astra', effort: 'low' });
+});
+
+test('inheritance aliases cannot shadow model aliases', () => {
+    const policy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
+    policy.inheritanceAliases = ['astra'];
+    assert.throws(
+        () => validateSubagentModelPolicy(policy),
+        /inheritance alias conflicts with a model alias/,
+    );
+});
+
+test('model names cannot collide after normalization', () => {
+    const policy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
+    policy.models.Astra = { id: 'gpt-6-astra-copy', aliases: [] };
+    assert.throws(
+        () => validateSubagentModelPolicy(policy),
+        /model name is ambiguous: astra/,
+    );
+});
+
+test('combined role routes must end at an approved terminal pair', () => {
+    const policy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
+    policy.replacements.push({
+        requested: { model: 'sol', effort: 'medium' },
+        selected: { model: 'astra', effort: 'low' },
+    });
+    policy.roleReplacements.push({
+        role: 'worker',
+        requested: { model: 'astra', effort: 'low' },
+        selected: { model: 'luna', effort: 'high' },
+    });
+    assert.throws(
+        () => validateSubagentModelPolicy(policy),
+        /replacement destination is not terminal/,
+    );
+});
+
+test('replacement cycles fail policy validation', () => {
+    const policy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
+    policy.replacements.push(
+        {
+            requested: { model: 'luna', effort: 'high' },
+            selected: { model: 'luna', effort: 'xhigh' },
+        },
+        {
+            requested: { model: 'luna', effort: 'xhigh' },
+            selected: { model: 'luna', effort: 'high' },
+        },
+    );
+    assert.throws(
+        () => validateSubagentModelPolicy(policy),
+        /replacement cycle includes/,
+    );
+});
+
+test('base replacement targets must be approved for every role', () => {
+    const policy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
+    policy.replacements = policy.replacements.map(replacement => (
+        replacement.requested.model === 'terra' && replacement.requested.effort === 'medium'
+            ? { ...replacement, selected: { model: 'astra', effort: 'high' } }
+            : replacement
+    ));
+    assert.throws(
+        () => validateSubagentModelPolicy(policy),
+        /replacement target is not approved: astra\/high/,
+    );
+});
+
+test('policy aliases stay in the policy file', () => {
+    const source = readFileSync(join(PACKAGE_ROOT, 'scripts', 'subagent_model_policy.mjs'), 'utf8');
+    assert.doesNotMatch(source, /gpt-5\.6-(?:luna|sol|terra)|gpt-6-astra/);
+});
