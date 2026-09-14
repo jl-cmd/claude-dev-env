@@ -86,6 +86,8 @@ After each meaningful checkpoint, save `expected_revision` and a `checkpoint`
 with `completed` and `remaining` arrays. Keep user rules out of the checkpoint.
 On a revision conflict, read the latest record and reconcile the update.
 
+When a diagnosis changes, review the pending actions based on it. Withdraw actions that lack support. Keep old proposals in history, apart from current work.
+
 ## Recovery and handoff
 
 The installed hook discovers the record from the host's stable session id.
