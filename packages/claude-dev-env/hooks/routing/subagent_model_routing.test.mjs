@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -11,9 +11,9 @@ function buildHookPayload(toolInput, metadata = {}) {
     return { tool_name: targetToolName, tool_input: toolInput, ...metadata };
 }
 
-test('remaps Terra Medium to Luna Xhigh', () => {
+test('remaps Sol Medium to Luna Xhigh', () => {
     const hookResponse = buildSubagentModelRoutingResponse(buildHookPayload({
-        model: 'Terra',
+        model: 'Sol',
         reasoning_effort: 'Medium',
     }));
 
@@ -26,7 +26,7 @@ test('remaps Terra Medium to Luna Xhigh', () => {
 
 test('emits only the allow response shape after a remap', () => {
     const hookResponse = buildSubagentModelRoutingResponse(buildHookPayload({
-        model: 'Terra',
+        model: 'Sol',
         reasoning_effort: 'medium',
     }));
 
@@ -52,7 +52,7 @@ test('preserves every non-routing tool field', () => {
         message: 'do the work',
         child_permissions: { shell: 'ask' },
         output_contract: ['summary'],
-        model: 'Terra',
+        model: 'Sol',
         reasoning_effort: 'medium',
     };
 
@@ -71,7 +71,7 @@ test('preserves every non-routing tool field', () => {
         message: 'do the work',
         child_permissions: { shell: 'ask' },
         output_contract: ['summary'],
-        model: 'Terra',
+        model: 'Sol',
         reasoning_effort: 'medium',
     });
 });
@@ -94,8 +94,8 @@ test('blocks malformed policy, unknown input, unavailable replacement, and untru
         buildHookPayload({ model: 'Unknown', reasoning_effort: 'medium' }),
     );
     const unavailableReplacementResponse = buildSubagentModelRoutingResponse(
-        buildHookPayload({ model: 'Terra', reasoning_effort: 'medium' }),
-        { availableModelIds: ['gpt-5.6-terra'] },
+        buildHookPayload({ model: 'Sol', reasoning_effort: 'medium' }),
+        { availableModelIds: ['gpt-5.6-sol'] },
     );
     const untrustedAdvisorResponse = buildSubagentModelRoutingResponse(
         buildHookPayload({
@@ -122,25 +122,62 @@ test('blocks malformed policy, unknown input, unavailable replacement, and untru
     }
 });
 
-test('allows a registered session advisor with trusted session metadata', () => {
-    const hookResponse = buildSubagentModelRoutingResponse(
-        buildHookPayload({
-            agent_type: 'session-advisor',
-            model: 'Astra',
-            reasoning_effort: 'high',
-        }),
-        {
-            trustedSessionMetadata: {
-                authorized: true,
-                registeredAgentType: 'session-advisor',
+for (const [eachModel, eachEffort, eachSelectedModel, eachSelectedEffort] of [
+    ['Sol', 'medium', 'gpt-5.6-luna', 'xhigh'],
+    ['Astra', 'high', 'gpt-6-astra', 'high'],
+]) {
+    test(`allows a trusted session advisor requesting ${eachModel} ${eachEffort}`, () => {
+        const hookResponse = buildSubagentModelRoutingResponse(
+            buildHookPayload({
+                agent_type: 'session-advisor',
+                model: eachModel,
+                reasoning_effort: eachEffort,
+            }),
+            {
+                trustedSessionMetadata: {
+                    authorized: true,
+                    registeredAgentType: 'session-advisor',
+                },
             },
+        );
+
+        assert.deepEqual(hookResponse.hookSpecificOutput.updatedInput, {
+            agent_type: 'session-advisor',
+            model: eachSelectedModel,
+            reasoning_effort: eachSelectedEffort,
+        });
+    });
+}
+
+test('the standalone hook silently remaps native Sol Medium and preserves other fields', () => {
+    const hookExecution = spawnSync(
+        process.execPath,
+        [fileURLToPath(new URL('./subagent_model_routing.mjs', import.meta.url))],
+        {
+            encoding: 'utf8',
+            input: JSON.stringify(buildHookPayload({
+                model: 'gpt-5.6-sol',
+                effort: 'medium',
+                message: 'keep',
+                child_permissions: { shell: 'ask' },
+                output_contract: ['summary'],
+            })),
         },
     );
-
-    assert.deepEqual(hookResponse.hookSpecificOutput.updatedInput, {
-        agent_type: 'session-advisor',
-        model: 'gpt-6-astra',
-        reasoning_effort: 'high',
+    assert.equal(hookExecution.status, 0);
+    assert.equal(hookExecution.stderr, '');
+    assert.deepEqual(JSON.parse(hookExecution.stdout), {
+        hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'allow',
+            updatedInput: {
+                model: 'gpt-5.6-luna',
+                effort: 'xhigh',
+                message: 'keep',
+                child_permissions: { shell: 'ask' },
+                output_contract: ['summary'],
+            },
+        },
     });
 });
 
@@ -201,7 +238,7 @@ test('the standalone hook command blocks an advisor without host metadata', () =
 
 test('keeps a second routing pass unchanged', () => {
     const firstResponse = buildSubagentModelRoutingResponse(buildHookPayload({
-        model: 'Terra',
+        model: 'Sol',
         reasoning_effort: 'medium',
         message: 'keep',
     }));

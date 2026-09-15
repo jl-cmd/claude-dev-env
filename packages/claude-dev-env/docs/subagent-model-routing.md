@@ -32,8 +32,11 @@ example, change the `terra` and `medium` entry in `replacements` to:
 
 The next routing call reads the file again. The resolver source stays unchanged.
 
-To keep a pair out of selector panels, add it to `selectorExclusions`. This
-does not block the shared resolver or the spawn hook. For example:
+Selector exclusions keep a pair out of panels. They do not change direct route
+decisions. The shipped policy keeps Sol Medium out of panels and routes direct
+requests for Sol Medium to Luna Xhigh through `replacements`. Sol Medium is absent
+from `approvedPairs`. The selector drops the requested pair before routing it,
+so its Luna replacement does not enter the panel through that preference.
 
 ```json
 "selectorExclusions": [
@@ -41,8 +44,24 @@ does not block the shared resolver or the spawn hook. For example:
 ]
 ```
 
+The matching replacement is:
+
+```json
+{
+  "requested": {"model": "sol", "effort": "medium"},
+  "selected": {"model": "luna", "effort": "xhigh"}
+}
+```
+
 Unknown values, invalid policy data, and unavailable replacement models stop the
 spawn with a short diagnostic. Parent inheritance stays unchanged.
+
+The direct spawn hook and advisor bridge use the same shared resolver. A Sol
+Medium remap changes only the model and effort fields in the hook's tool input.
+The hook returns an allow decision with the updated input and emits no remap
+notice. Luna High, Xhigh, and Max and Astra Low and Medium keep their routes.
+Trusted advisors also keep Astra High. A worker request for Sol without an
+effort stops because Sol has no approved pair to supply a default effort.
 
 The hook blocks advisor role claims because the current Codex hook input has no
 host-provided role binding. The Python advisor bridge passes trusted session
