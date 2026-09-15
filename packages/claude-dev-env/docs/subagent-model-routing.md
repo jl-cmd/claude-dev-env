@@ -34,7 +34,7 @@ The next routing call reads the file again. The resolver source stays unchanged.
 
 Selector exclusions keep a pair out of panels. They do not change direct route
 decisions. The shipped policy keeps Sol Medium out of panels and routes direct
-requests for Sol Medium to Luna Xhigh through `replacements`. Sol Medium is absent
+requests for Sol Medium to Luna Max through `replacements`. Sol Medium is absent
 from `approvedPairs`. The selector drops the requested pair before routing it,
 so its Luna replacement does not enter the panel through that preference.
 
@@ -49,7 +49,7 @@ The matching replacement is:
 ```json
 {
   "requested": {"model": "sol", "effort": "medium"},
-  "selected": {"model": "luna", "effort": "xhigh"}
+  "selected": {"model": "luna", "effort": "max"}
 }
 ```
 

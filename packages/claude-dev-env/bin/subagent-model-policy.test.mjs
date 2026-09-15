@@ -35,7 +35,7 @@ const replacements = [
     [['Luna', 'low'], ['gpt-5.6-luna', 'high']],
     [['Luna', 'medium'], ['gpt-5.6-luna', 'high']],
     [['Sol', 'low'], ['gpt-5.6-luna', 'xhigh']],
-    [['Sol', 'medium'], ['gpt-5.6-luna', 'xhigh']],
+    [['Sol', 'medium'], ['gpt-5.6-luna', 'max']],
     [['Terra', 'low'], ['gpt-5.6-luna', 'xhigh']],
     [['Terra', 'medium'], ['gpt-5.6-luna', 'xhigh']],
     [['Terra', 'high'], ['gpt-5.6-luna', 'xhigh']],
@@ -85,7 +85,7 @@ test('selector exclusions keep Sol Medium out while direct routing remaps', () =
     assert.equal(policy.selectorExclusions.has('sol/medium'), true);
     const result = route({ model: 'Sol', reasoning_effort: 'medium' });
     assert.equal(result.status, 'remapped');
-    assert.deepEqual(result.selected, { model: 'gpt-5.6-luna', effort: 'xhigh' });
+    assert.deepEqual(result.selected, { model: 'gpt-5.6-luna', effort: 'max' });
 
     const rawPolicy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
     rawPolicy.selectorExclusions = [{ model: 'missing', effort: 'medium' }];
@@ -177,7 +177,7 @@ test('the advisor bridge blocks malformed input', () => {
     );
 });
 
-test('the advisor bridge routes Sol Medium to Luna Xhigh', () => {
+test('the advisor bridge routes Sol Medium to Luna Max', () => {
     const bridgePath = join(PACKAGE_ROOT, 'scripts', 'resolve_advisor_model_route.mjs');
     const bridgeExecution = spawnSync(
         process.execPath,
@@ -193,7 +193,7 @@ test('the advisor bridge routes Sol Medium to Luna Xhigh', () => {
     assert.equal(advisorDecision.status, 'remapped');
     assert.equal(advisorDecision.role, 'advisor');
     assert.equal(advisorDecision.diagnostic, null);
-    assert.deepEqual(advisorDecision.selected, { model: 'gpt-5.6-luna', effort: 'xhigh' });
+    assert.deepEqual(advisorDecision.selected, { model: 'gpt-5.6-luna', effort: 'max' });
 });
 
 test('missing worker settings preserve parent inheritance', () => {
@@ -233,7 +233,7 @@ test('native values with case or whitespace differences are canonicalized', () =
     assert.equal(result.status, 'remapped');
     assert.deepEqual(result.updatedInput, {
         model: 'gpt-5.6-luna',
-        reasoning_effort: 'xhigh',
+        reasoning_effort: 'max',
         message: 'keep',
     });
 });
@@ -296,10 +296,10 @@ test('a temporary policy copy changes the next route without source edits', () =
         assert.deepEqual(route(
             { model: 'Sol', reasoning_effort: 'medium' },
             { policyPath: temporaryPolicy },
-        ).selected, { model: 'gpt-5.6-luna', effort: 'xhigh' });
+        ).selected, { model: 'gpt-5.6-luna', effort: 'max' });
         policy.replacements = policy.replacements.map(replacement => (
             replacement.requested.model === 'sol' && replacement.requested.effort === 'medium'
-                ? { ...replacement, selected: { model: 'luna', effort: 'max' } }
+                ? { ...replacement, selected: { model: 'luna', effort: 'xhigh' } }
                 : replacement
         ));
         writeFileSync(temporaryPolicy, JSON.stringify(policy));
@@ -307,7 +307,7 @@ test('a temporary policy copy changes the next route without source edits', () =
             { model: 'Sol', reasoning_effort: 'medium' },
             { policyPath: temporaryPolicy },
         );
-        assert.deepEqual(updatedRoute.selected, { model: 'gpt-5.6-luna', effort: 'max' });
+        assert.deepEqual(updatedRoute.selected, { model: 'gpt-5.6-luna', effort: 'xhigh' });
         assert.equal(readFileSync(POLICY_SOURCE, 'utf8'), sourceText);
     } finally {
         rmSync(temporaryRoot, { recursive: true, force: true });
