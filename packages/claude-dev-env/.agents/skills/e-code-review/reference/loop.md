@@ -48,8 +48,10 @@ no advisor call reopens that.
 ## Required checks
 
 "Run required checks" means: run
-`~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo root>`
-with no file paths and no `--only-under` prefix. On a violation on lines this
+`python ~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo root>`
+with no file paths and no `--only-under` prefix. The `python` prefix is
+required. On Windows a bare `.py` path opens the file in Cursor, which then
+crashes on the gate flags. On a violation on lines this
 round already owns, fix it and re-run the exact same command until clean. A
 violation outside the review target is reported or skipped, not force-fixed into
 unrelated files, and the skip is logged with path and reason.

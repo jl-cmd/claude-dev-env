@@ -21,8 +21,10 @@ every rule below.
 Before returning, the resumed agent runs the code-rules gate with the same bare
 call every other surface in this skill uses:
 
-1. Run `~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root <repo
-   root>` with no file paths and no `--only-under` prefix.
+1. Run `python ~/.claude/_shared/pr-loop/scripts/code_rules_gate.py --repo-root
+   <repo root>` with no file paths and no `--only-under` prefix. The `python`
+   prefix is required. On Windows a bare `.py` path opens the file in Cursor,
+   which then crashes on the gate flags.
 2. If the gate reports violations **on lines this fix already owns** (the files
    and added lines the fix changed), fix them and re-run the exact same command.
 3. A violation on a path or added line outside this fix's own work is reported
