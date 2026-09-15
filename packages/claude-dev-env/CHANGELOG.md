@@ -1,5 +1,25 @@
 # Changelog
 
+## [7.7.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.6.1...claude-dev-env-v7.7.0) (2026-09-15)
+
+
+### Features
+
+* add subagent model policy resolver ([b0e7955](https://github.com/jl-cmd/claude-dev-env/commit/b0e7955eacdcae8ef290f05e252bf5ae002b0dec))
+* **pstack:** add subagent model policy resolver ([e0ee3c6](https://github.com/jl-cmd/claude-dev-env/commit/e0ee3c655309e1bd595e875b3b2809e3bf9cec95))
+* **pstack:** route subagent models at spawn time ([a2ae5c4](https://github.com/jl-cmd/claude-dev-env/commit/a2ae5c447ca3469a27e695d497d1e91b959cd694))
+* route subagent models at spawn time ([5ec5987](https://github.com/jl-cmd/claude-dev-env/commit/5ec59879acadd39ff99213f52359ada6cfe77008))
+
+
+### Bug Fixes
+
+* **pstack:** align policy terms ([b027465](https://github.com/jl-cmd/claude-dev-env/commit/b027465ce0760ef2688190222a0afc7204ecbd4f))
+* **pstack:** exclude Sol Medium panel contender ([d22971d](https://github.com/jl-cmd/claude-dev-env/commit/d22971d3e35581088ecaf0c5987f538a7be09e93))
+* **pstack:** prune moved routing hook ([d3649b8](https://github.com/jl-cmd/claude-dev-env/commit/d3649b8f784951fbf5e2d57ecded2a943241ea52))
+* **pstack:** satisfy cumulative policy lint ([eec1e2c](https://github.com/jl-cmd/claude-dev-env/commit/eec1e2ce0a164360957fdf9058f668eaa94805cd))
+* **pstack:** sync package instruction guidance ([1316a76](https://github.com/jl-cmd/claude-dev-env/commit/1316a765756d0cc617be9e600b10598b138966b3))
+* **pstack:** validate model routing boundaries ([0b12d04](https://github.com/jl-cmd/claude-dev-env/commit/0b12d04387a7ac65a7da449dd844ac9052163a26))
+
 ## [7.6.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.6.0...claude-dev-env-v7.6.1) (2026-09-11)
 
 
