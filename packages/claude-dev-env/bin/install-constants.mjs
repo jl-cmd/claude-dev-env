@@ -56,8 +56,11 @@ export const RUN_BACKUP_DIRECTORY_NAME_PATTERN =
 export const PACKAGE_AGENTS_HOME_DIRECTORY_NAME = '.agents';
 
 export const PSTACK_MODEL_RULE_FILE_NAME = 'pstack-models.mdc';
-export const PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME =
-    'pstack-model-preferences.codex.json';
+export const SUBAGENT_MODEL_POLICY_FILE_NAME = 'subagent-model-policy.json';
+export const PSTACK_SEEDED_MODEL_PREFERENCES_FILE_NAMES = Object.freeze([
+    'pstack-model-preferences.claude.json',
+    'pstack-model-preferences.codex.json',
+]);
 
 /**
  * The directory name skill directories carry in a package source and under
@@ -179,3 +182,5 @@ export const WINDOWS_PYTHON_LAUNCHER_COMMAND = 'py -3';
  * Maximum time each Python interpreter probe may run during detection.
  */
 export const PYTHON_PROBE_TIMEOUT_MILLISECONDS = 10_000;
+export const ADDITIONAL_SETTINGS_BLOB_PREFIX = 'settings-';
+export const CODEX_NATIVE_ROUTING_MATCHER = 'multi_agent_v1__spawn_agent';

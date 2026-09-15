@@ -128,6 +128,11 @@ def copy_gate_script_into(repository_root: Path) -> Path:
     destination_terminology_sweep.write_text(
         source_terminology_sweep.read_text(encoding="utf-8"), encoding="utf-8"
     )
+    source_window_access = SHARED_PR_LOOP_SCRIPTS / "subprocess_window_access.py"
+    destination_window_access = destination_scripts / "subprocess_window_access.py"
+    destination_window_access.write_text(
+        source_window_access.read_text(encoding="utf-8"), encoding="utf-8"
+    )
     destination_config = destination_scripts / "config"
     destination_config.mkdir(parents=True, exist_ok=True)
     source_config = SHARED_PR_LOOP_SCRIPTS / "config"

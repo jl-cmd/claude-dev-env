@@ -47,9 +47,9 @@ Mechanical override for scripts:
 
 ### Shared effort, any host
 
-Fable and Astra both read `ADVISOR_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`). The default is `low`.
+Fable and Astra both read `ADVISOR_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`). Fable keeps its low default. Astra uses the policy default, Medium.
 Pass `--effort <level>` on the Astra helper to set effort for that Astra run.
-Pass `--effort <level>` on the Claude CLI bind for Fable. An unset or unrecognized value uses `low`.
+Pass `--effort <level>` on the Claude CLI bind for Fable. An unset or unrecognized Fable value uses `low`.
 
 ### Astra rung
 

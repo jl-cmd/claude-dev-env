@@ -44,41 +44,84 @@ export function mergeContinuityHooks(existing, host, script) {
     return mergedConfiguration;
 }
 
-async function main() {
-    const requested = process.argv.slice(2);
-    const selected = requested.length ? requested : supportedHosts;
-    const unsupported = selected.find(host => !supportedHosts.includes(host));
-    if (unsupported) throw new Error(`Unsupported host ${unsupported}`);
-    const { resolveInstallRoot } = await import('./resolve-install-root.mjs');
-    const roots = resolveInstallRoot();
-    const script = join(roots.skillsInstallDirectory, 'session-continuity', 'continuity.mjs');
-    if (!existsSync(script) || !existsSync(join(dirname(script), 'SKILL.md'))) {
-        throw new Error('Run the full claude-dev-env installer from this checkout first so the companion is in the canonical agents home.');
-    }
-    const paths = {
+export const CONTINUITY_SCRIPT_MARKER = '/session-continuity/continuity.mjs';
+
+export function isContinuityHookCommand(command) {
+    return typeof command === 'string' && command.includes(CONTINUITY_SCRIPT_MARKER);
+}
+
+export function continuityScriptPath(roots) {
+    return join(roots.skillsInstallDirectory, 'session-continuity', 'continuity.mjs');
+}
+
+export function continuityHostConfigurationPaths(roots) {
+    return {
         claude: join(roots.managedRoot, 'settings.json'),
         codex: join(dirname(roots.codexRulesInstallDirectory), 'hooks.json'),
         cursor: join(roots.cursorInstallDirectory, 'hooks.json'),
     };
-    const plans = selected.map(host => {
-        const path = paths[host];
-        if (!existsSync(dirname(path))) throw new Error(`Host config directory is absent: ${dirname(path)}`);
-        const existing = existsSync(path) ? readFileSync(path, 'utf8') : null;
-        return { path, existing, content: JSON.stringify(mergeContinuityHooks(existing ? JSON.parse(existing) : {}, host, script), null, 2) + '\n' };
-    });
-    for (const plan of plans) {
-        if (plan.existing === plan.content) { console.log(`Already configured: ${plan.path}`); continue; }
-        if (plan.existing !== null) {
-            const backup = `${plan.path}.before-session-continuity`;
-            if (!existsSync(backup)) writeFileSync(backup, plan.existing, { flag: 'wx', mode: 0o600 });
-        }
-        const current = existsSync(plan.path) ? readFileSync(plan.path, 'utf8') : null;
-        if (current !== plan.existing) throw new Error(`Config changed during setup: ${plan.path}. Rerun setup.`);
-        const temporary = `${plan.path}.continuity-${process.pid}.tmp`;
-        writeFileSync(temporary, plan.content, { flag: 'wx', mode: 0o600 });
-        renameSync(temporary, plan.path);
-        if (readFileSync(plan.path, 'utf8') !== plan.content) throw new Error(`Config read-back mismatch: ${plan.path}`);
-        console.log(`Configured and read back: ${plan.path}`);
+}
+
+export function removeContinuityHooks(configuration) {
+    let removedCount = 0;
+    for (const [event, entries] of Object.entries(configuration.hooks || {})) {
+        const kept = entries.flatMap(entry => {
+            if (!entry.hooks) {
+                if (!isContinuityHookCommand(entry.command)) return [entry];
+                removedCount += 1;
+                return [];
+            }
+            const hooks = entry.hooks.filter(hook => !isContinuityHookCommand(hook.command));
+            removedCount += entry.hooks.length - hooks.length;
+            return hooks.length ? [{ ...entry, hooks }] : [];
+        });
+        if (kept.length) configuration.hooks[event] = kept;
+        else delete configuration.hooks[event];
+    }
+    return removedCount;
+}
+
+function continuityConfigurationPlan(host, path, script) {
+    if (!existsSync(dirname(path))) throw new Error(`Host config directory is absent: ${dirname(path)}`);
+    const existing = existsSync(path) ? readFileSync(path, 'utf8') : null;
+    const merged = mergeContinuityHooks(existing ? JSON.parse(existing) : {}, host, script);
+    return { host, path, existing, content: JSON.stringify(merged, null, 2) + '\n' };
+}
+
+function applyContinuityConfigurationPlan(plan) {
+    if (plan.existing === plan.content) return { host: plan.host, path: plan.path, changed: false };
+    if (plan.existing !== null) {
+        const backup = `${plan.path}.before-session-continuity`;
+        if (!existsSync(backup)) writeFileSync(backup, plan.existing, { flag: 'wx', mode: 0o600 });
+    }
+    const current = existsSync(plan.path) ? readFileSync(plan.path, 'utf8') : null;
+    if (current !== plan.existing) throw new Error(`Config changed during setup: ${plan.path}. Rerun setup.`);
+    const temporary = `${plan.path}.continuity-${process.pid}.tmp`;
+    writeFileSync(temporary, plan.content, { flag: 'wx', mode: 0o600 });
+    renameSync(temporary, plan.path);
+    if (readFileSync(plan.path, 'utf8') !== plan.content) throw new Error(`Config read-back mismatch: ${plan.path}`);
+    return { host: plan.host, path: plan.path, changed: true };
+}
+
+export function configureContinuityHosts(roots, selected) {
+    const unsupported = selected.find(host => !supportedHosts.includes(host));
+    if (unsupported) throw new Error(`Unsupported host ${unsupported}`);
+    const script = continuityScriptPath(roots);
+    if (!existsSync(script) || !existsSync(join(dirname(script), 'SKILL.md'))) {
+        throw new Error('Run the full claude-dev-env installer from this checkout first so the companion is in the canonical agents home.');
+    }
+    const paths = continuityHostConfigurationPaths(roots);
+    return selected
+        .map(host => continuityConfigurationPlan(host, paths[host], script))
+        .map(applyContinuityConfigurationPlan);
+}
+
+async function main() {
+    const requested = process.argv.slice(2);
+    const selected = requested.length ? requested : supportedHosts;
+    const { resolveInstallRoot } = await import('./resolve-install-root.mjs');
+    for (const result of configureContinuityHosts(resolveInstallRoot(), selected)) {
+        console.log(`${result.changed ? 'Configured and read back' : 'Already configured'}: ${result.path}`);
     }
     console.log('Review and trust the new hooks in each host.');
 }

@@ -46,6 +46,8 @@ from fresh_branch_scripts_constants.fresh_branch_cli_constants import (
     GIT_WORKTREE_ADD,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def run_git(
     all_git_arguments: list[str],
@@ -66,6 +68,7 @@ def run_git(
         check=False,
         capture_output=True,
         text=True,
+        creationflags=hidden_window_creation_flags(),
     )
 
 

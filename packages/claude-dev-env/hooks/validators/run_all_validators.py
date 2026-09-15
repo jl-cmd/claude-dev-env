@@ -60,6 +60,8 @@ from hooks_constants.multi_edit_reconstruction import (
     edits_for_tool,
 )
 
+from hooks_constants.subprocess_window import hidden_window_creation_flags
+
 VALIDATORS_DIR = Path(__file__).parent
 hooks_dir = VALIDATORS_DIR.parent
 package_name = VALIDATORS_DIR.name
@@ -131,6 +133,7 @@ def invoke_validator_module(module_stem: str, forwarded_file_paths: List[str]) -
         text=True,
         cwd=working_directory_string,
         env=environment,
+        creationflags=hidden_window_creation_flags(),
     )
 
 
@@ -160,6 +163,7 @@ def run_validators_entrypoint_subprocess(
         cwd=working_directory_string,
         env=environment,
         input=stdin_text,
+        creationflags=hidden_window_creation_flags(),
     )
 
 
@@ -347,6 +351,7 @@ def get_project_root() -> Optional[Path]:
         ["git", "-C", str(hooks_dir), "rev-parse", "--show-toplevel"],
         capture_output=True,
         text=True,
+        creationflags=hidden_window_creation_flags(),
     )
     if completed_git_lookup.returncode == 0:
         return Path(completed_git_lookup.stdout.strip())
@@ -674,6 +679,7 @@ def get_changed_files() -> List[Path]:
         ["git", "diff", "--cached", "--name-only"],
         capture_output=True,
         text=True,
+        creationflags=hidden_window_creation_flags(),
     )
 
     files = result.stdout.strip().split("\n") if result.stdout.strip() else []
@@ -684,6 +690,7 @@ def get_changed_files() -> List[Path]:
             ["git", "diff", "--name-only", "HEAD~1"],
             capture_output=True,
             text=True,
+            creationflags=hidden_window_creation_flags(),
         )
         files = result.stdout.strip().split("\n") if result.stdout.strip() else []
 

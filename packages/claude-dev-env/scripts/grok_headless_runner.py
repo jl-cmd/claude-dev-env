@@ -85,6 +85,8 @@ from process_tree_kill import (  # noqa: E402
     terminate_process_tree,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 runner_popen = subprocess.Popen
 
 
@@ -361,6 +363,7 @@ def _invoke_process(
             encoding=UTF8_ENCODING,
             errors=UTF8_DECODE_ERRORS,
             start_new_session=should_start_new_session(),
+            creationflags=hidden_window_creation_flags(),
         )
     except FileNotFoundError:
         return _missing_binary_outcome()

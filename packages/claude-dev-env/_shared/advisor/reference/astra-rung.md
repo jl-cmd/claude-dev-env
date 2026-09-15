@@ -12,7 +12,7 @@ A Windows `setx` write only updates the persisted user environment; only a proce
 
 ## Effort
 
-`ADVISOR_EFFORT` selects Codex `model_reasoning_effort` for Astra and `--effort` for Fable: `low`, `medium`, `high`, `xhigh`, or `max`. The default is `low`, which sends `model_reasoning_effort="low"`. Pass `--effort <level>` on the helper to set effort for that Astra run without changing the environment. An unset or unrecognized value uses `low`.
+`ADVISOR_EFFORT` selects Codex `model_reasoning_effort` for Astra: `low`, `medium`, `high`, `xhigh`, or `max`. The policy default is `medium`, which sends `model_reasoning_effort="medium"`. Astra Xhigh and Max requests route to Medium. Pass `--effort <level>` on the helper to set effort for that Astra run without changing the environment. An unset value uses the policy default. An unknown value blocks advisor routing.
 
 Every fallback reply carries a `fallback_kind` field. `declined` means policy closed the rung (flag off, usage meter at or below the gate). `broken` means the Astra path itself failed (missing executable, spawn error, timeout, malformed reply). A `broken` fallback is a defect to report.
 
@@ -32,7 +32,7 @@ The gate passes only when the probe exits 0, `percent_left` is finite numeric da
 
 ## Branches
 
-**Preflight pass.** Bind one Codex CLI session at `gpt-6-astra` with `model_reasoning_effort` set from `ADVISOR_EFFORT` (default `low`), `--sandbox read-only`, and JSON output. The helper receives the standing-reviewer charter on stdin and returns only parsed ENDORSE / CORRECTION / PLAN / STOP guidance with a session ID.
+**Preflight pass.** Bind one Codex CLI session at `gpt-6-astra` with `model_reasoning_effort` set from the policy-selected `ADVISOR_EFFORT` value, `--sandbox read-only`, and JSON output. The helper receives the standing-reviewer charter on stdin and returns only parsed ENDORSE / CORRECTION / PLAN / STOP guidance with a session ID.
 
 **Preflight fail.** Probe failure, non-zero exit, timeout, missing or malformed usage, `null`, non-finite usage, or usage at or below the threshold fails closed when Fable did not bind.
 

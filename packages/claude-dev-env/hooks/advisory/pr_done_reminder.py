@@ -36,6 +36,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+_subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
+if _subprocess_window_hooks_directory not in sys.path:
+    sys.path.append(_subprocess_window_hooks_directory)
+
+from hooks_constants.subprocess_window import hidden_window_creation_flags
+
 try:
     _hooks_root_directory = str(Path(__file__).resolve().parent.parent)
     if _hooks_root_directory not in sys.path:
@@ -294,6 +300,7 @@ def _probe_pull_request(cwd: str) -> str | None:
             errors="replace",
             timeout=GH_PR_VIEW_TIMEOUT_SECONDS,
             check=False,
+            creationflags=hidden_window_creation_flags(),
         )
     except (OSError, subprocess.TimeoutExpired):
         return None

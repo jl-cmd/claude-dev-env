@@ -46,6 +46,8 @@ from pr_loop_shared_constants.copilot_quota_constants import (
     QUOTA_SNAPSHOTS_FIELD_NAME,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 @dataclass(frozen=True)
 class QuotaDecision:
@@ -86,6 +88,7 @@ def _run_gh(
         errors="replace",
         check=False,
         env=process_environment,
+        creationflags=hidden_window_creation_flags(),
     )
     return completed_process.returncode, completed_process.stdout
 

@@ -21,16 +21,26 @@ The file contains this shape:
 ```json
 {
   "host": "current-host",
+  "defaultEffort": "medium",
   "modelsByRole": {
     "feature, refactoring": ["confirmed-host-model"]
   }
 }
 ```
 
+Automatic model and effort routing reads
+`rules/subagent-model-policy.json` from the same agents home. Edit that file to
+change the next routing decision. The installer creates it only when it is
+absent. The native hook blocks advisor role claims because the current Codex hook
+input has no host-provided role binding. The Python advisor helper passes trusted
+session metadata to the shared resolver. The native advisor hook path stays
+pending until the host supplies that binding.
+
 Offer only model IDs the active native tool accepts. Keep the user's order.
-Treat `inherit-parent` and `auto` as parent inheritance, not model IDs. A
-different host starts with its own confirmed choices. It never copies the Codex
-preference file.
+Treat `inherit-parent` and `auto` as parent inheritance, not model IDs. A full
+install seeds the Claude file and the Codex file from the package when a host
+file is absent, and leaves an existing file untouched. A different host never
+copies another host's preference file.
 
 ## Selection before every delegation
 
@@ -54,6 +64,7 @@ $selectorInput = @'
     "agentCount": 3,
     "requiresDistinctModels": false
   },
+  "requestedEffort": "medium",
   "availableModelIds": ["confirmed-host-model"],
   "confirmedSuitableModelIds": [],
   "parentModelId": "current-parent-model",
@@ -70,11 +81,23 @@ $selection = $selectorInput | node "$HOME/.agents/scripts/select_pstack_models.m
 `confirmedSuitableModelIds` contains available alternatives whose suitability
 for this role the host metadata or user has confirmed. Do not rank or classify a
 model from its name.
+Keep the host's default effort in the preference file as `defaultEffort`, or
+pass it as trusted runtime data in `requestedEffort`. The selector applies that
+effort to a model-only entry before it picks a candidate. It holds the entry
+when neither source supplies an effort and the policy has no single approved
+effort for that model and role.
 
 Use the returned `nativeSpawnArguments` in the native subagent call. An empty
 object with `omitNativeModelArgument: true` means parent inheritance, so omit
 the native `model` argument. Stop when `canDelegate` is false. Ask the user
 when `requiresUserChoice` is true.
+
+When a preference entry includes `{ "model": "model-id", "effort": "medium" }`,
+the selector routes the pair before it deduplicates candidates and checks panel
+diversity. The selected pair appears in `panel.selectedModelPairs`, and the
+native argument uses `reasoning_effort`. The policy's `selectorExclusions` list
+removes matching routed pairs from panel contenders without blocking direct
+resolver or spawn-hook use.
 
 Run the selector again before the next agent call. Pass the same panel contract
 and the new delegation index with the refreshed inventory. Report

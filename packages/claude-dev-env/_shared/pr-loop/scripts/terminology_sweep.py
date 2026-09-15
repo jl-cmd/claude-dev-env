@@ -75,6 +75,8 @@ from pr_loop_shared_constants.terminology_sweep_constants import (
     TEST_FILE_SUFFIX,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 IdentifierTuple = tuple[str, ...]
 
 
@@ -656,6 +658,7 @@ def _base_tree_names(
                 timeout=GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
                 check=False,
                 env=repository_environment(),
+                creationflags=hidden_window_creation_flags(),
             )
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             continue
@@ -678,6 +681,7 @@ def _run_strict_git(
             timeout=GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
             check=False,
             env=repository_environment(),
+            creationflags=hidden_window_creation_flags(),
         )
     except (subprocess.TimeoutExpired, OSError) as e:
         raise RuntimeError(str(e)) from e
@@ -807,6 +811,7 @@ def staged_terminology_findings(repository_root: Path) -> list[str]:
         timeout=GIT_DIFF_SUBPROCESS_TIMEOUT_SECONDS,
         check=False,
         env=repository_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     if diff_process.returncode != 0:
         return []

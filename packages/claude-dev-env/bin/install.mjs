@@ -30,13 +30,17 @@ import {
     MANAGED_HOOKS_DIRECTORY_NAME,
     MANAGED_SCRIPTS_DIRECTORY_NAME,
     SETTINGS_FILE_NAME,
+    CODEX_HOME_ENVIRONMENT_VARIABLE,
+    DEFAULT_CODEX_DIRECTORY_NAME,
     CODEX_RULES_PACKAGE_DIRECTORY_NAME,
     CURSOR_SYNC_SCRIPT_FILE_NAME,
     CURSOR_RULES_DIRECTORY_NAME,
     PSTACK_MODEL_RULE_FILE_NAME,
-    PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME,
+    SUBAGENT_MODEL_POLICY_FILE_NAME,
+    PSTACK_SEEDED_MODEL_PREFERENCES_FILE_NAMES,
     WINDOWS_PYTHON_LAUNCHER_COMMAND,
     PYTHON_PROBE_TIMEOUT_MILLISECONDS,
+    CODEX_NATIVE_ROUTING_MATCHER,
 } from './install-constants.mjs';
 import {
     PSTACK_PLUGIN_DIRECTORY_NAME,
@@ -44,6 +48,11 @@ import {
     refreshPstackPluginManifest,
 } from '../scripts/refresh_pstack_plugin_skills.mjs';
 import { installPstack } from './pstack.mjs';
+import {
+    configureContinuityHosts,
+    continuityHostConfigurationPaths,
+    removeContinuityHooks,
+} from './install-session-continuity.mjs';
 import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
@@ -491,17 +500,10 @@ export function refreshInstalledPstackPluginManifest(
     return join(pluginRoot, PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH);
 }
 
-function seedCodexPstackPreferences() {
+function seedPstackPreferences(preferenceFileName) {
     const preferenceDirectory = join(AGENTS_HOME, CURSOR_RULES_DIRECTORY_NAME);
-    const preferencePath = join(
-        preferenceDirectory,
-        PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME,
-    );
-    const preferenceSource = join(
-        PACKAGE_ROOT,
-        'bin',
-        PSTACK_CODEX_MODEL_PREFERENCES_FILE_NAME,
-    );
+    const preferencePath = join(preferenceDirectory, preferenceFileName);
+    const preferenceSource = join(PACKAGE_ROOT, 'bin', preferenceFileName);
     mkdirSync(preferenceDirectory, { recursive: true });
     try {
         copyFileSync(
@@ -514,6 +516,77 @@ function seedCodexPstackPreferences() {
         if (copyError.code === 'EEXIST') return null;
         throw copyError;
     }
+}
+
+function seedSubagentModelPolicy() {
+    const policyDirectory = join(AGENTS_HOME, CURSOR_RULES_DIRECTORY_NAME);
+    const policyPath = join(policyDirectory, SUBAGENT_MODEL_POLICY_FILE_NAME);
+    const policySource = join(PACKAGE_ROOT, 'rules', SUBAGENT_MODEL_POLICY_FILE_NAME);
+    mkdirSync(policyDirectory, { recursive: true });
+    try {
+        copyFileSync(policySource, policyPath, filesystemConstants.COPYFILE_EXCL);
+        return policyPath;
+    } catch (copyError) {
+        if (copyError.code === 'EEXIST') return null;
+        throw copyError;
+    }
+}
+
+/**
+ * Registers the session-continuity companion in each host configuration this
+ * install root resolves. Without this step the companion ships to the agents
+ * home but no host ever calls it, so Poteto Mode only activates when someone
+ * remembers a second setup command.
+ *
+ * A competing profile's registration, or an unwritable host configuration, is
+ * reported and leaves the rest of the install intact.
+ *
+ * @returns {string[]} The host configuration paths this run registered.
+ */
+function registerSessionContinuityHooks() {
+    const configurationPaths = continuityHostConfigurationPaths(INSTALL_ROOT_RESOLUTION);
+    const hosts = Object.keys(configurationPaths)
+        .filter(host => existsSync(dirname(configurationPaths[host])));
+    if (hosts.length === 0) return [];
+    try {
+        const results = configureContinuityHosts(INSTALL_ROOT_RESOLUTION, hosts);
+        for (const result of results) {
+            const state = result.changed ? 'registered' : 'already registered';
+            console.log(`  Session continuity: ${state} in ${result.path}`);
+        }
+        return results.map(result => result.path);
+    } catch (registrationError) {
+        console.warn(
+            `  Warning: session-continuity hooks were not registered (${registrationError.message}) — `
+            + 'run bin/install-session-continuity.mjs once the cause is resolved.',
+        );
+        return [];
+    }
+}
+
+/**
+ * Removes the companion's registrations from the Codex and Cursor hook files
+ * during an uninstall. The Claude settings.json copy is pruned inside the
+ * settings block, which owns that file's single write.
+ *
+ * Each host this installer registered is a host it has to clean, or the host
+ * keeps calling a script the uninstall deleted.
+ *
+ * @returns {string[]} The host configuration paths this run changed.
+ */
+function removeSessionContinuityHooksFromOtherHosts() {
+    const configurationPaths = continuityHostConfigurationPaths(INSTALL_ROOT_RESOLUTION);
+    const changedPaths = [];
+    for (const host of ['codex', 'cursor']) {
+        const configurationPath = configurationPaths[host];
+        if (!existsSync(configurationPath)) continue;
+        const configuration = JSON.parse(readFileSync(configurationPath, 'utf8'));
+        if (removeContinuityHooks(configuration) === 0) continue;
+        writeFileSync(configurationPath, JSON.stringify(configuration, null, 2) + '\n');
+        changedPaths.push(configurationPath);
+        console.log(`  Session continuity: hook registrations removed from ${configurationPath}`);
+    }
+    return changedPaths;
 }
 
 /**
@@ -1160,22 +1233,11 @@ function renameCaseOnlyMatchToShippedName(destinationFilePath, entryNamesByDirec
     existingEntryNames[existingEntryNames.indexOf(caseOnlyMatchName)] = shippedFileName;
 }
 
-/**
- * Copy every file under a source directory into a destination directory,
- * reporting what the run created and what it updated.
- *
- * A destination entry whose name differs from the shipped name only in letter
- * case is renamed to the shipped name before the copy, so the tree carries the
- * spelling the package ships. The directory listing behind that decision is read
- * once per destination directory and reused for every file the run copies there.
- *
- * @param {string} sourceBase The absolute source directory to copy from.
- * @param {string} destBase The absolute destination directory to copy into.
- * @param {{isCaseInsensitive?: boolean}} options Whether name comparison folds letter case; defaults to this host's filesystem.
- * @returns {{created: number, updated: number, paths: string[]}} The counts and the destination paths written.
- */
 export function copyTree(sourceBase, destBase, options = {}) {
-    const files = collectFiles(sourceBase);
+    const excludedFileNames = new Set(options.excludeFileNames ?? []);
+    const files = collectFiles(sourceBase).filter(
+        sourceFile => !excludedFileNames.has(basename(sourceFile)),
+    );
     const stats = { created: 0, updated: 0, paths: [] };
     const entryNamesByDirectory = new Map();
     for (const sourceFile of files) {
@@ -1219,15 +1281,6 @@ function backupHubBeforeOverwrite(destPath, incomingPath, backupName) {
     return backupPath;
 }
 
-/**
- * Hook script paths the installer manages even though hooks.json
- * carries no standalone entry for them. Most were folded into the PreToolUse
- * dispatcher in Stage 1; retired hooks have no current registration.
- * Each path stays in this set so a reinstall from an older settings shape
- * prunes its standalone entry — a folded hook would otherwise double-run
- * alongside the dispatcher, and a retired hook's entry would continue to run
- * from the user's settings.json.
- */
 export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
     'blocking/write_existing_file_blocker.py',
     'blocking/sensitive_file_protector.py',
@@ -1292,7 +1345,6 @@ export const RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS = new Set([
     'blocking/nas_ssh_binary_enforcer.py',
     'blocking/block_main_commit.py',
     'blocking/session_edit_stage_gate.py',
-    'blocking/bash_pre_tool_use_dispatcher.py',
     'blocking/stop_dispatcher.py',
     'blocking/bot_mention_comment_blocker.py',
     'blocking/fable_spawn_gate.py',
@@ -1304,25 +1356,18 @@ export const RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS = new Set([
     'blocking/session_handoff_blocker.py',
 ]);
 
-/**
- * Builds the set of hook script paths this installer manages, each relative to
- * the hooks directory (e.g. 'blocking/code_rules_enforcer.py'), parsed from the
- * `${CLAUDE_PLUGIN_ROOT}/hooks/<path>` references in hooks.json. Inline
- * `python3 -c` commands reference the hooks directory without a script tail and
- * contribute nothing. Also includes every path from FOLDED_HOOK_RELATIVE_PATHS
- * and the retained path sets so a reinstall from an older settings shape prunes
- * folded and retired entries.
- *
- * @param {{hooks: object}} hooksConfig Parsed hooks.json.
- * @returns {Set<string>} Forward-slash relative script paths under hooks/.
- */
+export const MOVED_HOOK_RELATIVE_PATHS = new Set([
+    'blocking/subagent_model_routing.mjs',
+]);
+
 export function managedHookScriptRelativePaths(hooksConfig) {
     const relativePaths = new Set([
         ...FOLDED_HOOK_RELATIVE_PATHS,
         ...POST_FOLDED_HOOK_RELATIVE_PATHS,
         ...RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS,
+        ...MOVED_HOOK_RELATIVE_PATHS,
     ]);
-    const scriptReferencePattern = /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/(\S+?\.py)/g;
+    const scriptReferencePattern = /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/(\S+?\.(?:py|mjs))/g;
     for (const matcherGroups of Object.values(hooksConfig.hooks)) {
         for (const sourceGroup of matcherGroups) {
             for (const hook of sourceGroup.hooks) {
@@ -1403,19 +1448,16 @@ export function commandReferencesManagedHook(commandString, managedHookRelativeP
     return false;
 }
 
-/**
- * Reports whether a command contains the `/.claude/hooks/<relative>` tail ending
- * at a path boundary: end of string, or an argument separator (whitespace, quote,
- * or semicolon). Anchoring the tail keeps a user hook whose path is the managed
- * tail plus a suffix (`code_rules_enforcer.py.bak`, `a.py/extra/thing.py`) outside
- * the managed set, so it is never pruned.
- *
- * @param {string} normalizedCommand Forward-slash-normalized hook command.
- * @param {string} relativePath Managed script path under hooks/.
- * @returns {boolean} True when the managed tail ends at a path boundary.
- */
 function commandTailEndsAtManagedHook(normalizedCommand, relativePath) {
-    return commandHoldsPathAtBoundary(normalizedCommand, `/.claude/hooks/${relativePath}`);
+    if (commandHoldsPathAtBoundary(normalizedCommand, `/.claude/hooks/${relativePath}`)) {
+        return true;
+    }
+    return MANAGED_HOOK_ROOT_PATHS.some(eachHooksRoot => (
+        commandHoldsPathAtBoundary(
+            normalizedCommand,
+            `${eachHooksRoot.replace(/\\/g, '/')}/${relativePath}`,
+        )
+    ));
 }
 
 /**
@@ -2106,16 +2148,7 @@ function reportRetiredHookStandIns(allHookRootPaths, standInPaths) {
 }
 
 
-/**
- * Load ~/.claude/settings.json for an in-place merge, or `{}` when absent/empty.
- *
- * Malformed JSON or a non-object root ends the process so install never writes
- * onto a shape the harness cannot read.
- *
- * @param {string} settingsPath Absolute path to settings.json.
- * @returns {object}
- */
-function loadClaudeSettingsObjectOrExit(settingsPath) {
+function loadClaudeSettingsObject(settingsPath) {
     if (!existsSync(settingsPath)) {
         return {};
     }
@@ -2127,40 +2160,65 @@ function loadClaudeSettingsObjectOrExit(settingsPath) {
     try {
         settings = JSON.parse(raw);
     } catch {
-        console.error('  ERROR: settings.json is malformed JSON. Fix it and rerun.');
-        process.exit(1);
+        throw new Error('settings.json is malformed JSON. Fix it and rerun.');
     }
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-        console.error('  ERROR: settings.json holds a value other than a JSON object. Fix it and rerun.');
-        process.exit(1);
+        throw new Error('settings.json holds a value other than a JSON object. Fix it and rerun.');
     }
     return settings;
 }
 
-/**
- * Merge one package source root's hook groups into ~/.claude/settings.json.
- *
- * A settings file holding anything other than a JSON object ends the install with
- * a message naming the file, so the run stops before it writes hook entries onto
- * a shape the harness cannot read.
- *
- * @param {string} hooksSourceRoot The package root whose hooks/hooks.json is merged.
- * @param {string} pythonCommand Interpreter command that replaces python3.
- * @returns {number} Count of matcher groups merged.
- */
-function mergeHooks(hooksSourceRoot, pythonCommand) {
+function mergeHooksAtPath(
+    hooksSourceRoot,
+    settingsPath,
+    indentation,
+    pythonCommand,
+    selectHooksConfig = hooksConfig => hooksConfig,
+    pluginRootDir = CLAUDE_HOME,
+) {
     const hooksSource = resolvePackageManagedDirectory(
         hooksSourceRoot,
         MANAGED_HOOKS_DIRECTORY_NAME,
     );
     const hooksJsonPath = join(hooksSource, 'hooks.json');
     if (!existsSync(hooksJsonPath)) return 0;
-    const hooksConfig = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
-    const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
-    const settings = loadClaudeSettingsObjectOrExit(settingsPath);
-    const groupCount = mergeHooksIntoSettings(settings, hooksConfig, CLAUDE_HOME, pythonCommand);
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
+    const hooksConfig = selectHooksConfig(JSON.parse(readFileSync(hooksJsonPath, 'utf8')));
+    const settings = loadClaudeSettingsObject(settingsPath);
+    const groupCount = mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pythonCommand);
+    writeFileSync(settingsPath, JSON.stringify(settings, null, indentation) + '\n');
     return groupCount;
+}
+
+function selectCodexNativeHooksConfig(hooksConfig) {
+    const preToolUseGroups = hooksConfig.hooks?.PreToolUse;
+    return {
+        ...hooksConfig,
+        hooks: {
+            PreToolUse: Array.isArray(preToolUseGroups)
+                ? preToolUseGroups.filter(group => group?.matcher === CODEX_NATIVE_ROUTING_MATCHER)
+                : [],
+        },
+    };
+}
+
+function mergeHooks(hooksSourceRoot, pythonCommand) {
+    return mergeHooksAtPath(
+        hooksSourceRoot,
+        join(CLAUDE_HOME, SETTINGS_FILE_NAME),
+        4,
+        pythonCommand,
+    );
+}
+
+function mergeCodexHooks(hooksSourceRoot, pythonCommand) {
+    return mergeHooksAtPath(
+        hooksSourceRoot,
+        CODEX_HOOKS_CONFIGURATION_PATH,
+        2,
+        pythonCommand,
+        selectCodexNativeHooksConfig,
+        dirname(CODEX_HOOKS_CONFIGURATION_PATH),
+    );
 }
 
 function writeManifest(installedFiles, skillNames, managedPermissions = null) {
@@ -2242,7 +2300,7 @@ function mergeManagedPermissions() {
     }
     const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
     const settingsExisted = existsSync(settingsPath);
-    const settings = loadClaudeSettingsObjectOrExit(settingsPath);
+    const settings = loadClaudeSettingsObject(settingsPath);
     const pruneOutcome = pruneManagedPermissionsFromSettings(settings, allRetiredManagedDenyEntries);
     const mergeOutcome = hasCurrentManagedDenyEntries
         ? mergeManagedPermissionsIntoSettings(settings, allCurrentManagedDenyEntries)
@@ -2544,6 +2602,7 @@ function executeInstallPlan(plan) {
         managedRoot: CLAUDE_HOME,
         manifestFilePath: MANIFEST_FILE,
         settingsPath: plan.settingsPath,
+        additionalSettingsPaths: [CODEX_HOOKS_CONFIGURATION_PATH],
         priorManifestFiles: plan.priorManifest.files,
         journalParentDirectory: join(CLAUDE_HOME, TRANSACTION_JOURNAL_DIRECTORY_NAME),
     });
@@ -2652,7 +2711,9 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             if (!existsSync(sourceDir)) continue;
             const destDir = join(CLAUDE_HOME, directory);
             if (hasFullAccess) {
-                const stats = copyTree(sourceDir, destDir);
+                const stats = copyTree(sourceDir, destDir, directory === 'rules'
+                    ? { excludeFileNames: [SUBAGENT_MODEL_POLICY_FILE_NAME] }
+                    : {});
                 if (!summary[directory]) {
                     summary[directory] = stats;
                 } else {
@@ -2666,7 +2727,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
                 let rulesUpdated = 0;
                 for (const ruleFile of allowedRules) {
                     const sourcePath = join(sourceDir, ruleFile);
-                    if (!existsSync(sourcePath)) continue;
+                    if (!existsSync(sourcePath) || ruleFile === SUBAGENT_MODEL_POLICY_FILE_NAME) continue;
                     const destPath = join(destDir, ruleFile);
                     mkdirSync(dirname(destPath), { recursive: true });
                     const existed = existsSync(destPath);
@@ -2757,10 +2818,17 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         copyFileSync(pstackRuleSource, sharedRulePath);
         allInstalledFiles.push(sharedRulePath);
         syncWrittenPaths(allInstalledFiles);
-        const seededPreferencePath = seedCodexPstackPreferences();
-        if (seededPreferencePath) {
-            allInstalledFiles.push(seededPreferencePath);
-            allUserOwnedPreferencePaths.add(seededPreferencePath);
+        for (const eachPreferenceFileName of PSTACK_SEEDED_MODEL_PREFERENCES_FILE_NAMES) {
+            const seededPreferencePath = seedPstackPreferences(eachPreferenceFileName);
+            if (seededPreferencePath) {
+                allInstalledFiles.push(seededPreferencePath);
+                allUserOwnedPreferencePaths.add(seededPreferencePath);
+            }
+        }
+        const seededPolicyPath = seedSubagentModelPolicy();
+        if (seededPolicyPath) {
+            allInstalledFiles.push(seededPolicyPath);
+            allUserOwnedPreferencePaths.add(seededPolicyPath);
         }
         syncWrittenPaths(allInstalledFiles);
     }
@@ -2810,6 +2878,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         let totalHooksCreated = 0;
         let totalHooksUpdated = 0;
         let totalHookGroups = 0;
+        let totalCodexHookGroups = 0;
         for (const sourceRoot of allSourceRoots) {
             const hooksSource = resolvePackageManagedDirectory(
                 sourceRoot,
@@ -2835,11 +2904,13 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             }
             const groupCount = mergeHooks(sourceRoot, pythonCommand);
             totalHookGroups += groupCount;
+            totalCodexHookGroups += mergeCodexHooks(sourceRoot, pythonCommand);
         }
         summary.hookFiles = { created: totalHooksCreated, updated: totalHooksUpdated };
         console.log(`  Hook files: ${totalHooksCreated} new, ${totalHooksUpdated} updated`);
         summary.hookGroups = totalHookGroups;
-        console.log(`  Hook groups: ${totalHookGroups} merged into settings.json`);
+        summary.codexHookGroups = totalCodexHookGroups;
+        console.log(`  Hook groups: ${totalHookGroups} merged into settings.json, ${totalCodexHookGroups} merged into hooks.json`);
         syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
         throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
 
@@ -2928,6 +2999,9 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         console.log(`  \u2713 ${relative(CLAUDE_HOME, agentsHubDest)} (canonical guidance)`);
     }
     const isFullInstall = !selectedGroups;
+    if (isFullInstall && shouldInstallAnyHooks) {
+        summary.sessionContinuity = { configuredPaths: registerSessionContinuityHooks() };
+    }
     const didPruneRun = isFullInstall && UNRESOLVED_DEPENDENCY_NAMES.length === 0;
     let failedPrunePaths = [];
     let stalePrunedTotal = 0;
@@ -3098,15 +3172,40 @@ function resolveUninstallPlan(isManifestRequired) {
     });
 }
 
-/**
- * Apply one preflighted uninstall plan: remove removable files, prune managed
- * hooks from settings, unset core.hooksPath when it points here, then drop the
- * ownership manifest. Fault phases mirror the install transaction names.
- *
- * @param {ReturnType<typeof buildUninstallPlan>} plan
- * @param {{ throwIfFault?: (phase: string) => void }} [helpers]
- * @returns {number} Count of files this call removed.
- */
+function pruneManagedHooksFromHostConfiguration(settingsPath, defaultIndentation) {
+    if (!existsSync(settingsPath)) return false;
+    let settingsText;
+    let settings;
+    try {
+        settingsText = readFileSync(settingsPath, 'utf8');
+        settings = JSON.parse(settingsText);
+    } catch (readError) {
+        throw new Error(`host hook configuration is malformed JSON: ${readError.message}`);
+    }
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+        throw new Error('host hook configuration must hold a JSON object');
+    }
+    if (!settings.hooks || typeof settings.hooks !== 'object') return false;
+    const managedHookRelativePaths = managedHookScriptRelativePathsFromSourceRoots(
+        managedPackageSourceRoots(),
+    );
+    pruneManagedHooksFromSettings(settings, managedHookRelativePaths);
+    writeFileSync(
+        settingsPath,
+        JSON.stringify(settings, null, hostConfigurationIndent(settingsText) || defaultIndentation) + '\n',
+    );
+    console.log(`  Hook entries removed from ${basename(settingsPath)}`);
+    return true;
+}
+
+function codexRoutingHookExists() {
+    return existsSync(join(
+        INSTALL_ROOT_RESOLUTION.codexHooksInstallDirectory,
+        'routing',
+        'subagent_model_routing.mjs',
+    ));
+}
+
 function executeUninstallPlan(plan, helpers = {}) {
     const throwIfFault = helpers.throwIfFault || (() => {});
     let removed = 0;
@@ -3145,6 +3244,10 @@ function executeUninstallPlan(plan, helpers = {}) {
             pruneManagedHooksFromSettings(settings, managedHookRelativePaths);
             didSettingsChange = true;
             console.log('  Hook entries removed from settings.json');
+            const removedContinuityCount = removeContinuityHooks(settings);
+            if (removedContinuityCount > 0) {
+                console.log(`  Session continuity: ${removedContinuityCount} hook registration(s) removed from settings.json`);
+            }
         }
         const managedDenyFromPlan = plan.managedPermissionDenyEntries.length > 0
             ? plan.managedPermissionDenyEntries
@@ -3162,6 +3265,10 @@ function executeUninstallPlan(plan, helpers = {}) {
             writeFileSync(plan.settingsPath, JSON.stringify(settings, null, 4) + '\n');
         }
     }
+    if (!codexRoutingHookExists()) {
+        pruneManagedHooksFromHostConfiguration(CODEX_HOOKS_CONFIGURATION_PATH, 2);
+    }
+    removeSessionContinuityHooksFromOtherHosts();
     throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
 
     unsetGlobalGitHooksPathIfOurs();
@@ -3236,6 +3343,7 @@ function uninstall() {
         managedRoot: CLAUDE_HOME,
         manifestFilePath: MANIFEST_FILE,
         settingsPath: plan.settingsPath,
+        additionalSettingsPaths: [CODEX_HOOKS_CONFIGURATION_PATH],
         priorManifestFiles: plan.removableFiles,
         journalParentDirectory: join(CLAUDE_HOME, TRANSACTION_JOURNAL_DIRECTORY_NAME),
     });
@@ -3383,7 +3491,9 @@ function loadDirectoryNameByProfileId() {
 function runInstallForAllTargets(allTargets, childArgv) {
     if (allTargets.length === 1) {
         const onlyTarget = allTargets[0];
-        if (onlyTarget.managedRoot !== CLAUDE_HOME || onlyTarget.targetIdentity !== INSTALL_TARGET_IDENTITY) {
+        if (onlyTarget.managedRoot !== CLAUDE_HOME
+            || onlyTarget.targetIdentity !== INSTALL_TARGET_IDENTITY
+            || !isDefaultClaudeTarget(onlyTarget)) {
             const childStatus = spawnInstallChild(onlyTarget, childArgv);
             process.exit(childStatus);
         }
@@ -3410,6 +3520,13 @@ function runInstallForAllTargets(allTargets, childArgv) {
  * @returns {number | null}
  */
 function spawnInstallChild(target, childArgv) {
+    const childEnvironment = { ...process.env };
+    if (!isDefaultClaudeTarget(target)) {
+        childEnvironment[CODEX_HOME_ENVIRONMENT_VARIABLE] = join(
+            target.managedRoot,
+            DEFAULT_CODEX_DIRECTORY_NAME,
+        );
+    }
     const childProcess = spawnSync(
         process.execPath,
         [
@@ -3422,7 +3539,7 @@ function spawnInstallChild(target, childArgv) {
         ],
         {
             stdio: 'inherit',
-            env: process.env,
+            env: childEnvironment,
         },
     );
     if (childProcess.error) {
@@ -3430,6 +3547,10 @@ function spawnInstallChild(target, childArgv) {
         return 1;
     }
     return childProcess.status === null ? 1 : childProcess.status;
+}
+
+function isDefaultClaudeTarget(target) {
+    return resolve(target.managedRoot) === resolve(join(homedir(), '.claude'));
 }
 
 if (invokedAsEntryPoint(import.meta.url, process.argv[1])) {
@@ -3477,6 +3598,10 @@ if (invokedAsEntryPoint(import.meta.url, process.argv[1])) {
             || (
                 targetSelection.mode === 'profiles'
                 && allTargets[0].targetIdentity !== INSTALL_TARGET_IDENTITY
+            )
+            || (
+                targetSelection.mode !== 'child-identity'
+                && !isDefaultClaudeTarget(allTargets[0])
             );
 
         if (needsChildHop && !args.includes('--uninstall')) {

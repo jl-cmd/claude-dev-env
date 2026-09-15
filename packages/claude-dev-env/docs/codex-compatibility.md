@@ -1,6 +1,6 @@
 # Codex compatibility entry point
 
-`codex-compat` is an optional, explicit bridge from this package's Claude-oriented source tree to Codex-compatible records. The existing `claude-dev-env` installer is unchanged and does not invoke it.
+`codex-compat` is an optional, explicit bridge from this package's Claude-oriented source tree to Codex-compatible records. The package installer also registers the supported native subagent routing hook in the selected Codex home.
 
 ## Materialization
 
@@ -21,6 +21,20 @@ A missing or unreadable source root is an error, and the run changes nothing. An
 ## Capability bridge
 
 Run `codex-compat bridge --surface <name> --payload '<json-object>'`. The bridge exposes the Python translation logic directly. `TaskCreate` and `TaskUpdate` map to `update_plan`; spawn, message, wait, and stop map to multi-agent surfaces. `ScheduleWakeup` is explicitly unsupported and requires manual review.
+
+## Automatic model routing
+
+The package installer seeds `subagent-model-policy.json` in the agents-home
+`rules/` directory when the file is absent. It registers one `PreToolUse` group
+for `multi_agent_v1__spawn_agent` in `$CODEX_HOME/hooks.json`. Existing Codex
+hook groups stay in place. Claude-only hook groups do not enter the Codex file.
+
+Edit the installed policy file to change the next routing decision. The resolver
+loads that path for each invocation.
+
+The default `.claude` target uses `CODEX_HOME`. A named profile or another
+target uses `<managed-root>/.codex`, so launch that profile with the same
+`CODEX_HOME` value.
 
 ## Per-message context injection (manual wiring)
 
@@ -46,9 +60,8 @@ Add this by hand to `$CODEX_HOME/hooks.json` (merge it into an existing file):
 }
 ```
 
-Limits:
-
-- The installer skips Codex `hooks.json` for now. Wire it by hand.
+The package installer does not register this optional context hook. Add it by
+hand when the host should receive that context.
 
 ## Luna fast-mode guard
 
@@ -71,4 +84,5 @@ The guard requires exact `fast` for Luna spawns through `Agent` and `Task`. Nati
 
 ## Roots and safety
 
-Both roots are caller-supplied. The tool never writes to `.agents` or `CODEX_HOME` automatically; pass those locations explicitly when desired. No personal paths or secrets are embedded in the package.
+Both materializer roots are caller-supplied. The tool writes only inside those
+roots. No personal paths or secrets are embedded in the package.

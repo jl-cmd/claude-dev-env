@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from collections import Counter
 from pathlib import PurePosixPath
 
 from . import adapter_support
@@ -52,12 +53,19 @@ def _remove_docstrings(parsed_tree: ast.AST) -> None:
         _remove_docstrings(each_child)
 
 
-def _ast_without_docstrings(source_text: str) -> str | None:
+def _parsed_without_docstrings(source_text: str) -> ast.Module | None:
     try:
         parsed_tree = ast.parse(source_text)
-    except SyntaxError:
+    except (SyntaxError, ValueError):
         return None
     _remove_docstrings(parsed_tree)
+    return parsed_tree
+
+
+def _ast_without_docstrings(source_text: str) -> str | None:
+    parsed_tree = _parsed_without_docstrings(source_text)
+    if parsed_tree is None:
+        return None
     return ast.dump(parsed_tree, include_attributes=False)
 
 
@@ -69,6 +77,144 @@ def _is_docstring_only_python_document(document: Document) -> bool:
     current_ast = _ast_without_docstrings(document.text)
     prior_ast = _ast_without_docstrings(document.prior_text)
     return current_ast is not None and current_ast == prior_ast
+
+
+def _is_import_statement(node: object) -> bool:
+    return isinstance(node, (ast.Import, ast.ImportFrom))
+
+
+def _dumped_import_tally(all_nodes: list[object]) -> Counter[str]:
+    return Counter(
+        ast.dump(each_node, include_attributes=False)
+        for each_node in all_nodes
+        if isinstance(each_node, ast.AST) and _is_import_statement(each_node)
+    )
+
+
+def _matches_positional_list(
+    all_current_nodes: list[object], all_prior_nodes: list[object]
+) -> bool:
+    if len(all_current_nodes) != len(all_prior_nodes):
+        return False
+    return all(
+        _matches_field(each_current_node, each_prior_node)
+        for each_current_node, each_prior_node in zip(
+            all_current_nodes, all_prior_nodes, strict=True
+        )
+    )
+
+
+def _matches_statement_list(
+    all_current_nodes: list[object], all_prior_nodes: list[object]
+) -> bool:
+    if _dumped_import_tally(all_prior_nodes) - _dumped_import_tally(all_current_nodes):
+        return False
+    return _matches_positional_list(
+        [
+            each_node
+            for each_node in all_current_nodes
+            if not _is_import_statement(each_node)
+        ],
+        [
+            each_node
+            for each_node in all_prior_nodes
+            if not _is_import_statement(each_node)
+        ],
+    )
+
+
+def _is_statement_list(all_nodes: list[object]) -> bool:
+    return all(isinstance(each_node, ast.stmt) for each_node in all_nodes)
+
+
+def _matches_node_list(
+    all_current_nodes: list[object], all_prior_nodes: list[object]
+) -> bool:
+    if _is_statement_list(all_current_nodes) and _is_statement_list(all_prior_nodes):
+        return _matches_statement_list(all_current_nodes, all_prior_nodes)
+    return _matches_positional_list(all_current_nodes, all_prior_nodes)
+
+
+def _matches_field(current_field: object, prior_field: object) -> bool:
+    if isinstance(current_field, ast.AST) and isinstance(prior_field, ast.AST):
+        return _matches_node(current_field, prior_field)
+    if isinstance(current_field, list) and isinstance(prior_field, list):
+        return _matches_node_list(current_field, prior_field)
+    if type(current_field) is not type(prior_field):
+        return False
+    return bool(current_field == prior_field)
+
+
+def _matches_keyword(current_keyword: ast.keyword, prior_keyword: ast.keyword) -> bool:
+    return current_keyword.arg == prior_keyword.arg and _matches_node(
+        current_keyword.value, prior_keyword.value
+    )
+
+
+def _keywords_after_match(
+    all_candidate_keywords: list[ast.keyword], prior_keyword: ast.keyword
+) -> list[ast.keyword] | None:
+    for each_index, each_candidate_keyword in enumerate(all_candidate_keywords):
+        if _matches_keyword(each_candidate_keyword, prior_keyword):
+            return all_candidate_keywords[each_index + 1 :]
+    return None
+
+
+def _prior_keywords_survive(
+    all_current_keywords: list[ast.keyword], all_prior_keywords: list[ast.keyword]
+) -> bool:
+    all_remaining_keywords: list[ast.keyword] | None = list(all_current_keywords)
+    for each_prior_keyword in all_prior_keywords:
+        if all_remaining_keywords is None:
+            return False
+        all_remaining_keywords = _keywords_after_match(
+            all_remaining_keywords, each_prior_keyword
+        )
+    return all_remaining_keywords is not None
+
+
+def _mapping_unpacking_count(all_keywords: list[ast.keyword]) -> int:
+    return sum(1 for each_keyword in all_keywords if each_keyword.arg is None)
+
+
+def _matches_call(current_call: ast.Call, prior_call: ast.Call) -> bool:
+    if not _matches_node(current_call.func, prior_call.func):
+        return False
+    if not _matches_positional_list(list(current_call.args), list(prior_call.args)):
+        return False
+    if _mapping_unpacking_count(current_call.keywords) != _mapping_unpacking_count(
+        prior_call.keywords
+    ):
+        return False
+    return _prior_keywords_survive(
+        list(current_call.keywords), list(prior_call.keywords)
+    )
+
+
+def _matches_node(current_node: ast.AST, prior_node: ast.AST) -> bool:
+    if type(current_node) is not type(prior_node):
+        return False
+    if isinstance(current_node, ast.Call) and isinstance(prior_node, ast.Call):
+        return _matches_call(current_node, prior_node)
+    return all(
+        _matches_field(
+            getattr(current_node, each_field_name, None),
+            getattr(prior_node, each_field_name, None),
+        )
+        for each_field_name in current_node._fields
+    )
+
+
+def _is_import_and_keyword_addition_python_document(document: Document) -> bool:
+    if document.path.suffix.lower() != constants.PYTHON_SUFFIX:
+        return False
+    if document.prior_text is None:
+        return False
+    current_tree = _parsed_without_docstrings(document.text)
+    prior_tree = _parsed_without_docstrings(document.prior_text)
+    if current_tree is None or prior_tree is None:
+        return False
+    return _matches_node(current_tree, prior_tree)
 
 
 def _candidate_test_names(path: PurePosixPath) -> frozenset[str]:
@@ -156,6 +302,8 @@ def _is_unpaired_production(
     if _is_constants_only_python_document(production_document, load_module):
         return False
     if _is_docstring_only_python_document(production_document):
+        return False
+    if _is_import_and_keyword_addition_python_document(production_document):
         return False
     return not _has_changed_test(production_path, all_changed_test_paths)
 

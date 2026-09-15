@@ -12,6 +12,31 @@ def test_constants_only_rejects_function_definition() -> None:
     assert content_analysis._is_constants_only_python_content("def f():\n    return 1\n") is False
 
 
+def test_constants_only_accepts_join_on_a_string_literal_inside_re_compile() -> None:
+    content = (
+        '"""doc."""\n'
+        "import re\n"
+        "NAMES = ('one', 'two')\n"
+        'PATTERN = re.compile("(" + "|".join(NAMES) + ")")\n'
+    )
+    assert content_analysis._is_constants_only_python_content(content) is True
+
+
+def test_constants_only_rejects_join_on_a_non_literal_receiver() -> None:
+    content = (
+        '"""doc."""\n'
+        'SEPARATOR = "|"\n'
+        'NAMES = ("one", "two")\n'
+        "PATTERN = SEPARATOR.join(NAMES)\n"
+    )
+    assert content_analysis._is_constants_only_python_content(content) is False
+
+
+def test_constants_only_rejects_a_non_allowlisted_method_on_a_string_literal() -> None:
+    content = '"""doc."""\nSHOUT = "hi".upper()\n'
+    assert content_analysis._is_constants_only_python_content(content) is False
+
+
 def test_post_edit_import_only_allows_import_removal() -> None:
     existing = "import os\n\ndef run(): return 1\n"
     tool_input = {"old_string": "import os\n", "new_string": ""}

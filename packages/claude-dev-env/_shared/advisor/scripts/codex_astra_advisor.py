@@ -19,6 +19,15 @@ for each_import_directory in (_scripts_directory, _config_directory):
     if each_import_directory_text not in sys.path:
         sys.path[:0] = [each_import_directory_text]
 
+from advisor_scripts_constants.advisor_route_constants import (
+    ADVISOR_CODEX_MODEL_ID,
+    ADVISOR_EFFORT_ALIASES,
+    ADVISOR_EFFORT_DEFAULT,
+    ADVISOR_EFFORT_ENV_VAR,
+    ADVISOR_ROUTING_TIMEOUT_SECONDS,
+    ALL_ADVISOR_EFFORT_LEVELS,
+    SPAWN_OUTCOME_KEY,
+)
 from advisor_scripts_constants.astra_advisor_constants import (
     ADVISOR_CODEX_EXECUTABLE_ENV_VAR,
     ALL_ASTRA_TRUTHY_VALUES,
@@ -34,8 +43,8 @@ from advisor_scripts_constants.astra_advisor_constants import (
     ASTRA_SESSION_ID_METAVAR,
     CLAUDE_CONFIG_DIRECTORY_NAME,
     CODEX_CONFIG_FLAG,
-    CODEX_EXECUTABLE,
     CODEX_EXEC_SUBCOMMAND,
+    CODEX_EXECUTABLE,
     CODEX_JSON_FLAG,
     CODEX_MODEL_FLAG,
     CODEX_PROMPT_FROM_STDIN,
@@ -48,20 +57,12 @@ from advisor_scripts_constants.astra_advisor_constants import (
     USAGE_PROBE_SCRIPTS_DIRECTORY_NAME,
     USAGE_PROBE_SHARED_DIRECTORY_NAME,
 )
-from advisor_scripts_constants.advisor_route_constants import (
-    ADVISOR_CODEX_MODEL_ID,
-    ADVISOR_EFFORT_DEFAULT,
-    ADVISOR_EFFORT_ENV_VAR,
-    ALL_ADVISOR_EFFORT_LEVELS,
-    SPAWN_OUTCOME_KEY,
-)
+from codex_astra_preflight import AstraPreflight, run_astra_preflight
 from codex_astra_reply import (
     CodexAstraAdvisorReply,
     build_fallback_reply,
     parse_codex_jsonl_reply,
 )
-from codex_astra_preflight import AstraPreflight, run_astra_preflight
-
 
 def _resolved_settings(
     all_settings: Mapping[str, str] | None,
@@ -82,18 +83,97 @@ def is_astra_advisor_enabled(all_settings: Mapping[str, str] | None) -> bool:
     return raw_setting.strip().lower() in ALL_ASTRA_TRUTHY_VALUES
 
 
+def _advisor_route_request(
+    all_settings: Mapping[str, str] | None,
+    policy_path: Path | None,
+) -> dict[str, object]:
+    requested = _resolved_settings(all_settings).get(ADVISOR_EFFORT_ENV_VAR, "")
+    request: dict[str, object] = {}
+    if requested.strip():
+        request["reasoning_effort"] = requested
+    if policy_path is not None:
+        request["policyPath"] = str(policy_path)
+    return request
+
+
+def _parse_advisor_route(
+    completed: subprocess.CompletedProcess[str],
+) -> Mapping[str, object]:
+    try:
+        route = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("advisor model routing returned invalid JSON") from error
+    if not isinstance(route, Mapping):
+        raise TypeError("advisor model routing returned an invalid response")
+    if completed.returncode != 0:
+        diagnostic = route.get("diagnostic")
+        message = str(diagnostic) if diagnostic else f"advisor model routing failed: process exit {completed.returncode}"
+        raise RuntimeError(message)
+    return route
+
+
+def _run_advisor_route(all_request: Mapping[str, object]) -> Mapping[str, object]:
+    resolver_path = _scripts_directory.parents[2] / "scripts" / "resolve_advisor_model_route.mjs"
+    try:
+        completed = subprocess.run(
+            ["node", str(resolver_path)],
+            input=json.dumps(all_request),
+            capture_output=True,
+            text=True,
+            check=False,
+            shell=False,
+            timeout=ADVISOR_ROUTING_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RuntimeError(f"advisor model routing failed: {error}") from error
+
+    return _parse_advisor_route(completed)
+
+
+def _selected_advisor_pair(all_route: Mapping[str, object]) -> tuple[str, str]:
+    if all_route.get("status") not in {"pass", "remapped"}:
+        raise RuntimeError(all_route.get("diagnostic") or "advisor model routing blocked")
+    selected = all_route.get("selected")
+    if not isinstance(selected, Mapping):
+        raise TypeError("advisor model routing returned no selected pair")
+    model_id = selected.get("model")
+    effort = selected.get("effort")
+    if not isinstance(model_id, str) or not isinstance(effort, str):
+        raise TypeError("advisor model routing returned an invalid selected pair")
+    return model_id, effort
+
+
+def resolve_advisor_pair(
+    all_settings: Mapping[str, str] | None,
+    policy_path: Path | None,
+) -> tuple[str, str]:
+    """Return the policy-selected advisor model and effort.
+
+    Args:
+        all_settings: Environment mapping, or None to read os.environ.
+        policy_path: Policy file path for the resolver, or None for the installed path.
+
+    Returns:
+        The selected native model ID and effort.
+
+    Raises:
+        RuntimeError: If the bridge fails or returns a blocked route.
+        TypeError: If the bridge returns an invalid shape.
+    """
+    route = _run_advisor_route(_advisor_route_request(all_settings, policy_path))
+    return _selected_advisor_pair(route)
+
+
 def resolve_advisor_effort(all_settings: Mapping[str, str] | None) -> str:
-    """Return ADVISOR_EFFORT, or low when the value is missing or unknown.
+    """Return the policy-selected advisor effort.
 
     Args:
         all_settings: Environment mapping, or None to read os.environ.
 
     Returns:
-        The requested effort, or low.
+        The selected effort.
     """
-    requested = _resolved_settings(all_settings).get(ADVISOR_EFFORT_ENV_VAR, "")
-    normalized = requested.strip().lower()
-    return normalized if normalized in ALL_ADVISOR_EFFORT_LEVELS else ADVISOR_EFFORT_DEFAULT
+    return resolve_advisor_pair(all_settings, None)[1]
 
 
 def resolve_usage_probe_path(home_directory: Path) -> Path:
@@ -132,6 +212,7 @@ def build_codex_arguments(
     codex_executable: str,
     session_id: str | None = None,
     reasoning_effort: str = ADVISOR_EFFORT_DEFAULT,
+    model_id: str = ADVISOR_CODEX_MODEL_ID,
 ) -> list[str]:
     """Build the Codex command list for bind or resume.
 
@@ -139,6 +220,7 @@ def build_codex_arguments(
         codex_executable: Codex executable path or name.
         session_id: Session to resume, or None for a new bind.
         reasoning_effort: Codex reasoning effort.
+        model_id: Native Codex model ID.
 
     Returns:
         Command arguments for Codex exec.
@@ -147,7 +229,7 @@ def build_codex_arguments(
         codex_executable,
         CODEX_EXEC_SUBCOMMAND,
         CODEX_MODEL_FLAG,
-        ADVISOR_CODEX_MODEL_ID,
+        model_id,
         CODEX_CONFIG_FLAG,
         CODEX_REASONING_CONFIG_TEMPLATE.format(effort=reasoning_effort),
         CODEX_SANDBOX_FLAG,
@@ -179,11 +261,13 @@ def _run_codex(
     executable: str,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> subprocess.CompletedProcess[str]:
+    model_id, effort = resolve_advisor_pair(all_settings, None)
     return process_runner(
         build_codex_arguments(
             executable,
             session_id=session_id,
-            reasoning_effort=resolve_advisor_effort(all_settings),
+            reasoning_effort=effort,
+            model_id=model_id,
         ),
         cwd=str(working_directory),
         input=prompt,
@@ -211,14 +295,29 @@ def _run_enabled_advisor(
             prompt, working_directory, session_id, setting_by_name, executable, process_runner
         )
     except subprocess.TimeoutExpired as error:
-        return build_fallback_reply(f"{ASTRA_CODEX_TIMEOUT_REASON}: {error}", True)
-    except (OSError, subprocess.SubprocessError) as error:
-        return build_fallback_reply(f"{ASTRA_BIND_FAILURE_REASON}: {error}", True)
+        return build_fallback_reply(
+            f"{ASTRA_CODEX_TIMEOUT_REASON}: {error}",
+            True,
+            ASTRA_FALLBACK_KIND_BROKEN,
+        )
+    except (OSError, subprocess.SubprocessError, RuntimeError, TypeError) as error:
+        return build_fallback_reply(
+            f"{ASTRA_BIND_FAILURE_REASON}: {error}",
+            True,
+            ASTRA_FALLBACK_KIND_BROKEN,
+        )
     if completed.returncode != 0:
         return build_fallback_reply(
-            f"{ASTRA_BIND_FAILURE_REASON}: process exit {completed.returncode}", True
+            f"{ASTRA_BIND_FAILURE_REASON}: process exit {completed.returncode}",
+            True,
+            ASTRA_FALLBACK_KIND_BROKEN,
         )
-    return parse_codex_jsonl_reply(completed.stdout, session_id, True)
+    return parse_codex_jsonl_reply(
+        completed.stdout,
+        session_id,
+        True,
+        ASTRA_FALLBACK_KIND_BROKEN,
+    )
 
 
 def run_codex_astra_advisor(
@@ -268,7 +367,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         ASTRA_EFFORT_FLAG,
         dest="astra_effort",
-        choices=ALL_ADVISOR_EFFORT_LEVELS,
+        choices=(*ALL_ADVISOR_EFFORT_LEVELS, *ADVISOR_EFFORT_ALIASES),
         default=None,
     )
     return parser

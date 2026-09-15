@@ -66,6 +66,8 @@ from terminology_sweep import repository_environment
 
 from code_rules_gate_parts import baseline_import_isolation, staged_test_running
 
+from subprocess_window_access import hidden_window_creation_flags
+
 TestIdentity = tuple[str, str]
 
 
@@ -93,6 +95,7 @@ def _run_git(
         text=True,
         check=False,
         env=repository_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
 
 

@@ -36,7 +36,6 @@ const allRetiredPolicyRegistrations = [
     'blocking/nas_ssh_binary_enforcer.py',
     'blocking/block_main_commit.py',
     'blocking/session_edit_stage_gate.py',
-    'blocking/bash_pre_tool_use_dispatcher.py',
     'blocking/stop_dispatcher.py',
     'blocking/bot_mention_comment_blocker.py',
     'blocking/fable_spawn_gate.py',
@@ -117,7 +116,7 @@ test('upgrade prunes legacy direct file checks while retaining foreign hooks', (
     });
     assert.ok(commands.every(command => !command.includes('/blocking/stop_dispatcher.py')));
     assert.ok(commands.some(command => command.includes('/blocking/pre_tool_use_dispatcher.py')));
-    assert.ok(commands.every(command => !command.includes('/blocking/bash_pre_tool_use_dispatcher.py')));
+    assert.ok(commands.some(command => command.includes('/blocking/bash_pre_tool_use_dispatcher.py')));
 });
 
 test('reinstall does not restore retired direct checks or duplicate foreign hooks', () => {

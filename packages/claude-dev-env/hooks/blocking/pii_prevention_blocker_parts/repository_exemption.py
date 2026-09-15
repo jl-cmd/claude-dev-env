@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
+from hooks_constants.subprocess_window import hidden_window_creation_flags
+
 try:
     _blocking_directory = str(Path(__file__).resolve().parent.parent)
     _hooks_directory = str(Path(__file__).resolve().parent.parent.parent)
@@ -186,6 +188,7 @@ def _repository_origin_slug(repository_root: Path) -> str | None:
             text=True,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
             cwd=str(repository_root),
+            creationflags=hidden_window_creation_flags(),
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return None

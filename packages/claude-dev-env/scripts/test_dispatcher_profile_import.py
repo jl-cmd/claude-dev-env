@@ -28,6 +28,10 @@ def _stage_profile_tree(
             target_profile_directory / "_shared" / each_shared_name
         )
         shutil.copytree(source_shared_directory, target_shared_directory)
+    shutil.copytree(
+        source_package_directory / "hooks" / "hooks_constants",
+        target_profile_directory / "hooks" / "hooks_constants",
+    )
     return target_scripts_directory
 
 

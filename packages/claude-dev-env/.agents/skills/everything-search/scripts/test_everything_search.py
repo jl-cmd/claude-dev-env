@@ -102,6 +102,7 @@ def test_main_runs_direct_search_without_registry_or_shell() -> None:
         encoding="utf-8",
         shell=False,
         text=True,
+        creationflags=search.hidden_window_creation_flags(),
     )
 
 

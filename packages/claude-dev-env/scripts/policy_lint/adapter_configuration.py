@@ -121,7 +121,31 @@ def _registered_nested_strings(each_entry: object) -> tuple[str, ...]:
     return tuple(all_registered_strings)
 
 
+def _names_exempt_registration_path(registered_string: str) -> bool:
+    """Return True when the registration names a chain that decides no policy.
+
+    ::
+
+        hooks/blocking/bash_pre_tool_use_dispatcher.py   -> exempt
+        hooks/blocking/some_new_blocker.py               -> flagged
+
+    The Bash PreToolUse dispatcher sits under ``blocking/`` for layout reasons
+    while its roster hosts one allow-and-rewrite hook. Its path segment reads as
+    a policy boundary that the chain never carries.
+
+    Args:
+        registered_string: One command, path, script, or entrypoint string.
+    """
+    path_shaped_string = registered_string.lower().replace("\\", "/")
+    return any(
+        each_exempt_path in path_shaped_string
+        for each_exempt_path in constants.ALL_ACTION_BOUNDARY_EXEMPT_REGISTRATION_PATHS
+    )
+
+
 def _contains_action_boundary_marker(registered_string: str) -> bool:
+    if _names_exempt_registration_path(registered_string):
+        return False
     normalized_string = registered_string.lower().replace("\\", "/")
     normalized_string = normalized_string.replace(".", "/").replace("-", "/")
     return any(

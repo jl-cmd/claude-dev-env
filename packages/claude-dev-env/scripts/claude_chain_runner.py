@@ -131,6 +131,8 @@ from dev_env_scripts_constants.claude_chain_constants import (
     UTF8_ENCODING,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def _decode_captured_stream(raw_bytes: bytes, encoding: str, errors: str) -> str:
     """Decode captured *raw_bytes* with ``text=True`` universal-newline semantics.
@@ -222,6 +224,7 @@ def _run_captured_subprocess(
                     else None
                 ),
                 input=input_bytes,
+                creationflags=hidden_window_creation_flags(),
             )
         except subprocess.TimeoutExpired as timeout_error:
             _attach_partial_timeout_streams(

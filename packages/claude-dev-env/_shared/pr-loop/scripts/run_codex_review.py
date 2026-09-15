@@ -90,6 +90,8 @@ from codex_review_scripts_constants.run_constants import (  # noqa: E402
     VERSION_PROBE_PATTERN,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def _open_codex_popen(
     all_arguments: list[str],
@@ -110,6 +112,7 @@ def _open_codex_popen(
         encoding=stream_encoding if isinstance(stream_encoding, str) else None,
         env=process_environment if isinstance(process_environment, dict) else None,
         start_new_session=should_start_new_session(),
+        creationflags=hidden_window_creation_flags(),
     )
 
 

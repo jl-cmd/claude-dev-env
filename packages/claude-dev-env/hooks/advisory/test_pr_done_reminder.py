@@ -28,6 +28,10 @@ except ImportError as import_error:
     ) from import_error
 
 
+WINDOWS_NO_WINDOW_FLAG = 0x08000000
+EXPECTED_HIDDEN_WINDOW_FLAGS = WINDOWS_NO_WINDOW_FLAG if sys.platform == "win32" else 0
+
+
 _CLEAN_PR_OBJECT: dict[str, object] = {
     "number": 42,
     "url": "https://github.com/acme/widgets/pull/42",
@@ -248,3 +252,20 @@ def test_main_should_stay_quiet_on_any_other_gh_failure(
 
     assert _run_main(monkeypatch, capsys, _payload("git push"), gh_down) == ""
 
+
+
+def test_gh_probe_should_start_without_a_console_window(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    all_recorded_keyword_arguments: dict[str, object] = {}
+
+    def _record(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del args
+        all_recorded_keyword_arguments.update(kwargs)
+        return subprocess.CompletedProcess(
+            [], 0, stdout=json.dumps(_CLEAN_PR_OBJECT), stderr=""
+        )
+
+    _run_main(monkeypatch, capsys, _payload("git push"), _record)
+
+    assert all_recorded_keyword_arguments["creationflags"] == EXPECTED_HIDDEN_WINDOW_FLAGS

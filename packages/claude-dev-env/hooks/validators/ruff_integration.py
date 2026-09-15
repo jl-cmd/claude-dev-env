@@ -6,6 +6,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from hooks_constants.subprocess_window import hidden_window_creation_flags
+
 _validators_directory = str(Path(__file__).resolve().parent)
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
 
@@ -53,6 +55,7 @@ def check_ruff_available() -> bool:
             check=False,
             capture_output=True,
             text=True,
+            creationflags=hidden_window_creation_flags(),
         )
         return result.returncode == 0
     except FileNotFoundError:
@@ -201,6 +204,7 @@ def _staged_ruff_result(
         input=staged_content,
         cwd=str(resolved_pyproject.parent),
         env=_ruff_subprocess_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     return RuffResult(
         passed=result.returncode == 0,
@@ -247,6 +251,7 @@ def _run_native_ruff_check(
         capture_output=True,
         text=True,
         env=_ruff_subprocess_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     return RuffResult(
         passed=result.returncode == 0,
@@ -308,6 +313,7 @@ def run_ruff_fix(all_files: list[Path]) -> RuffResult:
         capture_output=True,
         text=True,
         env=_ruff_subprocess_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
     return RuffResult(
         passed=result.returncode == 0,

@@ -15,6 +15,9 @@ from verification_notice import build_verification_notice
 from verification_notice_context import VerificationNoticeContext
 from verification_start import start_automatic_advisory
 
+WINDOWS_NO_WINDOW_FLAG = 0x08000000
+EXPECTED_HIDDEN_WINDOW_FLAGS = WINDOWS_NO_WINDOW_FLAG if sys.platform == "win32" else 0
+
 
 def build_context(
     repository_root: Path,
@@ -102,6 +105,7 @@ def _assert_launch_matches_runner(
     assert launch_options["stdin"] is subprocess.DEVNULL
     assert launch_options["stdout"] is subprocess.DEVNULL
     assert launch_options["stderr"] is subprocess.DEVNULL
+    assert launch_options["creationflags"] == EXPECTED_HIDDEN_WINDOW_FLAGS
     assert "--once" not in command
 
 

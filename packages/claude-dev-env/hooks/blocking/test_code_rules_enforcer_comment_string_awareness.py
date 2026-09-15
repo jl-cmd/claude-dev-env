@@ -133,6 +133,33 @@ def test_check_comment_changes_allows_comment_removal_without_advisory(
     assert captured.err == ""
 
 
+def test_check_comment_changes_does_not_flag_added_stealth_keep_marker() -> None:
+    old_content = "x = 1\n"
+    new_content = "x = 1  # STEALTH: Keep -- reason\n"
+    issues = code_rules_enforcer.check_comment_changes(old_content, new_content, "foo.py")
+    assert issues == []
+
+
+def test_check_comment_changes_does_not_flag_stealth_keep_retained_on_touched_line() -> None:
+    old_content = "x = 1  # STEALTH: Keep -- reason\n"
+    new_content = "x = 2  # STEALTH: Keep -- reason\n"
+    issues = code_rules_enforcer.check_comment_changes(old_content, new_content, "foo.py")
+    assert issues == []
+
+
+@pytest.mark.parametrize(
+    "each_marker",
+    ("# noqa: E501", "# type: ignore[misc]", "# TODO: revisit", "# FIXME: revisit"),
+)
+def test_check_comment_changes_still_flags_other_added_directive_markers(
+    each_marker: str,
+) -> None:
+    old_content = "x = 1\n"
+    new_content = f"x = 1  {each_marker}\n"
+    issues = code_rules_enforcer.check_comment_changes(old_content, new_content, "foo.py")
+    assert any("comment added" in each_issue.lower() for each_issue in issues)
+
+
 def test_python_check_should_exempt_directive_without_space_after_hash() -> None:
     for each_directive in ("#noqa", "#type: ignore", "#pylint: disable", "#pragma: no cover"):
         content = f"{each_directive}\n"

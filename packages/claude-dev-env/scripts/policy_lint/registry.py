@@ -73,7 +73,7 @@ def _python_document_rules() -> tuple[model.Rule, ...]:
         ),
         build_document_rule(
             "subprocess-budget",
-            adapters.accepts_python,
+            adapters.accepts_production_python,
             adapters.subprocess_budget_diagnostics,
         ),
         build_document_rule(
@@ -103,6 +103,11 @@ def _text_document_rules() -> tuple[model.Rule, ...]:
             "workflow-substitution",
             adapters.accepts_workflow,
             adapters.workflow_substitution_diagnostics,
+        ),
+        build_document_rule(
+            "retired-hook-prose",
+            adapters.accepts_rules_markdown,
+            adapters.retired_hook_prose_diagnostics,
         ),
     )
 

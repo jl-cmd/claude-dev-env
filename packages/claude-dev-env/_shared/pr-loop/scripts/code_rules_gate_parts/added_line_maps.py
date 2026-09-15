@@ -24,6 +24,8 @@ from code_rules_gate_parts.git_file_sets import (
 )
 from code_rules_gate_parts.violation_scoping import parse_added_line_numbers
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def _run_git_text_capture(
     repository_root: Path, all_git_arguments: list[str]
@@ -38,6 +40,7 @@ def _run_git_text_capture(
         errors="replace",
         check=False,
         env=repository_environment(),
+        creationflags=hidden_window_creation_flags(),
     )
 
 

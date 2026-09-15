@@ -8,7 +8,13 @@ from types import ModuleType
 
 from shared_tree_paths import resolve_shared_scripts_directory
 
-from . import adapter_configuration, adapter_detectors, adapter_pairing, adapter_support
+from . import (
+    adapter_configuration,
+    adapter_detectors,
+    adapter_pairing,
+    adapter_retired_hook_prose,
+    adapter_support,
+)
 from .config import constants
 from .model import Diagnostic, Document, DocumentSet
 
@@ -27,9 +33,13 @@ def _hooks_module(module_name: str) -> ModuleType:
 
 
 def _pr_loop_script_module(module_name: str) -> ModuleType:
+    marker_relative_path = (
+        module_name.replace(".", constants.POSIX_PATH_SEPARATOR)
+        + constants.PYTHON_SUFFIX
+    )
     scripts_directory = str(resolve_shared_scripts_directory(
         __file__, os.environ, constants.PR_LOOP_DIRECTORY_NAME,
-        f"{module_name}{constants.PYTHON_SUFFIX}", constants.SHARED_ROOT_PARENT_INDEX
+        marker_relative_path, constants.SHARED_ROOT_PARENT_INDEX
     ))
     if scripts_directory not in sys.path:
         sys.path.insert(0, scripts_directory)
@@ -66,7 +76,7 @@ def code_rule_diagnostics(
         Diagnostics from the code-rule engine.
     """
     return adapter_detectors.code_rule_diagnostics(
-        document, repository_root, _hooks_module
+        document, repository_root, _hooks_module, _pr_loop_script_module
     )
 
 
@@ -270,6 +280,25 @@ def accepts_python(document: Document) -> bool:
     return document.path.suffix.lower() == constants.PYTHON_SUFFIX
 
 
+def accepts_production_python(document: Document) -> bool:
+    """Return whether the document is Python outside the test tree.
+
+    The hook lane exempts a test module so a test can stage an undercounting
+    fixture freely. This gate reuses the hook lane's own ``is_test_file``
+    predicate, so the two lanes cannot drift on what counts as a test file.
+
+    Args:
+        document: Candidate document.
+
+    Returns:
+        True for a Python document whose path is not a test path.
+    """
+    if not accepts_python(document):
+        return False
+    shared_module = _hooks_module("blocking.code_rules_shared")
+    return not shared_module.is_test_file(f"/{document.path.as_posix()}")
+
+
 def accepts_code(document: Document) -> bool:
     """Return whether the document contains supported source code.
 
@@ -286,6 +315,21 @@ def accepts_markdown(document: Document) -> bool:
     return document.path.suffix.lower() in constants.ALL_MARKDOWN_SUFFIXES
 
 
+def _is_generated_document(document: Document) -> bool:
+    """Return whether a release tool writes the document from commit history.
+
+    A changelog is rebuilt from merged commit subjects, so its wording belongs
+    to the commits rather than to an author. Prose rules skip it.
+
+    Args:
+        document: Candidate document.
+
+    Returns:
+        True for a generated document name.
+    """
+    return document.path.name.lower() in constants.ALL_GENERATED_DOCUMENT_NAMES
+
+
 def accepts_source_or_markdown(document: Document) -> bool:
     """Return whether a state-description rule can inspect the document.
 
@@ -293,8 +337,10 @@ def accepts_source_or_markdown(document: Document) -> bool:
         document: Candidate document.
 
     Returns:
-        True for supported source or Markdown.
+        True for authored source or Markdown, and False for a generated document.
     """
+    if _is_generated_document(document):
+        return False
     return accepts_code(document) or accepts_markdown(document)
 
 
@@ -305,8 +351,10 @@ def accepts_stored_prompt(document: Document) -> bool:
         document: Candidate document.
 
     Returns:
-        True for Markdown in an instruction directory.
+        True for authored Markdown in an instruction directory.
     """
+    if _is_generated_document(document):
+        return False
     normalized_path = f"/{document.path.as_posix().lower()}"
     return accepts_markdown(document) and any(
         each_segment in normalized_path
@@ -376,4 +424,33 @@ def accepts_plans(document: Document) -> bool:
                 plans_constants.DOCS_PLANS_PATH_PREFIX,
             )
         )
+    )
+
+
+def accepts_rules_markdown(document: Document) -> bool:
+    """Return whether the document is Markdown in a rules directory.
+
+    Args:
+        document: Candidate document.
+
+    Returns:
+        True for a Markdown file directly under a ``rules`` directory.
+    """
+    return adapter_retired_hook_prose.accepts_rules_markdown(document)
+
+
+def retired_hook_prose_diagnostics(
+    document: Document, repository_root: Path
+) -> tuple[Diagnostic, ...]:
+    """Report rules prose that credits an unregistered hook with a live action.
+
+    Args:
+        document: Current rules Markdown text and path.
+        repository_root: Request repository root for package resolution.
+
+    Returns:
+        Retired-hook prose diagnostics.
+    """
+    return adapter_retired_hook_prose.retired_hook_prose_diagnostics(
+        document, repository_root
     )

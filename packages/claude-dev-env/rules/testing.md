@@ -23,10 +23,8 @@ Incomplete mocks make it impossible to distinguish "broken code" from "missing d
 
 Tests exercise real behavior, real data, and production code paths. A test that asserts on a stand-in for the production path proves the stand-in works.
 
-## The File-Level TDD Gate Reads Content
+## No Gate Holds the Test-First Order
 
-`tdd_enforcer.py` records each candidate test's content hash at every sighting and compares that hash on the next write. A first sighting requires content that differs from HEAD.
+`tdd_enforcer.py` once required a fresh, failing test before a production module was written. Nothing runs it now, and the staged policy lint carries no replacement. Hold the red-green-refactor order yourself, and let review check it on the diff.
 
-## The Gate Reads a Recorded Failing Run First
-
-`hooks/observability/test_failure_recorder.py` runs on every Bash call and records a single unchained pytest run that names a real test file path and reports a failing exit status. It stores the command, that exit status, and the path in the same content-hash store the gate reads. The gate consults that record before its freshness fallback, and honours it while the candidate's content still matches what failed. `content_hash_store.py`'s module docstring holds the full contract.
+`hooks/observability/test_failure_recorder.py` still runs on every Bash call. It records a single unchained pytest run that names a test file path and reports a failing exit status, storing the command, that exit status, and the path in the content-hash store. `content_hash_store.py`'s module docstring holds the full contract. No gate reads that store today, so the record serves as history rather than a precondition.

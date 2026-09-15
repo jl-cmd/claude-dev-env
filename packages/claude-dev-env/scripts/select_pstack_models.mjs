@@ -1,8 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+    defaultSubagentModelPolicyPath,
+    isSelectorPairExcluded,
+    loadSubagentModelPolicy,
+    resolveSubagentModelRoute,
+} from './subagent_model_policy.mjs';
 
-const inheritanceAliases = new Set(['inherit-parent', 'auto']);
 const hostNamePattern = /^[a-z0-9][a-z0-9_-]*$/;
 const defaultSingleDelegationPanel = Object.freeze({
     agentCount: 1,
@@ -42,10 +47,20 @@ export function selectPstackDelegation(input) {
     validateSelectionInput(input);
     const panel = resolvePanel(input);
     validateDelegationIndex(input.delegationIndex, panel.agentCount);
-    const modelsByRole = readHostPreferences(input);
-    const allCandidates = collectCandidates(input, modelsByRole[input.role] ?? []);
+    const hostPreferences = readHostPreferences(input);
+    const routingInput = (input.requestedEffort === undefined || input.requestedEffort === null)
+        && hostPreferences.defaultEffort !== undefined
+        ? { ...input, requestedEffort: hostPreferences.defaultEffort }
+        : input;
+    const selectionPolicy = loadSelectionPolicy(input);
+    if (selectionPolicy.policy) validateModelIdInventories(input, selectionPolicy.policy);
+    const { allCandidates, routingFailures } = collectCandidates(
+        routingInput,
+        hostPreferences.modelsByRole[routingInput.role] ?? [],
+        selectionPolicy,
+    );
     const allSelectedCandidates = selectPanelCandidates(allCandidates, panel);
-    return buildSelection(input, panel, allSelectedCandidates);
+    return buildSelection(routingInput, panel, allSelectedCandidates, routingFailures);
 }
 
 function validateSelectionInput(input) {
@@ -56,7 +71,10 @@ function validateSelectionInput(input) {
     validateDelegationIndex(input.delegationIndex);
     requireStringArray(input.availableModelIds, 'available model ids');
     requireStringArray(input.confirmedSuitableModelIds, 'confirmed suitable model ids');
-    validateRealModelIds(input.availableModelIds, 'available model ids');
+    if (input.requestedEffort !== undefined && input.requestedEffort !== null
+        && (typeof input.requestedEffort !== 'string' || input.requestedEffort.trim() === '')) {
+        throw new Error('requested effort must be a non-empty string');
+    }
     validateParentFallback(input.parentFallback);
     validateConfirmedModels(input);
     if (typeof input.role !== 'string' || !Object.hasOwn(allPstackRoleRequirements, input.role)) {
@@ -90,12 +108,6 @@ function requireStringArray(allEntries, label) {
     }
 }
 
-function validateRealModelIds(allModelIds, label) {
-    if (allModelIds.some(eachModelId => inheritanceAliases.has(eachModelId))) {
-        throw new Error(label + ' cannot contain inheritance aliases');
-    }
-}
-
 function validateParentFallback(parentFallback) {
     const hasBooleanFlags = parentFallback
         && typeof parentFallback === 'object'
@@ -107,12 +119,23 @@ function validateParentFallback(parentFallback) {
 }
 
 function validateConfirmedModels(input) {
-    validateRealModelIds(input.confirmedSuitableModelIds, 'confirmed suitable model ids');
     const allAvailableModelIds = new Set(input.availableModelIds);
     if (input.confirmedSuitableModelIds.some(
         eachModelId => !allAvailableModelIds.has(eachModelId),
     )) {
         throw new Error('confirmed suitable models must be available');
+    }
+}
+
+function validateModelIdInventories(input, policy) {
+    const inventories = [
+        ['confirmed suitable model ids', input.confirmedSuitableModelIds],
+        ['available model ids', input.availableModelIds],
+    ];
+    for (const [label, modelIds] of inventories) {
+        if (modelIds.some(eachModelId => policy.inheritanceAliases.has(eachModelId.trim().toLowerCase()))) {
+            throw new Error(label + ' must contain native model ids');
+        }
     }
 }
 
@@ -142,50 +165,182 @@ function readHostPreferences(input) {
         'pstack-model-preferences.' + input.host + '.json',
     );
     if (!existsSync(preferencesPath)) {
-        return {};
+        return { modelsByRole: {}, defaultEffort: undefined };
     }
     const preferences = JSON.parse(readFileSync(preferencesPath, 'utf8'));
     if (preferences.host !== input.host) {
         throw new Error('preference host must match selected host');
     }
-    return preferences.modelsByRole ?? {};
+    return {
+        modelsByRole: preferences.modelsByRole ?? {},
+        defaultEffort: preferences.defaultEffort,
+    };
 }
 
-function collectCandidates(input, allPreferredModelIds) {
-    requireStringArray(allPreferredModelIds, 'role preferences');
-    const allAvailableModelIds = new Set(input.availableModelIds);
-    const allPreferredCandidates = allPreferredModelIds
-        .map(eachModelId => preferenceCandidate(eachModelId, allAvailableModelIds, input))
+function loadSelectionPolicy(input) {
+    try {
+        return { policy: loadSubagentModelPolicy(resolvePolicyPath(input)), error: null };
+    } catch (error) {
+        return {
+            policy: null,
+            error: error instanceof Error ? error.message : String(error),
+        };
+    }
+}
+
+function collectCandidates(input, allPreferredModelEntries, selectionPolicy) {
+    validatePreferenceEntries(allPreferredModelEntries, 'role preferences');
+    if (!selectionPolicy.policy) {
+        return { allCandidates: [], routingFailures: [selectionPolicy.error] };
+    }
+    const routingFailures = [];
+    const allPreferredCandidates = allPreferredModelEntries
+        .map(eachEntry => preferenceCandidate(
+            eachEntry,
+            input,
+            'host-preference',
+            routingFailures,
+            selectionPolicy.policy,
+        ))
         .filter(Boolean);
-    const allAlternativeCandidates = input.confirmedSuitableModelIds.map(
-        eachModelId => modelCandidate(eachModelId, 'confirmed-host-alternative'),
-    );
+    const allAlternativeCandidates = input.confirmedSuitableModelIds
+        .map(eachModelId => preferenceCandidate(
+            eachModelId,
+            input,
+            'confirmed-host-alternative',
+            routingFailures,
+            selectionPolicy.policy,
+        ))
+        .filter(Boolean);
     const allCandidates = deduplicateCandidates([
         ...allPreferredCandidates,
         ...allAlternativeCandidates,
     ]);
-    const allCandidatesWithFallback = allCandidates.length === 0
+    const allCandidatesWithFallback = allCandidates.length === 0 && routingFailures.length === 0
         && input.parentFallback.isAllowed
         ? [parentCandidate()]
         : allCandidates;
-    return orderCrossJudgeCandidates(input, allCandidatesWithFallback);
+    return {
+        allCandidates: orderCrossJudgeCandidates(input, allCandidatesWithFallback),
+        routingFailures,
+    };
 }
 
-function preferenceCandidate(modelId, allAvailableModelIds, input) {
-    if (inheritanceAliases.has(modelId)) {
+function preferenceCandidate(
+    preferenceEntry,
+    input,
+    source,
+    routingFailures,
+    policy,
+) {
+    const resolvedEntry = resolvePreferenceEntry(preferenceEntry, input, policy);
+    if (resolvedEntry.error) {
+        routingFailures.push(resolvedEntry.error);
+        return null;
+    }
+    const { modelId, effort } = resolvedEntry;
+    if (isSelectorPairExcluded(modelId, effort, policy)) return null;
+    if (policy.inheritanceAliases.has(modelId.trim().toLowerCase())) {
+        if (effort !== null) {
+            routingFailures.push('parent inheritance cannot set an effort');
+            return null;
+        }
         return input.parentFallback.isAllowed ? parentCandidate() : null;
     }
-    return allAvailableModelIds.has(modelId)
-        ? modelCandidate(modelId, 'host-preference')
-        : null;
+    if (input.host !== 'codex') {
+        return input.availableModelIds.includes(modelId)
+            ? modelCandidate(modelId, source)
+            : null;
+    }
+    const routeRequest = { model: modelId, agent_type: input.routingRole ?? 'worker' };
+    if (effort !== null) routeRequest.reasoning_effort = effort;
+    const route = resolveSubagentModelRoute(
+        routeRequest,
+        {
+            policyPath: resolvePolicyPath(input),
+            policy,
+            availableModelIds: input.availableModelIds,
+            allowMissingEffort: effort === null,
+            trustedSessionMetadata: input.trustedSessionMetadata,
+        },
+    );
+    if (route.status === 'blocked') {
+        routingFailures.push(route.diagnostic);
+        return null;
+    }
+    if (isSelectorPairExcluded(route.selected.model, route.selected.effort, policy)) return null;
+    if (route.status === 'inherited') return input.parentFallback.isAllowed ? parentCandidate() : null;
+    return modelCandidate(route.selected.model, source, route);
 }
 
-function modelCandidate(modelId, source) {
-    return { kind: 'model', modelId, source };
+function modelCandidate(modelId, source, route = null) {
+    return {
+        kind: 'model',
+        modelId,
+        source,
+        requestedPair: route?.requested ?? null,
+        selectedPair: route?.selected ?? null,
+        effort: route?.selected?.effort ?? null,
+    };
 }
 
 function parentCandidate() {
-    return { kind: 'parent', modelId: null, source: 'parent-inheritance' };
+    return {
+        kind: 'parent',
+        modelId: null,
+        source: 'parent-inheritance',
+        requestedPair: null,
+        selectedPair: null,
+        effort: null,
+    };
+}
+
+function resolvePreferenceEntry(preferenceEntry, input, policy = null) {
+    const preferenceModel = typeof preferenceEntry === 'string'
+        ? preferenceEntry
+        : preferenceEntry?.modelId ?? preferenceEntry?.model;
+    const isInheritanceAlias = typeof preferenceModel === 'string'
+        && policy?.inheritanceAliases.has(preferenceModel.trim().toLowerCase());
+    const fallbackEffort = isInheritanceAlias ? null : input.requestedEffort ?? null;
+    if (typeof preferenceEntry === 'string' && preferenceEntry !== '') {
+        return { modelId: preferenceEntry, effort: fallbackEffort, error: null };
+    }
+    if (!preferenceEntry || typeof preferenceEntry !== 'object' || Array.isArray(preferenceEntry)) {
+        return { modelId: null, effort: null, error: 'role preferences must contain model ids or pair objects' };
+    }
+    const modelId = preferenceEntry.modelId ?? preferenceEntry.model;
+    const effortFields = ['reasoning_effort', 'effort'].filter(
+        field => Object.hasOwn(preferenceEntry, field),
+    );
+    if (effortFields.length > 1) {
+        return { modelId: null, effort: null, error: 'role preference effort fields are ambiguous' };
+    }
+    const effort = preferenceEntry[effortFields[0]] ?? fallbackEffort;
+    if (typeof modelId !== 'string' || modelId === '') {
+        return { modelId: null, effort: null, error: 'role preference model must be a non-empty string' };
+    }
+    return { modelId, effort, error: null };
+}
+
+function validatePreferenceEntries(allEntries, label) {
+    if (!Array.isArray(allEntries)) throw new Error(label + ' must be an array');
+    allEntries.forEach(eachEntry => {
+        const resolvedEntry = resolvePreferenceEntry(eachEntry, {});
+        if (resolvedEntry.error) throw new Error(resolvedEntry.error);
+    });
+}
+
+function resolvePolicyPath(input) {
+    if (typeof input.policyPath === 'string' && input.policyPath.trim() !== '') {
+        return input.policyPath;
+    }
+    const allPolicyPaths = [
+        input.preferencesDirectory
+            ? join(input.preferencesDirectory, 'subagent-model-policy.json')
+            : null,
+        defaultSubagentModelPolicyPath(),
+    ].filter(Boolean);
+    return allPolicyPaths.find(eachPath => existsSync(eachPath)) ?? allPolicyPaths[0];
 }
 
 function deduplicateCandidates(allCandidates) {
@@ -230,9 +385,9 @@ function selectPanelCandidates(allCandidates, panel) {
     );
 }
 
-function buildSelection(input, requestedPanel, allSelectedCandidates) {
+function buildSelection(input, requestedPanel, allSelectedCandidates, routingFailures) {
     const panel = reportPanel(requestedPanel, allSelectedCandidates);
-    const failure = selectionFailure(input, panel, allSelectedCandidates);
+    const failure = selectionFailure(input, panel, allSelectedCandidates, routingFailures);
     const selectedCandidate = allSelectedCandidates[input.delegationIndex];
     return {
         selectedHost: input.host,
@@ -244,6 +399,7 @@ function buildSelection(input, requestedPanel, allSelectedCandidates) {
         failure,
         selectionSource: selectedCandidate?.source ?? null,
         panel,
+        routingDiagnostics: routingFailures,
         nativeSpawnArguments: nativeSpawnArguments(selectedCandidate, failure),
         omitNativeModelArgument: selectedCandidate?.kind === 'parent',
     };
@@ -253,18 +409,23 @@ function reportPanel(requestedPanel, allSelectedCandidates) {
     const allSelectedModelIds = allSelectedCandidates.map(
         eachCandidate => eachCandidate.modelId,
     );
-    const distinctRealModelCount = new Set(allSelectedModelIds.filter(Boolean)).size;
+    const distinctModelCount = new Set(allSelectedModelIds.filter(Boolean)).size;
     return {
         agentCount: requestedPanel.agentCount,
         requiresDistinctModels: requestedPanel.requiresDistinctModels,
         selectedModelIds: allSelectedModelIds,
+        requestedModelPairs: allSelectedCandidates.map(eachCandidate => eachCandidate.requestedPair),
+        selectedModelPairs: allSelectedCandidates.map(eachCandidate => eachCandidate.selectedPair),
         selectionSources: allSelectedCandidates.map(eachCandidate => eachCandidate.source),
         isCrossModelDiverse: requestedPanel.agentCount > 1
-            && distinctRealModelCount === requestedPanel.agentCount,
+            && distinctModelCount === requestedPanel.agentCount,
     };
 }
 
-function selectionFailure(input, panel, allSelectedCandidates) {
+function selectionFailure(input, panel, allSelectedCandidates, routingFailures) {
+    if (routingFailures.length > 0) {
+        return 'model-routing-failed: ' + routingFailures[0];
+    }
     if (panel.requiresDistinctModels && !panel.isCrossModelDiverse) {
         return 'distinct-models-unavailable';
     }
@@ -282,7 +443,11 @@ function nativeSpawnArguments(selectedCandidate, failure) {
     if (failure || !selectedCandidate || selectedCandidate.kind === 'parent') {
         return {};
     }
-    return { model: selectedCandidate.modelId };
+    const spawnArguments = { model: selectedCandidate.modelId };
+    if (selectedCandidate.effort !== null) {
+        spawnArguments.reasoning_effort = selectedCandidate.effort;
+    }
+    return spawnArguments;
 }
 
 async function readSelectionInput() {

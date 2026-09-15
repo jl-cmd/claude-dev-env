@@ -2,13 +2,13 @@
 
 Route every user-directed question through the `AskUserQuestion` tool — never a plain-text question in a response's final paragraph. Structure: concise `question`, `header` of 12 chars or fewer, 2-4 options (the UI adds the "Other" fallback), `multiSelect` only when choices genuinely combine.
 
-The `question_to_user_enforcer` Stop hook blocks a response whose final paragraph (after stripping code fences, inline code, and blockquotes) ends in a question mark or contains ask-phrases ("would you like", "should I", "let me know if", ...). Rhetorical questions answered in the same paragraph, and questions inside code or blockquotes, pass. `verify-before-asking` gates whether the question belongs to the user at all.
+No hook checks this. Read your own final paragraph before you send it. A paragraph that ends in a question mark, or that carries an ask-phrase such as "would you like", "should I", or "let me know if", belongs in an `AskUserQuestion` call instead. A rhetorical question answered in the same paragraph is fine, and so is a question inside code or a blockquote. `verify-before-asking` settles whether the question belongs to the user at all.
 
 ## The question block stays lean
 
 `AskUserQuestion` renders as one plain unformatted text block. Detail — plans, counts, tradeoffs, background — goes in chat text before the call. The block itself carries a lean question and short choices. When a choice needs formatting, an inline visualizer tool carries it.
 
-The `ask_user_question_shape_blocker` PreToolUse hook denies an `AskUserQuestion` call whose `question` text or whose `description` under any of the `options` carries chat detail:
+No hook denies an over-full block, so keep an `AskUserQuestion` call inside these caps yourself. They apply to the `question` text and to the `description` under any of the `options`:
 
 | What the block carries | Cap |
 |---|---|
@@ -28,4 +28,4 @@ Structure is read at block level on the raw text: a marker counts when it opens 
 
 An inline code span — a path, a flag, a command the reader needs verbatim — weighs one word against either word cap on both fields, so a question naming `--dry-run` and a choice naming `C:\dev\gate.py` both pass. A span sits inside a line, so it never opens one with a marker.
 
-A sentence closes on `.`, `!`, or `?` followed by a capitalized word or by the end of the text. A word is any whitespace-separated token carrying a letter or a digit. The denial names each cap the block broke and sends the detail back to chat text.
+A sentence closes on `.`, `!`, or `?` followed by a capitalized word or by the end of the text. A word is any whitespace-separated token carrying a letter or a digit. When a block breaks a cap, move that detail back into chat text before the call.

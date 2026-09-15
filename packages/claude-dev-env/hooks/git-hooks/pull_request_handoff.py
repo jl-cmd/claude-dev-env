@@ -9,6 +9,8 @@ from git_hooks_constants import (
     GH_PR_VIEW_TIMEOUT_SECONDS,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def get_pull_request_url(repo_dir: Path) -> str | None:
     try:
@@ -19,6 +21,7 @@ def get_pull_request_url(repo_dir: Path) -> str | None:
             capture_output=True,
             text=True,
             timeout=GH_PR_VIEW_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except (OSError, subprocess.SubprocessError):
         return None

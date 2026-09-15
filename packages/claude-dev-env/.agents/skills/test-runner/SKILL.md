@@ -64,6 +64,7 @@ run migrations, or repair a failed preflight.
 - `SKILL.md` covers invocation, checks, and the command boundary.
 - `scripts/run_tests.py` parses the command, runs preflight, and launches the child.
 - `scripts/preflight_checks.py` runs Django and Playwright readiness checks.
+- `scripts/subprocess_window_access.py` re-exports the hidden-window helpers from the deployed hooks directory.
 - `scripts/test_run_tests.py` covers the command and preflight.
 - `scripts/test_preflight_checks.py` covers the readiness checks.
 - `scripts/test_runner_constants/` holds command names, messages, and limits.

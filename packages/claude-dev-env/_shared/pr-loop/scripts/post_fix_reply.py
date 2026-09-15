@@ -30,6 +30,8 @@ from pr_converge_skill_constants.constants import (
     GH_ISSUE_COMMENT_CREATE_PATH_TEMPLATE,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 
 def post_inline_reply(
     *,
@@ -67,6 +69,7 @@ def post_inline_reply(
         encoding="utf-8",
         errors="replace",
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
     if completed_process.returncode != 0:
         print(f"gh api error: {completed_process.stderr}", file=sys.stderr)
@@ -108,6 +111,7 @@ def post_pr_comment(
         encoding="utf-8",
         errors="replace",
         check=False,
+        creationflags=hidden_window_creation_flags(),
     )
     if completed_process.returncode != 0:
         print(f"gh api error: {completed_process.stderr}", file=sys.stderr)

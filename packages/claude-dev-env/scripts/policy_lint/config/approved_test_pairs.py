@@ -5,6 +5,31 @@ from pathlib import PurePosixPath
 APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
     PurePosixPath, frozenset[PurePosixPath]
 ] = {
+    PurePosixPath("packages/claude-dev-env/bin/install-constants.mjs"): frozenset(
+        {
+            PurePosixPath("packages/claude-dev-env/bin/install.cursor-rules.test.mjs"),
+        }
+    ),
+    PurePosixPath("packages/claude-dev-env/bin/install.mjs"): frozenset(
+        {
+            PurePosixPath("packages/claude-dev-env/bin/install.cursor-rules.test.mjs"),
+        }
+    ),
+    PurePosixPath(
+        "packages/claude-dev-env/hooks/blocking/code_rules_comments.py"
+    ): frozenset(
+        {
+            PurePosixPath(
+                "packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_comment_string_awareness.py"
+            ),
+            PurePosixPath(
+                "packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_exempt_marker_chained.py"
+            ),
+            PurePosixPath(
+                "packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_javascript_comments.py"
+            ),
+        }
+    ),
     PurePosixPath(
         "packages/claude-dev-env/hooks/git-hooks/verification_notice_context.py"
     ): frozenset(
@@ -149,15 +174,6 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
         {
             PurePosixPath(
                 "packages/claude-dev-env/scripts/tests/test_closed_pr_label.py"
-            ),
-        }
-    ),
-    PurePosixPath(
-        "packages/claude-dev-env/scripts/automatic_advisory/window_flags.py"
-    ): frozenset(
-        {
-            PurePosixPath(
-                "packages/claude-dev-env/scripts/tests/test_automatic_advisory_window_flags.py"
             ),
         }
     ),

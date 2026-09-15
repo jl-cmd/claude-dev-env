@@ -1,5 +1,149 @@
 # Changelog
 
+## [7.7.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.6.1...claude-dev-env-v7.7.0) (2026-09-15)
+
+
+### Features
+
+* add subagent model policy resolver ([b0e7955](https://github.com/jl-cmd/claude-dev-env/commit/b0e7955eacdcae8ef290f05e252bf5ae002b0dec))
+* **pstack:** add subagent model policy resolver ([e0ee3c6](https://github.com/jl-cmd/claude-dev-env/commit/e0ee3c655309e1bd595e875b3b2809e3bf9cec95))
+* **pstack:** route subagent models at spawn time ([a2ae5c4](https://github.com/jl-cmd/claude-dev-env/commit/a2ae5c447ca3469a27e695d497d1e91b959cd694))
+* route subagent models at spawn time ([5ec5987](https://github.com/jl-cmd/claude-dev-env/commit/5ec59879acadd39ff99213f52359ada6cfe77008))
+
+
+### Bug Fixes
+
+* **pstack:** align policy terms ([b027465](https://github.com/jl-cmd/claude-dev-env/commit/b027465ce0760ef2688190222a0afc7204ecbd4f))
+* **pstack:** exclude Sol Medium panel contender ([d22971d](https://github.com/jl-cmd/claude-dev-env/commit/d22971d3e35581088ecaf0c5987f538a7be09e93))
+* **pstack:** prune moved routing hook ([d3649b8](https://github.com/jl-cmd/claude-dev-env/commit/d3649b8f784951fbf5e2d57ecded2a943241ea52))
+* **pstack:** satisfy cumulative policy lint ([eec1e2c](https://github.com/jl-cmd/claude-dev-env/commit/eec1e2ce0a164360957fdf9058f668eaa94805cd))
+* **pstack:** sync package instruction guidance ([1316a76](https://github.com/jl-cmd/claude-dev-env/commit/1316a765756d0cc617be9e600b10598b138966b3))
+* **pstack:** validate model routing boundaries ([0b12d04](https://github.com/jl-cmd/claude-dev-env/commit/0b12d04387a7ac65a7da449dd844ac9052163a26))
+
+## [7.6.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.6.0...claude-dev-env-v7.6.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **install:** clean the companion out of the Codex and Cursor hook files too ([81171da](https://github.com/jl-cmd/claude-dev-env/commit/81171da391da081223dfcf1305862ba39243dc20))
+* **install:** register the session-continuity companion during a full install ([1c9d3f4](https://github.com/jl-cmd/claude-dev-env/commit/1c9d3f42e2cc109b387bb9faff35fb45df11c78a))
+* **install:** register the session-continuity hook during a full install ([f4f930c](https://github.com/jl-cmd/claude-dev-env/commit/f4f930cc0c03c6bbe35b31886b66cc140d8d6c1b))
+
+## [7.6.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.5.0...claude-dev-env-v7.6.0) (2026-09-10)
+
+
+### Features
+
+* **install:** seed every packaged pstack model preference file ([1ec4057](https://github.com/jl-cmd/claude-dev-env/commit/1ec40570578afe913b6d211068d575209bb98f6c))
+* **install:** seed the Claude pstack model preferences ([db8fc77](https://github.com/jl-cmd/claude-dev-env/commit/db8fc77c5998acefaa8f03c833a669fdcd23f86f))
+* **policy-lint:** waive test pairing for added imports and keyword arguments ([bad24c0](https://github.com/jl-cmd/claude-dev-env/commit/bad24c07a0a98c463c5b86228d1d50656218b019))
+* **policy-lint:** waive test pairing for added imports and keyword arguments ([cb2ae7d](https://github.com/jl-cmd/claude-dev-env/commit/cb2ae7d8cdbe0f098008d37b5dbc25c49707363e))
+* **policy:** exempt a frozen file from the personal-data scan by path and hash ([1fdce56](https://github.com/jl-cmd/claude-dev-env/commit/1fdce56ca9487c9d311cfb238e62635730b52e47))
+* **policy:** let a repository exempt a frozen file by path and hash ([79d24cc](https://github.com/jl-cmd/claude-dev-env/commit/79d24ccee38a257a7338aa01b6259d3cacb8d6d1))
+
+
+### Bug Fixes
+
+* **hooks:** exempt STEALTH: Keep marker from comment-change check ([8d2c44d](https://github.com/jl-cmd/claude-dev-env/commit/8d2c44d68868d3a0cf18a4d93a15b76dc9e055be))
+* **hooks:** exempt the STEALTH: Keep marker from comment-change detection ([162f1e1](https://github.com/jl-cmd/claude-dev-env/commit/162f1e148b65a3c5d1335653824313474ec39b2c))
+* **hooks:** start every spawned child without a console window on Windows ([5e08959](https://github.com/jl-cmd/claude-dev-env/commit/5e089592f26cd0d59cd0d396bac09a5bc322a3c0))
+* **hooks:** treat a literal string's join() as safe in the constants-only classifier ([84eeb2a](https://github.com/jl-cmd/claude-dev-env/commit/84eeb2afcb588da2f9bc8865d2ed3c6aa475923a))
+* **hooks:** treat a literal string's join() as safe in the constants-only classifier ([f4d707e](https://github.com/jl-cmd/claude-dev-env/commit/f4d707e03cb5044f3fc65be183c060c587b0d902))
+* **hooks:** type the hidden-window startup record on every platform ([8cf7447](https://github.com/jl-cmd/claude-dev-env/commit/8cf7447a0b324e57661b7e79874915e021b6328c))
+* **policy-lint:** exempt test modules from the subprocess-budget rule ([c05d55e](https://github.com/jl-cmd/claude-dev-env/commit/c05d55e62a240a88e42b7534e225e113d7bef103))
+* **policy-lint:** exempt test modules from the subprocess-budget rule ([8af140d](https://github.com/jl-cmd/claude-dev-env/commit/8af140d20d7249bcb47616536307c25975452d43))
+* **policy-lint:** report a long function only when the change touched it ([d67be43](https://github.com/jl-cmd/claude-dev-env/commit/d67be439ed21ce218f69d8fdb6631fec02b6b176))
+* **policy-lint:** scope function-length findings to the functions a change touches ([9e2c268](https://github.com/jl-cmd/claude-dev-env/commit/9e2c26828711c07fb9d9628bb4b23126b413e337))
+* **policy-lint:** skip prose rules on a generated changelog ([f0a6a9d](https://github.com/jl-cmd/claude-dev-env/commit/f0a6a9d790d407d3b4ab9b5369ab102f79004d1c))
+* **policy-lint:** skip prose rules on a generated changelog ([7da53a2](https://github.com/jl-cmd/claude-dev-env/commit/7da53a21f30d953f223751d55e864f9b6d6b9954))
+* **policy:** accept the STEALTH: Keep marker and exempt one frozen evidence path ([6a032d7](https://github.com/jl-cmd/claude-dev-env/commit/6a032d779092154ed495b238000b65b428653904))
+* **policy:** exempt the frozen evidence home path and allow the stealth keep marker ([1ad6536](https://github.com/jl-cmd/claude-dev-env/commit/1ad653630da11889cb3ee33c44016c51fac85dd2))
+
+
+### Documentation
+
+* **hooks:** name the hidden-window shim in four package inventories ([6b14719](https://github.com/jl-cmd/claude-dev-env/commit/6b1471910a687b24ac0b711e36cfb0d5fb266d6c))
+
+
+### Refactoring
+
+* **hooks:** reach the hidden-window helpers through a per-tree shim ([9c8156b](https://github.com/jl-cmd/claude-dev-env/commit/9c8156bbce52498e8fafd92d156ddc26c75da97d))
+
+
+### Style
+
+* **hooks:** drop the noqa markers the import bootstraps did not need ([506082a](https://github.com/jl-cmd/claude-dev-env/commit/506082af676ad0d1ada15e897d9d84112d79cf44))
+* **hooks:** drop the noqa markers the shims never needed ([cc9b84b](https://github.com/jl-cmd/claude-dev-env/commit/cc9b84ba14a451f69e926693c97672a4b8cd6f90))
+
+
+### Tests
+
+* **hooks:** assert every rethreaded spawn hides its console window ([2b6725f](https://github.com/jl-cmd/claude-dev-env/commit/2b6725ff13b93b3892a244dc435b89e4d0783bbe))
+* **hooks:** cover the STEALTH: Keep exempt-comment marker ([9bb0a51](https://github.com/jl-cmd/claude-dev-env/commit/9bb0a513ac5f2dfd781990c35555560bdb7db585))
+* **policy:** pair the shared policy-document move with its behaviour tests ([c531df6](https://github.com/jl-cmd/claude-dev-env/commit/c531df665e35d2fdc95345402cb6dade59df8886))
+
+## [7.5.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.4.1...claude-dev-env-v7.5.0) (2026-09-10)
+
+
+### Features
+
+* **hooks:** advise the MSYS export fix when Git Bash mangles a rev-path argument ([1486a86](https://github.com/jl-cmd/claude-dev-env/commit/1486a8647c590fdbeb51dcf7daf52292c9442ab7))
+* **hooks:** keep Git Bash from converting a &lt;rev&gt;:&lt;path&gt; git argument ([5e232af](https://github.com/jl-cmd/claude-dev-env/commit/5e232afe0ddf718bd208e802b66fe99405fd9710))
+* **hooks:** stop MSYS converting a &lt;rev&gt;:&lt;path&gt; git argument ([8a23051](https://github.com/jl-cmd/claude-dev-env/commit/8a23051a8eaa6b5568b1e32ad078fdea00b8ea9f))
+* **policy-lint:** catch rules prose that credits a hook running nowhere ([3da52c1](https://github.com/jl-cmd/claude-dev-env/commit/3da52c1b7e200ea8e1c6ba81e13a84deb5792753))
+* **policy-lint:** report rules prose that names a hook nothing runs ([7af3dcd](https://github.com/jl-cmd/claude-dev-env/commit/7af3dcd3fbec9151c8cfc1192aa5114ace72d257))
+
+
+### Bug Fixes
+
+* **advisory:** reword the import failure message ([c0c19ee](https://github.com/jl-cmd/claude-dev-env/commit/c0c19ee08cfbe598e37d75c264587f5eb9cf81be))
+* **durable-post-lint:** require only the headings both rule sets name ([00aeda4](https://github.com/jl-cmd/claude-dev-env/commit/00aeda4931031057ef50b9581199bd5c82681ce4)), closes [#1340](https://github.com/jl-cmd/claude-dev-env/issues/1340)
+* **hooks:** keep a quoted git message out of the exclusion export ([6f10dde](https://github.com/jl-cmd/claude-dev-env/commit/6f10dde4990bed275b65f33e220250466b6e874e))
+* **hooks:** widen the MSYS quiet branch to both workaround variables ([75cff7a](https://github.com/jl-cmd/claude-dev-env/commit/75cff7a6b8ff9c940a115f54d7b8cc67c1a55ec3))
+* **msys-advisor:** walk both git mangled-argument markers ([50d4523](https://github.com/jl-cmd/claude-dev-env/commit/50d45234869fb2fbc04438c8a5cdf71b7cc9695c))
+* **policy-lint:** exempt the Bash PreToolUse dispatcher from the boundary check ([f6dd63b](https://github.com/jl-cmd/claude-dev-env/commit/f6dd63b1daef064c4e5f5e0cb73ddc1b09ef6f66))
+* **policy-lint:** let a binary file block its own item, not the run ([0c6c2a4](https://github.com/jl-cmd/claude-dev-env/commit/0c6c2a4c71098260b35535104d7b2d55bf611014))
+
+
+### Documentation
+
+* **rules:** add stacked PR and verification lessons from a stack rebuild ([55c610e](https://github.com/jl-cmd/claude-dev-env/commit/55c610e57da23d6c030c75f2b965e0d819e6ee35))
+* **rules:** add stacked PR and verification lessons from a stack rebuild ([14fffde](https://github.com/jl-cmd/claude-dev-env/commit/14fffde238a648f2f31c63d2184fec0b54e8e332))
+* **rules:** correct hook claims for gates that no longer run ([7ef75fa](https://github.com/jl-cmd/claude-dev-env/commit/7ef75fabb6bd7164fe94788c794ac621d7c5bf2a))
+* **rules:** correct the Bash hook count and the trigger wording ([184b641](https://github.com/jl-cmd/claude-dev-env/commit/184b6413d64f9b58667724d8f1dac6912cd796e5))
+* **rules:** drop a banned word from the git-workflow port ([f7eceae](https://github.com/jl-cmd/claude-dev-env/commit/f7eceaed895426c1cc747f60d83209d48aa0b058))
+* **rules:** record the PreToolUse rewriter beside the advisory ([ec6b164](https://github.com/jl-cmd/claude-dev-env/commit/ec6b164dd5c749035b701d345079e9af6d8c3d15))
+* **rules:** replace retired hook claims with what runs now ([02c31fa](https://github.com/jl-cmd/claude-dev-env/commit/02c31faf5adc4960ccb1cef2f17f3b95d458c61e))
+* **rules:** replace the retired Bash gate with the MSYS advisory ([f14471d](https://github.com/jl-cmd/claude-dev-env/commit/f14471dbd13f7a533967aad97fc00e6870cc7a0a))
+
+
+### Maintenance
+
+* **hooks:** delete four constants files no hook loads ([9010a97](https://github.com/jl-cmd/claude-dev-env/commit/9010a979c8449ce757a4417408ed5aed681efa7e))
+* **hooks:** remove constants modules for retired hooks ([b4f77e5](https://github.com/jl-cmd/claude-dev-env/commit/b4f77e58122286a236d352cda69a741075ef8316))
+
+
+### Refactoring
+
+* **advisory:** extract the MSYS mangling-mark predicate ([2699b8b](https://github.com/jl-cmd/claude-dev-env/commit/2699b8b37e4f28c9cf7b7525432d55a808575e7e))
+* **hooks-constants:** drop the MSYS export building block from __all__ ([054685e](https://github.com/jl-cmd/claude-dev-env/commit/054685e602296e9a0d4631818a733744ecc2087f))
+* **hooks:** give the PostToolUse output contract one home ([827236f](https://github.com/jl-cmd/claude-dev-env/commit/827236fbb62ac3b002d24090ce87750c92754609))
+* **hooks:** share one PostToolUse context emitter ([e37002a](https://github.com/jl-cmd/claude-dev-env/commit/e37002afda159311d900a6dd00a03eaad01a38f3))
+* **hooks:** tighten the MSYS advisory constants surface ([e6952d8](https://github.com/jl-cmd/claude-dev-env/commit/e6952d8d59f1d440d427ebe4ca7584b2c9ae9c2e))
+
+
+### Tests
+
+* **advisory:** pin the MSYS mangling-mark predicate ([a31b387](https://github.com/jl-cmd/claude-dev-env/commit/a31b387e8e46dca61c9c98ad38a92f5efdcac535))
+* **durable-post-lint:** drop the heading cases the checker cannot read ([44ccc1f](https://github.com/jl-cmd/claude-dev-env/commit/44ccc1f6259fa1b980107e0e5842a95866e5b49b))
+* **durable-post-lint:** pin the PR headings both rule sets name ([5791e06](https://github.com/jl-cmd/claude-dev-env/commit/5791e06907e5bd98016112dba297d09bc1c3baaa)), closes [#1340](https://github.com/jl-cmd/claude-dev-env/issues/1340)
+* **hooks:** carry the roster addition into the dispatcher tests ([e7a066e](https://github.com/jl-cmd/claude-dev-env/commit/e7a066e5daba67edd4ad40d5b45dfc72beadde56))
+* **hooks:** pin a quoted git message out of the exclusion prefixes ([189efb6](https://github.com/jl-cmd/claude-dev-env/commit/189efb696f4005d652259330112b6ffe2188b441))
+* **hooks:** pin the MSYS &lt;rev&gt;:&lt;path&gt; PreToolUse rewriter ([084d798](https://github.com/jl-cmd/claude-dev-env/commit/084d7985a7e29fb69310c4b3653d4196800981b8))
+* **hooks:** pin the MSYS path-conversion advisory contract ([3646312](https://github.com/jl-cmd/claude-dev-env/commit/36463127e17224b496ce088e4ca1c656b552d1cb))
+* **hooks:** pin the quiet branch for the argument-exclusion export ([aa72bd7](https://github.com/jl-cmd/claude-dev-env/commit/aa72bd7506d60f979158393b5c15f996f089b861))
+* **msys-advisor:** pin the invalid-object-name mangling fingerprint ([109e81a](https://github.com/jl-cmd/claude-dev-env/commit/109e81a750b1cf085f917cf4a596d4373d9c2b0c))
+
 ## [7.4.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.4.0...claude-dev-env-v7.4.1) (2026-09-09)
 
 

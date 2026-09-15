@@ -39,6 +39,8 @@ from process_tree_scripts_constants.process_tree_kill_constants import (  # noqa
     WINDOWS_TASKKILL_TREE_FLAG,
 )
 
+from subprocess_window_access import hidden_window_creation_flags
+
 process_tree_subprocess_run = subprocess.run
 
 
@@ -73,6 +75,7 @@ def _kill_windows_process_tree(process_identifier: int) -> None:
             stderr=subprocess.DEVNULL,
             check=False,
             timeout=PROCESS_TREE_KILL_TIMEOUT_SECONDS,
+            creationflags=hidden_window_creation_flags(),
         )
     except (subprocess.TimeoutExpired, OSError):
         return

@@ -119,3 +119,40 @@ def test_malformed_config_stops_scanning(tmp_path: Path, content: str) -> None:
 
 def test_missing_config_has_no_exemptions(tmp_path: Path) -> None:
     assert load_email_exemptions(tmp_path) == frozenset()
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {"version": 1},
+        {
+            "version": 1,
+            "path_exemptions": [
+                {
+                    "path": "evidence/manifest.json",
+                    "sha256": DIGEST,
+                    "reason": "Frozen evidence file pinned by its consumers",
+                }
+            ],
+        },
+    ],
+)
+def test_document_without_the_email_list_loads_no_email_exemptions(
+    tmp_path: Path, document: dict[str, object]
+) -> None:
+    """A document may carry the other family, or no exception list at all."""
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "repository-policy.json").write_text(
+        json.dumps(document), encoding="utf-8"
+    )
+    assert load_email_exemptions(tmp_path) == frozenset()
+
+
+def test_reason_rejection_names_the_ownership_requirement(tmp_path: Path) -> None:
+    _write_config(tmp_path, [_entry(reason=" ")])
+    with pytest.raises(ValueError) as rejection:
+        load_email_exemptions(tmp_path)
+    assert (
+        str(rejection.value)
+        == "Email exemption reason must explain why the exception is owned"
+    )

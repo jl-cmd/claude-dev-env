@@ -9,6 +9,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+from hooks_constants.subprocess_window import hidden_window_creation_flags
+
 _validators_directory = str(Path(__file__).resolve().parent)
 _hooks_directory = str(Path(__file__).resolve().parent.parent)
 
@@ -66,6 +68,7 @@ def check_mypy_available() -> bool:
             check=False,
             capture_output=True,
             text=True,
+            creationflags=hidden_window_creation_flags(),
         )
         return result.returncode == 0
     except FileNotFoundError:
@@ -224,6 +227,7 @@ def _run_mypy_subprocess(
                 text=True,
                 cwd=working_directory,
                 timeout=timeout_seconds,
+                creationflags=hidden_window_creation_flags(),
             )
         except subprocess.TimeoutExpired:
             logger.warning(detached_timeout_skip_message)

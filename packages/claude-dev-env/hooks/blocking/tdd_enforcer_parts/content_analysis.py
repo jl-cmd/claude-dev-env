@@ -30,6 +30,10 @@ def _safe_constant_attribute_calls() -> frozenset[tuple[str, str]]:
     return frozenset({("re", "compile")})
 
 
+def _safe_string_literal_methods() -> frozenset[str]:
+    return frozenset({"join"})
+
+
 def _node_is_unsafe_construct(subnode: ast.AST) -> bool:
     return isinstance(
         subnode,
@@ -37,7 +41,18 @@ def _node_is_unsafe_construct(subnode: ast.AST) -> bool:
     )
 
 
+def _is_safe_string_literal_method_call(function_node: ast.Attribute) -> bool:
+    receiver = function_node.value
+    return (
+        isinstance(receiver, ast.Constant)
+        and isinstance(receiver.value, str)
+        and function_node.attr in _safe_string_literal_methods()
+    )
+
+
 def _attribute_call_is_unsafe(function_node: ast.Attribute) -> bool:
+    if _is_safe_string_literal_method_call(function_node):
+        return False
     if not isinstance(function_node.value, ast.Name):
         return True
     pair = (function_node.value.id, function_node.attr)
@@ -56,9 +71,10 @@ def _call_is_unsafe(call_node: ast.Call) -> bool:
 def _rhs_has_unsafe_call(rhs_node: ast.AST) -> bool:
     """Return True when a constant's value contains a non-allowlisted call.
 
-    Safe calls are value constructors (``Path(...)``, ``re.compile(...)``) that
-    build objects without side effects; any other call or a comprehension reads
-    as import-time behavior.
+    Safe calls are value constructors (``Path(...)``, ``re.compile(...)``) and
+    a pure string-literal method call (``"|".join(...)``) that build objects
+    without side effects; any other call or a comprehension reads as
+    import-time behavior.
 
     Args:
         rhs_node: The assignment's right-hand-side expression node.

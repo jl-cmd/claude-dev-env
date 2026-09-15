@@ -9,6 +9,8 @@ import stat
 import subprocess
 from pathlib import Path
 
+from subprocess_window_access import hidden_window_creation_flags
+
 git_directory_name = ".git"
 git_listing_commands = (
     (("git", "ls-files", "--stage", "-z"), True),
@@ -32,6 +34,7 @@ def _read_git_paths_and_modes(
             cwd=repository_root,
             capture_output=True,
             check=True,
+            creationflags=hidden_window_creation_flags(),
         )
         for each_record in completed_process.stdout.split(b"\0"):
             if not each_record:
