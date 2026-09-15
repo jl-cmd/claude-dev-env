@@ -111,6 +111,38 @@ test('Codex preferences skip an excluded pair in a panel', () => {
     }
 });
 
+test('selector exclusions remove Sol Medium before its Luna remap enters a panel', () => {
+    const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-sol-exclusion-'));
+    try {
+        writeHostPreferences(preferencesDirectory, 'codex', {
+            'how critics': [
+                { model: ' Sol ', effort: 'Medium' },
+                { model: 'gpt-5.6-sol', effort: 'medium' },
+                { model: 'gpt-5.6-luna', effort: 'high' },
+                { model: 'gpt-6-astra', effort: 'medium' },
+            ],
+        });
+        const selection = selectWithPreferences(preferencesDirectory, {
+            role: 'how critics',
+            panel: { agentCount: 2, requiresDistinctModels: true },
+            availableModelIds: ['gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-6-astra'],
+            confirmedSuitableModelIds: ['gpt-5.6-sol'],
+        });
+        assert.equal(selection.canDelegate, true);
+        assert.deepEqual(selection.panel.selectedModelPairs, [
+            { model: 'gpt-5.6-luna', effort: 'high' },
+            { model: 'gpt-6-astra', effort: 'medium' },
+        ]);
+        assert.deepEqual(selection.nativeSpawnArguments, {
+            model: 'gpt-5.6-luna',
+            reasoning_effort: 'high',
+        });
+        assert.deepEqual(selection.routingDiagnostics, []);
+    } finally {
+        rmSync(preferencesDirectory, { recursive: true, force: true });
+    }
+});
+
 test('a foreign host reads only its own saved preferences', () => {
     const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-host-'));
     try {
@@ -555,6 +587,23 @@ test('a model-only preference holds when the host supplies no usable effort', ()
         const selection = selectWithPreferences(preferencesDirectory, {
             requestedEffort: undefined,
             availableModelIds: ['gpt-5.6-terra'],
+        });
+        assert.equal(selection.canDelegate, false);
+        assert.match(selection.failure, /effort is required for this model/);
+    } finally {
+        rmSync(preferencesDirectory, { recursive: true, force: true });
+    }
+});
+
+test('a model-only Sol preference holds when no Sol effort remains approved', () => {
+    const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-routing-sol-missing-effort-'));
+    try {
+        writeHostPreferences(preferencesDirectory, 'codex', {
+            'feature, refactoring': ['Sol'],
+        });
+        const selection = selectWithPreferences(preferencesDirectory, {
+            requestedEffort: undefined,
+            availableModelIds: ['gpt-5.6-sol', 'gpt-5.6-luna'],
         });
         assert.equal(selection.canDelegate, false);
         assert.match(selection.failure, /effort is required for this model/);

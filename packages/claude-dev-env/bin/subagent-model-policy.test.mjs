@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -35,6 +35,7 @@ const replacements = [
     [['Luna', 'low'], ['gpt-5.6-luna', 'high']],
     [['Luna', 'medium'], ['gpt-5.6-luna', 'high']],
     [['Sol', 'low'], ['gpt-5.6-luna', 'xhigh']],
+    [['Sol', 'medium'], ['gpt-5.6-luna', 'xhigh']],
     [['Terra', 'low'], ['gpt-5.6-luna', 'xhigh']],
     [['Terra', 'medium'], ['gpt-5.6-luna', 'xhigh']],
     [['Terra', 'high'], ['gpt-5.6-luna', 'xhigh']],
@@ -59,7 +60,6 @@ test('every approved pair returns its literal native pair', () => {
         [['Luna', 'high'], ['gpt-5.6-luna', 'high']],
         [['Luna', 'xhigh'], ['gpt-5.6-luna', 'xhigh']],
         [['Luna', 'max'], ['gpt-5.6-luna', 'max']],
-        [['Sol', 'medium'], ['gpt-5.6-sol', 'medium']],
         [['Astra', 'low'], ['gpt-6-astra', 'low']],
         [['Astra', 'medium'], ['gpt-6-astra', 'medium']],
     ];
@@ -67,6 +67,9 @@ test('every approved pair returns its literal native pair', () => {
         const result = route({ model, reasoning_effort: effort });
         assert.ok(['pass', 'remapped'].includes(result.status));
         assert.deepEqual(result.selected, { model: expectedModel, effort: expectedEffort });
+        const nativeRoute = route({ model: expectedModel, reasoning_effort: expectedEffort });
+        assert.equal(nativeRoute.status, 'pass');
+        assert.deepEqual(nativeRoute.selected, { model: expectedModel, effort: expectedEffort });
     }
     const advisor = advisorRoute({
         model: 'Astra',
@@ -77,12 +80,12 @@ test('every approved pair returns its literal native pair', () => {
     assert.deepEqual(advisor.selected, { model: 'gpt-6-astra', effort: 'high' });
 });
 
-test('selector exclusions leave direct Sol Medium routing valid', () => {
+test('selector exclusions keep Sol Medium out while direct routing remaps', () => {
     const policy = loadSubagentModelPolicy();
     assert.equal(policy.selectorExclusions.has('sol/medium'), true);
     const result = route({ model: 'Sol', reasoning_effort: 'medium' });
-    assert.ok(['pass', 'remapped'].includes(result.status));
-    assert.deepEqual(result.selected, { model: 'gpt-5.6-sol', effort: 'medium' });
+    assert.equal(result.status, 'remapped');
+    assert.deepEqual(result.selected, { model: 'gpt-5.6-luna', effort: 'xhigh' });
 
     const rawPolicy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
     rawPolicy.selectorExclusions = [{ model: 'missing', effort: 'medium' }];
@@ -174,11 +177,39 @@ test('the advisor bridge blocks malformed input', () => {
     );
 });
 
+test('the advisor bridge routes Sol Medium to Luna Xhigh', () => {
+    const bridgePath = join(PACKAGE_ROOT, 'scripts', 'resolve_advisor_model_route.mjs');
+    const bridgeExecution = spawnSync(
+        process.execPath,
+        [bridgePath],
+        {
+            encoding: 'utf8',
+            input: JSON.stringify({ model: 'Sol', reasoning_effort: 'medium' }),
+        },
+    );
+    assert.equal(bridgeExecution.status, 0);
+    assert.equal(bridgeExecution.stderr, '');
+    const advisorDecision = JSON.parse(bridgeExecution.stdout);
+    assert.equal(advisorDecision.status, 'remapped');
+    assert.equal(advisorDecision.role, 'advisor');
+    assert.equal(advisorDecision.diagnostic, null);
+    assert.deepEqual(advisorDecision.selected, { model: 'gpt-5.6-luna', effort: 'xhigh' });
+});
+
 test('missing worker settings preserve parent inheritance', () => {
     const input = { message: 'keep', agent_type: 'worker' };
     const result = routeSubagentToolInput(input);
     assert.equal(result.status, 'inherited');
     assert.strictEqual(result.updatedInput, input);
+});
+
+test('Sol without an effort stays blocked after its only approved pair is removed', () => {
+    const result = route(
+        { model: 'Sol' },
+        { allowMissingEffort: true },
+    );
+    assert.equal(result.status, 'blocked');
+    assert.equal(result.diagnostic, 'effort is required for this model');
 });
 
 test('unknown input holds with a short diagnostic', () => {
@@ -201,16 +232,16 @@ test('native values with case or whitespace differences are canonicalized', () =
     });
     assert.equal(result.status, 'remapped');
     assert.deepEqual(result.updatedInput, {
-        model: 'gpt-5.6-sol',
-        reasoning_effort: 'medium',
+        model: 'gpt-5.6-luna',
+        reasoning_effort: 'xhigh',
         message: 'keep',
     });
 });
 
 test('unavailable replacements hold the spawn', () => {
     const result = route(
-        { model: 'Terra', reasoning_effort: 'medium' },
-        { availableModelIds: ['gpt-5.6-terra'] },
+        { model: 'Sol', reasoning_effort: 'medium' },
+        { availableModelIds: ['gpt-5.6-sol'] },
     );
     assert.equal(result.status, 'blocked');
     assert.match(result.diagnostic, /replacement model is unavailable/);
@@ -246,7 +277,7 @@ test('the tool route copies every non-routing field', () => {
 
 test('a second route pass is idempotent', () => {
     const first = routeSubagentToolInput(
-        { model: 'Terra', reasoning_effort: 'medium', message: 'keep' },
+        { model: 'Sol', reasoning_effort: 'medium', message: 'keep' },
         {},
     );
     const second = routeSubagentToolInput(first.updatedInput);
@@ -261,17 +292,22 @@ test('a temporary policy copy changes the next route without source edits', () =
         const temporaryPolicy = join(temporaryRoot, 'policy.json');
         const sourceText = readFileSync(POLICY_SOURCE, 'utf8');
         const policy = JSON.parse(sourceText);
+        writeFileSync(temporaryPolicy, sourceText);
+        assert.deepEqual(route(
+            { model: 'Sol', reasoning_effort: 'medium' },
+            { policyPath: temporaryPolicy },
+        ).selected, { model: 'gpt-5.6-luna', effort: 'xhigh' });
         policy.replacements = policy.replacements.map(replacement => (
-            replacement.requested.model === 'terra' && replacement.requested.effort === 'medium'
+            replacement.requested.model === 'sol' && replacement.requested.effort === 'medium'
                 ? { ...replacement, selected: { model: 'luna', effort: 'max' } }
                 : replacement
         ));
         writeFileSync(temporaryPolicy, JSON.stringify(policy));
-        const result = route(
-            { model: 'Terra', reasoning_effort: 'medium' },
+        const updatedRoute = route(
+            { model: 'Sol', reasoning_effort: 'medium' },
             { policyPath: temporaryPolicy },
         );
-        assert.deepEqual(result.selected, { model: 'gpt-5.6-luna', effort: 'max' });
+        assert.deepEqual(updatedRoute.selected, { model: 'gpt-5.6-luna', effort: 'max' });
         assert.equal(readFileSync(POLICY_SOURCE, 'utf8'), sourceText);
     } finally {
         rmSync(temporaryRoot, { recursive: true, force: true });
@@ -347,10 +383,11 @@ test('model names cannot collide after normalization', () => {
 
 test('combined role routes must end at an approved terminal pair', () => {
     const policy = JSON.parse(readFileSync(POLICY_SOURCE, 'utf8'));
-    policy.replacements.push({
-        requested: { model: 'sol', effort: 'medium' },
-        selected: { model: 'astra', effort: 'low' },
-    });
+    const solMediumReplacement = policy.replacements.find(replacement => (
+        replacement.requested.model === 'sol'
+        && replacement.requested.effort === 'medium'
+    ));
+    solMediumReplacement.selected = { model: 'astra', effort: 'low' };
     policy.roleReplacements.push({
         role: 'worker',
         requested: { model: 'astra', effort: 'low' },

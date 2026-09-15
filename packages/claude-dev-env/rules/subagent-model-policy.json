@@ -53,7 +53,6 @@
     {"model": "luna", "effort": "high"},
     {"model": "luna", "effort": "xhigh"},
     {"model": "luna", "effort": "max"},
-    {"model": "sol", "effort": "medium"},
     {"model": "astra", "effort": "low"},
     {"model": "astra", "effort": "medium"},
     {"model": "astra", "effort": "high", "roles": ["advisor"]}
@@ -66,6 +65,7 @@
     {"requested": {"model": "luna", "effort": "low"}, "selected": {"model": "luna", "effort": "high"}},
     {"requested": {"model": "luna", "effort": "medium"}, "selected": {"model": "luna", "effort": "high"}},
     {"requested": {"model": "sol", "effort": "low"}, "selected": {"model": "luna", "effort": "xhigh"}},
+    {"requested": {"model": "sol", "effort": "medium"}, "selected": {"model": "luna", "effort": "xhigh"}},
     {"requested": {"model": "terra", "effort": "low"}, "selected": {"model": "luna", "effort": "xhigh"}},
     {"requested": {"model": "terra", "effort": "medium"}, "selected": {"model": "luna", "effort": "xhigh"}},
     {"requested": {"model": "terra", "effort": "high"}, "selected": {"model": "luna", "effort": "xhigh"}},
