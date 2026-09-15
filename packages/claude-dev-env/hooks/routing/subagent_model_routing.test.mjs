@@ -11,7 +11,7 @@ function buildHookPayload(toolInput, metadata = {}) {
     return { tool_name: targetToolName, tool_input: toolInput, ...metadata };
 }
 
-test('remaps Sol Medium to Luna Xhigh', () => {
+test('remaps Sol Medium to Luna Max', () => {
     const hookResponse = buildSubagentModelRoutingResponse(buildHookPayload({
         model: 'Sol',
         reasoning_effort: 'Medium',
@@ -20,7 +20,7 @@ test('remaps Sol Medium to Luna Xhigh', () => {
     assert.equal(hookResponse.hookSpecificOutput.updatedInput.model, 'gpt-5.6-luna');
     assert.equal(
         hookResponse.hookSpecificOutput.updatedInput.reasoning_effort,
-        'xhigh',
+        'max',
     );
 });
 
@@ -41,7 +41,7 @@ test('emits only the allow response shape after a remap', () => {
         permissionDecision: 'allow',
         updatedInput: {
             model: 'gpt-5.6-luna',
-            reasoning_effort: 'xhigh',
+            reasoning_effort: 'max',
         },
     });
 });
@@ -64,7 +64,7 @@ test('preserves every non-routing tool field', () => {
         child_permissions: { shell: 'ask' },
         output_contract: ['summary'],
         model: 'gpt-5.6-luna',
-        reasoning_effort: 'xhigh',
+        reasoning_effort: 'max',
     });
     assert.deepEqual(toolInput, {
         assignment: 'preserve',
@@ -123,7 +123,7 @@ test('blocks malformed policy, unknown input, unavailable replacement, and untru
 });
 
 for (const [eachModel, eachEffort, eachSelectedModel, eachSelectedEffort] of [
-    ['Sol', 'medium', 'gpt-5.6-luna', 'xhigh'],
+    ['Sol', 'medium', 'gpt-5.6-luna', 'max'],
     ['Astra', 'high', 'gpt-6-astra', 'high'],
 ]) {
     test(`allows a trusted session advisor requesting ${eachModel} ${eachEffort}`, () => {
@@ -172,7 +172,7 @@ test('the standalone hook silently remaps native Sol Medium and preserves other 
             permissionDecision: 'allow',
             updatedInput: {
                 model: 'gpt-5.6-luna',
-                effort: 'xhigh',
+                effort: 'max',
                 message: 'keep',
                 child_permissions: { shell: 'ask' },
                 output_contract: ['summary'],
@@ -249,7 +249,7 @@ test('keeps a second routing pass unchanged', () => {
     assert.deepEqual(secondResponse, {});
     assert.deepEqual(firstResponse.hookSpecificOutput.updatedInput, {
         model: 'gpt-5.6-luna',
-        reasoning_effort: 'xhigh',
+        reasoning_effort: 'max',
         message: 'keep',
     });
 });

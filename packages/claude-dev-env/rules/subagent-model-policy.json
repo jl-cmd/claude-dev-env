@@ -65,7 +65,7 @@
     {"requested": {"model": "luna", "effort": "low"}, "selected": {"model": "luna", "effort": "high"}},
     {"requested": {"model": "luna", "effort": "medium"}, "selected": {"model": "luna", "effort": "high"}},
     {"requested": {"model": "sol", "effort": "low"}, "selected": {"model": "luna", "effort": "xhigh"}},
-    {"requested": {"model": "sol", "effort": "medium"}, "selected": {"model": "luna", "effort": "xhigh"}},
+    {"requested": {"model": "sol", "effort": "medium"}, "selected": {"model": "luna", "effort": "max"}},
     {"requested": {"model": "terra", "effort": "low"}, "selected": {"model": "luna", "effort": "xhigh"}},
     {"requested": {"model": "terra", "effort": "medium"}, "selected": {"model": "luna", "effort": "xhigh"}},
     {"requested": {"model": "terra", "effort": "high"}, "selected": {"model": "luna", "effort": "xhigh"}},
