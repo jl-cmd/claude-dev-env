@@ -6,8 +6,16 @@ function blockedRoute(diagnostic) {
     return { status: 'blocked', diagnostic };
 }
 
-function isObject(value) {
-    return value !== null && typeof value === 'object' && !Array.isArray(value);
+function isObject(objectCandidate) {
+    return objectCandidate !== null && typeof objectCandidate === 'object' && !Array.isArray(objectCandidate);
+}
+
+function validatePolicyPath(input) {
+    if (!Object.hasOwn(input, 'policyPath')) return null;
+    if (typeof input.policyPath !== 'string' || input.policyPath.trim() === '') {
+        return 'advisor route policyPath must be a non-empty string';
+    }
+    return null;
 }
 
 let input;
@@ -24,17 +32,20 @@ if (input !== undefined) {
     if (!isObject(input)) {
         routingDecision = blockedRoute('advisor route input must be an object');
     } else {
-        routingDecision = resolveSubagentModelRoute({
-            agent_type: 'session-advisor',
-            ...(input.model !== undefined && input.model !== null ? { model: input.model } : {}),
-            ...(input.reasoning_effort !== undefined ? { reasoning_effort: input.reasoning_effort } : {}),
-        }, {
-            policyPath: input.policyPath,
-            trustedSessionMetadata: {
-                authorized: true,
-                registeredAgentType: 'session-advisor',
-            },
-        });
+        const routingInputIssue = validatePolicyPath(input);
+        routingDecision = routingInputIssue
+            ? blockedRoute(routingInputIssue)
+            : resolveSubagentModelRoute({
+                agent_type: 'session-advisor',
+                ...(input.model !== undefined && input.model !== null ? { model: input.model } : {}),
+                ...(input.reasoning_effort !== undefined ? { reasoning_effort: input.reasoning_effort } : {}),
+            }, {
+                policyPath: input.policyPath,
+                trustedSessionMetadata: {
+                    authorized: true,
+                    registeredAgentType: 'session-advisor',
+                },
+            });
     }
     process.stdout.write(JSON.stringify(routingDecision));
     if (routingDecision.status === 'blocked') process.exitCode = 1;

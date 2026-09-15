@@ -280,6 +280,63 @@ test('parent inheritance omits the native model argument', () => {
     }
 });
 
+test('parent inheritance rejects an explicit preference effort', () => {
+    const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-parent-effort-'));
+    try {
+        writeHostPreferences(preferencesDirectory, 'codex', {
+            'feature, refactoring': [{ model: 'auto', effort: 'medium' }],
+        });
+        const selection = selectWithPreferences(preferencesDirectory, {
+            availableModelIds: [],
+            parentFallback: {
+                isAllowed: true,
+                hasMaterialCapabilityLoss: false,
+            },
+        });
+        assert.equal(selection.canDelegate, false);
+        assert.equal(selection.failure, 'model-routing-failed: parent inheritance cannot set an effort');
+        assert.deepEqual(selection.panel.selectedModelIds, []);
+        assert.deepEqual(selection.nativeSpawnArguments, {});
+    } finally {
+        rmSync(preferencesDirectory, { recursive: true, force: true });
+    }
+});
+
+test('selector rejects policy-defined inheritance aliases in model inventories', () => {
+    const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-inventory-alias-'));
+    try {
+        assert.throws(
+            () => selectWithPreferences(preferencesDirectory, {
+                availableModelIds: ['auto'],
+                confirmedSuitableModelIds: ['auto'],
+                parentFallback: {
+                    isAllowed: true,
+                    hasMaterialCapabilityLoss: false,
+                },
+            }),
+            /confirmed suitable model ids must contain native model ids/,
+        );
+        const policy = JSON.parse(readFileSync(defaultSubagentModelPolicyPath(), 'utf8'));
+        policy.inheritanceAliases = ['custom-parent'];
+        const policyPath = join(preferencesDirectory, 'subagent-model-policy.json');
+        writeFileSync(policyPath, JSON.stringify(policy));
+        assert.throws(
+            () => selectWithPreferences(preferencesDirectory, {
+                availableModelIds: ['custom-parent'],
+                confirmedSuitableModelIds: [],
+                parentFallback: {
+                    isAllowed: true,
+                    hasMaterialCapabilityLoss: false,
+                },
+                policyPath,
+            }),
+            /available model ids must contain native model ids/,
+        );
+    } finally {
+        rmSync(preferencesDirectory, { recursive: true, force: true });
+    }
+});
+
 test('material capability loss requires a user choice before inheritance', () => {
     const preferencesDirectory = mkdtempSync(join(tmpdir(), 'pstack-parent-loss-'));
     try {

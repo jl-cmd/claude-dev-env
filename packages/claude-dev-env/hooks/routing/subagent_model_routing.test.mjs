@@ -178,7 +178,7 @@ test('payload advisor metadata cannot grant advisory authorization', () => {
     );
 });
 
-test('the installed command blocks an advisor without host metadata', () => {
+test('the standalone hook command blocks an advisor without host metadata', () => {
     const output = execFileSync(
         process.execPath,
         [fileURLToPath(new URL('./subagent_model_routing.mjs', import.meta.url))],

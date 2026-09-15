@@ -38,3 +38,14 @@ test('advisor bridge blocks non-object input', () => {
         diagnostic: 'advisor route input must be an object',
     });
 });
+
+test('advisor bridge blocks invalid policy paths', () => {
+    for (const policyPath of [null, {}, '']) {
+        const bridgeRun = runBridge(JSON.stringify({ policyPath }));
+        assert.equal(bridgeRun.status, 1);
+        assert.deepEqual(JSON.parse(bridgeRun.stdout), {
+            status: 'blocked',
+            diagnostic: 'advisor route policyPath must be a non-empty string',
+        });
+    }
+});

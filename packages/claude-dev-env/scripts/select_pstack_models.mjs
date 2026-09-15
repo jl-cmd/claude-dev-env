@@ -53,6 +53,7 @@ export function selectPstackDelegation(input) {
         ? { ...input, requestedEffort: hostPreferences.defaultEffort }
         : input;
     const selectionPolicy = loadSelectionPolicy(input);
+    if (selectionPolicy.policy) validateModelIdInventories(input, selectionPolicy.policy);
     const { allCandidates, routingFailures } = collectCandidates(
         routingInput,
         hostPreferences.modelsByRole[routingInput.role] ?? [],
@@ -123,6 +124,18 @@ function validateConfirmedModels(input) {
         eachModelId => !allAvailableModelIds.has(eachModelId),
     )) {
         throw new Error('confirmed suitable models must be available');
+    }
+}
+
+function validateModelIdInventories(input, policy) {
+    const inventories = [
+        ['confirmed suitable model ids', input.confirmedSuitableModelIds],
+        ['available model ids', input.availableModelIds],
+    ];
+    for (const [label, modelIds] of inventories) {
+        if (modelIds.some(eachModelId => policy.inheritanceAliases.has(eachModelId.trim().toLowerCase()))) {
+            throw new Error(label + ' must contain native model ids');
+        }
     }
 }
 
@@ -228,6 +241,10 @@ function preferenceCandidate(
     const { modelId, effort } = resolvedEntry;
     if (isSelectorPairExcluded(modelId, effort, policy)) return null;
     if (policy.inheritanceAliases.has(modelId.trim().toLowerCase())) {
+        if (effort !== null) {
+            routingFailures.push('parent inheritance cannot set an effort');
+            return null;
+        }
         return input.parentFallback.isAllowed ? parentCandidate() : null;
     }
     if (input.host !== 'codex') {
@@ -279,11 +296,11 @@ function parentCandidate() {
 }
 
 function resolvePreferenceEntry(preferenceEntry, input, policy = null) {
-    const modelValue = typeof preferenceEntry === 'string'
+    const preferenceModel = typeof preferenceEntry === 'string'
         ? preferenceEntry
         : preferenceEntry?.modelId ?? preferenceEntry?.model;
-    const isInheritanceAlias = typeof modelValue === 'string'
-        && policy?.inheritanceAliases.has(modelValue.trim().toLowerCase());
+    const isInheritanceAlias = typeof preferenceModel === 'string'
+        && policy?.inheritanceAliases.has(preferenceModel.trim().toLowerCase());
     const fallbackEffort = isInheritanceAlias ? null : input.requestedEffort ?? null;
     if (typeof preferenceEntry === 'string' && preferenceEntry !== '') {
         return { modelId: preferenceEntry, effort: fallbackEffort, error: null };
