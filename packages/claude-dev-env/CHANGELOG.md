@@ -1,5 +1,20 @@
 # Changelog
 
+## [7.7.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.7.0...claude-dev-env-v7.7.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* map Sol Medium to Luna Max ([2132cff](https://github.com/jl-cmd/claude-dev-env/commit/2132cff0f759a9ffb69204307df58b7152192e14))
+* **pstack:** enforce Sol Medium routing ([e7d926a](https://github.com/jl-cmd/claude-dev-env/commit/e7d926a4a6cb7bdc2abc4f7d7a50cc314d37fabf))
+* **pstack:** route Sol Medium to Luna Max ([bbc5ecd](https://github.com/jl-cmd/claude-dev-env/commit/bbc5ecd9676eeb672430b78b4f0e42bc89c71eb0))
+* **pstack:** route Sol Medium to Luna Xhigh ([65ee03c](https://github.com/jl-cmd/claude-dev-env/commit/65ee03c62e2aca45c0a433659814b9f77ba6cdfa))
+
+
+### Documentation
+
+* **e-code-review:** put python in front of the code-rules gate call ([2c5fa80](https://github.com/jl-cmd/claude-dev-env/commit/2c5fa80048796f4f046820dbba70bbe194713729))
+
 ## [7.7.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.6.1...claude-dev-env-v7.7.0) (2026-09-15)
 
 
