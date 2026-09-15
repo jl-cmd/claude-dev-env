@@ -46,7 +46,8 @@
       "theme-prompt-generator",
       "translator"
     ],
-    "advisor": ["advisor", "session-advisor", "team-advisor", "code-advisor"]
+    "advisor": ["advisor", "session-advisor", "team-advisor", "code-advisor"],
+    "trustedAdvisor": ["session-advisor", "team-advisor", "code-advisor"]
   },
   "approvedPairs": [
     {"model": "luna", "effort": "high"},
@@ -56,6 +57,9 @@
     {"model": "astra", "effort": "low"},
     {"model": "astra", "effort": "medium"},
     {"model": "astra", "effort": "high", "roles": ["advisor"]}
+  ],
+  "selectorExclusions": [
+    {"model": "sol", "effort": "medium"}
   ],
   "advisorDefault": {"model": "astra", "effort": "medium"},
   "replacements": [

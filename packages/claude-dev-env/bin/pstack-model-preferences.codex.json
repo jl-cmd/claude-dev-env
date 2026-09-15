@@ -1,5 +1,6 @@
 {
     "host": "codex",
+    "defaultEffort": "medium",
     "modelsByRole": {
         "feature, refactoring": ["gpt-5.6-sol"],
         "bug-fix": ["gpt-5.6-sol"],

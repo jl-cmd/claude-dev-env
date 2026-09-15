@@ -1,12 +1,13 @@
 """Behavioral tests for the executable Codex Astra advisor path."""
-import io
 import importlib.util
+import io
 import json
 import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+
 import pytest
 
 _ProcessRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -28,6 +29,7 @@ def _load_astra_module() -> ModuleType:
 
 
 astra_advisor = _load_astra_module()
+
 SCRIPTS_ROOT = Path(__file__).parent.parent
 USAGE_PROBE_PATH = (
     SCRIPTS_ROOT.parents[1] / "pr-loop" / "scripts" / "codex_usage_probe.py"
@@ -87,7 +89,37 @@ def test_astra_flag_rejects_legacy_sol_setting() -> None:
 
 def test_resolve_advisor_effort_uses_shared_setting_and_default() -> None:
     assert astra_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "HIGH"}) == "high"
-    assert astra_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "unknown"}) == "low"
+    with pytest.raises(RuntimeError, match="effort is unknown"):
+        astra_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "unknown"})
+    assert astra_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "Light"}) == "low"
+    assert astra_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "XHIGH"}) == "medium"
+    assert astra_advisor.resolve_advisor_effort({"ADVISOR_EFFORT": "MAX"}) == "medium"
+
+
+def test_advisor_route_uses_edited_policy_model_and_effort(tmp_path: Path) -> None:
+    policy = json.loads(
+        (SCRIPTS_ROOT.parents[2] / "rules" / "subagent-model-policy.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    for each_entry in policy["roleReplacements"]:
+        if (
+            each_entry["role"] == "advisor"
+            and each_entry["requested"] == {"model": "astra", "effort": "xhigh"}
+        ):
+            each_entry["selected"] = {"model": "luna", "effort": "high"}
+    policy_path = tmp_path / "subagent-model-policy.json"
+    policy_path.write_text(json.dumps(policy), encoding="utf-8")
+    assert astra_advisor.resolve_advisor_pair(
+        {"ADVISOR_EFFORT": "xhigh"}, policy_path
+    ) == ("gpt-5.6-luna", "high")
+
+
+def test_advisor_route_blocks_malformed_policy(tmp_path: Path) -> None:
+    policy_path = tmp_path / "subagent-model-policy.json"
+    policy_path.write_text('{"schemaVersion": 1}', encoding="utf-8")
+    with pytest.raises(RuntimeError, match="models must be an object"):
+        astra_advisor.resolve_advisor_pair({}, policy_path)
 
 
 def test_resolve_codex_executable_prefers_override_and_falls_back_to_path(
@@ -118,6 +150,7 @@ def test_argument_parser_accepts_astra_and_rejects_sol() -> None:
     parser = astra_advisor.build_argument_parser()
     parsed = parser.parse_args(["--bind", "--cwd", ".", "--enable-astra"])
     assert parsed.is_astra_requested
+    assert parser.parse_args(["--bind", "--cwd", ".", "--effort", "light"]).astra_effort == "light"
     with pytest.raises(SystemExit):
         parser.parse_args(["--bind", "--cwd", ".", "--enable-sol"])
 
@@ -188,6 +221,23 @@ def test_bind_runs_probe_then_codex() -> None:
     )
     assert reply.successful
     assert calls[1] == astra_advisor.build_codex_arguments("codex")
+
+
+def test_bind_routes_astra_xhigh_to_the_policy_effort() -> None:
+    calls: list[list[str]] = []
+    settings = {**ENABLED_SETTINGS, astra_advisor.ADVISOR_EFFORT_ENV_VAR: "xhigh"}
+    reply = astra_advisor.run_codex_astra_advisor(
+        "consult",
+        Path("."),
+        None,
+        USAGE_PROBE_PATH,
+        settings,
+        None,
+        _two_step_runner(calls),
+    )
+    assert reply.successful
+    config_index = calls[1].index("--config")
+    assert calls[1][config_index + 1] == 'model_reasoning_effort="medium"'
 
 
 def test_disabled_flag_returns_declined_fallback() -> None:

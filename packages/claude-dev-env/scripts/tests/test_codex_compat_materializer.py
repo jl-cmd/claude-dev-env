@@ -947,6 +947,15 @@ def _prepare_projection_fixture(
                         {"type": "command", "command": "python not_code_rules_enforcer.py"}
                     ],
                 },
+                {
+                    "matcher": "multi_agent_v1__spawn_agent",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "node custom/subagent_model_routing.mjs",
+                        }
+                    ],
+                },
             ],
             "SessionStart": [_hook_group(
                 "",
@@ -1030,6 +1039,12 @@ def _assert_projection_and_manifest(
         f'python3 "{target / "hooks" / "blocking" / "code_rules_enforcer.py"}"'
     )
     assert managed_command in apply_patch_commands
+    routing_entries = [
+        each_entry
+        for each_entry in manifest["hooks"]["PreToolUse"]
+        if each_entry["matcher"] == "multi_agent_v1__spawn_agent"
+    ]
+    assert routing_entries == [existing_hooks["hooks"]["PreToolUse"][4]]
     expected_commands_by_event = {
         "SessionStart": ["python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/fix_worktree_hookspath.py"],
         "UserPromptSubmit": ["python3 /home/example/custom/hooks/session/untracked_repo_detector.py", "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/untracked_repo_detector.py.bak"],

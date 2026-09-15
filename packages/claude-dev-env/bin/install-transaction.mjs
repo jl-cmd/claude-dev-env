@@ -30,6 +30,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { ADDITIONAL_SETTINGS_BLOB_PREFIX } from './install-constants.mjs';
 
 /** Env var that forces a throw after a named mutation phase (tests only). */
 export const INSTALL_FAULT_ENV = 'CLAUDE_DEV_ENV_INSTALL_FAULT';
@@ -180,19 +181,6 @@ function classifyPath(absolutePath, io) {
     return { kind: ENTRY_KIND_MISSING };
 }
 
-/**
- * Capture prior settings, manifest, hooksPath, and package-owned files.
- *
- * @param {{
- *   managedRoot: string,
- *   manifestFilePath: string,
- *   settingsPath: string,
- *   priorManifestFiles?: string[]|null,
- *   journalParentDirectory?: string,
- *   io?: object,
- * }} input
- * @returns {object}
- */
 export function capturePriorInstallSnapshot(input) {
     const io = input.io || {};
     const exists = io.existsSync || existsSync;
@@ -208,10 +196,23 @@ export function capturePriorInstallSnapshot(input) {
     const filesDirectory = join(journalRoot, FILES_DIRECTORY_NAME);
     mkdir(filesDirectory, { recursive: true });
 
-    const settingsExisted = exists(input.settingsPath);
-    if (settingsExisted) {
-        copyFile(input.settingsPath, join(journalRoot, SETTINGS_BLOB_NAME));
-    }
+    const allSettingsPaths = [
+        input.settingsPath,
+        ...(Array.isArray(input.additionalSettingsPaths) ? input.additionalSettingsPaths : []),
+    ].filter((eachPath, index, allPaths) => (
+        typeof eachPath === 'string'
+        && eachPath !== ''
+        && allPaths.indexOf(eachPath) === index
+    ));
+    const settingsSnapshots = allSettingsPaths.map((settingsPath, index) => {
+        const settingsExisted = exists(settingsPath);
+        const blobName = index === 0
+            ? SETTINGS_BLOB_NAME
+            : `${ADDITIONAL_SETTINGS_BLOB_PREFIX}${index}.json`;
+        if (settingsExisted) copyFile(settingsPath, join(journalRoot, blobName));
+        return { path: settingsPath, existed: settingsExisted, blobName };
+    });
+    const primarySettingsSnapshot = settingsSnapshots[0];
 
     const manifestExisted = exists(input.manifestFilePath);
     if (manifestExisted) {
@@ -255,7 +256,8 @@ export function capturePriorInstallSnapshot(input) {
         managedRoot: input.managedRoot,
         settingsPath: input.settingsPath,
         manifestFilePath: input.manifestFilePath,
-        settingsExisted,
+        settingsSnapshots,
+        settingsExisted: primarySettingsSnapshot?.existed ?? false,
         manifestExisted,
         priorHooksPath,
         allFileEntries,
@@ -267,23 +269,14 @@ export function capturePriorInstallSnapshot(input) {
         managedRoot: input.managedRoot,
         settingsPath: input.settingsPath,
         manifestFilePath: input.manifestFilePath,
-        settingsExisted,
+        settingsSnapshots: Object.freeze(settingsSnapshots.map(eachSnapshot => Object.freeze(eachSnapshot))),
+        settingsExisted: primarySettingsSnapshot?.existed ?? false,
         manifestExisted,
         priorHooksPath,
         allFileEntries: Object.freeze(allFileEntries.map((eachEntry) => Object.freeze({ ...eachEntry }))),
     });
 }
 
-/**
- * Restore the captured prior installation and drop extra write-set paths.
- *
- * @param {ReturnType<typeof capturePriorInstallSnapshot>} snapshot
- * @param {{
- *   allWrittenPaths?: string[],
- *   io?: object,
- * }} [options]
- * @returns {void}
- */
 export function restorePriorInstallSnapshot(snapshot, options = {}) {
     const io = options.io || {};
     const exists = io.existsSync || existsSync;
@@ -294,6 +287,13 @@ export function restorePriorInstallSnapshot(snapshot, options = {}) {
     const lstat = io.lstatSync || lstatSync;
 
     const filesDirectory = join(snapshot.journalRoot, FILES_DIRECTORY_NAME);
+    const settingsSnapshots = snapshot.settingsSnapshots?.length > 0
+        ? snapshot.settingsSnapshots
+        : [{
+            path: snapshot.settingsPath,
+            existed: snapshot.settingsExisted,
+            blobName: SETTINGS_BLOB_NAME,
+        }];
     for (const eachEntry of snapshot.allFileEntries) {
         try {
             if (exists(eachEntry.absolutePath)) {
@@ -302,9 +302,7 @@ export function restorePriorInstallSnapshot(snapshot, options = {}) {
                     unlink(eachEntry.absolutePath);
                 }
             }
-        } catch {
-            // keep restoring remaining entries
-        }
+        } catch {}
         if (eachEntry.kind === ENTRY_KIND_FILE && eachEntry.blobName) {
             mkdir(dirname(eachEntry.absolutePath), { recursive: true });
             copyFile(join(filesDirectory, eachEntry.blobName), eachEntry.absolutePath);
@@ -324,7 +322,8 @@ export function restorePriorInstallSnapshot(snapshot, options = {}) {
         if (priorPathSet.has(eachWrittenPath)) {
             continue;
         }
-        if (eachWrittenPath === snapshot.settingsPath || eachWrittenPath === snapshot.manifestFilePath) {
+        if (settingsSnapshots.some(eachSnapshot => eachSnapshot.path === eachWrittenPath)
+            || eachWrittenPath === snapshot.manifestFilePath) {
             continue;
         }
         try {
@@ -339,14 +338,14 @@ export function restorePriorInstallSnapshot(snapshot, options = {}) {
         }
     }
 
-    if (snapshot.settingsExisted) {
-        mkdir(dirname(snapshot.settingsPath), { recursive: true });
-        copyFile(join(snapshot.journalRoot, SETTINGS_BLOB_NAME), snapshot.settingsPath);
-    } else if (exists(snapshot.settingsPath)) {
-        try {
-            unlink(snapshot.settingsPath);
-        } catch {
-            // leave in place when unlink fails
+    for (const eachSnapshot of settingsSnapshots) {
+        if (eachSnapshot.existed) {
+            mkdir(dirname(eachSnapshot.path), { recursive: true });
+            copyFile(join(snapshot.journalRoot, eachSnapshot.blobName), eachSnapshot.path);
+        } else if (exists(eachSnapshot.path)) {
+            try {
+                unlink(eachSnapshot.path);
+            } catch {}
         }
     }
 
@@ -356,9 +355,7 @@ export function restorePriorInstallSnapshot(snapshot, options = {}) {
     } else if (exists(snapshot.manifestFilePath)) {
         try {
             unlink(snapshot.manifestFilePath);
-        } catch {
-            // leave in place when unlink fails
-        }
+        } catch {}
     }
 
     writeGlobalCoreHooksPath(snapshot.priorHooksPath, io);

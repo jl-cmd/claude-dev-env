@@ -8,6 +8,7 @@ const DEFAULT_ROLE = 'worker';
 const MODEL_FIELD = 'model';
 const EFFORT_FIELDS = ['reasoning_effort', 'effort'];
 const ROLE_FIELDS = ['role', 'agent_type', 'agentType'];
+const VALIDATED_POLICY_MARKER = Symbol('validatedPolicy');
 
 export class SubagentModelPolicyError extends Error {
     constructor(message) {
@@ -47,13 +48,19 @@ export function validateSubagentModelPolicy(policy) {
     const inheritanceAliases = validateStringList(
         policy.inheritanceAliases,
         'inheritanceAliases',
-    ).map(normalizeValue);
+    ).map(normalizeToken);
     if (inheritanceAliases.some(alias => modelByName.aliasOwner.has(alias))) {
         throw new SubagentModelPolicyError('inheritance alias conflicts with a model alias');
     }
     const roleByAlias = validateRoles(policy.roles);
+    const trustedAdvisorRoles = validateTrustedAdvisorRoles(policy.roles, roleByAlias);
     const approvedPairs = validateApprovedPairs(policy.approvedPairs, modelByName, effortNames, roleByAlias);
     const approvedPairKeys = new Set(approvedPairs.map(pair => pairKey(pair)));
+    const selectorExclusions = validateSelectorExclusions(
+        policy.selectorExclusions ?? [],
+        modelByName,
+        effortNames,
+    );
     const advisorDefault = validatePair(
         policy.advisorDefault,
         modelByName,
@@ -80,7 +87,7 @@ export function validateSubagentModelPolicy(policy) {
     );
     validateReplacementGraph(replacements, roleReplacements, approvedPairKeys);
 
-    return {
+    const validatedPolicy = {
         ...policy,
         efforts: {
             ...policy.efforts,
@@ -91,16 +98,23 @@ export function validateSubagentModelPolicy(policy) {
         effortNames,
         inheritanceAliases: new Set(inheritanceAliases),
         roleByAlias,
+        trustedAdvisorRoles,
         approvedPairs,
+        selectorExclusions,
         advisorDefault,
         replacements,
         roleReplacements,
     };
+    Object.defineProperty(validatedPolicy, VALIDATED_POLICY_MARKER, { value: true });
+    return validatedPolicy;
 }
 
 export function resolveSubagentModelRoute(request, options = {}) {
     try {
-        const policy = options.policy ?? loadSubagentModelPolicy(options.policyPath);
+        const loadedPolicy = options.policy ?? loadSubagentModelPolicy(options.policyPath);
+        const policy = isValidatedPolicy(loadedPolicy)
+            ? loadedPolicy
+            : validateSubagentModelPolicy(loadedPolicy);
         return resolveRouteWithPolicy(request, policy, options);
     } catch (error) {
         if (error instanceof SubagentModelPolicyError) return blockedRoute(error.message);
@@ -115,22 +129,35 @@ export function routeSubagentToolInput(toolInput, options = {}) {
     if (route.status === 'inherited' || route.status === 'pass') {
         return { ...route, updatedInput: toolInput };
     }
-    const updatedInput = { ...toolInput };
-    updatedInput[MODEL_FIELD] = route.selected.model;
-    const effortField = route.effortField ?? 'reasoning_effort';
-    updatedInput[effortField] = route.selected.effort;
-    if (effortField !== 'reasoning_effort' && Object.hasOwn(updatedInput, 'reasoning_effort')) {
-        delete updatedInput.reasoning_effort;
+    const updatedInput = { ...toolInput, [MODEL_FIELD]: route.selected.model };
+    if (route.selected.effort !== null) {
+        const effortField = route.effortField ?? 'reasoning_effort';
+        updatedInput[effortField] = route.selected.effort;
+        if (effortField !== 'reasoning_effort' && Object.hasOwn(updatedInput, 'reasoning_effort')) {
+            delete updatedInput.reasoning_effort;
+        }
     }
     return { ...route, updatedInput };
 }
 
+export function isSelectorPairExcluded(model, effort, policy) {
+    if (effort === null || effort === undefined) return false;
+    const modelName = policy.modelByName.aliasOwner.get(normalizeToken(model));
+    if (!modelName) return false;
+    const normalizedEffort = normalizeToken(effort);
+    const effortName = policy.effortNames.has(normalizedEffort)
+        ? normalizedEffort
+        : policy.efforts.aliases[normalizedEffort];
+    return typeof effortName === 'string'
+        && policy.selectorExclusions.has(pairKey({ model: modelName, effort: effortName }));
+}
+
 function resolveRouteWithPolicy(request, policy, options) {
     if (!isObject(request)) return blockedRoute('subagent tool input must be an object');
-    const roleResult = resolveRole(request, policy, options);
+    const roleResult = resolveRole(request, policy);
     if (roleResult.status === 'blocked') return roleResult;
     const { role } = roleResult;
-    if (role === 'advisor' && options.trustedRole !== true) {
+    if (role === 'advisor' && !hasTrustedAdvisorSession(policy, options)) {
         return blockedRoute('advisor role is not trusted');
     }
 
@@ -164,7 +191,13 @@ function resolveRouteWithPolicy(request, policy, options) {
         const modelEfforts = approvedEffortsForModel(modelName, role, policy.approvedPairs);
         if (modelEfforts.length === 1) effort = modelEfforts[0];
     }
-    if (effort === null) return blockedRoute('effort is required for this model');
+    if (effort === null) {
+        const modelEfforts = approvedEffortsForModel(modelName, role, policy.approvedPairs);
+        if (!options.allowMissingEffort || modelEfforts.length !== 1) {
+            return blockedRoute('effort is required for this model');
+        }
+        effort = modelEfforts[0];
+    }
 
     const requestedPair = { model: modelName, effort };
     const selectedPair = selectReplacement(requestedPair, role, policy);
@@ -208,15 +241,15 @@ function validateModels(models) {
     const modelByName = {};
     const aliasOwner = new Map();
     for (const [rawName, rawModel] of Object.entries(models)) {
-        const name = normalizeValue(rawName);
+        const name = normalizeToken(rawName);
         if (!isIdentifier(name)) throw new SubagentModelPolicyError(`invalid model name: ${rawName}`);
         if (Object.hasOwn(modelByName, name)) {
             throw new SubagentModelPolicyError(`model name is ambiguous: ${name}`);
         }
         requireObject(rawModel, `model ${name}`);
-        const id = requireValue(rawModel.id, `model ${name} id`);
+        const id = requireNonEmptyString(rawModel.id, `model ${name} id`);
         const aliases = validateStringList(rawModel.aliases, `model ${name} aliases`);
-        const allAliases = [...new Set([name, id, ...aliases].map(normalizeValue))];
+        const allAliases = [...new Set([name, id, ...aliases].map(normalizeToken))];
         for (const alias of allAliases) {
             const previousOwner = aliasOwner.get(alias);
             if (previousOwner && previousOwner !== name) {
@@ -233,7 +266,7 @@ function validateModels(models) {
 
 function validateEfforts(efforts) {
     requireObject(efforts, 'efforts');
-    const names = validateStringList(efforts.values, 'efforts.values').map(normalizeValue);
+    const names = validateStringList(efforts.values, 'efforts.values').map(normalizeToken);
     if (new Set(names).size !== names.length || names.some(name => !isIdentifier(name))) {
         throw new SubagentModelPolicyError('effort values must be unique identifiers');
     }
@@ -241,8 +274,8 @@ function validateEfforts(efforts) {
     requireObject(aliases, 'efforts.aliases');
     const canonicalAliases = {};
     for (const [alias, target] of Object.entries(aliases)) {
-        const normalizedAlias = normalizeValue(alias);
-        const normalizedTarget = normalizeValue(target);
+        const normalizedAlias = normalizeToken(alias);
+        const normalizedTarget = normalizeToken(target);
         if (!isIdentifier(normalizedAlias) || !names.includes(normalizedTarget)) {
             throw new SubagentModelPolicyError(`effort alias is invalid: ${alias}`);
         }
@@ -262,7 +295,7 @@ function validateRoles(roles) {
     const roleByAlias = new Map();
     const canonicalRoles = ['worker', 'advisor'];
     for (const role of canonicalRoles) {
-        const aliases = validateStringList(roles[role], `roles.${role}`).map(normalizeValue);
+        const aliases = validateStringList(roles[role], `roles.${role}`).map(normalizeToken);
         const allAliases = [role, ...aliases];
         for (const alias of allAliases) {
             if (!isIdentifier(alias)) throw new SubagentModelPolicyError(`invalid role name: ${alias}`);
@@ -273,11 +306,28 @@ function validateRoles(roles) {
             roleByAlias.set(alias, role);
         }
     }
-    const defaultRole = normalizeValue(roles.default);
+    const defaultRole = normalizeToken(roles.default);
     if (defaultRole !== DEFAULT_ROLE || !roleByAlias.has(defaultRole)) {
         throw new SubagentModelPolicyError('roles.default must be worker');
     }
     return roleByAlias;
+}
+
+function validateTrustedAdvisorRoles(roles, roleByAlias) {
+    const configuredRoles = roles.trustedAdvisor ?? roles.advisor.filter(
+        role => normalizeToken(role) !== 'advisor',
+    );
+    const trustedAdvisorRoles = validateStringList(
+        configuredRoles,
+        'roles.trustedAdvisor',
+    ).map(normalizeToken);
+    if (new Set(trustedAdvisorRoles).size !== trustedAdvisorRoles.length) {
+        throw new SubagentModelPolicyError('roles.trustedAdvisor must be unique');
+    }
+    if (trustedAdvisorRoles.some(role => roleByAlias.get(role) !== 'advisor')) {
+        throw new SubagentModelPolicyError('roles.trustedAdvisor must name advisor roles');
+    }
+    return new Set(trustedAdvisorRoles);
 }
 
 function validateApprovedPairs(rawPairs, modelByName, effortNames, roleByAlias) {
@@ -297,6 +347,27 @@ function validateApprovedPairs(rawPairs, modelByName, effortNames, roleByAlias) 
         pairs.push({ ...pair, roles });
     }
     return pairs;
+}
+
+function validateSelectorExclusions(rawExclusions, modelByName, effortNames) {
+    if (!Array.isArray(rawExclusions)) {
+        throw new SubagentModelPolicyError('selectorExclusions must be an array');
+    }
+    const exclusionKeys = new Set();
+    for (const rawExclusion of rawExclusions) {
+        const exclusion = validatePair(
+            rawExclusion,
+            modelByName,
+            effortNames,
+            'selectorExclusions entry',
+        );
+        const key = pairKey(exclusion);
+        if (exclusionKeys.has(key)) {
+            throw new SubagentModelPolicyError(`duplicate selector exclusion: ${key}`);
+        }
+        exclusionKeys.add(key);
+    }
+    return exclusionKeys;
 }
 
 function validateReplacements(rawReplacements, modelByName, effortNames, approvedPairs, label) {
@@ -368,8 +439,8 @@ function validateReplacementGraph(replacements, roleReplacements, approvedPairKe
 
 function validatePair(rawPair, modelByName, effortNames, label) {
     requireObject(rawPair, label);
-    const model = normalizeValue(rawPair.model);
-    const effort = normalizeValue(rawPair.effort);
+    const model = normalizeToken(rawPair.model);
+    const effort = normalizeToken(rawPair.effort);
     if (!Object.hasOwn(modelByName, model)) throw new SubagentModelPolicyError(`${label} has unknown model: ${model}`);
     if (!effortNames.has(effort)) throw new SubagentModelPolicyError(`${label} has unknown effort: ${effort}`);
     return { model, effort };
@@ -383,26 +454,32 @@ function validateCanonicalRoles(rawRoles, roleByAlias, label) {
 }
 
 function canonicalRole(rawRole, roleByAlias, label) {
-    const normalizedRole = normalizeValue(rawRole);
+    const normalizedRole = normalizeToken(rawRole);
     const role = roleByAlias.get(normalizedRole);
     if (!role) throw new SubagentModelPolicyError(`${label} is unknown: ${normalizedRole}`);
     return role;
 }
 
-function resolveRole(request, policy, options) {
+function resolveRole(request, policy) {
     const suppliedRoles = ROLE_FIELDS
         .filter(field => Object.hasOwn(request, field))
         .map(field => request[field]);
-    if (options.trustedRoleName !== undefined) suppliedRoles.push(options.trustedRoleName);
     if (suppliedRoles.length === 0) return { status: 'pass', role: policy.roleByAlias.get(DEFAULT_ROLE) };
     if (suppliedRoles.some(role => typeof role !== 'string' || role.trim() === '')) {
         return blockedRoute('role must be a non-empty string');
     }
-    const canonicalRoles = suppliedRoles.map(role => policy.roleByAlias.get(normalizeValue(role)));
+    const canonicalRoles = suppliedRoles.map(role => policy.roleByAlias.get(normalizeToken(role)));
     if (canonicalRoles.some(role => !role) || new Set(canonicalRoles).size !== 1) {
         return blockedRoute('role is unknown or ambiguous');
     }
     return { status: 'pass', role: canonicalRoles[0] };
+}
+
+function hasTrustedAdvisorSession(policy, options) {
+    const metadata = options.trustedSessionMetadata;
+    if (!isObject(metadata) || metadata.authorized !== true) return false;
+    return typeof metadata.registeredAgentType === 'string'
+        && policy.trustedAdvisorRoles.has(normalizeToken(metadata.registeredAgentType));
 }
 
 function readModel(request, policy) {
@@ -412,7 +489,7 @@ function readModel(request, policy) {
     if (typeof request[MODEL_FIELD] !== 'string' || request[MODEL_FIELD].trim() === '') {
         return blockedRoute('model must be a non-empty string');
     }
-    const normalizedModel = normalizeValue(request[MODEL_FIELD]);
+    const normalizedModel = normalizeToken(request[MODEL_FIELD]);
     if (policy.inheritanceAliases.has(normalizedModel)) {
         return { modelName: null, inherited: true, wasAlias: true, wasMissing: false };
     }
@@ -438,7 +515,7 @@ function readEffort(request, policy) {
     if (typeof request[field] !== 'string' || request[field].trim() === '') {
         return blockedRoute('effort must be a non-empty string');
     }
-    const normalizedEffort = normalizeValue(request[field]);
+    const normalizedEffort = normalizeToken(request[field]);
     const canonicalEffort = policy.effortNames.has(normalizedEffort)
         ? normalizedEffort
         : resolveEffortAlias(normalizedEffort, policy);
@@ -486,7 +563,7 @@ function validateAvailability(selectedPair, availableModelIds, policy) {
     }
     const availableNames = new Set();
     for (const rawModel of availableModelIds) {
-        const modelName = policy.modelByName.aliasOwner.get(normalizeValue(rawModel));
+        const modelName = policy.modelByName.aliasOwner.get(normalizeToken(rawModel));
         if (modelName) availableNames.add(modelName);
     }
     return availableNames.has(selectedPair.model)
@@ -510,30 +587,34 @@ function blockedRoute(diagnostic) {
     };
 }
 
-function requireObject(value, label) {
-    if (!isObject(value)) throw new SubagentModelPolicyError(`${label} must be an object`);
+function requireObject(objectCandidate, label) {
+    if (!isObject(objectCandidate)) throw new SubagentModelPolicyError(`${label} must be an object`);
 }
 
-function validateStringList(value, label) {
-    if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string' || entry.trim() === '')) {
+function validateStringList(stringEntries, label) {
+    if (!Array.isArray(stringEntries) || stringEntries.some(entry => typeof entry !== 'string' || entry.trim() === '')) {
         throw new SubagentModelPolicyError(`${label} must be a non-empty string array`);
     }
-    return value;
+    return stringEntries;
 }
 
-function requireValue(value, label) {
-    if (typeof value !== 'string' || value.trim() === '') throw new SubagentModelPolicyError(`${label} must be a non-empty string`);
-    return value;
+function requireNonEmptyString(stringCandidate, label) {
+    if (typeof stringCandidate !== 'string' || stringCandidate.trim() === '') throw new SubagentModelPolicyError(`${label} must be a non-empty string`);
+    return stringCandidate;
 }
 
-function normalizeValue(value) {
-    return typeof value === 'string' ? value.trim().toLowerCase() : '';
+function normalizeToken(token) {
+    return typeof token === 'string' ? token.trim().toLowerCase() : '';
 }
 
-function isIdentifier(value) {
-    return /^[a-z][a-z0-9_-]*$/.test(value);
+function isIdentifier(identifier) {
+    return /^[a-z][a-z0-9_-]*$/.test(identifier);
 }
 
-function isObject(value) {
-    return value !== null && typeof value === 'object' && !Array.isArray(value);
+function isValidatedPolicy(policy) {
+    return isObject(policy) && policy[VALIDATED_POLICY_MARKER] === true;
+}
+
+function isObject(objectCandidate) {
+    return objectCandidate !== null && typeof objectCandidate === 'object' && !Array.isArray(objectCandidate);
 }
