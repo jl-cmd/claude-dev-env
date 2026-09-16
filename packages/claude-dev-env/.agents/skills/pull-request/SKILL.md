@@ -122,8 +122,9 @@ permanent URLs. Rerun the linter after changing the body.
 
 ### 5. Resolve the process-local author
 
-Run `.agents/skills/pull-request/scripts/pull_request.py` with one structured
-action and the selected author. The command runs the linter again, resolves
+Run `~/.agents/skills/pull-request/scripts/pull_request.py` (under the agents
+home, not the repository; a worktree holds no `.agents/` copy) with one
+structured action and the selected author. The command runs the linter again, resolves
 the author value, and passes it only to the child `gh` process. It never
 changes the parent environment or calls `gh auth switch`.
 
