@@ -31,7 +31,8 @@ failure signature in the release job log reads
 
 Use the `pr-description-writer` agent before creating a pull request or
 rewriting its full description. Publish its title and body file through
-`.agents/skills/pull-request/scripts/pull_request.py`.
+`~/.agents/skills/pull-request/scripts/pull_request.py`. That path is under the
+agents home, not the repository. A worktree holds no `.agents/` copy.
 
 Resolve the active managed root (`CLAUDE_CONFIG_DIR` when set, `~/.claude`
 otherwise), then run `<managed-root>/scripts/durable_post_lint.py` before any
@@ -58,6 +59,13 @@ Then run that exact gate command locally against that level's own base, on every
 level. A required check that never fired is invisible debt at every level, and it
 surfaces only after the whole stack is pushed, when the repair costs a second pass
 over every branch.
+
+A red local run blocks the push, whoever owns the failing line. The gate charges
+a change for the whole file it touches, so "pre-existing on main" is a blame
+note, not a pass. Fix the line in the same push or report the branch blocked. A
+single-file mypy call is not the gate on this repository: it cannot see sibling
+modules and reports false import errors. Run the repository's `local_verify.py`
+over the changed set instead.
 
 A checks listing that reports nothing on the branch is a finding, not a neutral
 state. Find out whether the workflow's event filters exclude the branch, or whether
