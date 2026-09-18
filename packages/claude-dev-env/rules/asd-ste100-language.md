@@ -26,7 +26,7 @@ definitions and dictionary decisions.
 - Use inclusive, neutral language.
 - Use periods, commas, colons, and bullets to show structure.
 - Preserve exact quoted labels, identifiers, formulas, titles, and interface text.
-- Use `WARNING` for a real risk of injury or death. Use `CAUTION` for a real risk of equipment, tool, or machine damage. State the command or condition first, then state the result.
+- Use `WARNING` for a risk of injury or death. Use `CAUTION` for a risk of equipment, tool, or machine damage. State the command or condition first, then state the result.
 - Aim for 20 words or fewer in a procedure sentence when the technical content allows.
 - Aim for 25 words or fewer in a descriptive sentence when the technical content allows.
 

@@ -390,10 +390,6 @@
           "axis_name": "Constants location"
         },
         {
-          "id": "J4",
-          "axis_name": "File-global use-count"
-        },
-        {
           "id": "J5",
           "axis_name": "Abbreviations"
         },

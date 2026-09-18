@@ -50,11 +50,6 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 - Distinguish *imports* (`from config.X import FOO`) from *declarations* — imports are not J3-scope.
 - Adversarial probes: (a) does any module-level constant masquerade as an "import" via a re-export pattern? (b) is there a `_PRIVATE_UPPER` declaration that escapes the visual UPPER_SNAKE filter but is still module-level? (c) does any test file declare a constant that *would* be flagged if it were in production, indicating the constant probably belongs in `config/` even if test-exempt?
 
-**J4. File-global use-count**
-- For every file-global constant outside `config/`, count references in the same file. Single ref → move to `config/`. Zero refs → delete.
-- The rule applies to *constants*, not functions, classes, or imports.
-- Adversarial probes: (a) is any imported constant referenced only once in the importing file (suggesting the import itself is gratuitous)? (b) is any helper function defined in a production file but never called from inside the same file (separate dead-code concern, surfaced here for completeness)? (c) does any constant in `config/` get imported from zero call sites across the repo?
-
 **J5. Abbreviations**
 - Walk every parameter, local, and attribute name across production, test, and JavaScript changed lines. Flag: `ctx`, `cfg`, `msg`, `btn`, `idx`, `cnt`, `elem`, `val`, `tmp`, `str`, `num`, `arr`, `obj`, `fn`, `cb`, `req`, `res`. Loop counters `i`/`j`/`k` and `e` for exceptions are exempt.
 - This audit walks changed test-file and `.mjs` / `.js` lines for this rule, even though the write-time hook skips them.
@@ -101,7 +96,7 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 
 ## Cross-bucket questions to answer at the end
 
-Q1: Are there literals or names that span two sub-buckets (e.g., a magic value in J1 that also appears inside an f-string scrutinized by J2; an UPPER_SNAKE in J3 that also fails the use-count test in J4)? Cite the literal/name and both sub-bucket IDs.
+Q1: Are there literals or names that span two sub-buckets (e.g., a magic value in J1 that also appears inside an f-string scrutinized by J2; an UPPER_SNAKE in J3 that is also an abbreviation under J5)? Cite the literal/name and both sub-bucket IDs.
 
 Q2: What is the worst CODE_RULES drift introduced by this artifact? Cite `<file>:<line>`. (Common candidates: cross-language duplicates, stale help text mirroring a config constant, abbreviations in a public API surface, bare `Any` annotations, hardcoded user paths in installer scripts.)
 
@@ -148,13 +143,6 @@ ID prefix: `find`.
 - Test file `test_sweep_empty_dirs.py` line 160 — `_SCRIPTS_DIR = Path(__file__).resolve().parent.parent` is *not* UPPER_SNAKE (leading underscore + mixed case); even if it were UPPER_SNAKE, test files are exempt by the rule.
 - `Install-SweepEmptyDirs.ps1` line 245 — `$TaskName = "SweepEmptyDirs"` is a PowerShell variable; J3 enforces Python module-level UPPER_SNAKE outside `config/`. PowerShell out of scope for J3.
 - Adversarial probes: (a) does any module-level constant in `sweep_empty_dirs.py` masquerade as an "import"? (b) is there any `_PRIVATE_UPPER` declaration that escapes the visual UPPER_SNAKE filter? (c) does the test file accidentally declare a constant that *would* be flagged if it were in production?
-
-**J4. File-global use-count**
-- For every file-global constant outside `config/`, count references in the same file. Single ref → move to `config/`. Zero refs → delete.
-- `sweep_empty_dirs.py` — no file-global constants declared (`DEFAULT_AGE_SECONDS` and `DEFAULT_POLL_INTERVAL` are imports). Imports follow standard import-usage rules, not the file-global use-count rule.
-- `config/sweep_config.py:142-143` — `DEFAULT_AGE_SECONDS` and `DEFAULT_POLL_INTERVAL` live in `config/`, exempt by location.
-- Test file `_SCRIPTS_DIR` — test files exempt.
-- Adversarial probes: (a) is any imported constant in `sweep_empty_dirs.py` referenced only once (line 104 for `DEFAULT_AGE_SECONDS`, line 108 for `DEFAULT_POLL_INTERVAL`) — wait, `DEFAULT_AGE_SECONDS` is referenced TWICE on line 104 (`default=DEFAULT_AGE_SECONDS`) and line 105 (`f"...default: {DEFAULT_AGE_SECONDS} = 2 minutes"`); `DEFAULT_POLL_INTERVAL` is referenced TWICE on line 108 and line 109. Both meet the ≥2-references threshold (note: file-global use-count technically applies to declarations, not imports — listed here for completeness). (b) is any helper function in `sweep_empty_dirs.py` defined but never called from inside the file? `_log_walk_error` (line 73) is referenced once at line 84; `_build_parser` (line 101) is referenced once at line 114. The use-count rule applies to *constants*, not functions, so neither is flagged. (c) does any constant in `config/sweep_config.py` get imported from zero call sites?
 
 **J5. Abbreviations**
 - Walk every parameter, local, and attribute name in `sweep_empty_dirs.py`.
@@ -247,10 +235,8 @@ import time
 from config.sweep_config import DEFAULT_AGE_SECONDS
 from config.sweep_config import DEFAULT_POLL_INTERVAL
 
-
 def _log_walk_error(os_error: OSError) -> None:
     print(f"warning: cannot scan {os_error.filename} — {os_error.strerror}", file=sys.stderr)
-
 
 def sweep(root: str, min_age_seconds: int) -> list[str]:
     """Remove empty directories under *root* older than *min_age_seconds*."""
@@ -275,7 +261,6 @@ def sweep(root: str, min_age_seconds: int) -> list[str]:
 
     return removed
 
-
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Delete empty directories older than a given age.")
     parser.add_argument("root", help="Root directory to scan")
@@ -286,7 +271,6 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--interval", type=int, default=DEFAULT_POLL_INTERVAL,
                         help=f"Poll interval in seconds when looping (default: {DEFAULT_POLL_INTERVAL})")
     return parser
-
 
 def main() -> None:
     parser = _build_parser()
@@ -308,7 +292,6 @@ def main() -> None:
     except KeyboardInterrupt:
         print("
 stopped.")
-
 
 if __name__ == "__main__":
     main()
@@ -342,7 +325,6 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from sweep_empty_dirs import sweep  # noqa: E402
 
-
 def _set_creation_time_windows(path: str, timestamp: float) -> None:
     dt = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
     date_str = dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -351,7 +333,6 @@ def _set_creation_time_windows(path: str, timestamp: float) -> None:
          f"(Get-Item '{path}').CreationTimeUtc = [DateTime]'{date_str}'"],
         check=True, capture_output=True,
     )
-
 
 def test_deletes_empty_dir_older_than_threshold() -> None:
     with tempfile.TemporaryDirectory() as tmp:
@@ -362,7 +343,6 @@ def test_deletes_empty_dir_older_than_threshold() -> None:
         assert empty_dir in removed
         assert not os.path.isdir(empty_dir)
 
-
 def test_skips_empty_dir_newer_than_threshold() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         fresh_dir = os.path.join(tmp, "fresh_empty")
@@ -370,7 +350,6 @@ def test_skips_empty_dir_newer_than_threshold() -> None:
         removed = sweep(tmp, min_age_seconds=120)
         assert fresh_dir not in removed
         assert os.path.isdir(fresh_dir)
-
 
 def test_deletes_nested_empty_dirs() -> None:
     with tempfile.TemporaryDirectory() as tmp:
@@ -384,12 +363,10 @@ def test_deletes_nested_empty_dirs() -> None:
         assert os.path.join(tmp, "parent", "child") in removed
         assert os.path.join(tmp, "parent") in removed
 
-
 def test_empty_root_does_not_crash() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         _set_creation_time_windows(tmp, time.time() - 300)
         sweep(tmp, min_age_seconds=120)
-
 
 def test_skips_nonempty_dir() -> None:
     with tempfile.TemporaryDirectory() as tmp:

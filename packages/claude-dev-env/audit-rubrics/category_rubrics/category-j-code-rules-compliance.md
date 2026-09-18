@@ -5,7 +5,7 @@
 **Examples of Category J findings:**
 - A literal `60` appears in a production function body (magic value rule).
 - A new `MAX_RETRIES = 3` declared at module scope outside `config/`.
-- A parameter named `ctx` instead of `context` (abbreviation rule).
+- A parameter named `ctx` where the name `context` belongs (abbreviation rule).
 - A function that returns a value with no return-type annotation.
 - A new `# explains the loop logic` comment added to production code.
 
@@ -20,7 +20,6 @@
 | J1 | Magic values in production function bodies | Literals other than `0`, `1`, `-1` inside production function bodies. Test files exempt. |
 | J2 | String-template magic | f-strings whose structural literal text (paths, URLs, patterns) belongs in `config/`. |
 | J3 | Constants location | Module-level `UPPER_SNAKE = ...` outside `config/` in production code. Exempt path families: `config/*`, `/migrations/`, `/workflow/`, `_tab.py`, `/states.py`, `/modules.py`, test files. |
-| J4 | File-global use-count | A file-global constant referenced by fewer than two methods/functions/classes in the same file. |
 | J5 | Abbreviations | `ctx`, `cfg`, `msg`, `btn`, `idx`, `cnt`, `elem`, `val`, `tmp`, `str`, `num`, `arr`, `obj`, `fn`, `cb`, `req`, `res`. (Loop counters `i`/`j`/`k` and `e` for exceptions are exempt.) |
 | J6 | Vague names | `result`, `data`, `output`, `response`, `value`, `item`, `temp`, `info`, `stuff`, `thing`. Vague prefixes: `handle`, `process`, `manage`, `do`. |
 | J7 | Type hints | Missing type annotation on a parameter or return; presence of `Any` or `# type: ignore`. |

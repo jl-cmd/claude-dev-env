@@ -25,5 +25,5 @@ Host, ssh port and ssh user are constants inside the runner and are also under t
 
 To copy a file, write it inside the script with a quoted heredoc rather than reaching for `scp`.
 
-The `/tmp` size limit, how to tell a real break from a platform-only one, and a failure-to-cause
+The `/tmp` size limit, how to tell a break in the code from a platform-only one, and a failure-to-cause
 table: `@~/.claude/docs/nas-ssh-invocation.md`.
