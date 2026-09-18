@@ -478,10 +478,6 @@ EXPECTED_SOURCE_LINK_PAIRS = {
             "packages/claude-dev-env/rules/bdd.md",
         ),
         (
-            "<managed-root>/rules/ask-user-question-required.md",
-            "packages/claude-dev-env/rules/ask-user-question-required.md",
-        ),
-        (
             "<managed-root>/rules/verify-before-asking.md",
             "packages/claude-dev-env/rules/verify-before-asking.md",
         ),
@@ -520,10 +516,6 @@ EXPECTED_SOURCE_LINK_PAIRS = {
         (
             "<managed-root>/rules/re-stage-before-commit.md",
             "packages/claude-dev-env/rules/re-stage-before-commit.md",
-        ),
-        (
-            "<managed-root>/rules/agent-spawn-protocol.md",
-            "packages/claude-dev-env/rules/agent-spawn-protocol.md",
         ),
         (
             "<managed-root>/rules/workers-done-before-complete.md",
@@ -797,7 +789,6 @@ def test_clean_coder_links_canonical_policy_areas() -> None:
     required_links = (
         "<managed-root>/docs/CODE_RULES.md#5-no-abbreviations",
         "<managed-root>/rules/testing.md",
-        "<managed-root>/rules/ask-user-question-required.md",
         "<managed-root>/rules/verify-runtime-state.md",
         "<managed-root>/rules/doc-inventory-integrity.md",
         "<managed-root>/rules/failure-blast-radius.md",
@@ -1029,7 +1020,6 @@ def test_clean_coder_groups_session_policy_references() -> None:
         "Worker coordination",
     ):
         assert each_policy_group in body
-    assert "ask-user-question-required.md" in body
     assert "workers-done-before-complete.md" in body
     assert "verify-runtime-state.md" in body
     assert "Material implementation questions must return to the caller" in body
@@ -1039,7 +1029,6 @@ def test_clean_coder_groups_session_policy_references() -> None:
     expected_session_policy_files = (
         "testing.md",
         "anti-corollary-tests.md",
-        "ask-user-question-required.md",
         "verify-before-asking.md",
         "filesystem-search.md",
         "shell-invocation.md",
@@ -1049,7 +1038,6 @@ def test_clean_coder_groups_session_policy_references() -> None:
         "failure-blast-radius.md",
         "git-workflow.md",
         "re-stage-before-commit.md",
-        "agent-spawn-protocol.md",
         "workers-done-before-complete.md",
     )
     session_policy_map = body[body.index("## Session policy map") :]

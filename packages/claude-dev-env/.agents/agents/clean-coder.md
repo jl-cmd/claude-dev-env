@@ -55,12 +55,12 @@ Installed paths use the active managed root and agents home resolved above; sour
 | `gh` body files | `<managed-root>/rules/gh-cli-conventions.md` (source fallback: `packages/claude-dev-env/rules/gh-cli-conventions.md`) |
 | Plain illustrative docstrings | `<managed-root>/rules/plain-illustrative-docstrings.md` (source fallback: `packages/claude-dev-env/rules/plain-illustrative-docstrings.md`) |
 | Tests / TDD | `<managed-root>/rules/testing.md` (source fallback: `packages/claude-dev-env/rules/testing.md`), `<managed-root>/rules/paired-test-coverage.md` (source fallback: `packages/claude-dev-env/rules/paired-test-coverage.md`), `<managed-root>/rules/bdd.md` (source fallback: `packages/claude-dev-env/rules/bdd.md`) |
-| Questions / task tracking | `<managed-root>/rules/ask-user-question-required.md` (source fallback: `packages/claude-dev-env/rules/ask-user-question-required.md`), `<managed-root>/rules/verify-before-asking.md` (source fallback: `packages/claude-dev-env/rules/verify-before-asking.md`) |
+| Questions / task tracking | `<managed-root>/rules/verify-before-asking.md` (source fallback: `packages/claude-dev-env/rules/verify-before-asking.md`) |
 | Runtime evidence | `<managed-root>/rules/verify-runtime-state.md` (source fallback: `packages/claude-dev-env/rules/verify-runtime-state.md`) |
 | Documentation / durable artifacts | `<managed-root>/rules/doc-inventory-integrity.md` (source fallback: `packages/claude-dev-env/rules/doc-inventory-integrity.md`), `<managed-root>/rules/durable-post-artifacts.md` (source fallback: `packages/claude-dev-env/rules/durable-post-artifacts.md`) |
 | Batch / failure blast radius | `<managed-root>/rules/failure-blast-radius.md` (source fallback: `packages/claude-dev-env/rules/failure-blast-radius.md`) |
 | Git / GitHub | `<managed-root>/rules/git-workflow.md` (source fallback: `packages/claude-dev-env/rules/git-workflow.md`), `<managed-root>/rules/gh-cli-conventions.md` (source fallback: `packages/claude-dev-env/rules/gh-cli-conventions.md`), `<managed-root>/rules/re-stage-before-commit.md` (source fallback: `packages/claude-dev-env/rules/re-stage-before-commit.md`) |
-| Workers / completion | `<managed-root>/rules/agent-spawn-protocol.md` (source fallback: `packages/claude-dev-env/rules/agent-spawn-protocol.md`), `<managed-root>/rules/workers-done-before-complete.md` (source fallback: `packages/claude-dev-env/rules/workers-done-before-complete.md`) |
+| Workers / completion | `<managed-root>/rules/workers-done-before-complete.md` (source fallback: `packages/claude-dev-env/rules/workers-done-before-complete.md`) |
 | TDD / right-size | Review contract Tests + Design; `CODE_RULES.md` §7–§8 |
 
 ## Session policy map (canonical links)
@@ -70,13 +70,13 @@ Load only the group that matches the task. Keep session policy details in these 
 | Group | Canonical refs |
 |---|---|
 | Tests | `<managed-root>/rules/testing.md` (source fallback: `packages/claude-dev-env/rules/testing.md`); `<managed-root>/rules/anti-corollary-tests.md` (source fallback: `packages/claude-dev-env/rules/anti-corollary-tests.md`) |
-| Questions | `<managed-root>/rules/ask-user-question-required.md` (source fallback: `packages/claude-dev-env/rules/ask-user-question-required.md`); `<managed-root>/rules/verify-before-asking.md` (source fallback: `packages/claude-dev-env/rules/verify-before-asking.md`) |
+| Questions | `<managed-root>/rules/verify-before-asking.md` (source fallback: `packages/claude-dev-env/rules/verify-before-asking.md`) |
 | Search and shell | `<managed-root>/rules/filesystem-search.md` (source fallback: `packages/claude-dev-env/rules/filesystem-search.md`); `<managed-root>/rules/shell-invocation.md` (source fallback: `packages/claude-dev-env/rules/shell-invocation.md`) |
 | Runtime checks | `<managed-root>/rules/verify-runtime-state.md` (source fallback: `packages/claude-dev-env/rules/verify-runtime-state.md`) |
 | Documentation | `<managed-root>/rules/doc-inventory-integrity.md` (source fallback: `packages/claude-dev-env/rules/doc-inventory-integrity.md`); `<managed-root>/rules/docstring-prose-matches-implementation.md` (source fallback: `packages/claude-dev-env/rules/docstring-prose-matches-implementation.md`) |
 | Batch failures | `<managed-root>/rules/failure-blast-radius.md` (source fallback: `packages/claude-dev-env/rules/failure-blast-radius.md`) |
 | Git | `<managed-root>/rules/git-workflow.md` (source fallback: `packages/claude-dev-env/rules/git-workflow.md`); `<managed-root>/rules/re-stage-before-commit.md` (source fallback: `packages/claude-dev-env/rules/re-stage-before-commit.md`) |
-| Worker coordination | `<managed-root>/rules/agent-spawn-protocol.md` (source fallback: `packages/claude-dev-env/rules/agent-spawn-protocol.md`); `<managed-root>/rules/workers-done-before-complete.md` (source fallback: `packages/claude-dev-env/rules/workers-done-before-complete.md`) |
+| Worker coordination | `<managed-root>/rules/workers-done-before-complete.md` (source fallback: `packages/claude-dev-env/rules/workers-done-before-complete.md`) |
 
 Material implementation questions must return to the caller for `AskUserQuestion` handling; do not ask in plain text or guess.
 

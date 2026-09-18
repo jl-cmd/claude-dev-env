@@ -27,7 +27,6 @@ BDD is the outer process and TDD is the inner loop: [`bdd.md`](bdd.md) discovers
 
 | Concern | Rule file |
 |---|---|
-| Question routing | [`ask-user-question-required.md`](ask-user-question-required.md) |
 | Task tracking / worker completion | [`workers-done-before-complete.md`](workers-done-before-complete.md) |
 | Multi-step task list | skill `task-build` (see agents catalog) |
 

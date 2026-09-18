@@ -14,4 +14,4 @@ Structural AskUserQuestion lean-block validation in `ask_user_question_shape_blo
 
 ## Hedging claims
 
-Hedge-word discipline is prose guidance, not a hook: `rules/hedging-claims.md`. State a claim with its evidence, or label it unverified in the same sentence as the hedge word.
+Hedge-word discipline is prose guidance, not a hook. State a claim with its evidence, or label it unverified in the same sentence as the hedge word.
