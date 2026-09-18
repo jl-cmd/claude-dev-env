@@ -64,7 +64,7 @@ The report then presents each candidate to the owner for a durable-fix decision,
 
 ## Enforcement
 
-`code_rules_blast_radius.py` runs inside `code_rules_enforcer.py`, which the staged policy lint applies to each changed file under its `code-rules` rule. No write-time hook runs it, so run `python packages/claude-dev-env/scripts/cde_lint.py --staged` before you commit. CI runs the same lint against the merge base.
+`code_rules_blast_radius.py` runs inside `code_rules_enforcer.py`, which the staged policy lint applies to each changed file under its `code-rules` rule. No write-time hook runs it, so CI is where it reports. CI runs the same lint against the merge base.
 
 The check requires each raised type written directly inside a loop body to end in `RunFatal` or `ItemBlocked`. The lexical check covers raises written directly in loop bodies. Shared helpers carry multiple caller contexts, so their callers classify the boundary.
 

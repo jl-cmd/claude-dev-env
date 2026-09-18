@@ -15,7 +15,7 @@ When you add a `class="..."` attribute, add its `.<class>` selector to the `<sty
 
 ## What the check covers
 
-The `check_orphan_css_classes` check in `code_rules_orphan_css_class.py` reaches production Python through the staged policy lint, whose `code-rules` rule loads `code_rules_enforcer.py` and applies it to each changed file. Run `python packages/claude-dev-env/scripts/cde_lint.py --staged` before you commit. CI runs the same lint against the merge base. It:
+The `check_orphan_css_classes` check in `code_rules_orphan_css_class.py` reaches production Python through the staged policy lint, whose `code-rules` rule loads `code_rules_enforcer.py` and applies it to each changed file. CI runs that lint against the merge base. It:
 
 1. Collects each class name referenced in a `class="..."` attribute across the file's string literals.
 2. Collects each class selector defined in a `<style>` block — both in the file under edit and in every Python module beside it (its own directory and immediate child directories), since a markup module commonly imports its style constant from a companion package directory.
