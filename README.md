@@ -135,7 +135,6 @@ Behavioral rules loaded into every session.
 | `paired-test-coverage` | Every public function in an established suite carries a behavioral test |
 | `plain-illustrative-docstrings` | Docstring narrative reads plainly on the first pass |
 | `prompt-workflow-context-controls` | Prompt workflows stay low-context |
-| `pstack-models` | Portable role requirements for pstack delegation |
 | `re-stage-before-commit` | Stage this session's edits right before the commit |
 | `research-mode` | Cite sources, say "I don't know", use direct quotes |
 | `shell-invocation` | Use pwsh, and keep shell substitution out of Bash commands |
@@ -220,7 +219,6 @@ that carry them.
 | `pull-request` | Validate and publish GitHub pull request actions |
 | `recovering-codex-startup` | Diagnose Windows Codex startup with fresh read-only process evidence |
 | `repairing-hook-boundaries` | Repair Claude and Codex hook failures at the first failing boundary |
-| `session-continuity` | Carry session context forward for a clean pickup |
 | `skill-builder` | Author a skill package to the house conventions |
 | `syncing-submodules` | Record a submodule's current commit in its parent repository |
 | `task-build` | Gather open session tasks and register them on the task list |
