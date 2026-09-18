@@ -20,7 +20,6 @@ from code_rules_constants_config import (  # noqa: E402
     _scan_function_body_constants,
     check_constants_outside_config,
     check_constants_outside_config_advisory,
-    check_file_global_constants_use_count,
 )
 
 code_rules_enforcer = SimpleNamespace(
@@ -28,44 +27,12 @@ code_rules_enforcer = SimpleNamespace(
     _scan_function_body_constants=_scan_function_body_constants,
     check_constants_outside_config=check_constants_outside_config,
     check_constants_outside_config_advisory=check_constants_outside_config_advisory,
-    check_file_global_constants_use_count=check_file_global_constants_use_count,
 )
 
 
 CONSTANTS_OUTSIDE_CONFIG_PRODUCTION_FILE_PATH = "packages/app/services/encoding.py"
 
 PRODUCTION_FILE_PATH = "packages/claude-dev-env/hooks/blocking/example_production.py"
-
-
-def test_should_flag_constant_used_only_in_class_level_decorator() -> None:
-    source = (
-        "TIMEOUT = 5\n"
-        "\n"
-        "def register(value):\n"
-        "    def wrap(cls):\n"
-        "        return cls\n"
-        "    return wrap\n"
-        "\n"
-        "@register(TIMEOUT)\n"
-        "class Foo:\n"
-        "    pass\n"
-    )
-    issues = code_rules_enforcer.check_file_global_constants_use_count(
-        source, PRODUCTION_FILE_PATH
-    )
-    assert any(
-        "TIMEOUT" in issue and "only 1 function/method" in issue for issue in issues
-    ), f"Expected class-decorator usage to register as a caller, got: {issues}"
-
-
-def test_should_flag_constant_used_once_at_module_scope_and_once_in_function() -> None:
-    source = "UPPER = 1\nSHADOW = UPPER\n\ndef lonely_caller():\n    return UPPER\n"
-    issues = code_rules_enforcer.check_file_global_constants_use_count(
-        source, PRODUCTION_FILE_PATH
-    )
-    assert issues == [], (
-        f"Expected module-scope + function usage to count as 2 distinct callers, got: {issues}"
-    )
 
 
 def test_is_exempt_for_advisory_scan_returns_true_for_config_file() -> None:
@@ -241,30 +208,3 @@ def test_check_constants_outside_config_reports_more_than_three_constants() -> N
     )
 
 
-_SINGLE_CALLER_CONSTANT_SOURCE = (
-    "TIMEOUT = 5\n"
-    "\n"
-    "def lonely_caller() -> int:\n"
-    "    return TIMEOUT\n"
-)
-
-_ENFORCER_ENTRY_FILE_PATH = "packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py"
-
-
-def test_use_count_flags_single_caller_constant_for_ordinary_production_path() -> None:
-    issues = code_rules_enforcer.check_file_global_constants_use_count(
-        _SINGLE_CALLER_CONSTANT_SOURCE, PRODUCTION_FILE_PATH
-    )
-    assert any(
-        "TIMEOUT" in issue and "only 1 function/method" in issue for issue in issues
-    ), f"Expected single-caller constant flagged on an ordinary production path, got: {issues}"
-
-
-def test_use_count_exempts_enforcer_entry_module_path() -> None:
-    issues = code_rules_enforcer.check_file_global_constants_use_count(
-        _SINGLE_CALLER_CONSTANT_SOURCE, _ENFORCER_ENTRY_FILE_PATH
-    )
-    assert issues == [], (
-        "The enforcer entry module must be exempt to avoid self-blocking, "
-        f"got: {issues}"
-    )

@@ -151,7 +151,7 @@ class TestSharedRegistryPath:
     def test_config_file_path_not_a_module_level_attribute(self) -> None:
         """Pin PR #230 round 7: _CONFIG_FILE_PATH inlined into _build_confirm_instruction.
 
-        Single-consumer module-level constant moved to local per file-global-constants rule.
+        Single-consumer module-level constant kept in the scope that reads it.
         """
         assert not hasattr(detector, "_CONFIG_FILE_PATH")
 

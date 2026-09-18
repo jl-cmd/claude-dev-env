@@ -22,7 +22,7 @@ Before writing a single line — **task-local discovery only** (no project-wide 
 1. **Load scoped repository instructions first.** Starting at the repository root, read every applicable `AGENTS.md` on the path to the task file. Then read the applicable `CLAUDE.md` files. Apply nearer instructions after broader ones; the closest file wins.
 2. **Read the file you are about to edit** (when editing existing code). Note every existing comment so you can leave each one untouched on lines that remain otherwise unchanged.
 3. **Discover config only next to the task files.** From each file you will write or edit, walk up to the nearest package or repo root and inspect the target package's existing constants layout — such as `config/` or a sibling `*_constants` package. Keep this task-local constants search. Do **not** force a generic `config/` layout. Do **not** glob the whole tree for every config file. Do **not** glob or open `.env`, `.env.*`, or other secret files.
-4. **Reuse constants from that local table.** Reuse first: exact value match → import the existing name. Semantic match → reuse it. Add a shared constant only when the value is shared policy or has multiple consumers. When no match exists, use the target package's existing constants layout; a one-use value follows `file-global-constants` rather than becoming a new shared constant.
+4. **Reuse constants from that local table.** Reuse first: exact value match → import the existing name. Semantic match → reuse it. Add a shared constant only when the value is shared policy or has multiple consumers. When no match exists, use the target package's existing constants layout, and keep a one-use value in the scope that reads it rather than making it a new shared constant.
 5. **Search callers.** When a symbol, name, or signature changes, search its full caller boundary and update every consumer. This search may be wider than the constants search.
 
 ## Generation mindset (9 laws)
@@ -50,7 +50,6 @@ Installed paths use the active managed root and agents home resolved above; sour
 | Write-time gates | `<managed-root>/hooks/blocking/code_rules_enforcer.py` (source fallback: `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py`) |
 | Naming and abbreviations | `<managed-root>/docs/CODE_RULES.md#5-no-abbreviations` (source fallback: `packages/claude-dev-env/docs/CODE_RULES.md#5-no-abbreviations`) |
 | Policy surface map | `<managed-root>/rules/code-standards.md` (source fallback: `packages/claude-dev-env/rules/code-standards.md`) |
-| File-global constants | `<managed-root>/rules/file-global-constants.md` (source fallback: `packages/claude-dev-env/rules/file-global-constants.md`) |
 | Windows rmtree / mkdir | `<managed-root>/rules/windows-filesystem-safe.md` (source fallback: `packages/claude-dev-env/rules/windows-filesystem-safe.md`) |
 | `gh` body files | `<managed-root>/rules/gh-cli-conventions.md` (source fallback: `packages/claude-dev-env/rules/gh-cli-conventions.md`) |
 | Plain illustrative docstrings | `<managed-root>/rules/plain-illustrative-docstrings.md` (source fallback: `packages/claude-dev-env/rules/plain-illustrative-docstrings.md`) |

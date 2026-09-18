@@ -173,3 +173,18 @@ def test_known_undispatched_set_lists_only_existing_checks() -> None:
         f"KNOWN_UNDISPATCHED_CHECKS lists functions that no longer exist: "
         f"{sorted(stale_names)}. Restore the function or remove it from the set."
     )
+
+
+ARCHIVED_USE_COUNT_CHECK_NAME = "check_file_global_constants_use_count"
+
+
+def test_enforcer_dispatches_no_check_for_an_archived_rule() -> None:
+    enforcer_source = (_HOOK_DIRECTORY / "code_rules_enforcer.py").read_text(
+        encoding="utf-8"
+    )
+    assert ARCHIVED_USE_COUNT_CHECK_NAME not in enforcer_source, (
+        "The file-global constant use-count rule moved to rules-archived, so the "
+        "enforcer must import and dispatch no check that enforces it. A check "
+        "left wired here blocks a write against a rule the package no longer "
+        "documents."
+    )

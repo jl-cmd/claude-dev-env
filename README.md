@@ -120,7 +120,6 @@ Behavioral rules loaded into every session.
 | `explore-thoroughly` | Read before proposing, map patterns before committing |
 | `failure-blast-radius` | Name what a raise stops: the run, or one member of a batch |
 | `falsify-before-green` | A check's green counts once that check ran red on a named break |
-| `file-global-constants` | A module-level constant earns its place with two consumers |
 | `filesystem-search` | Every filesystem search names a scope |
 | `gh-cli-conventions` | Body content travels by file; paginated reads slurp before they filter |
 | `git-workflow` | Draft PRs, stacked PR patterns, review-response protocol |

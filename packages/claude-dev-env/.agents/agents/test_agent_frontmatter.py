@@ -446,10 +446,6 @@ EXPECTED_SOURCE_LINK_PAIRS = {
             "packages/claude-dev-env/rules/code-standards.md",
         ),
         (
-            "<managed-root>/rules/file-global-constants.md",
-            "packages/claude-dev-env/rules/file-global-constants.md",
-        ),
-        (
             "<managed-root>/rules/windows-filesystem-safe.md",
             "packages/claude-dev-env/rules/windows-filesystem-safe.md",
         ),
@@ -983,7 +979,6 @@ def test_clean_coder_follows_target_package_constant_layouts() -> None:
     assert "Reuse first" in body
     assert "shared policy" in body
     assert "multiple consumers" in body
-    assert "file-global-constants" in body
     assert "add the constant to the appropriate config file" not in body
 
 

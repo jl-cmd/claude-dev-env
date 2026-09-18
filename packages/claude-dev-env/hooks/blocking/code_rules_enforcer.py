@@ -60,7 +60,6 @@ from code_rules_constants_config import (  # noqa: E402
     check_config_duplicate_path_anchor,
     check_constants_outside_config,
     check_constants_outside_config_advisory,
-    check_file_global_constants_use_count,
 )
 from code_rules_docstrings import (  # noqa: E402
     check_class_docstring_names_public_methods,
@@ -358,7 +357,6 @@ def _python_magic_value_and_constant_issues(context: _ValidationContext) -> list
     all_issues.extend(check_fstring_structural_literals(content, file_path))
     all_issues.extend(check_constants_outside_config(content, file_path))
     check_constants_outside_config_advisory(content, file_path)
-    all_issues.extend(check_file_global_constants_use_count(content, file_path))
     return all_issues
 
 
@@ -1240,7 +1238,9 @@ def _deny_reason_for_issues(
     Returns:
         The complete ``permissionDecisionReason`` text.
     """
-    issue_list = "; ".join(all_blocking_issues[:DENY_REASON_ISSUE_PREVIEW_COUNT])
+    issue_list = VIOLATION_SEPARATOR.join(
+        all_blocking_issues[:DENY_REASON_ISSUE_PREVIEW_COUNT]
+    )
     deny_reason = (
         f"BLOCKED: [CODE_RULES] {len(all_blocking_issues)} violation(s): {issue_list}"
     )
@@ -1257,7 +1257,9 @@ def _deny_reason_for_issues(
             all_blocking_issues=all_blocking_issues,
         )
         if forecast_issues:
-            forecast_list = "; ".join(forecast_issues[:DENY_REASON_ISSUE_PREVIEW_COUNT])
+            forecast_list = VIOLATION_SEPARATOR.join(
+                forecast_issues[:DENY_REASON_ISSUE_PREVIEW_COUNT]
+            )
             deny_reason += (
                 f"; FULL-FILE FORECAST — {len(forecast_issues)} additional "
                 "violation(s) elsewhere in this file will block future edits "
@@ -1362,7 +1364,9 @@ def _report_hook_blocking_issues(
     )
     if not all_blocking_issues:
         return
-    issue_list = "; ".join(all_blocking_issues[:DENY_REASON_ISSUE_PREVIEW_COUNT])
+    issue_list = VIOLATION_SEPARATOR.join(
+        all_blocking_issues[:DENY_REASON_ISSUE_PREVIEW_COUNT]
+    )
     deny_reason = (
         f"BLOCKED: [CODE_RULES] {len(all_blocking_issues)} violation(s): {issue_list}"
         + _precheck_hint()
