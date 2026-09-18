@@ -64,10 +64,13 @@ contexts appears on that level's head. A required check that never fired is
 invisible debt at every level, and it surfaces only after the whole stack is
 pushed, when the repair costs a second pass over every branch.
 
-A red required check blocks the branch, whoever owns the failing line. The gate
-charges a change for the whole file it touches, so "pre-existing on main" is a
-blame note, not a pass. Fix the line in the next push or report the branch
-blocked. Read the gate's own report rather than a narrower substitute. A
+A red required check blocks the branch, whoever owns the failing line. The
+staged policy lint grades a change against the file's prior text, so a finding
+that survives is one the change introduced or made worse. Fix that line in the
+next push or report the branch blocked. A finding the change did not introduce
+is a gate-scoping defect: report it against the lint and leave the file's shape
+alone. Restructuring a file to satisfy a mis-scoped check trades one finding for
+a set of new ones. Read the gate's own report rather than a narrower substitute. A
 single-file mypy call cannot see sibling modules and reports false import
 errors, so it neither clears nor convicts a change.
 

@@ -37,6 +37,21 @@ Clone the revision the workflow pins, then point the gate at that clone. That
 run asks CI's question and its answer carries. Report a local result by naming
 the revision it used, so a reader can tell which question it answered.
 
+The selection flag decides which question the staged policy lint answers.
+`--staged` and `--base <revision>` carry each file's prior text, so the lint
+subtracts what the prior text already reported and only a breach the change
+introduced survives. `--files` and `--repository` carry no prior text, so every
+breach in the file reports and the command exits non-zero on debt the change
+never touched. CI runs the merge-base form, so reproduce a CI verdict with it:
+
+```
+git merge-base HEAD origin/main
+python packages/claude-dev-env/scripts/cde_lint.py --base <the revision that printed>
+```
+
+A `--files` run that comes back red on a file you touched has answered a
+different question. Read the reported line before you treat it as yours.
+
 ## The verdict belongs to CI
 
 CI decides whether a change passed, from evidence CI gathered. Keep that loop

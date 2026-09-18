@@ -11,7 +11,7 @@
 | Contract | `docs/CODE_RULES.md` | Full review criteria for PR agents, loaded on demand |
 | Pointer | `.cursor/BUGBOT.md` | Checked-in file Cursor BugBot reads; points at `CODE_RULES.md` |
 | Enforcer | `hooks/blocking/code_rules_enforcer.py` | Hand-maintained checks the staged policy lint runs; not generated from the docs |
-| Lint | `scripts/cde_lint.py` | Runs the enforcer and the other policy rules over staged or changed files |
+| Lint | `scripts/cde_lint.py` | Runs the enforcer and the other policy rules over staged or changed files, grading each against the file's prior text; see [`ci-owns-the-gate.md`](ci-owns-the-gate.md) for what each selection flag reports |
 | Session rules | `rules/*.md` | Runtime session policy (questions, tasks, shell) |
 
 Load `CODE_RULES.md` when reviewing a PR, resolving a policy conflict, or generating code. Prefer linking this ref over restating rules.
@@ -19,7 +19,7 @@ Load `CODE_RULES.md` when reviewing a PR, resolving a policy conflict, or genera
 Two standards live in `CODE_RULES.md` in full:
 
 - **TDD** — CODE_RULES §8 / AGENTS Tests: red, green, refactor; no production code before a failing test.
-- **Right-sized engineering** — CODE_RULES §7 / AGENTS Design: functions over classes; concrete over abstract; add an abstraction at the commit that introduces its second concrete implementation.
+- **Right-sized engineering** — CODE_RULES §7 / AGENTS Design: functions over classes; concrete over abstract; add an abstraction at the commit that introduces its second concrete implementation. That count is a house call, one occurrence earlier than the rule of three Fowler credits to Don Roberts. The direction comes from the literature; the number does not, so read it as this package's setting rather than as a cited standard.
 
 BDD is the outer process and TDD is the inner loop: [`bdd.md`](bdd.md) discovers and formulates the behavior a feature needs, then each formulated behavior is built through the TDD cycle.
 
