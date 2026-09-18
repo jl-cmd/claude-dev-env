@@ -36,7 +36,7 @@ A hook module is the sharpest case of the same rule: its docstring lead narrativ
 
 The staged policy lint carries this as its `hook-prose-consistency` rule, covering hook modules and their `*_constants.py` companions. It reports prose that claims a trigger the detector never fires on, and names the fix. No write-time hook runs it, so CI is where it reports.
 
-After writing a hook, ask: would a token matching every word of this message actually trip the detector? When the message names a shape the regex skips, rewrite the message to name only what the regex catches. The path-shape case is the common overstatement — a detector that keys off a path separator must not claim it blocks an "output-key segment". The corrective message spells the rewrite.
+After writing a hook, ask: would a token matching every word of this message trip the detector? When the message names a shape the regex skips, rewrite the message to name only what the regex catches. The path-shape case is the common overstatement — a detector that keys off a path separator must not claim it blocks an "output-key segment". The corrective message spells the rewrite.
 
 ## Full standard
 

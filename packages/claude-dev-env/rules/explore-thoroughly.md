@@ -13,7 +13,7 @@ Note: This deliberately chooses exploration depth over the "commit and execute q
 
 ## Exploration scales with risk
 
-- Small change to a familiar file: a quick read of the file and its immediate neighbors is sufficient.
+- Small change to a familiar file: a quick read of the file and its immediate neighbors is enough.
 - New feature or cross-cutting change: read broadly across the codebase to understand how similar things are done.
 - Architectural decision: explore the full landscape before recommending a direction.
 
@@ -23,4 +23,4 @@ The depth budget shrinks once the evidence is in hand. When you can already name
 
 ## Relationship to other rules
 
-- **research-mode.md** ensures factual claims are grounded. This rule ensures implementation plans are grounded in the actual codebase.
+- **research-mode.md** ensures factual claims are grounded. This rule ensures implementation plans are grounded in the codebase.
