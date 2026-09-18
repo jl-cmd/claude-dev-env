@@ -222,7 +222,6 @@ that carry them.
 | `repairing-hook-boundaries` | Repair Claude and Codex hook failures at the first failing boundary |
 | `session-continuity` | Carry session context forward for a clean pickup |
 | `skill-builder` | Author a skill package to the house conventions |
-| `source-command-logifix` | Restore the Logitech Gaming Software tray icon on Windows |
 | `syncing-submodules` | Record a submodule's current commit in its parent repository |
 | `task-build` | Gather open session tasks and register them on the task list |
 | `team-advisor` | Standing reviewer for a session and the subagents it spawns |
