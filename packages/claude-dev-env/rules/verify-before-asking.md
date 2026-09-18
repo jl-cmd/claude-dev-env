@@ -19,6 +19,7 @@ Before writing any AskUserQuestion or asking a clarifying question in chat, eval
 | Is the answer determined by file naming patterns or contents? | Glob a sample and inspect. |
 | Is the answer a value in a config or environment variable? | Read the config or check the env. |
 | Is the answer retrievable from any available MCP tool? | Use the tool. |
+| Did the user already state a criterion, standard, or line that decides this? | Apply it, state the call and the reason, and keep going. |
 
 Only after confirming the answer cannot be obtained through any available tool, ask the user.
 
@@ -36,6 +37,8 @@ Reserve user questions for:
 - **Missing context the user holds** — passwords, account names, intent, future plans.
 - **Judgment calls** — tradeoffs the user needs to evaluate.
 - **Scope decisions** — what to include or exclude from a piece of work.
+
+A preference question is one where the user has not yet given the line. Once they have, every case under that line is yours to decide. Handing back each application of a stated criterion turns one decision into many and stalls the work, because the person who set the standard does not hold the individual answers. Apply the criterion, name the call and the reason it went that way, and escalate only what the criterion cannot settle: a new axis it never covered, or a step nobody can undo. [`long-horizon-autonomy.md`](long-horizon-autonomy.md) carries the same duty for authority the task already granted.
 
 ## Examples
 

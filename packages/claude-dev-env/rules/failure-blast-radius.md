@@ -47,7 +47,7 @@ The re-raise comes first, sending an escalation directly through the boundary.
 An agent that hits a member failure keeps working the problem. Three things bound how:
 
 - **Repair in place.** The current run preserves every completed member.
-- **Three real attempts, then park.** An attempt is a theory of the cause, acted on. Re-running the same code on the same input counts as one attempt. Three theories cover the obvious cause, the second guess, and the cause revealed by the first two attempts. Judgment selects each theory; the third attempt sets the stopping point. After the third theory fails, park the member with its reason and move to the next. Parked members return after the batch.
+- **Three attempts, then park.** An attempt is a theory of the cause, acted on. Re-running the same code on the same input counts as one attempt. Three theories cover the obvious cause, the second guess, and the cause revealed by the first two attempts. Judgment selects each theory; the third attempt sets the stopping point. After the third theory fails, park the member with its reason and move to the next. Parked members return after the batch.
 - **The batch always reaches a deliverable.** Complete every member that can complete, produce the packaged artifact, then work the parked list. A run with 34 of 37 members complete and 3 parked records progress and continues to delivery.
 
 ## Three alike means one cause
@@ -58,9 +58,9 @@ The run report groups parked members by that signature and names every group of 
 
 ## Close the run with every outcome
 
-Every issue the run hit gets one line in the closing report: what failed, and how it ended — repaired, worked around, or parked. Members that finished after a repair belong in that list beside the parked ones. A workaround patched past mid-run is the likeliest real defect in the batch, because the closing report becomes its durable record.
+Every issue the run hit gets one line in the closing report: what failed, and how it ended — repaired, worked around, or parked. Members that finished after a repair belong in that list beside the parked ones. A workaround patched past mid-run is the likeliest defect in the batch, because the closing report becomes its durable record.
 
-The report then presents each candidate to the owner for a durable-fix decision, names the fixes the run recommends, and waits for the answer. The next run builds the selected fix; the current run completes its deliverable first.
+The report then presents each candidate to the owner for a durable-fix decision and names the fix the run recommends for each one. The report is a statement, not a gate: the current run completes its deliverable and ends. A later run builds whichever fixes the owner selects, and the recommendation stands as the default for any the owner does not rule on.
 
 ## Enforcement
 
@@ -82,7 +82,7 @@ scope, and the deliverable remains the run priority.
 
 Repair in place and preserve every completed asset in the current run.
 
-Three real attempts, then park. An attempt is a theory of the cause, acted
+Three attempts, then park. An attempt is a theory of the cause, acted
 on. Repeated execution of one theory remains one attempt.
 Three theories cover the obvious cause, the second guess, and the cause
 revealed by the first two attempts. Use your judgment to select each theory;
@@ -108,11 +108,12 @@ stops. For an asset-level stop, put the handling inside the loop body.
 Close the run by reporting what broke and what you did about it. Every issue
 gets one line: what failed, and how it ended — repaired, worked around, or
 parked. Include the ones you solved; a workaround you patched past in attempt
-two is the likeliest real defect in the list, because the closing report becomes
+two is the likeliest defect in the list, because the closing report becomes
 its durable record.
-Present each candidate for the owner's durable-fix decision, state which fixes
-you recommend and why, and wait for the answer. The next run builds the
-selected durable fix after this run completes its deliverable.
+Present each candidate for the owner's durable-fix decision and state which
+fix you recommend for each and why. Do not wait on the answer. Complete this
+run's deliverable and end. A later run builds whichever fixes the owner
+selects, and your recommendation stands as the default for the rest.
 
 Report as: N of M complete, K parked, and what you are working now.
 Close with: what broke, how each one ended, and which of them deserve a

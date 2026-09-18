@@ -28,11 +28,13 @@ When the code reduces each input to a canonical form and then compares the forms
 
 Name the degenerate value a dead implementation would return — empty string, `None`, `False`, a blanket refusal, an empty collection. When the test's expected value equals that default, the test passes whether the mechanism works or not. On its own it proves nothing.
 
-**Do this:** keep at least one case that expects the **non-default** answer, and drive the real code path — not a mock that only records that a call happened.
+**Do this:** keep at least one case that expects the **non-default** answer, and drive the production code path — not a mock that only records that a call happened.
 
 ### 3. What single change to the code would make this test fail?
 
 When the honest answer is "none," or "only a change that also breaks everything else," the test is decoration. Drop it or rewrite it so one named mutation kills it.
+
+**The policy-surface case.** A test that asserts a policy's own wording appears in the file that declares the policy has one mutation available: editing that sentence. It cannot report whether anything obeys the policy, so a suite full of such tests measures how many files repeat a rule, which is the duplication the reader was already complaining about. Assert instead that the surfaces the policy governs comply with it, and let the declaring file be the input rather than the subject.
 
 ## What a mechanism with a degenerate failure mode needs
 
