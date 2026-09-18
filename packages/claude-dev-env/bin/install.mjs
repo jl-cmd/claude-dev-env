@@ -48,6 +48,7 @@ import {
     continuityHostConfigurationPaths,
     removeContinuityHooks,
 } from './prune-session-continuity.mjs';
+import { removeRetiredPstackInstallation } from './prune-retired-pstack-store.mjs';
 import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
@@ -2749,6 +2750,14 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         summary.retiredSessionContinuity = {
             changedPaths: removeRetiredSessionContinuityHooks(),
         };
+        const retiredPstack = removeRetiredPstackInstallation(INSTALL_ROOT_RESOLUTION);
+        summary.retiredPstackStore = retiredPstack;
+        for (const pointerPath of retiredPstack.removedPointerPaths) {
+            console.log(`  Pstack: retired pointer removed from ${pointerPath}`);
+        }
+        if (retiredPstack.removedStorePath) {
+            console.log(`  Pstack: retired release store removed from ${retiredPstack.removedStorePath}`);
+        }
     }
     if (!selectedGroups && shouldInstallPstackPlugin()) {
         const pstackPlugin = installPstackPluginForHosts();

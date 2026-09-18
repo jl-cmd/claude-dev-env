@@ -3041,6 +3041,35 @@ function continuityCommandCount(configurationPath) {
     ).length;
 }
 
+test('a full install removes the retired pstack pointers and release store', t => {
+    const sandbox = pstackPluginSandbox(t);
+    const managedRoot = join(sandbox.homeDirectory, '.claude');
+    const agentsSkillsRoot = join(sandbox.homeDirectory, '.agents', 'skills');
+    const releaseSkillsRoot = join(managedRoot, 'pstack', 'releases', 'abc123', 'runtime', 'pstack', 'skills');
+    mkdirSync(join(releaseSkillsRoot, 'poteto-mode'), { recursive: true });
+    mkdirSync(join(managedRoot, 'skills'), { recursive: true });
+    mkdirSync(agentsSkillsRoot, { recursive: true });
+    const allPointerPaths = [
+        join(managedRoot, 'skills', 'pstack'),
+        join(agentsSkillsRoot, 'pstack'),
+    ];
+    for (const pointerPath of allPointerPaths) {
+        symlinkSync(releaseSkillsRoot, pointerPath, 'dir');
+    }
+
+    const installerOutput = runPstackInstaller(sandbox.homeDirectory, [], sandbox.environment);
+
+    for (const pointerPath of allPointerPaths) {
+        assert.equal(
+            existsSync(pointerPath),
+            false,
+            `the install removes ${pointerPath}, which Claude Code would load as a second pstack plugin`,
+        );
+    }
+    assert.equal(existsSync(join(managedRoot, 'pstack')), false);
+    assert.match(installerOutput, /Pstack: retired release store removed/);
+});
+
 test('a full install clears a retired session-continuity registration from every host', t => {
     const sandbox = pstackPluginSandbox(t);
     const companionCommand = 'node "/stale/.agents/skills/session-continuity/continuity.mjs" hook claude';
