@@ -35,24 +35,19 @@ import {
     CODEX_RULES_PACKAGE_DIRECTORY_NAME,
     CURSOR_SYNC_SCRIPT_FILE_NAME,
     CURSOR_RULES_DIRECTORY_NAME,
-    PSTACK_MODEL_RULE_FILE_NAME,
     SUBAGENT_MODEL_POLICY_FILE_NAME,
-    PSTACK_SEEDED_MODEL_PREFERENCES_FILE_NAMES,
     WINDOWS_PYTHON_LAUNCHER_COMMAND,
     PYTHON_PROBE_TIMEOUT_MILLISECONDS,
     CODEX_NATIVE_ROUTING_MATCHER,
 } from './install-constants.mjs';
 import {
-    PSTACK_PLUGIN_DIRECTORY_NAME,
-    PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH,
-    refreshPstackPluginManifest,
-} from '../scripts/refresh_pstack_plugin_skills.mjs';
-import { installPstack } from './pstack.mjs';
+    installPstackPlugin,
+    shouldInstallPstackPlugin,
+} from './install-pstack-plugin.mjs';
 import {
-    configureContinuityHosts,
     continuityHostConfigurationPaths,
     removeContinuityHooks,
-} from './install-session-continuity.mjs';
+} from './prune-session-continuity.mjs';
 import {
     resolveInstallRoot,
     parseExplicitTargetFromArgv,
@@ -432,90 +427,22 @@ export function runCursorRuleSync(pythonCommand, scriptPath, claudeRoot, cursorR
     );
 }
 
-const PSTACK_RELEASE_OPT_OUT_FLAG = '--no-pstack';
-const PSTACK_RELEASE_OPT_OUT_VARIABLE = 'CDE_INSTALL_PSTACK';
-const PSTACK_RELEASE_OPT_OUT_VALUE = '0';
-
 /**
- * Decide whether a full install also installs the pstack release.
+ * Install the pstack plugin from its marketplace into the hosts this run serves.
  *
- * The step reaches the network for the pinned upstream commit. `--no-pstack`
- * on the command line, or `CDE_INSTALL_PSTACK=0` in the environment, turns it
- * off for an air-gapped or offline run.
+ * The plugin carries its own skills, agents, and SessionStart hook, so the step
+ * reports its outcome rather than adding paths to the install manifest. A host
+ * without its command-line tool is skipped and a failing command is reported,
+ * so the rules, hooks, and skills this run already wrote still reach their
+ * durable places.
  *
- * @param {string[]} [argumentList] The command-line arguments after the script.
- * @param {Record<string, string|undefined>} [environment] The process environment.
- * @returns {boolean} True when this run installs the pstack release.
+ * @returns {{status: string, hosts: object[], warning: string|null}} The outcome.
  */
-export function shouldInstallPstackRelease(
-    argumentList = process.argv.slice(2),
-    environment = process.env,
-) {
-    if (argumentList.includes(PSTACK_RELEASE_OPT_OUT_FLAG)) return false;
-    return environment[PSTACK_RELEASE_OPT_OUT_VARIABLE] !== PSTACK_RELEASE_OPT_OUT_VALUE;
-}
-
-/**
- * Install the pstack release into a managed root without failing the run.
- *
- * The pstack store keeps its own state and its own skill pointers, so this
- * step reports its outcome rather than adding paths to the install manifest.
- * A network failure returns a warning so the rules, hooks, and skills this
- * run already wrote still reach their durable places.
- *
- * @param {object} [options] Options for `installPstack`, including `root`.
- * @param {object} [dependencies] Seams `installPstack` accepts, such as `fetchSource`.
- * @returns {{status: string, release: string|null, warning: string|null}} The outcome.
- */
-export function installPstackRelease(options = {}, dependencies = {}) {
-    try {
-        const installation = installPstack(options, dependencies);
-        return {
-            status: installation.status,
-            release: installation.release,
-            warning: installation.warning ?? null,
-        };
-    } catch (installError) {
-        return { status: 'failed', release: null, warning: installError.message };
-    }
-}
-
-/**
- * Refresh the pstack plugin manifest Claude Code reads, when this home has one.
- *
- * Claude Code loads a skills-directory folder as a plugin when it holds
- * `.claude-plugin/plugin.json`, and namespaces its skills as `pstack:how`.
- * Without the manifest, a folder of skill folders loads nothing.
- *
- * @param {string} [skillsRoot] The skills root to read. Defaults to the root
- *   this run installs into.
- * @returns {string|null} The manifest path when this run wrote it, else null.
- */
-export function refreshInstalledPstackPluginManifest(
-    skillsRoot = join(CLAUDE_HOME, MANAGED_SKILLS_DIRECTORY_NAME),
-) {
-    const pluginRoot = join(skillsRoot, PSTACK_PLUGIN_DIRECTORY_NAME);
-    const outcome = refreshPstackPluginManifest(pluginRoot);
-    if (!outcome.didWrite) return null;
-    return join(pluginRoot, PSTACK_PLUGIN_MANIFEST_RELATIVE_PATH);
-}
-
-function seedPstackPreferences(preferenceFileName) {
-    const preferenceDirectory = join(AGENTS_HOME, CURSOR_RULES_DIRECTORY_NAME);
-    const preferencePath = join(preferenceDirectory, preferenceFileName);
-    const preferenceSource = join(PACKAGE_ROOT, 'bin', preferenceFileName);
-    mkdirSync(preferenceDirectory, { recursive: true });
-    try {
-        copyFileSync(
-            preferenceSource,
-            preferencePath,
-            filesystemConstants.COPYFILE_EXCL,
-        );
-        return preferencePath;
-    } catch (copyError) {
-        if (copyError.code === 'EEXIST') return null;
-        throw copyError;
-    }
+export function installPstackPluginForHosts() {
+    return installPstackPlugin({
+        claudeRoot: CLAUDE_HOME,
+        codexHome: INSTALL_ROOT_RESOLUTION.codexHomeDirectory,
+    });
 }
 
 function seedSubagentModelPolicy() {
@@ -533,58 +460,30 @@ function seedSubagentModelPolicy() {
 }
 
 /**
- * Registers the session-continuity companion in each host configuration this
- * install root resolves. Without this step the companion ships to the agents
- * home but no host ever calls it, so Poteto Mode only activates when someone
- * remembers a second setup command.
+ * Removes the retired session-continuity registrations from the named hosts.
  *
- * A competing profile's registration, or an unwritable host configuration, is
- * reported and leaves the rest of the install intact.
+ * An earlier claude-dev-env registered the companion in Claude, Codex, and
+ * Cursor. The pstack plugin now carries the SessionStart context the companion
+ * supplied, so a registration left behind points every session at a deleted
+ * script. Every install clears all three hosts; an uninstall passes the two the
+ * settings block does not already own.
  *
- * @returns {string[]} The host configuration paths this run registered.
- */
-function registerSessionContinuityHooks() {
-    const configurationPaths = continuityHostConfigurationPaths(INSTALL_ROOT_RESOLUTION);
-    const hosts = Object.keys(configurationPaths)
-        .filter(host => existsSync(dirname(configurationPaths[host])));
-    if (hosts.length === 0) return [];
-    try {
-        const results = configureContinuityHosts(INSTALL_ROOT_RESOLUTION, hosts);
-        for (const result of results) {
-            const state = result.changed ? 'registered' : 'already registered';
-            console.log(`  Session continuity: ${state} in ${result.path}`);
-        }
-        return results.map(result => result.path);
-    } catch (registrationError) {
-        console.warn(
-            `  Warning: session-continuity hooks were not registered (${registrationError.message}) — `
-            + 'run bin/install-session-continuity.mjs once the cause is resolved.',
-        );
-        return [];
-    }
-}
-
-/**
- * Removes the companion's registrations from the Codex and Cursor hook files
- * during an uninstall. The Claude settings.json copy is pruned inside the
- * settings block, which owns that file's single write.
- *
- * Each host this installer registered is a host it has to clean, or the host
- * keeps calling a script the uninstall deleted.
- *
+ * @param {string[]} [hosts] The hosts to clear. Defaults to all three.
  * @returns {string[]} The host configuration paths this run changed.
  */
-function removeSessionContinuityHooksFromOtherHosts() {
+function removeRetiredSessionContinuityHooks(hosts = ['claude', 'codex', 'cursor']) {
     const configurationPaths = continuityHostConfigurationPaths(INSTALL_ROOT_RESOLUTION);
     const changedPaths = [];
-    for (const host of ['codex', 'cursor']) {
+    for (const host of hosts) {
         const configurationPath = configurationPaths[host];
         if (!existsSync(configurationPath)) continue;
-        const configuration = JSON.parse(readFileSync(configurationPath, 'utf8'));
+        const configurationText = readFileSync(configurationPath, 'utf8');
+        const configuration = JSON.parse(configurationText);
         if (removeContinuityHooks(configuration) === 0) continue;
-        writeFileSync(configurationPath, JSON.stringify(configuration, null, 2) + '\n');
+        const indent = hostConfigurationIndent(configurationText);
+        writeFileSync(configurationPath, JSON.stringify(configuration, null, indent) + '\n');
         changedPaths.push(configurationPath);
-        console.log(`  Session continuity: hook registrations removed from ${configurationPath}`);
+        console.log(`  Session continuity: retired hook registrations removed from ${configurationPath}`);
     }
     return changedPaths;
 }
@@ -2811,20 +2710,6 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         allInstalledFiles.push(...generatedCursorPaths);
         summary.cursorRules = { created: generatedCursorPaths.length, updated: 0, paths: generatedCursorPaths };
         syncWrittenPaths(allInstalledFiles);
-        const pstackRuleSource = join(INSTALL_ROOT_RESOLUTION.cursorRulesInstallDirectory, PSTACK_MODEL_RULE_FILE_NAME);
-        const sharedRuleDirectory = join(AGENTS_HOME, CURSOR_RULES_DIRECTORY_NAME);
-        const sharedRulePath = join(sharedRuleDirectory, PSTACK_MODEL_RULE_FILE_NAME);
-        mkdirSync(sharedRuleDirectory, { recursive: true });
-        copyFileSync(pstackRuleSource, sharedRulePath);
-        allInstalledFiles.push(sharedRulePath);
-        syncWrittenPaths(allInstalledFiles);
-        for (const eachPreferenceFileName of PSTACK_SEEDED_MODEL_PREFERENCES_FILE_NAMES) {
-            const seededPreferencePath = seedPstackPreferences(eachPreferenceFileName);
-            if (seededPreferencePath) {
-                allInstalledFiles.push(seededPreferencePath);
-                allUserOwnedPreferencePaths.add(seededPreferencePath);
-            }
-        }
         const seededPolicyPath = seedSubagentModelPolicy();
         if (seededPolicyPath) {
             allInstalledFiles.push(seededPolicyPath);
@@ -2860,16 +2745,20 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     }
     summary.skills = { created: skillsCreated, updated: skillsUpdated, pruned: 0, paths: skillPaths };
     allInstalledFiles.push(...skillPaths);
-    if (!selectedGroups && shouldInstallPstackRelease()) {
-        const pstackRelease = installPstackRelease({ root: CLAUDE_HOME });
-        summary.pstackRelease = pstackRelease;
-        console.log(pstackRelease.warning
-            ? `  Pstack: ${pstackRelease.status} \u2014 ${pstackRelease.warning}`
-            : `  Pstack: ${pstackRelease.status} (${pstackRelease.release})`);
+    if (!selectedGroups) {
+        summary.retiredSessionContinuity = {
+            changedPaths: removeRetiredSessionContinuityHooks(),
+        };
     }
-    const pstackManifestPath = refreshInstalledPstackPluginManifest();
-    if (pstackManifestPath) allInstalledFiles.push(pstackManifestPath);
-    summary.pstackPlugin = { manifestPath: pstackManifestPath };
+    if (!selectedGroups && shouldInstallPstackPlugin()) {
+        const pstackPlugin = installPstackPluginForHosts();
+        summary.pstackPlugin = pstackPlugin;
+        for (const eachHost of pstackPlugin.hosts) {
+            console.log(eachHost.warning
+                ? `  Pstack (${eachHost.host}): ${eachHost.status} \u2014 ${eachHost.warning}`
+                : `  Pstack (${eachHost.host}): ${eachHost.status}`);
+        }
+    }
     syncWrittenPaths([...allInstalledFiles, ...publishedPointerPaths]);
     throwIfFault(FAULT_PHASES.AFTER_FILE_STAGING);
     throwIfFault(FAULT_PHASES.BEFORE_DURABLE_PROMOTION);
@@ -2999,9 +2888,6 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         console.log(`  \u2713 ${relative(CLAUDE_HOME, agentsHubDest)} (canonical guidance)`);
     }
     const isFullInstall = !selectedGroups;
-    if (isFullInstall && shouldInstallAnyHooks) {
-        summary.sessionContinuity = { configuredPaths: registerSessionContinuityHooks() };
-    }
     const didPruneRun = isFullInstall && UNRESOLVED_DEPENDENCY_NAMES.length === 0;
     let failedPrunePaths = [];
     let stalePrunedTotal = 0;
@@ -3268,7 +3154,7 @@ function executeUninstallPlan(plan, helpers = {}) {
     if (!codexRoutingHookExists()) {
         pruneManagedHooksFromHostConfiguration(CODEX_HOOKS_CONFIGURATION_PATH, 2);
     }
-    removeSessionContinuityHooksFromOtherHosts();
+    removeRetiredSessionContinuityHooks(['codex', 'cursor']);
     throwIfFault(FAULT_PHASES.AFTER_SETTINGS_WRITE);
 
     unsetGlobalGitHooksPathIfOurs();
@@ -3394,7 +3280,7 @@ Usage:
   npx ${PACKAGE_NAME} --target DIR Install into DIR instead of ~/.claude (overrides CLAUDE_CONFIG_DIR)
   npx ${PACKAGE_NAME} --profile ID Install into one named profile root (under the profiles root)
   npx ${PACKAGE_NAME} --profiles A,B  Install into each selected profile (one ownership manifest per target)
-  npx ${PACKAGE_NAME} --no-pstack  Full install without the pinned pstack release (also CDE_INSTALL_PSTACK=0)
+  npx ${PACKAGE_NAME} --no-pstack  Full install without the pstack plugin (also CDE_INSTALL_PSTACK=0)
   npx ${PACKAGE_NAME} --uninstall  Remove installed files from the selected root
   npx ${PACKAGE_NAME} --help       Show this help
 

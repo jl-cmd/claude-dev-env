@@ -119,6 +119,11 @@ test('resolveInstallRoot names ~/.codex/rules and allows files under it', () => 
     const expectedDirectory = join(homeDirectory, DEFAULT_CODEX_DIRECTORY_NAME, CODEX_RULES_DIRECTORY_NAME);
     assert.equal(resolution.codexRulesInstallDirectory, expectedDirectory);
     assert.equal(
+        resolution.codexHomeDirectory,
+        join(homeDirectory, DEFAULT_CODEX_DIRECTORY_NAME),
+        'the pstack plugin step installs into this Codex home',
+    );
+    assert.equal(
         isAllowedInstallDestination(join(expectedDirectory, CODEX_RULES_SHIPPED_FILE_NAME), resolution),
         true,
     );
@@ -140,6 +145,7 @@ test('CODEX_HOME relocates the Codex rules destination', () => {
         resolution.codexRulesInstallDirectory,
         join(relocatedHome, CODEX_RULES_DIRECTORY_NAME),
     );
+    assert.equal(resolution.codexHomeDirectory, relocatedHome);
 });
 
 test('a full install copies shipped Codex rules and leaves a local default.rules in place', () => {

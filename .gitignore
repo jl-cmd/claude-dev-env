@@ -74,10 +74,3 @@ pytestdebug.log
 # backslash path passes through Git Bash (separators eaten, colon encoded)
 *AppDataLocalTemp*
 
-/.claude/pstack/
-/.claude/skills/pstack-*/
-/.claude/skills/cursor-team-kit-*/
-/.claude/skills/cde-create-skill/
-/.agents/skills/pstack-*/
-/.agents/skills/cursor-team-kit-*/
-/.agents/skills/cde-create-skill/
