@@ -13,14 +13,14 @@ model on every spawn, so no agent definition names one, concrete or
 `inherit`::
 
     ok:   <no model key at all>
-    flag: model: inherit    <- caller can no longer choose the model
+    flag: model: inherit    <- caller cannot choose the model
     flag: model: opus       <- pinned concrete model, caller can't override
 
 Every block must also load through `yaml.safe_load`. An unquoted colon inside
 a plain scalar reads as a mapping key and makes the whole block unloadable::
 
     ok:   description: ... constraints. Examples are below.
-    flag: description: ... constraints. Examples:   <- block no longer loads
+    flag: description: ... constraints. Examples:   <- block does not load
 
 Two parsers read these files, and a block that satisfies one can still be
 unreadable by the other. `scripts/codex_compat_materializer.py` loads the

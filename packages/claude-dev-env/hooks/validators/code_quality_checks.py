@@ -1,9 +1,15 @@
 """Code quality checks validator.
 
 Implements:
-- Check 30: Function too long (max 30 lines)
+- Check 30: Function too long (max 30 lines), production files only
 - Check 31: Nesting too deep (max 2 levels)
-- Check 32: File too long (max 400 lines)
+- Check 32: File too long (max 400 lines), production files only
+
+The two length caps read production files only. A test module grows with the
+surface it covers, and a linear list of assertions is what a reader wants there,
+so capping its length pushes a contributor to split a suite for the counter
+rather than for the reader. ``magic_value_checks`` short-circuits on the same
+category through the same helper.
 """
 
 import ast
@@ -11,6 +17,7 @@ import sys
 from pathlib import Path
 from typing import List
 
+from .exempt_paths import is_test_file
 from .validator_base import Violation, source_text, syntax_tree
 
 
@@ -21,6 +28,9 @@ MAX_FILE_LINES = 400
 
 def check_function_length(tree: ast.AST, filename: str) -> List[Violation]:
     violations: List[Violation] = []
+
+    if is_test_file(filename):
+        return violations
 
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -73,6 +83,9 @@ def _get_max_nesting_depth(node: ast.AST, current_depth: int) -> int:
 def check_file_length(file_path: Path) -> List[Violation]:
     violations: List[Violation] = []
     filename = str(file_path)
+
+    if is_test_file(filename):
+        return violations
 
     try:
         lines = source_text(file_path).splitlines()
