@@ -11,8 +11,6 @@ import {
     readdirSync,
     existsSync,
     copyFileSync,
-    cpSync,
-    lstatSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -20,8 +18,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
     collectPackageSourceConflicts,
-    installPstackRelease,
-    shouldInstallPstackRelease,
     CONTENT_DIRECTORIES,
     CORE_INCLUDE_DIRECTORIES,
     CORE_SKILLS,
@@ -54,7 +50,6 @@ import {
     hookCommandComparisonSpelling,
     detectPython,
     retainNewestRunBackupOnly,
-    refreshInstalledPstackPluginManifest,
 } from './install.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 
@@ -2881,42 +2876,6 @@ test('pruneStaleInstalledFiles leaves the run backup root standing when the rena
     }
 });
 
-test('the pstack step writes a manifest for a skills root that carries pstack', () => {
-    const skillsRoot = mkdtempSync(join(tmpdir(), 'cdev-pstack-step-'));
-    try {
-        const skillDirectory = join(skillsRoot, 'pstack', 'how');
-        mkdirSync(skillDirectory, { recursive: true });
-        writeFileSync(join(skillDirectory, 'SKILL.md'), '---\nname: how\n---\n');
-
-        const manifestPath = refreshInstalledPstackPluginManifest(skillsRoot);
-
-        assert.equal(
-            manifestPath,
-            join(skillsRoot, 'pstack', '.claude-plugin', 'plugin.json'),
-            'the step reports the manifest it wrote so the run records the path',
-        );
-        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-        assert.deepEqual(manifest.skills, ['./how']);
-        assert.equal(
-            refreshInstalledPstackPluginManifest(skillsRoot),
-            null,
-            'a second run writes nothing and reports no path',
-        );
-    } finally {
-        rmSync(skillsRoot, { recursive: true, force: true });
-    }
-});
-
-test('the pstack step reports no path for a skills root without pstack', () => {
-    const skillsRoot = mkdtempSync(join(tmpdir(), 'cdev-pstack-absent-'));
-    try {
-        assert.equal(refreshInstalledPstackPluginManifest(skillsRoot), null);
-        assert.equal(existsSync(join(skillsRoot, 'pstack')), false);
-    } finally {
-        rmSync(skillsRoot, { recursive: true, force: true });
-    }
-});
-
 const RETIRED_SKILLS = ['pr-small-cl', 'session-log', 'session-tidy'];
 
 test('each core skill has a shipped entry point', () => {
@@ -2976,43 +2935,24 @@ test('pruneRetiredHookEntriesFromSettings warns and returns 0 when the host conf
 
 const PSTACK_TEST_PACKAGE_ROOT = dirname(fileURLToPath(new URL('./install.mjs', import.meta.url)));
 const PSTACK_TEST_INSTALLER_PATH = fileURLToPath(new URL('./install.mjs', import.meta.url));
-const PSTACK_TEST_LOCK = JSON.parse(readFileSync(
-    new URL('../scripts/pstack.lock.json', import.meta.url),
-    'utf8',
-));
 
-function writePstackFixtureFile(filePath, fileContent) {
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, fileContent);
-}
-
-function pstackUpstreamFixture(t) {
-    const temporaryRoot = mkdtempSync(join(tmpdir(), 'cdev-install-pstack-'));
-    t.after(() => rmSync(temporaryRoot, { recursive: true, force: true }));
-    const checkout = join(temporaryRoot, 'checkout');
-    for (const [component, allSkillNames] of Object.entries(PSTACK_TEST_LOCK.requiredSkills)) {
-        for (const skillName of allSkillNames) {
-            writePstackFixtureFile(
-                join(checkout, component, 'skills', skillName, 'SKILL.md'),
-                `---\nname: ${skillName}\ndescription: Test ${skillName}.\n---\n\nRun ${skillName}.\n`,
-            );
-        }
+function writeRecordingHostCommand(directory, name, logPath) {
+    mkdirSync(directory, { recursive: true });
+    if (process.platform === 'win32') {
+        const batchPath = join(directory, `${name}.cmd`);
+        writeFileSync(batchPath, `@echo off\r\n>>"${logPath}" echo ${name} %*\r\n`);
+        return batchPath;
     }
-    const managedRoot = join(temporaryRoot, 'home', '.claude');
-    return {
-        managedRoot,
-        options: {
-            root: managedRoot,
-            lock: structuredClone(PSTACK_TEST_LOCK),
-            packageRoot: dirname(PSTACK_TEST_PACKAGE_ROOT),
-        },
-        dependencies: {
-            fetchSource: (_lock, destination) => cpSync(checkout, destination, { recursive: true }),
-        },
-    };
+    const commandPath = join(directory, name);
+    writeFileSync(
+        commandPath,
+        `#!/bin/sh\nprintf '%s %s\\n' "${name}" "$*" >> "${logPath}"\n`,
+        { mode: 0o755 },
+    );
+    return commandPath;
 }
 
-function runPstackInstaller(homeDirectory, extraArguments) {
+function runPstackInstaller(homeDirectory, extraArguments, environmentOverrides = {}) {
     return execFileSync('node', [PSTACK_TEST_INSTALLER_PATH, ...extraArguments], {
         cwd: dirname(PSTACK_TEST_PACKAGE_ROOT),
         encoding: 'utf8',
@@ -3024,81 +2964,79 @@ function runPstackInstaller(homeDirectory, extraArguments) {
             CLAUDE_CONFIG_DIR: join(homeDirectory, '.claude'),
             GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
             CDE_INSTALL_PSTACK: '1',
-            GIT_ALLOW_PROTOCOL: 'none',
+            ...environmentOverrides,
         },
     });
 }
 
-function withPstackTemporaryHome(t, runAssertions) {
+function pstackPluginSandbox(t) {
     const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-install-pstack-run-'));
     t.after(() => rmSync(homeDirectory, { recursive: true, force: true }));
-    runAssertions(homeDirectory);
-}
-
-test('the base install publishes the pstack poteto-mode entry into the managed skills home', t => {
-    const fixture = pstackUpstreamFixture(t);
-
-    const outcome = installPstackRelease(fixture.options, fixture.dependencies);
-
-    assert.equal(outcome.status, 'installed');
-    assert.equal(outcome.warning, null);
-    const pstackRoot = join(fixture.managedRoot, 'skills', 'pstack');
-    const entryPath = join(pstackRoot, 'poteto-mode');
-    assert.equal(lstatSync(pstackRoot).isSymbolicLink(), true, 'the pstack root is a pointer into the release');
-    assert.equal(existsSync(join(entryPath, 'SKILL.md')), true, 'the nested entry resolves to a skill');
-});
-
-test('an unreachable pstack upstream reports a warning and keeps the base install going', t => {
-    const fixture = pstackUpstreamFixture(t);
-
-    const outcome = installPstackRelease(fixture.options, {
-        fetchSource: () => { throw new Error('network unavailable'); },
-    });
-
-    assert.equal(outcome.status, 'failed');
-    assert.equal(outcome.release, null);
-    assert.match(outcome.warning, /network unavailable/);
-});
-
-test('--no-pstack and CDE_INSTALL_PSTACK=0 each turn the pstack step off', () => {
-    assert.equal(shouldInstallPstackRelease([], {}), true);
-    assert.equal(shouldInstallPstackRelease(['--no-pstack'], {}), false);
-    assert.equal(shouldInstallPstackRelease([], { CDE_INSTALL_PSTACK: '0' }), false);
-    assert.equal(shouldInstallPstackRelease([], { CDE_INSTALL_PSTACK: '1' }), true);
-});
-
-test('a full install runs the pstack step and reports an upstream failure without stopping', t => {
-    withPstackTemporaryHome(t, homeDirectory => {
-        const installerOutput = runPstackInstaller(homeDirectory, []);
-
-        assert.match(installerOutput, /Pstack:/, 'the run reports the pstack step');
-        assert.equal(existsSync(join(homeDirectory, '.claude', 'pstack')), true);
-    });
-});
-
-test('--no-pstack leaves the pstack store absent', t => {
-    withPstackTemporaryHome(t, homeDirectory => {
-        const installerOutput = runPstackInstaller(homeDirectory, ['--no-pstack']);
-
-        assert.doesNotMatch(installerOutput, /Pstack:/);
-        assert.equal(existsSync(join(homeDirectory, '.claude', 'pstack')), false);
-    });
-});
-
-function runContinuityInstaller(homeDirectory, extraArguments) {
-    return execFileSync('node', [PSTACK_TEST_INSTALLER_PATH, ...extraArguments], {
-        cwd: dirname(PSTACK_TEST_PACKAGE_ROOT),
-        encoding: 'utf8',
-        env: {
-            ...process.env,
-            CDE_INSTALL_PSTACK: '0',
-            HOME: homeDirectory,
-            USERPROFILE: homeDirectory,
-            GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
-            CODEX_HOME: join(homeDirectory, '.codex'),
+    const commandLogPath = join(homeDirectory, 'host-commands.log');
+    const commandDirectory = join(homeDirectory, 'host-commands');
+    return {
+        homeDirectory,
+        commandLogPath,
+        environment: {
+            CDE_CLAUDE_EXECUTABLE: writeRecordingHostCommand(commandDirectory, 'claude', commandLogPath),
+            CDE_CODEX_EXECUTABLE: writeRecordingHostCommand(commandDirectory, 'codex', commandLogPath),
         },
-    });
+        recordedCommands() {
+            if (!existsSync(commandLogPath)) return [];
+            return readFileSync(commandLogPath, 'utf8')
+                .split(/\r?\n/)
+                .map(eachLine => eachLine.trim())
+                .filter(Boolean);
+        },
+    };
 }
+
+test('a full install adds the pstack marketplace and plugin on both hosts', t => {
+    const sandbox = pstackPluginSandbox(t);
+
+    const installerOutput = runPstackInstaller(sandbox.homeDirectory, [], sandbox.environment);
+
+    assert.deepEqual(sandbox.recordedCommands(), [
+        'claude plugin marketplace add michael-denyer/pstack-claude',
+        'claude plugin install pstack@pstack-claude',
+        'codex plugin marketplace add michael-denyer/pstack-claude',
+        'codex plugin add pstack@pstack-claude',
+    ]);
+    assert.match(installerOutput, /Pstack \(claude\): installed/);
+    assert.match(installerOutput, /Pstack \(codex\): installed/);
+});
+
+test('an absent host command is reported and leaves the other host installed', t => {
+    const sandbox = pstackPluginSandbox(t);
+
+    const installerOutput = runPstackInstaller(sandbox.homeDirectory, [], {
+        ...sandbox.environment,
+        CDE_CODEX_EXECUTABLE: join(sandbox.homeDirectory, 'host-commands', 'absent-codex-command'),
+    });
+
+    assert.match(installerOutput, /Pstack \(claude\): installed/);
+    assert.match(
+        installerOutput,
+        /Pstack \(codex\): (skipped|failed)/,
+        'the absent host is reported either way, and the two unit tests pin which signal maps to skipped',
+    );
+    assert.doesNotMatch(installerOutput, /Pstack \(codex\): installed/);
+    assert.deepEqual(
+        sandbox.recordedCommands().filter(eachCommand => eachCommand.startsWith('codex')),
+        [],
+    );
+});
+
+test('--no-pstack leaves both hosts untouched', t => {
+    const sandbox = pstackPluginSandbox(t);
+
+    const installerOutput = runPstackInstaller(
+        sandbox.homeDirectory, ['--no-pstack'], sandbox.environment,
+    );
+
+    assert.deepEqual(sandbox.recordedCommands(), []);
+    assert.doesNotMatch(installerOutput, /Pstack \(/);
+});
 
 function continuityCommandCount(configurationPath) {
     if (!existsSync(configurationPath)) return 0;
@@ -3112,32 +3050,59 @@ function continuityCommandCount(configurationPath) {
     ).length;
 }
 
-test('a full install registers the session-continuity companion in every host, and uninstall takes it back out', t => {
-    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-continuity-install-'));
-    t.after(() => rmSync(homeDirectory, { recursive: true, force: true }));
-    const allConfigurationPaths = [
-        join(homeDirectory, '.claude', 'settings.json'),
-        join(homeDirectory, '.codex', 'hooks.json'),
-        join(homeDirectory, '.cursor', 'hooks.json'),
+test('a full install removes the retired pstack pointers and release store', t => {
+    const sandbox = pstackPluginSandbox(t);
+    const managedRoot = join(sandbox.homeDirectory, '.claude');
+    const agentsSkillsRoot = join(sandbox.homeDirectory, '.agents', 'skills');
+    const releaseSkillsRoot = join(managedRoot, 'pstack', 'releases', 'abc123', 'runtime', 'pstack', 'skills');
+    mkdirSync(join(releaseSkillsRoot, 'poteto-mode'), { recursive: true });
+    mkdirSync(join(managedRoot, 'skills'), { recursive: true });
+    mkdirSync(agentsSkillsRoot, { recursive: true });
+    const allPointerPaths = [
+        join(managedRoot, 'skills', 'pstack'),
+        join(agentsSkillsRoot, 'pstack'),
     ];
-
-    runContinuityInstaller(homeDirectory, []);
-
-    for (const configurationPath of allConfigurationPaths) {
-        assert.equal(
-            continuityCommandCount(configurationPath) > 0,
-            true,
-            `the install registers the companion in ${configurationPath} without a second setup command`,
-        );
+    for (const pointerPath of allPointerPaths) {
+        symlinkSync(releaseSkillsRoot, pointerPath, 'dir');
     }
 
-    runContinuityInstaller(homeDirectory, ['--uninstall']);
+    const installerOutput = runPstackInstaller(sandbox.homeDirectory, [], sandbox.environment);
+
+    for (const pointerPath of allPointerPaths) {
+        assert.equal(
+            existsSync(pointerPath),
+            false,
+            `the install removes ${pointerPath}, which Claude Code would load as a second pstack plugin`,
+        );
+    }
+    assert.equal(existsSync(join(managedRoot, 'pstack')), false);
+    assert.match(installerOutput, /Pstack: retired release store removed/);
+});
+
+test('a full install clears a retired session-continuity registration from every host', t => {
+    const sandbox = pstackPluginSandbox(t);
+    const companionCommand = 'node "/stale/.agents/skills/session-continuity/continuity.mjs" hook claude';
+    const allConfigurationPaths = [
+        join(sandbox.homeDirectory, '.claude', 'settings.json'),
+        join(sandbox.homeDirectory, '.codex', 'hooks.json'),
+        join(sandbox.homeDirectory, '.cursor', 'hooks.json'),
+    ];
+    for (const configurationPath of allConfigurationPaths) {
+        mkdirSync(dirname(configurationPath), { recursive: true });
+        writeFileSync(configurationPath, JSON.stringify({
+            hooks: {
+                SessionStart: [{ hooks: [{ type: 'command', command: companionCommand }] }],
+            },
+        }, null, 2) + '\n');
+    }
+
+    runPstackInstaller(sandbox.homeDirectory, [], sandbox.environment);
 
     for (const configurationPath of allConfigurationPaths) {
         assert.equal(
             continuityCommandCount(configurationPath),
             0,
-            `uninstall leaves no registration in ${configurationPath} pointing at a removed script`,
+            `the install leaves no registration in ${configurationPath} pointing at a removed script`,
         );
     }
 });

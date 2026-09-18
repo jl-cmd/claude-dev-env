@@ -1,89 +1,58 @@
 # Install pstack across hosts
 
-A full `claude-dev-env` install also installs the pinned pstack release, so `npx -y claude-dev-env@latest` needs no second command. Run `cde-pstack` to manage that release on its own: verify it, refresh its pin, or launch a host with it. The pstack installer keeps complete pstack and cursor-team-kit trees, including scripts, playbooks, references, agents, licenses, and images. Generated entry points load the compatibility instructions before the upstream workflow. The original upstream files remain under `upstream/` in each release.
+A full `claude-dev-env` install also installs [pstack](https://github.com/michael-denyer/pstack-claude) as a plugin from its own marketplace, so `npx -y claude-dev-env@latest` needs no second command. The plugin ships its own skills, agents, model defaults, and SessionStart hook. Upstream owns every one of those, so this repository holds no pstack tree, no pinned commit, and no adapter files.
 
-## Commands
+## What the install step runs
 
-From this repository checkout:
-
-```bash
-node packages/claude-dev-env/bin/pstack.mjs install --project "$PWD" --strict
-node packages/claude-dev-env/bin/pstack.mjs verify --project "$PWD"
-```
-
-After a package containing this change is published, the installed commands are:
+For Claude Code, with `CLAUDE_CONFIG_DIR` set to the managed root this run writes to:
 
 ```bash
-cde-pstack launch --host claude --
-cde-pstack launch --host codex --
-cde-pstack launch --host cursor -- --wait .
+claude plugin marketplace add michael-denyer/pstack-claude
+claude plugin install pstack@pstack-claude
 ```
 
-Use `cde-pstack install` before these launch commands. The launcher checks the shared pin at a one-hour interval before starting the host. Use `--interval-ms` to change the interval, `--force` to refresh immediately, and `--offline` to use an existing installation. Keep Cursor's `--wait` flag so the launcher remains alive with the editor task.
+For Codex, with `CODEX_HOME` set to the resolved Codex home:
 
-A launcher records its process as an active session. Other launcher sessions reuse that release until the active processes end. Each generated skill also records immutable absolute paths to its own supporting files. Direct launches outside this wrapper do not register a session lease. Restart those sessions before adopting a new pin.
+```bash
+codex plugin marketplace add michael-denyer/pstack-claude
+codex plugin add pstack@pstack-claude
+```
 
-Use `--root` to select a Claude config root or `--project` to install into a repository.
+Both commands run without a prompt and report their outcome on stdout. Claude Code records the marketplace under `extraKnownMarketplaces` and the plugin under `enabledPlugins` in that root's `settings.json`, then unpacks the plugin under `plugins/cache/pstack-claude/pstack/<version>`.
 
-## The pstack step inside a full install
+## When a host is absent
 
-A full install installs the pstack release into the managed Claude root it already writes to. The step reaches the network for the pinned upstream commit. A failure prints a warning and the install continues, so a network problem never stops the rules, hooks, and skills.
+Each host is one member of the batch. A host whose command-line tool is not on `PATH` is skipped, and a host whose command fails is reported. Either outcome leaves the other host installed and never stops the rules, hooks, and skills this run already wrote.
 
-The step runs on a full install only. A `--only <group>` run installs the named groups and skips pstack.
+Set `CDE_CLAUDE_EXECUTABLE` or `CDE_CODEX_EXECUTABLE` to name an interpreter outside `PATH`.
 
-Two controls turn the step off:
+## Turning the step off
+
+The step runs on a full install only. A `--only <group>` run installs the named groups and skips it. Two controls turn it off:
 
 - `npx -y claude-dev-env@latest --no-pstack`
 - `CDE_INSTALL_PSTACK=0` in the environment
 
-The pstack store keeps its own state and its own entry pointers. The install manifest does not record them, so the stale-file prune and `--uninstall` leave the pstack store in place. Remove it with the store directory under the managed root.
+The plugin keeps its own state under each host's plugin store. The install manifest does not record those paths, so the stale-file prune and `--uninstall` leave the plugin in place. Remove it with `claude plugin uninstall pstack@pstack-claude` or `codex plugin remove pstack@pstack-claude`.
 
-## Discovery and names
+## Updating and configuring
 
-Project pstack entries live under `.claude/skills/pstack/<subskill>` with matching `.agents/skills/pstack/<subskill>` paths. User entries use the selected Claude config root and its existing sibling agents home. The installer publishes one managed `pstack` pointer per distinct skills home. The pointed-to tree carries `.claude-plugin/plugin.json` with every pstack subskill path, so the release is self-contained. Existing shared skills-directory pointers stay intact. The installer creates no `.cursor/skills` directory.
+`claude plugin marketplace update pstack-claude` refreshes the catalog and `claude plugin install pstack@pstack-claude` adopts the new version. A later `claude-dev-env` install runs the same two commands, so an install adopts whatever the marketplace publishes.
 
-Pstack skills use plugin names such as `pstack:poteto-mode` and `pstack:how`. Dependency names such as `cursor-team-kit-deslop`, `cursor-team-kit-control-cli`, and `cursor-team-kit-control-ui` remain flat entries beside the `pstack` folder. The mapping resolves upstream component and short names through `release.json`.
+Run `/pstack:setup-pstack` in Claude Code, or `setup-pstack` in Codex, to change the plugin's model defaults or turn its automatic routing off. This repository's own `subagent-model-policy.json` and its `subagent_model_routing` hook stay in place and are unrelated to the plugin's routing.
 
-If an unmanaged `pstack` path already exists in a skills home, the installer leaves it in place and reports the collision. A managed update swaps the one pstack pointer to the new immutable release, so added and removed subskills converge with the release tree.
+## Retired integration points
 
-Each skill entry loads the common mapping and one of host-claude.md, host-codex.md, or host-cursor.md. Delegation prompts carry those paths and the upstream agent definition to the child. Required independent or cross-model work reports a missing host capability rather than substituting a weaker review. The copied model selector receives an explicit preferencesDirectory outside the release, preserving host settings through updates. A full install seeds `rules/pstack-model-preferences.claude.json` and `rules/pstack-model-preferences.codex.json` in the agents home when a file is absent, and `setup-pstack` rewrites the current host's file. The same agents-home rules directory holds the editable `subagent-model-policy.json`; the installer creates it only when it is absent. cde-create-skill provides the portable authoring workflow when the native creator is absent.
+An earlier `claude-dev-env` installed pstack itself: a pinned upstream commit, a release store under the managed root, generated host adapters, a `cde-pstack` command, a copied model selector, seeded model preference files, and a `session-continuity` companion registered as a hook in Claude, Codex, and Cursor. The plugin covers each of those, including the SessionStart context the companion supplied.
 
-The default Claude target uses the configured `CODEX_HOME`. A named profile or another target uses `<managed-root>/.codex`; launch that profile with the same `CODEX_HOME` value.
+Every full install now clears the companion's hook registrations from all three host configuration files, because a registration left behind points every session at a deleted script.
 
-## Cloud setup and maintenance
+## Cloud setup
 
-For Codex cloud using this repository, put this command in the environment setup script:
+For Claude cloud, `npx -y claude-dev-env@latest` in the environment setup script installs the plugin with everything else. For Codex cloud, put the two `codex plugin` commands above in the environment setup script.
 
-```bash
-node packages/claude-dev-env/bin/pstack.mjs install --project "$PWD" --strict
-```
-
-Put this command in its maintenance script:
-
-```bash
-node packages/claude-dev-env/bin/pstack.mjs install --project "$PWD" --refresh
-```
-
-For Claude cloud, `npx -y claude-dev-env@latest` in the environment setup script installs pstack with everything else. Run the command above instead when the environment needs a project-scoped install. This installer does not change the repository's Claude hooks. Install the existing session-continuity companion separately if the environment uses it.
-
-For other repositories, install the published package's cde-pstack command in the environment and use cde-pstack install --project "$PWD" in setup, adding --refresh in maintenance. Add the same repository SessionStart registration for Claude, pointing at the installed command with hook. A setup script in this repository does not change settings in an existing remote environment. Configure each environment's script fields separately.
-
-Git and Node 22 or later are installer prerequisites. Runtime workflows still need the CLIs, browser access, credentials, and permissions their steps use. The adapters require checking those capabilities before work. No installer can supply an absent native subagent or browser tool by copying files.
-
-## Shared pin and rollback
-
-`packages/claude-dev-env/scripts/pstack.lock.json` is the shared record on `main`. Update the commit through a reviewed pull request. Environments adopt the merged record on their next install or refresh.
-
-The adapter digest covers the installer code and compatibility files with consistent line endings on Linux and Windows. A release records its upstream commit, adapter digest and version, installed skills and agents, and file hashes. Installation stages a release before publishing pointers, checks unmanaged path collisions, and restores prior pointers if publication fails. Old releases remain on disk. An update error reports the retained revision; a first-install failure returns a failure status. verify checks installed files and pointers and labels the result filesystem-only.
-
-## Acceptance before enabling the default
-
-Run a fresh Claude cloud session and a fresh Codex cloud session against this branch. In each, invoke `pstack:poteto-mode`, load its Feature playbook, dispatch one supported native subagent with the adapter and upstream agent-definition paths, and complete a small repository task. Save the host version, selected models, exact skill and playbook paths, child final response, changed artifact, and observed verification result.
-
-Repeat on the actual local Claude, Codex, and Cursor profiles. Confirm the separate session-continuity companion loads the generated entry and restores the same immutable release after compaction. Test a real changed, added, and removed upstream skill across the environments, then an unreachable upstream and an incompatible dependency.
-
-The automated tests cover filesystem discovery locations, metadata, resources, dependencies, update reconciliation, collision handling, rollback, offline reuse, launch leases, and hook JSON. The real-upstream CI job runs on Linux and Windows. The Linux job also asks Codex 0.153.4 to list the installed skills through its native app server and checks each name and entry path. This read-only discovery test sends no agent task. Cloud task execution, delegation, Claude and Cursor menus, and actual profile launch integration remain separate acceptance evidence.
+Git and Node 22 or later are installer prerequisites. The plugin's own workflows still need the CLIs, browser access, credentials, and permissions their steps use.
 
 ## Sources
 
-[Claude skills](https://code.claude.com/docs/en/skills), [Claude cloud environments](https://code.claude.com/docs/en/cloud-environments), [Codex skills](https://developers.openai.com/codex/skills/), [Codex cloud environments](https://developers.openai.com/codex/cloud/environments/), and [Cursor skills](https://cursor.com/docs/skills) define host discovery and startup behavior. The [pstack-claude port](https://github.com/michael-denyer/pstack-claude) informed the entry-point mapping approach. This implementation fetches cursor/plugins directly and imports no code from that port.
+[Claude Code plugins](https://code.claude.com/docs/en/plugins), [Claude Code plugin marketplaces](https://code.claude.com/docs/en/plugin-marketplaces), and the [pstack-claude README](https://github.com/michael-denyer/pstack-claude#install) define the marketplace and plugin commands each host accepts.

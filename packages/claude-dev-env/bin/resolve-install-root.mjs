@@ -60,6 +60,7 @@ export const MANIFEST_FILE_NAME = '.claude-dev-env-manifest.json';
  *   hooksLookupDirectory: string,
  *   scriptsLookupDirectory: string,
  *   codexHooksInstallDirectory: string,
+ *   codexHomeDirectory: string,
  * }} InstallRootResolution
  */
 
@@ -179,6 +180,7 @@ export function resolveInstallRoot(options = {}) {
         hooksLookupDirectory,
         scriptsLookupDirectory,
         codexHooksInstallDirectory,
+        codexHomeDirectory,
     };
 }
 
