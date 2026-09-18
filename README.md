@@ -113,7 +113,6 @@ Behavioral rules loaded into every session.
 | `asd-ste100-language` | Plain word choice, sentence style, and tone for user-facing text |
 | `ask-user-question-required` | Route every user-directed question through AskUserQuestion |
 | `bdd` | Discovery, illustration, and should-style specifications around the TDD loop |
-| `claims-as-quotes` | A claim about existing code travels with its path, lines, and quote |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |
 | `code-standards` | Point at CODE_RULES.md for review and code generation |
 | `confirm-implementation-forks` | Ask which path at a fork that changes scope or a hard-to-reverse contract |
@@ -130,7 +129,6 @@ Behavioral rules loaded into every session.
 | `git-workflow` | Draft PRs, stacked PR patterns, review-response protocol |
 | `hedging-claims` | State a claim with its evidence, or name it unverified |
 | `long-horizon-autonomy` | Carry a long or unwatched run to completion |
-| `measurement-denominators` | Every count names what it scanned |
 | `nas-ssh-invocation` | Reach the NAS through its runner script |
 | `no-cross-skill-duplicate-helpers` | A helper copied between two skill folders is a deliberate choice |
 | `orphan-css-class` | Every class name in generated markup has a matching selector |

@@ -65,22 +65,10 @@ hand when the host should receive that context.
 
 ## Luna fast-mode guard
 
-`hooks/blocking/luna_fast_mode_gate.py` serves Claude and Codex. Codex reads its own `hooks.json`, so add this `PreToolUse` group to that file. Replace `<CODEX_HOOKS_ROOT>` with the directory that holds the shipped hook:
-
-```json
-{
-  "matcher": "Agent|Task|multi_agent_v1__spawn_agent",
-  "hooks": [
-    {
-      "type": "command",
-      "command": "python <CODEX_HOOKS_ROOT>/blocking/luna_fast_mode_gate.py",
-      "timeout": 10
-    }
-  ]
-}
-```
-
-The guard requires exact `fast` for Luna spawns through `Agent` and `Task`. Native Codex `multi_agent_v1__spawn_agent` accepts exact `fast` or `priority`. Other models and tools pass through.
+Commit `0f21faf8` retired `luna_fast_mode_gate.py` with the other blocking
+policy hooks. The package ships no replacement, so a Codex `hooks.json` needs
+no entry for it, and the spawn tier a Luna spawn asks for is the caller's to
+hold.
 
 ## Roots and safety
 

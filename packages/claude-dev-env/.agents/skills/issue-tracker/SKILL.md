@@ -21,7 +21,7 @@ Prefer the **same warm** `issue-tracker` agent for follow-ups on the same issue 
 
 ## Voice
 
-Use the `plain-brief` output style (`output-styles/plain-brief.md`). End with the issue number(s) and URL(s) the caller must keep.
+End with the issue number(s) and URL(s) the caller must keep, and nothing else.
 
 ## Gotchas
 
