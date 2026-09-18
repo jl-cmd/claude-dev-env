@@ -26,7 +26,7 @@ Inline the artifact under this section using the section types defined in the ch
 
 **E2. Functions / methods defined but never called**
 - For every function, method, or callable defined or modified by the artifact, enumerate call sites: direct calls, callback registrations (`onerror=`, `key=`, signal handlers), decorator applications, `__main__` guards, framework-driven discovery (pytest collection, Django URL resolution, FastAPI route decorators, Click groups), and string-form references resolved at runtime (`getattr`, dispatch tables).
-- Leading-underscore names: a single internal call site is sufficient; explicitly verify nothing outside the file imports the underscore-prefixed name.
+- Leading-underscore names: a single internal call site is enough; explicitly verify nothing outside the file imports the underscore-prefixed name.
 - Public names: confirm at least one call site inside or outside the file, or confirm the function is part of a documented public API.
 - Framework-discovered callables (test functions, route handlers, CLI commands): state which collector picks them up and confirm the artifact's path matches that collector's pattern.
 
@@ -71,7 +71,7 @@ Inline the artifact under this section using the section types defined in the ch
 
 **E9. Constants-module exports with no importer**
 - For every module-level `UPPER_SNAKE` constant the artifact adds to a `*_constants.py` or `config/` module, grep the whole repo for the constant name and locate at least one importer (`from <module> import <NAME>`) or in-file reference.
-- The file-global use-count gate exempts a constants module because every name it exports carries zero in-file references by design, so a genuinely dead export slips past the write-time gate; this sub-bucket is the audit-time backstop for that exemption.
+- Every name a constants module exports carries zero in-file references by design and no write-time check reads such a module, so a dead export reaches the audit untouched; this sub-bucket is the audit-time backstop.
 - A sibling that a consumer module imports is live; a constant that no `from ... import` line and no in-file reference names anywhere in the repo is dead and must be removed (CODE_RULES 9.8).
 - Constants reached only by string-form lookup (`getattr(config, name)`, settings registries) are live; name the dynamic consumer when you mark such a constant referenced.
 - Adversarial probes for proof-of-absence: (a) does the artifact add any constant to a `*_constants.py` / `config/` module whose name returns zero hits outside its own definition line? (b) is any newly added constant shadowed by a same-named constant in a sibling module so the importer resolves the other one? (c) does any constant exist only as an `__all__` re-export with no downstream importer of that re-export?
