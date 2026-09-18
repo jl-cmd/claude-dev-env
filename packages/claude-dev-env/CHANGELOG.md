@@ -1,5 +1,29 @@
 # Changelog
 
+## [8.1.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.0.0...claude-dev-env-v8.1.0) (2026-09-18)
+
+
+### Features
+
+* **rules:** stop the rules that park work on the person who set the standard ([730d74a](https://github.com/jl-cmd/claude-dev-env/commit/730d74a6e2d50550aff97563f533ec340b2a12d8))
+
+
+### Bug Fixes
+
+* **rules:** describe the gate the lint carries now ([e7e9757](https://github.com/jl-cmd/claude-dev-env/commit/e7e9757aef63f4a2131189f45bbf0cae03add61b))
+* **rules:** finish the trim and unblock the rules that stop the work ([3a6d90a](https://github.com/jl-cmd/claude-dev-env/commit/3a6d90a055f608e81f62dbac84240926fcfb52b3))
+
+
+### Maintenance
+
+* **audit-rubrics:** drop the use-count lane the rules trim withdrew ([d10bbd9](https://github.com/jl-cmd/claude-dev-env/commit/d10bbd999cceb2c7dd80cecc2950e7d4d1590e0a))
+* **rules:** clear the banned words the rules ship ([ec43954](https://github.com/jl-cmd/claude-dev-env/commit/ec43954a6ebe3fcf7a2e901154fd6bee9b07b1a7))
+
+
+### Tests
+
+* **codex-compat:** follow the excerpt wording the rules now carry ([68f815a](https://github.com/jl-cmd/claude-dev-env/commit/68f815a0b5087723aeb8740c67bb6e9ad174ea7b))
+
 ## [8.0.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.7.1...claude-dev-env-v8.0.0) (2026-09-18)
 
 
