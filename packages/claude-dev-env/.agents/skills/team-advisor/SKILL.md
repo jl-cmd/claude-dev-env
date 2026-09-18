@@ -26,9 +26,8 @@ One warm advisor at the strongest tier this session can reach. This session is t
 1. Name the session identity first (protocol **Host profiles**), then walk the model floor.
 2. Claude: Fable first in-session at `ADVISOR_EFFORT` (default low). When Fable is out of usage, bind Astra at the same effort. Codex: Astra in-session. Third-party: headless Fable then Astra. When the host's walk fails, fail closed.
 3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); a native Astra subagent on Codex; one CLI `session_id` on a third-party host via the protocol Claude-chain or Astra helper.
-4. A Fable-tier spawn or re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in its prompt (protocol warm-up; `fable_spawn_gate` requires it).
-5. Skip the multi-consumer "who you are" opener. This session is the sole consumer.
-6. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound advisor issues ENDORSE / CORRECTION / PLAN / STOP.
+4. Skip the multi-consumer "who you are" opener. This session is the sole consumer.
+5. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound advisor issues ENDORSE / CORRECTION / PLAN / STOP.
 
 **GOTCHA (Cursor / ThirdParty + Astra):** when the walk reaches Astra or the user asks for Astra, first tool call is `python ~/.claude/_shared/advisor/scripts/codex_astra_advisor.py --bind --enable-astra --cwd <repo-root>` with the charter on stdin. Do not use Agent or Task. Do not search for a probe path. Details: [`third-party-bind.md`](../../_shared/advisor/reference/third-party-bind.md) GOTCHA and [`astra-rung.md`](../../_shared/advisor/reference/astra-rung.md).
 

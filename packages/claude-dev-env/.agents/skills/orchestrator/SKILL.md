@@ -36,9 +36,8 @@ verification reads.
 ## status_gate (deterministic — not optional)
 
 **Prose does not keep the loop alive.** Re-arm and terminate are gated by
-`scripts/status_gate.py` (and, on Claude, the PreToolUse hook
-`orchestrator_refresh_reschedule_gate`). The gate is host-agnostic: a
-single pending re-arm latch in the status file, not host product names.
+`scripts/status_gate.py`. The gate is host-agnostic: a single pending re-arm
+latch in the status file, not host product names.
 
 ```
 python scripts/status_gate.py set --status active|done [--run-slug SLUG] [--status-file PATH]

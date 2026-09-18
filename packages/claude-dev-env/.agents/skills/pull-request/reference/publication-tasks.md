@@ -6,7 +6,7 @@ reason when the task is conditional. This file is a task seed catalog, not a
 markdown progress board.
 
 1. Resolve one repository, action, and selected author. For create, resolve the source branch, base, and head. For other actions, resolve one existing pull request target. Create actions publish drafts.
-2. Invoke the required `pr-description-writer` for create or full body rewrite, then record its title and body file. Mark `N/A` for comment or review bodies that do not rewrite the pull request description.
+2. Record the title and body file for create or full body rewrite, written by you or drafted by `pr-description-writer`. Mark `N/A` for comment or review bodies that do not rewrite the pull request description.
 3. Validate every title, body, artifact, and local path input. Reject inline body input.
 4. Resolve the active managed root and run `<managed-root>/scripts/durable_post_lint.py` for the matching action. Record exit code `0` before credential lookup or network work.
 5. Run `privacy-hygiene` before the GitHub post and record its clean result.

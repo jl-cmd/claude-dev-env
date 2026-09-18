@@ -104,7 +104,6 @@ The validator checks ladder shape only; host policy sits on top.
 ## Warm-up (once per session)
 
 On a **Claude host**, spawn `session-advisor` at the Fable alias with the charter as its prompt. When Fable is out of usage and the Astra rung is open, bind Astra through the Codex helper instead.
-A **Fable**-tier try carries the exact token `FABLE-SPAWN-AUTHORIZED` in its prompt. `hooks/blocking/fable_spawn_gate.py` denies a Fable-tier spawn without it.
 Full spawn fields and the charter template: [`reference/warm-up.md`](reference/warm-up.md).
 
 On a **Codex host**, spawn a native in-session Astra subagent with the same charter. Bind fields: [`reference/identity.md`](reference/identity.md) and [`reference/warm-up.md`](reference/warm-up.md).
