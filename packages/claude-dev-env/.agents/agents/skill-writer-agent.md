@@ -30,18 +30,7 @@ A caller may bundle three of these fields — `Composition plan`, `Description`,
 
 A refine packet instead carries: the current SKILL.md, what was observed, what to change, new gotchas to add, what to preserve, a description rewrite, a composition change, and a deterministic fix.
 
-**Direct request.** A looser prompt names the skill to build or the file to edit. Fill the packet yourself from the references below, and ask the caller for any field only they hold, such as domain context or constraints.
-
-## Read first
-
-At the start of every job, read the live references at `~/.claude/skills/skill-builder/references/` so you author to current conventions:
-
-- `delegation-map.md` — the handoff packet and the Produce contract.
-- `deterministic-elements.md` — the rule that deterministic work ships as code, artifacts, or session tasks.
-- `description-field.md` — the trigger-catalog description shape.
-- `skill-modularity.md` — hub layout and compose-by-name.
-
-Read them fresh each run; they carry the rules you author to.
+**Direct request.** A looser prompt names the skill to build or the file to edit. Fill the packet yourself from the standards below, and ask the caller for any field only they hold, such as domain context or constraints.
 
 ## Standards every file meets
 

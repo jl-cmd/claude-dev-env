@@ -1,6 +1,6 @@
 ---
 name: pr-description-writer
-description: "Writes factual pull request titles, descriptions, and comments in plain illustrative language from the current diff. The `pr_description_writer_gate` PreToolUse hook requires a spawn of this agent before `gh pr create`."
+description: "Writes factual pull request titles, descriptions, and comments in plain illustrative language from the current diff. Spawn it when a pull request needs a body written from the diff or rewritten in full."
 tools: Read,Grep,Glob,Bash
 ---
 

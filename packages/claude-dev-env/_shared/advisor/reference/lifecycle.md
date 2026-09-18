@@ -10,7 +10,6 @@ Every other consumer (executors, or any other consulting session) reaches it by 
 One shared advisor exists per orchestrated session, owned by the session that spawned it.
 
 **Re-spawn on drift.** If a reply shows the agent working from a stale picture, or the session pivots to an unrelated task, the owning session ends that agent and spawns a fresh one with a new charter.
-A **Fable**-tier re-spawn carries the exact token `FABLE-SPAWN-AUTHORIZED` in that fresh prompt, as a Fable-tier warm-up try does.
 
 ## Codex host
 

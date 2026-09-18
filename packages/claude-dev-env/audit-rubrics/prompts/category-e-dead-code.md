@@ -59,7 +59,7 @@ Inline the artifact under this section using the section types defined in the ch
 
 **E7. Test fixtures / helpers defined but never used**
 - For every test file in scope, enumerate `@pytest.fixture`, `@pytest.fixture(scope=...)`, `setUp` / `tearDown` methods, factory helpers, mock builders, and module-level test constants. Verify each has at least one consumer test.
-- Module-level constants in test files: each must satisfy the file-global-constants use-count rule (≥2 references) OR be referenced by exactly one test plus one helper that the tests call.
+- Module-level constants in test files: each must be referenced by at least two callers, OR by exactly one test plus one helper that the tests call.
 - Helpers defined inside a single test body that are never called within that body are dead.
 - Adversarial probes for proof-of-absence: (a) any test that defines a local helper (e.g., `def make_dir(...):`) and never calls it? (b) any imported test name from the production module that no test exercises? (c) any module-level constant whose call graph collapses to zero references after the diff?
 
@@ -156,7 +156,7 @@ ID prefix: `find`.
 **E7. Test fixtures / helpers defined but never used**
 - `test_sweep_empty_dirs.py` defines no `@pytest.fixture` decorators. Nothing to flag under "fixture with no consumers".
 - `_set_creation_time_windows` is the only test helper; it has three call sites (E2 above). Used.
-- `_SCRIPTS_DIR` (line 12) is a module-level constant used at line 13 (`if str(_SCRIPTS_DIR) not in sys.path:`) and line 14 (`sys.path.insert(0, str(_SCRIPTS_DIR))`). Two references; satisfies the file-global-constants use-count rule.
+- `_SCRIPTS_DIR` (line 12) is a module-level constant used at line 13 (`if str(_SCRIPTS_DIR) not in sys.path:`) and line 14 (`sys.path.insert(0, str(_SCRIPTS_DIR))`). Two references; the constant earns its module scope.
 - No test data builders or mock factories are defined in this PR.
 - Adversarial probes for proof-of-absence: (a) does any of the five tests define a local helper inside its body that is then never called? (e.g., a `def make_dir(...):` defined but unused) — scan each test body. (b) does any test import a name from `sweep_empty_dirs` that it never uses? — only `sweep` is imported, and every test calls it. (c) does the `_SCRIPTS_DIR` block survive if pytest is invoked with `sweep_empty_dirs.py` already on `sys.path`? — yes, the membership-test guards the insert, so the constant is still meaningfully consumed even on the second run.
 
@@ -178,7 +178,7 @@ ID prefix: `find`.
 
 Q1: Are there imports unused locally but consumed by a re-export pattern in another file? Cite the cross-file pair if found. (Hypothesis: none — neither `sweep_empty_dirs.py` nor `test_sweep_empty_dirs.py` defines `__all__`, so re-export is not in play. `config/sweep_config.py` declares two constants that ARE consumed by `sweep_empty_dirs.py` lines 10-11; this is normal cross-file consumption, not a re-export.)
 Q2: What's the worst unused-code hazard introduced by this PR? Cite `<file>:<line>`. Candidates to evaluate: `arguments.interval` is parsed but unreachable on the `--once` path (line 57 short-circuits before the watch loop at line 67); the scheduled task always uses `--once`, so the `--interval` argparse declaration at line 45 is dead code on the only invocation path the installer creates. Decide: P2 (style) because the manual watch-mode path still uses it, vs P1 if you treat "the only installer path never exercises this branch" as functionally dead.
-Q3: Which symbol most likely will *become* dead code after a near-future refactor? Candidates: `_log_walk_error` (sole call site is the `os.walk(..., onerror=...)` kwarg — if a future refactor switches to `pathlib.Path.rglob` for walking, this helper has no other consumer and silently becomes orphaned); `DEFAULT_POLL_INTERVAL` (sole consumer is `_build_parser`'s `--interval` default — if Q2's hazard is resolved by removing `--interval` from the `--once`-only installer flow, this constant has zero consumers in the script and the file-global-constants use-count rule is broken).
+Q3: Which symbol most likely will *become* dead code after a near-future refactor? Candidates: `_log_walk_error` (sole call site is the `os.walk(..., onerror=...)` kwarg — if a future refactor switches to `pathlib.Path.rglob` for walking, this helper has no other consumer and silently becomes orphaned); `DEFAULT_POLL_INTERVAL` (sole consumer is `_build_parser`'s `--interval` default — if Q2's hazard is resolved by removing `--interval` from the `--once`-only installer flow, this constant has zero consumers in the script).
 
 ## Output
 

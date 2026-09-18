@@ -13,14 +13,14 @@ model on every spawn, so no agent definition names one, concrete or
 `inherit`::
 
     ok:   <no model key at all>
-    flag: model: inherit    <- caller can no longer choose the model
+    flag: model: inherit    <- caller cannot choose the model
     flag: model: opus       <- pinned concrete model, caller can't override
 
 Every block must also load through `yaml.safe_load`. An unquoted colon inside
 a plain scalar reads as a mapping key and makes the whole block unloadable::
 
     ok:   description: ... constraints. Examples are below.
-    flag: description: ... constraints. Examples:   <- block no longer loads
+    flag: description: ... constraints. Examples:   <- block does not load
 
 Two parsers read these files, and a block that satisfies one can still be
 unreadable by the other. `scripts/codex_compat_materializer.py` loads the
@@ -446,10 +446,6 @@ EXPECTED_SOURCE_LINK_PAIRS = {
             "packages/claude-dev-env/rules/code-standards.md",
         ),
         (
-            "<managed-root>/rules/file-global-constants.md",
-            "packages/claude-dev-env/rules/file-global-constants.md",
-        ),
-        (
             "<managed-root>/rules/windows-filesystem-safe.md",
             "packages/claude-dev-env/rules/windows-filesystem-safe.md",
         ),
@@ -476,10 +472,6 @@ EXPECTED_SOURCE_LINK_PAIRS = {
         (
             "<managed-root>/rules/bdd.md",
             "packages/claude-dev-env/rules/bdd.md",
-        ),
-        (
-            "<managed-root>/rules/ask-user-question-required.md",
-            "packages/claude-dev-env/rules/ask-user-question-required.md",
         ),
         (
             "<managed-root>/rules/verify-before-asking.md",
@@ -520,10 +512,6 @@ EXPECTED_SOURCE_LINK_PAIRS = {
         (
             "<managed-root>/rules/re-stage-before-commit.md",
             "packages/claude-dev-env/rules/re-stage-before-commit.md",
-        ),
-        (
-            "<managed-root>/rules/agent-spawn-protocol.md",
-            "packages/claude-dev-env/rules/agent-spawn-protocol.md",
         ),
         (
             "<managed-root>/rules/workers-done-before-complete.md",
@@ -797,7 +785,6 @@ def test_clean_coder_links_canonical_policy_areas() -> None:
     required_links = (
         "<managed-root>/docs/CODE_RULES.md#5-no-abbreviations",
         "<managed-root>/rules/testing.md",
-        "<managed-root>/rules/ask-user-question-required.md",
         "<managed-root>/rules/verify-runtime-state.md",
         "<managed-root>/rules/doc-inventory-integrity.md",
         "<managed-root>/rules/failure-blast-radius.md",
@@ -992,7 +979,6 @@ def test_clean_coder_follows_target_package_constant_layouts() -> None:
     assert "Reuse first" in body
     assert "shared policy" in body
     assert "multiple consumers" in body
-    assert "file-global-constants" in body
     assert "add the constant to the appropriate config file" not in body
 
 
@@ -1029,7 +1015,6 @@ def test_clean_coder_groups_session_policy_references() -> None:
         "Worker coordination",
     ):
         assert each_policy_group in body
-    assert "ask-user-question-required.md" in body
     assert "workers-done-before-complete.md" in body
     assert "verify-runtime-state.md" in body
     assert "Material implementation questions must return to the caller" in body
@@ -1039,7 +1024,6 @@ def test_clean_coder_groups_session_policy_references() -> None:
     expected_session_policy_files = (
         "testing.md",
         "anti-corollary-tests.md",
-        "ask-user-question-required.md",
         "verify-before-asking.md",
         "filesystem-search.md",
         "shell-invocation.md",
@@ -1049,7 +1033,6 @@ def test_clean_coder_groups_session_policy_references() -> None:
         "failure-blast-radius.md",
         "git-workflow.md",
         "re-stage-before-commit.md",
-        "agent-spawn-protocol.md",
         "workers-done-before-complete.md",
     )
     session_policy_map = body[body.index("## Session policy map") :]

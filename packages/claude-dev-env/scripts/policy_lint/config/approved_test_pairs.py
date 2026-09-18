@@ -31,6 +31,18 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
         }
     ),
     PurePosixPath(
+        "packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py"
+    ): frozenset(
+        {
+            PurePosixPath(
+                "packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_dispatch_wiring.py"
+            ),
+            PurePosixPath(
+                "packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_cap_meta.py"
+            ),
+        }
+    ),
+    PurePosixPath(
         "packages/claude-dev-env/hooks/git-hooks/verification_notice_context.py"
     ): frozenset(
         {

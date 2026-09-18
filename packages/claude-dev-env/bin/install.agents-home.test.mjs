@@ -54,10 +54,6 @@ const CLEAN_CODER_POLICY_REFERENCES = [
         'packages/claude-dev-env/rules/code-standards.md',
     ],
     [
-        '<managed-root>/rules/file-global-constants.md',
-        'packages/claude-dev-env/rules/file-global-constants.md',
-    ],
-    [
         '<managed-root>/rules/windows-filesystem-safe.md',
         'packages/claude-dev-env/rules/windows-filesystem-safe.md',
     ],

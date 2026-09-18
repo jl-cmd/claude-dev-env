@@ -2893,13 +2893,9 @@ test('retired skills leave install groups and stay in the cleanup registry', () 
     }
 });
 
-test('README and vault guidance use current session tools', () => {
+test('the README names current session tools', () => {
     const readme = readFileSync(new URL('../../../README.md', import.meta.url), 'utf8');
-    const vaultRule = readFileSync(new URL('../rules/vault-context.md', import.meta.url), 'utf8');
     assert.doesNotMatch(readme, /--only journal|session-log|session-tidy/);
-    assert.doesNotMatch(vaultRule, /`session-log`|`recall`/);
-    assert.match(vaultRule, /obsidian MCP tools/);
-    assert.match(vaultRule, /project.*frontmatter/);
 });
 
 test('the help output states that the installer reads only flags', () => {

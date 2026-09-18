@@ -1,6 +1,6 @@
 # Agent Spawn Protocol
 
-Full protocol behind the always-on `rules/agent-spawn-protocol.md` kernel. It applies before any Agent or Task tool invocation — Explore, implementation, research, or team subagents.
+Full protocol for briefing a subagent. It applies before any Agent or Task tool invocation — Explore, implementation, research, or team subagents.
 
 ## Step 1: Context sufficiency check
 

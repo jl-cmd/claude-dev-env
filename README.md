@@ -108,14 +108,11 @@ Behavioral rules loaded into every session.
 
 | Rule | What it does |
 |------|-------------|
-| `agent-spawn-protocol` | Check context sufficiency before delegating to an agent |
 | `anti-corollary-tests` | Each test carries information; skip corollary matrices |
 | `asd-ste100-language` | Plain word choice, sentence style, and tone for user-facing text |
-| `ask-user-question-required` | Route every user-directed question through AskUserQuestion |
 | `bdd` | Discovery, illustration, and should-style specifications around the TDD loop |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |
 | `code-standards` | Point at CODE_RULES.md for review and code generation |
-| `confirm-implementation-forks` | Ask which path at a fork that changes scope or a hard-to-reverse contract |
 | `destructive-commands` | Allowed removal forms, and destructive literals kept out of command strings |
 | `doc-inventory-integrity` | A doc that inventories code stays in step with the directory |
 | `docstring-prose-matches-implementation` | A docstring's enumeration covers every behavior the body applies |
@@ -123,23 +120,21 @@ Behavioral rules loaded into every session.
 | `explore-thoroughly` | Read before proposing, map patterns before committing |
 | `failure-blast-radius` | Name what a raise stops: the run, or one member of a batch |
 | `falsify-before-green` | A check's green counts once that check ran red on a named break |
-| `file-global-constants` | A module-level constant earns its place with two consumers |
 | `filesystem-search` | Every filesystem search names a scope |
 | `gh-cli-conventions` | Body content travels by file; paginated reads slurp before they filter |
 | `git-workflow` | Draft PRs, stacked PR patterns, review-response protocol |
-| `hedging-claims` | State a claim with its evidence, or name it unverified |
 | `long-horizon-autonomy` | Carry a long or unwatched run to completion |
 | `nas-ssh-invocation` | Reach the NAS through its runner script |
 | `no-cross-skill-duplicate-helpers` | A helper copied between two skill folders is a deliberate choice |
 | `orphan-css-class` | Every class name in generated markup has a matching selector |
 | `paired-test-coverage` | Every public function in an established suite carries a behavioral test |
 | `plain-illustrative-docstrings` | Docstring narrative reads plainly on the first pass |
+| `pstack-models` | Portable role requirements for pstack delegation |
 | `prompt-workflow-context-controls` | Prompt workflows stay low-context |
 | `re-stage-before-commit` | Stage this session's edits right before the commit |
 | `research-mode` | Cite sources, say "I don't know", use direct quotes |
 | `shell-invocation` | Use pwsh, and keep shell substitution out of Bash commands |
 | `testing` | Complete mocks, reference TEST_QUALITY.md |
-| `vault-context` | Search prior sessions and decisions before substantive project work |
 | `verify-before-asking` | Answer with a tool what a tool can answer |
 | `verify-runtime-state` | A runtime verdict rests on a live probe from this session |
 | `windows-filesystem-safe` | Safe tree removal for read-only Windows files |
@@ -167,7 +162,7 @@ Reference documents that rules and agents point to for detailed standards.
 | `BDD_DISCOVERY_PROTOCOL.md` | Example Mapping to find test ideas before code |
 | `BDD_SCENARIO_QUALITY.md` | Seven patterns for clear, focused scenarios |
 | `BDD_TEST_LAYOUT.md` | Describe, when, and should layout for readable suites |
-| `agent-spawn-protocol.md` | Full protocol behind the agent-spawn rule |
+| `agent-spawn-protocol.md` | Full protocol for briefing a subagent |
 | `codex-compatibility.md` | The bridge from this source tree to Codex-compatible output |
 | `host-pool-health-monitor.md` | Kernel pool counters and handle pressure on a Windows host |
 | `nas-ssh-invocation.md` | Full detail behind the NAS ssh rule |

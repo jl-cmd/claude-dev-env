@@ -71,7 +71,6 @@ KNOWN_UNCAPPED_CHECKS_PENDING_REVIEW: frozenset[str] = frozenset(
         "check_constant_equality_tests",
         "check_constants_outside_config",
         "check_existence_check_tests",
-        "check_file_global_constants_use_count",
         "check_imports_at_top",
         "check_inline_literal_collections",
         "check_join_separator_string_magic",

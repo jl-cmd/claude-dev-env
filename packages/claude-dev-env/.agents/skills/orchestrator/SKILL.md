@@ -36,9 +36,8 @@ verification reads.
 ## status_gate (deterministic — not optional)
 
 **Prose does not keep the loop alive.** Re-arm and terminate are gated by
-`scripts/status_gate.py` (and, on Claude, the PreToolUse hook
-`orchestrator_refresh_reschedule_gate`). The gate is host-agnostic: a
-single pending re-arm latch in the status file, not host product names.
+`scripts/status_gate.py`. The gate is host-agnostic: a single pending re-arm
+latch in the status file, not host product names.
 
 ```
 python scripts/status_gate.py set --status active|done [--run-slug SLUG] [--status-file PATH]
@@ -158,8 +157,8 @@ in the repo the run works on (working files, not committed):
 - **One assignment file per task** — scope, file list, constraints, the
   acceptance check, baseline command output. The thick context goes
   here. `/prompt-generator` authors the assignment once at plan time,
-  and every ticket for that task reuses it — that reuse is what
-  satisfies the agent-spawn-protocol context check at each spawn.
+  and every ticket for that task reuses it, so each spawn starts from
+  the same named files, constraints, and acceptance check.
 - **Results merge into run state.** An executor's product is its
   artifact — the branch diff, the test output, the report its agent type
   may write — and its reply is thin: status, artifact paths, blockers.

@@ -2,7 +2,7 @@
 
 Each constant is consumed by exactly one check function in the enforcer. They
 live here (not at module scope of the enforcer) so the enforcer file stays
-under the file-global-constants use-count rule (CODE_RULES §file-global-constants).
+because each has more than one consumer in this package.
 """
 
 from __future__ import annotations

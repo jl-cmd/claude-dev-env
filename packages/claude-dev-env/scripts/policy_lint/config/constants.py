@@ -72,6 +72,9 @@ FAST_SAVE_VALIDATORS_STEM = "fast_save_validators"
 ALL_OVERLAPPING_VALIDATOR_NAMES = frozenset(
     {"Python Style", "Magic Values", "Type Safety", "Test Safety", "React"}
 )
+VALIDATOR_MESSAGE_PREFIX_SEPARATOR = ": "
+VALIDATOR_MESSAGE_DIGIT_PATTERN = re.compile(r"\d+")
+VALIDATOR_MESSAGE_DIGIT_PLACEHOLDER = "#"
 ALL_PR_LOOP_SCRIPTS_PATH_SEGMENTS = ("_shared", "pr-loop", "scripts")
 TERMINOLOGY_SWEEP_MODULE_NAME = "terminology_sweep"
 TERMINOLOGY_SWEEP_RULE_ID = "terminology-sweep"

@@ -49,6 +49,4 @@ Generated prompt-workflow outputs must declare, in their audit frontmatter:
 - `base_minimal_instruction_layer: true`
 - `on_demand_skill_loading: true`
 
-The Stop guard blocks responses that omit either signal. These signals are
-the machine-checkable counterpart to the policy text in
-`rules/prompt-workflow-context-controls.md`.
+The Stop guard blocks responses that omit either signal.

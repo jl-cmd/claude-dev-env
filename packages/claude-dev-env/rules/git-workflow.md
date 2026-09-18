@@ -29,8 +29,8 @@ opens with the bot's own marker line. The description rules in this file, the
 failure signature in the release job log reads
 `could not parse pull request body as a release PR`.
 
-Use the `pr-description-writer` agent before creating a pull request or
-rewriting its full description. Publish its title and body file through
+The `pr-description-writer` agent writes a title and body from the diff when
+you want one. Publish the title and body file through
 `~/.agents/skills/pull-request/scripts/pull_request.py`. That path is under the
 agents home, not the repository. A worktree holds no `.agents/` copy.
 
@@ -94,7 +94,7 @@ what it calls.
 Force-with-lease protects the ref. It protects nobody's understanding of what the
 branch now holds. When a rewrite moves content between levels of a stack, or
 otherwise changes what a branch contains, refresh that pull request's description
-through the `pr-description-writer` agent before you ask anyone to read or merge it.
+before you ask anyone to read or merge it.
 
 ## Never commit working documents or images
 

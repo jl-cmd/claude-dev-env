@@ -10,8 +10,8 @@ test functions, which exports nothing, so a single-file scan proves a constant
 no other line reads is dead. A ``conftest.py``, a shared helper module reached
 only through the ``tests/`` directory gate, and a dedicated constants or
 ``config/`` module all export their constants to importer modules, so the
-audit lane governs their constants cross-module (see
-rules/file-global-constants.md) and this write-time check leaves them alone.
+audit lane governs their constants cross-module and this write-time check
+leaves them alone.
 """
 
 import ast
@@ -54,7 +54,7 @@ def _is_dead_constant_scan_target(file_path: str) -> bool:
     constant no other line reads is dead. A ``conftest.py``, a shared helper
     module reached only through the ``tests/`` directory gate, and a dedicated
     constants or ``config/`` module all export to importer modules, where the
-    cross-module audit lane governs their constants (see rules/file-global-constants.md).
+    cross-module audit lane governs their constants.
 
     Args:
         file_path: The destination path of the write.
@@ -77,8 +77,8 @@ def _is_private_constant_name(name: str) -> bool:
         EXPECTED_TOTAL           ->  public constant, left alone
 
     Only a leading-underscore name qualifies. A public module constant exports
-    to importer modules, so the cross-module audit lane governs it (see
-    rules/file-global-constants.md) and this single-file scan leaves it alone.
+    to importer modules, so the cross-module audit lane governs it and this
+    single-file scan leaves it alone.
     """
     if not name.startswith(PRIVATE_NAME_PREFIX):
         return False
@@ -163,8 +163,7 @@ def check_dead_test_module_constant(content: str, file_path: str) -> list[str]:
     dead scaffolding an edit stranded. A public constant, a ``conftest.py``, a
     shared helper module under ``tests/``, and a dedicated constants or
     ``config/`` module all export to importer modules, so the cross-module
-    audit lane judges those (see rules/file-global-constants.md) and this
-    check skips them.
+    audit lane judges those and this check skips them.
 
     Args:
         content: The post-edit file content under validation.

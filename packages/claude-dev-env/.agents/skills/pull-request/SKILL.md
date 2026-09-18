@@ -73,7 +73,7 @@ current process environment.
 
 | Skill | When | Produces | If missing |
 |---|---|---|---|
-| `pr-description-writer` | Before create or a full body rewrite | A reviewed title and body file | Stop the create or rewrite and report that authoring is required |
+| `pr-description-writer` | Create or a full body rewrite, when you want the body drafted for you | A reviewed title and body file | Write the title and body yourself |
 | `privacy-hygiene` | Before any durable GitHub post | A clean body and repository privacy sweep | Stop before publication and report the missing gate |
 | `issue-tracker` | Issue create, edit, or comment requests | Issue state and issue URLs | Route the request there. |
 | `e-code-review` | Review or review/fix loop requests | Structured findings or a clean review result | Route the request there. |
@@ -97,10 +97,10 @@ request target. Create actions publish drafts. Record the target before any writ
 
 ### 2. Author the title and body
 
-For create and full body rewrite, invoke the installed
-`pr-description-writer`. Require its title and body file as the authoring
-output. A comment or review may use a supplied body file when it does not
-rewrite the pull request description.
+For create and full body rewrite, write the title and a body file, or invoke
+the installed `pr-description-writer` to draft them from the diff. A comment or
+review may use a supplied body file when it does not rewrite the pull request
+description.
 
 ### 3. Run the local linter
 

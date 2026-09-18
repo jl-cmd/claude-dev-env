@@ -1,8 +1,7 @@
 """Configuration constants for the setup_project_paths bootstrap script.
 
 Shared constants consumed by two or more modules across the hook subsystem.
-Single-use values are inlined into their consuming functions per the
-file-global-constants use-count rule.
+Single-use values are inlined into their consuming functions.
 """
 
 from __future__ import annotations

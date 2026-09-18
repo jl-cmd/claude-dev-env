@@ -24,3 +24,16 @@ def test_module_source_carries_no_docstring_magic_value() -> None:
         "bare-number token that the magic-value check flags as a literal, "
         f"got: {magic_value_issues}"
     )
+
+
+ARCHIVED_USE_COUNT_CHECK_NAME = "check_file_global_constants_use_count"
+
+
+def test_module_defines_no_check_for_an_archived_rule() -> None:
+    module_path = Path(__file__).resolve().parent / "code_rules_constants_config.py"
+    module_source = module_path.read_text(encoding="utf-8")
+    assert ARCHIVED_USE_COUNT_CHECK_NAME not in module_source, (
+        "The file-global constant use-count rule moved to rules-archived, so this "
+        "module must define no check that enforces it. Code left behind keeps "
+        "enforcing a rule the package no longer documents."
+    )

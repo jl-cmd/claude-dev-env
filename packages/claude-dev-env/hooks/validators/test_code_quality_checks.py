@@ -127,3 +127,25 @@ class TestFileLength:
             assert "400" in violations[0].message or "lines" in violations[0].message.lower()
         finally:
             temp_path.unlink()
+
+
+class TestTestFileExemption:
+    def test_long_function_in_a_test_file_passes(self) -> None:
+        tree = ast.parse(BAD_LONG_FUNCTION)
+        violations = check_function_length(tree, "packages/app/test_widget.py")
+        assert violations == []
+
+    def test_long_function_outside_a_test_file_still_fails(self) -> None:
+        tree = ast.parse(BAD_LONG_FUNCTION)
+        violations = check_function_length(tree, "packages/app/widget.py")
+        assert len(violations) == 1
+
+    def test_long_test_file_passes(self, tmp_path: Path) -> None:
+        temp_path = tmp_path / "test_widget.py"
+        temp_path.write_text("x = 1\n" * 450, encoding="utf-8")
+        assert check_file_length(temp_path) == []
+
+    def test_long_conftest_passes(self, tmp_path: Path) -> None:
+        temp_path = tmp_path / "conftest.py"
+        temp_path.write_text("x = 1\n" * 450, encoding="utf-8")
+        assert check_file_length(temp_path) == []
