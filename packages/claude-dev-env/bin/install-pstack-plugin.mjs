@@ -68,12 +68,56 @@ export function shouldInstallPstackPlugin(
     return environment[PSTACK_PLUGIN_OPT_OUT_VARIABLE] !== '0';
 }
 
+/**
+ * Build the process launch one platform needs to run a host command.
+ *
+ * Both hosts ship on Windows as a `.cmd` shim, and Node's synchronous spawn
+ * rejects a batch file with `EINVAL` unless a shell runs it, so Windows goes
+ * through `cmd.exe /d /s /c` with the whole command line as one verbatim
+ * argument. The executable carries its own quotes inside that line, which is
+ * why the line is passed verbatim rather than quoted again by Node. Every
+ * other platform launches the executable directly.
+ *
+ * @param {string} executable The host command, a bare name or a path.
+ * @param {string[]} commandArguments The arguments after the executable.
+ * @param {string} [platform] The platform to build for.
+ * @param {Record<string, string|undefined>} [environment] Supplies `ComSpec`.
+ * @returns {{file: string, args: string[], windowsVerbatimArguments: boolean}} The launch.
+ */
+export function hostCommandInvocation(
+    executable,
+    commandArguments,
+    platform = process.platform,
+    environment = process.env,
+) {
+    if (platform !== 'win32') {
+        return { file: executable, args: [...commandArguments], windowsVerbatimArguments: false };
+    }
+    const commandLine = [`"${executable}"`, ...commandArguments].join(' ');
+    return {
+        file: environment.ComSpec || 'cmd.exe',
+        args: ['/d', '/s', '/c', `"${commandLine}"`],
+        windowsVerbatimArguments: true,
+    };
+}
+
 function runHostCommand(executable, commandArguments, options) {
-    const spawned = spawnSync(executable, commandArguments, {
+    const invocation = hostCommandInvocation(executable, commandArguments);
+    const spawned = spawnSync(invocation.file, invocation.args, {
         encoding: 'utf8',
         env: { ...process.env, ...options.environment },
+        windowsVerbatimArguments: invocation.windowsVerbatimArguments,
     });
     return { status: spawned.status, stderr: spawned.stderr ?? '', error: spawned.error };
+}
+
+const COMMAND_NOT_FOUND_EXIT_CODE = 9009;
+const COMMAND_NOT_FOUND_PATTERN = /is not recognized as an internal or external command/;
+
+function namesAnAbsentCommand(outcome) {
+    if (outcome.error?.code === 'ENOENT') return true;
+    return outcome.status === COMMAND_NOT_FOUND_EXIT_CODE
+        && COMMAND_NOT_FOUND_PATTERN.test(outcome.stderr ?? '');
 }
 
 function firstLine(text) {
@@ -90,7 +134,7 @@ function installForHost(host, homeDirectory, environment, runCommand) {
         const outcome = runCommand(executable, [...commandArguments], {
             environment: commandEnvironment,
         });
-        if (outcome.error?.code === 'ENOENT') {
+        if (namesAnAbsentCommand(outcome)) {
             return {
                 host,
                 executable,
@@ -116,7 +160,10 @@ function installForHost(host, homeDirectory, environment, runCommand) {
  *
  * Each host is one member of the batch. A host without its command-line tool
  * is skipped and a host whose command fails is reported, so the rules, hooks,
- * and skills this run already wrote still reach their durable places.
+ * and skills this run already wrote still reach their durable places. An
+ * absent tool arrives as a spawn `ENOENT` on other platforms and as
+ * `cmd.exe`'s command-not-found exit code on Windows, and both read as
+ * skipped.
  *
  * @param {object} [options] Install targets.
  * @param {string} [options.claudeRoot] The managed Claude root to install into.

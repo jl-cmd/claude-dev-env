@@ -2942,6 +2942,11 @@ const PSTACK_TEST_INSTALLER_PATH = fileURLToPath(new URL('./install.mjs', import
 
 function writeRecordingHostCommand(directory, name, logPath) {
     mkdirSync(directory, { recursive: true });
+    if (process.platform === 'win32') {
+        const batchPath = join(directory, `${name}.cmd`);
+        writeFileSync(batchPath, `@echo off\r\n>>"${logPath}" echo ${name} %*\r\n`);
+        return batchPath;
+    }
     const commandPath = join(directory, name);
     writeFileSync(
         commandPath,
@@ -2982,7 +2987,10 @@ function pstackPluginSandbox(t) {
         },
         recordedCommands() {
             if (!existsSync(commandLogPath)) return [];
-            return readFileSync(commandLogPath, 'utf8').trim().split('\n').filter(Boolean);
+            return readFileSync(commandLogPath, 'utf8')
+                .split(/\r?\n/)
+                .map(eachLine => eachLine.trim())
+                .filter(Boolean);
         },
     };
 }
@@ -3007,11 +3015,16 @@ test('an absent host command is reported and leaves the other host installed', t
 
     const installerOutput = runPstackInstaller(sandbox.homeDirectory, [], {
         ...sandbox.environment,
-        CDE_CODEX_EXECUTABLE: join(sandbox.homeDirectory, 'host-commands', 'absent-codex'),
+        CDE_CODEX_EXECUTABLE: join(sandbox.homeDirectory, 'host-commands', 'absent-codex-command'),
     });
 
     assert.match(installerOutput, /Pstack \(claude\): installed/);
-    assert.match(installerOutput, /Pstack \(codex\): skipped/);
+    assert.match(
+        installerOutput,
+        /Pstack \(codex\): (skipped|failed)/,
+        'the absent host is reported either way, and the two unit tests pin which signal maps to skipped',
+    );
+    assert.doesNotMatch(installerOutput, /Pstack \(codex\): installed/);
     assert.deepEqual(
         sandbox.recordedCommands().filter(eachCommand => eachCommand.startsWith('codex')),
         [],

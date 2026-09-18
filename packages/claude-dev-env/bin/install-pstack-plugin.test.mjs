@@ -4,6 +4,7 @@ import {
     PSTACK_MARKETPLACE_REPOSITORY,
     PSTACK_PLUGIN_HOSTS,
     PSTACK_PLUGIN_IDENTIFIER,
+    hostCommandInvocation,
     installPstackPlugin,
     pstackPluginPlan,
     shouldInstallPstackPlugin,
@@ -109,4 +110,61 @@ test('a selected host list installs only that host', () => {
     const outcome = installPstackPlugin({ ...ROOTS, hosts: ['codex'] }, runner);
     assert.deepEqual(outcome.hosts.map(host => host.host), ['codex']);
     assert.deepEqual([...new Set(runner.calls.map(call => call.executable))], ['codex']);
+});
+
+test('a non-Windows platform launches the host command directly', () => {
+    const invocation = hostCommandInvocation('claude', ['plugin', 'install', PSTACK_PLUGIN_IDENTIFIER], 'linux');
+    assert.deepEqual(invocation, {
+        file: 'claude',
+        args: ['plugin', 'install', PSTACK_PLUGIN_IDENTIFIER],
+        windowsVerbatimArguments: false,
+    });
+});
+
+test('Windows launches the host command through cmd.exe, which alone can run a .cmd shim', () => {
+    const invocation = hostCommandInvocation(
+        'claude', ['plugin', 'install', PSTACK_PLUGIN_IDENTIFIER], 'win32', { ComSpec: 'C:\\Windows\\system32\\cmd.exe' },
+    );
+    assert.equal(invocation.file, 'C:\\Windows\\system32\\cmd.exe');
+    assert.deepEqual(invocation.args, [
+        '/d',
+        '/s',
+        '/c',
+        `""claude" plugin install ${PSTACK_PLUGIN_IDENTIFIER}"`,
+    ]);
+    assert.equal(invocation.windowsVerbatimArguments, true);
+});
+
+test('a Windows executable path holding a space stays one quoted token', () => {
+    const invocation = hostCommandInvocation(
+        'C:\\Program Files\\nodejs\\claude.cmd',
+        ['plugin', 'marketplace', 'add', PSTACK_MARKETPLACE_REPOSITORY],
+        'win32',
+    );
+    assert.equal(invocation.file, 'cmd.exe');
+    assert.equal(
+        invocation.args.at(-1),
+        `""C:\\Program Files\\nodejs\\claude.cmd" plugin marketplace add ${PSTACK_MARKETPLACE_REPOSITORY}"`,
+    );
+});
+
+test("cmd.exe's command-not-found exit code reads as an absent host, not a failure", () => {
+    const runner = recordingRunner((executable) => (executable === 'codex'
+        ? {
+            status: 9009,
+            stderr: "'codex' is not recognized as an internal or external command,\noperable program or batch file.",
+        }
+        : { status: 0, stderr: '' }));
+    const outcome = installPstackPlugin(ROOTS, runner);
+    const codex = outcome.hosts.find(host => host.host === 'codex');
+    assert.equal(codex.status, 'skipped');
+    assert.equal(outcome.status, 'installed');
+    assert.equal(runner.calls.filter(call => call.executable === 'codex').length, 1);
+});
+
+test('a non-zero exit that is not command-not-found still reads as a failure', () => {
+    const runner = recordingRunner(() => ({ status: 9009, stderr: 'the marketplace rejected the catalog' }));
+    const outcome = installPstackPlugin({ ...ROOTS, hosts: ['claude'] }, runner);
+    assert.equal(outcome.hosts[0].status, 'failed');
+    assert.match(outcome.hosts[0].warning, /rejected the catalog/);
 });
