@@ -1,5 +1,56 @@
 # Changelog
 
+## [8.0.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.7.1...claude-dev-env-v8.0.0) (2026-09-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* **install:** the bespoke pstack integration points are gone. Removed the cde-pstack command and its installer, the pinned upstream commit and release store, the generated host adapters, the copied model selector, the seeded pstack model preference files, the two pstack rules, the plugin-manifest refresher, the pstack installation workflow, and the session-continuity companion whose SessionStart context the plugin now supplies. This repository's own subagent-model-policy.json and subagent_model_routing hook stay in place.
+
+### Features
+
+* **install:** install pstack from its own plugin marketplace ([8333815](https://github.com/jl-cmd/claude-dev-env/commit/833381566313dc7f04175cc07bdcb009498abedf))
+
+
+### Bug Fixes
+
+* **install:** launch the host plugin commands through cmd.exe on Windows ([1c24042](https://github.com/jl-cmd/claude-dev-env/commit/1c240427e21fbe0bbab3309d0c14e672dfa15a1e))
+* **install:** remove the retired pstack pointers and release store ([8eea372](https://github.com/jl-cmd/claude-dev-env/commit/8eea372e12ad2aad588d447e9b54ad2e617c3097))
+* **policy-lint:** grade a change against its prior text in the validator lane ([ad4d075](https://github.com/jl-cmd/claude-dev-env/commit/ad4d07591c53e220e6bb71663ad33a4d33f5bcdc))
+* **sync:** accept a mirror whose files were already copied in ([96cc883](https://github.com/jl-cmd/claude-dev-env/commit/96cc8830b02a3b8adff2b011581d8788cfadf353))
+* **sync:** adopt the remote tip when copied files already match it ([a5afaec](https://github.com/jl-cmd/claude-dev-env/commit/a5afaec5181fa06765bba8c36f336f1cdbde7573))
+* **test:** base root-resolution expectations on the temp directory ([21c7521](https://github.com/jl-cmd/claude-dev-env/commit/21c7521ff98922cfef2df6e8b99dd5f7dd792674))
+* **validators:** read the length caps on production files only ([40f6fc5](https://github.com/jl-cmd/claude-dev-env/commit/40f6fc596be30aa3f7410f011c84e0fbb1897886))
+
+
+### Documentation
+
+* correct stale references and archive two preference rules ([60144c1](https://github.com/jl-cmd/claude-dev-env/commit/60144c1e404e3b887e67c72c36f1eb20e1bd83a6))
+* correct two references to files this package does not ship ([5c4d0d6](https://github.com/jl-cmd/claude-dev-env/commit/5c4d0d6be098026d065c7f862b26e32567c4e316))
+* **rules:** a red local run blocks the push; publisher path is under the agents home ([5d37b17](https://github.com/jl-cmd/claude-dev-env/commit/5d37b17b6ef73b4b92c406504801d171179d4c7a))
+* **rules:** a red local run blocks the push; publisher path is under the agents home ([dd3af4d](https://github.com/jl-cmd/claude-dev-env/commit/dd3af4de6000b13e5931caf4503666450050f04c))
+* **rules:** CI owns the gate, so stop rehearsing it locally ([a4db7b2](https://github.com/jl-cmd/claude-dev-env/commit/a4db7b22e635a026d3f0d91d9a94e0243de1bf9f))
+* **rules:** let CI own the gate and confirm the required checks fired ([db586d5](https://github.com/jl-cmd/claude-dev-env/commit/db586d5cc0025d787c81ff323625543e01b6de97))
+* **rules:** state the gate rule in positive form ([721ee3e](https://github.com/jl-cmd/claude-dev-env/commit/721ee3e2ac25e533da49bdf6c71ccccd68a533f0))
+* **rules:** stop eight rules asking for a local lint before commit ([ed5f921](https://github.com/jl-cmd/claude-dev-env/commit/ed5f9217e7473bb4faf7e7fad0749bb5e68913fa))
+* **rules:** stop eight rules asking for a local lint before commit ([7e1dfc0](https://github.com/jl-cmd/claude-dev-env/commit/7e1dfc0cae293ad794a762e20136f8bff63e26a8))
+
+
+### Maintenance
+
+* **rules:** archive six rules that state preference rather than practice ([4930f7d](https://github.com/jl-cmd/claude-dev-env/commit/4930f7d3879dad81238484dd98dff7ddc3bc5e36))
+* **rules:** archive the file-global-constants rule and its check ([7fd7590](https://github.com/jl-cmd/claude-dev-env/commit/7fd7590e537ea619467e65f568117f6f28793283))
+* **rules:** archive two rules that state preference rather than practice ([f03fe9d](https://github.com/jl-cmd/claude-dev-env/commit/f03fe9d03f47cbb1afde7cd760f2ec58871ecbe6))
+* **rules:** drop five mandates whose gate no longer exists ([cb87c83](https://github.com/jl-cmd/claude-dev-env/commit/cb87c83a9867253afe046eb3338f9c37a995ebb3))
+* **rules:** trim the installed rules to the ones a standard backs ([a09ef5c](https://github.com/jl-cmd/claude-dev-env/commit/a09ef5cdb0d8a6e7f2dc1b9f77402306a9759d07))
+* **skills:** archive the logifix skill ([32f68f7](https://github.com/jl-cmd/claude-dev-env/commit/32f68f742c424dbf7dac800755160f520d8072e3))
+* **skills:** archive the logifix skill so it stops installing ([b630646](https://github.com/jl-cmd/claude-dev-env/commit/b6306463215dd3a8dd340583573a4b9d5a4f258f))
+
+
+### Tests
+
+* **install:** pass the environment into every plugin-launch case ([657affc](https://github.com/jl-cmd/claude-dev-env/commit/657affc59867ae382c39a2e99ec697ebeaff2cbb))
+
 ## [7.7.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v7.7.0...claude-dev-env-v7.7.1) (2026-09-15)
 
 
