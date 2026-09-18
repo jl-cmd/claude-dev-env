@@ -11,7 +11,10 @@
   - Only runs when the checked-out branch is the named branch
   - Only runs when there are no tracked changes (untracked files are fine),
     unless -StashDirty is passed
-  - Uses merge --ff-only only (never force, never hard reset, never clean)
+  - Uses merge --ff-only (never force, never hard reset, never clean)
+  - When the fast-forward fails because the files were already copied in,
+    moves HEAD with a mixed reset, which writes no files. It keeps that move
+    only when every file the remote changed now matches the remote
   - Logs and exits non-zero on skip, diverge, or failure so a Task Scheduler
     history row can surface a problem instead of a silent no-op
 
@@ -128,6 +131,64 @@ function Invoke-GitOrExit {
     return $result.Output
 }
 
+function Get-NulSeparatedPaths {
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$Output
+    )
+    return @($Output -split "`0" | Where-Object { $_ })
+}
+
+function Invoke-AdoptCopiedTree {
+    <#
+      Handles a mirror whose files are refreshed by copy while its HEAD stays
+      behind. The fast-forward then refuses to overwrite the copied files,
+      even though they already hold the remote content.
+
+      A mixed reset moves HEAD and the index to the remote tip and writes no
+      files. If any file the remote changed still differs afterwards, the
+      reset goes back to the old tip, so the tree ends as it started.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$LocalTip,
+        [Parameter(Mandatory)]
+        [string]$RemoteRef
+    )
+    $stagedResult = Invoke-Git -Arguments @('diff', '--cached', '--quiet')
+    if ($stagedResult.ExitCode -ne 0) {
+        Write-SyncLog -Level 'ERROR' -Message 'adopt skipped: the index holds staged changes'
+        return $false
+    }
+    $changedResult = Invoke-Git -Arguments @('diff', '--name-only', '--no-renames', '-z', $LocalTip, $RemoteRef)
+    if ($changedResult.ExitCode -ne 0) {
+        Write-SyncLog -Level 'ERROR' -Message "adopt skipped: cannot list remote changes: $($changedResult.Output)"
+        return $false
+    }
+    $allRemoteChangedPaths = [System.Collections.Generic.HashSet[string]]::new([string[]](Get-NulSeparatedPaths -Output $changedResult.Output))
+
+    $resetResult = Invoke-Git -Arguments @('reset', '-q', $RemoteRef)
+    if ($resetResult.ExitCode -ne 0) {
+        Write-SyncLog -Level 'ERROR' -Message "adopt skipped: mixed reset failed: $($resetResult.Output)"
+        return $false
+    }
+    $differResult = Invoke-Git -Arguments @('diff', '--name-only', '--no-renames', '-z')
+    $allMismatchedPaths = @(Get-NulSeparatedPaths -Output $differResult.Output | Where-Object { $allRemoteChangedPaths.Contains($_) })
+    if ($differResult.ExitCode -eq 0 -and $allMismatchedPaths.Count -eq 0) {
+        return $true
+    }
+
+    $revertResult = Invoke-Git -Arguments @('reset', '-q', $LocalTip)
+    if ($revertResult.ExitCode -ne 0) {
+        Write-SyncLog -Level 'ERROR' -Message "adopt revert to $LocalTip failed; HEAD is at $RemoteRef with no file changed: $($revertResult.Output)"
+        return $false
+    }
+    $shownPaths = ($allMismatchedPaths | Select-Object -First 20) -join '; '
+    Write-SyncLog -Level 'ERROR' -Message "adopt refused: $($allMismatchedPaths.Count) file(s) the remote changed differ from it; HEAD kept at ${LocalTip}: $shownPaths"
+    return $false
+}
+
 try {
     if (-not (Test-Path -LiteralPath $RepoPath)) {
         Write-SyncLog -Level 'ERROR' -Message "repo path missing: $RepoPath"
@@ -194,14 +255,18 @@ try {
         Write-SyncLog -Level 'ERROR' -Message "merge --ff-only failed: $($mergeResult.Output)"
         if ($didStash) {
             $popResult = Invoke-Git -Arguments @('stash', 'pop')
-            if ($popResult.ExitCode -eq 0) {
-                Write-SyncLog -Level 'OK' -Message "restored the stashed edits to the working tree after the failed fast-forward"
-            }
-            else {
+            if ($popResult.ExitCode -ne 0) {
                 Write-SyncLog -Level 'ERROR' -Message ("stash pop failed after the failed fast-forward; the edits are still stashed as '" + $stashMessage + "' — recover them with git stash list and git stash pop: " + $popResult.Output)
+                exit 1
             }
+            Write-SyncLog -Level 'OK' -Message "restored the stashed edits to the working tree after the failed fast-forward"
         }
-        exit 1
+        if (-not (Invoke-AdoptCopiedTree -LocalTip $localTip -RemoteRef "$Remote/$Branch")) {
+            exit 1
+        }
+        $subject = Get-GitDecoration -Arguments @('log', '-1', '--format=%h %s') -Placeholder '<subject unavailable>'
+        Write-SyncLog -Level 'OK' -Message "$Branch $localTip -> $remoteTip adopted (files already matched) | $subject"
+        exit 0
     }
 
     $subject = Get-GitDecoration -Arguments @('log', '-1', '--format=%h %s') -Placeholder '<subject unavailable>'
