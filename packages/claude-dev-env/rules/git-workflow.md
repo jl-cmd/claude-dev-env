@@ -53,17 +53,16 @@ untouched.
 
 ## Confirm the required checks fired, and let CI run them
 
-CI is the gate. Push the branch and read its verdict. Do not rehearse the gate
-on your own machine first. [`ci-owns-the-gate.md`](ci-owns-the-gate.md) holds
-the reasoning and the one narrow exception.
+The gate runs once, and it runs on CI. Push the branch and read its verdict.
+[`ci-owns-the-gate.md`](ci-owns-the-gate.md) holds the reasoning and the shape
+a local run takes when one is warranted.
 
 Read the branch ruleset for the required check contexts before you push a
 branch, or any level of a stack: `gh api repos/<owner>/<repo>/rules/branches/<trunk>`.
-You read it to learn which checks must report, not to reproduce them locally.
-After the push, confirm each of those contexts appears on that level's head. A
-required check that never fired is invisible debt at every level, and it
-surfaces only after the whole stack is pushed, when the repair costs a second
-pass over every branch.
+Read it to learn which checks must report. After the push, confirm each of those
+contexts appears on that level's head. A required check that never fired is
+invisible debt at every level, and it surfaces only after the whole stack is
+pushed, when the repair costs a second pass over every branch.
 
 A red required check blocks the branch, whoever owns the failing line. The gate
 charges a change for the whole file it touches, so "pre-existing on main" is a
