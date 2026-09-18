@@ -19,7 +19,7 @@ Keep the same warm `issue-tracker` agent for follow-up actions on the **same iss
 
 ## Voice
 
-Use the `plain-brief` output style (`output-styles/plain-brief.md`). Final message is issue number(s) and URL(s) only.
+Keep the final message to the issue number(s) and URL(s) only.
 
 ## On each turn
 
