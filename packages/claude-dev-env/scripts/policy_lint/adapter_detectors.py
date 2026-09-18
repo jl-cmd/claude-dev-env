@@ -91,31 +91,137 @@ def _messages_for_validator_outcomes(
     )
 
 
+def _validator_messages_for_text(
+    document: Document,
+    absolute_path: Path,
+    text: str,
+    validator_module: ModuleType,
+) -> tuple[str, ...]:
+    all_validator_outcomes = validator_module.validate_proposed_file(
+        absolute_path.as_posix(),
+        text,
+        config_source_path=absolute_path,
+        include_ruff=False,
+        excluded_validator_names=constants.ALL_OVERLAPPING_VALIDATOR_NAMES,
+    )
+    return _messages_for_validator_outcomes(document, all_validator_outcomes)
+
+
+def _message_body(message: str) -> str:
+    _head, separator, body = message.partition(
+        constants.VALIDATOR_MESSAGE_PREFIX_SEPARATOR
+    )
+    return body if separator and body else message
+
+
+def _message_identity(message: str) -> str:
+    return constants.VALIDATOR_MESSAGE_DIGIT_PATTERN.sub(
+        constants.VALIDATOR_MESSAGE_DIGIT_PLACEHOLDER, _message_body(message)
+    )
+
+
+def _all_measured_sizes(message: str) -> tuple[int, ...]:
+    return tuple(
+        int(each_digit_run)
+        for each_digit_run in constants.VALIDATOR_MESSAGE_DIGIT_PATTERN.findall(
+            _message_body(message)
+        )
+    )
+
+
+def _has_grown_since(message: str, prior_message: str) -> bool:
+    return any(
+        each_size > each_prior_size
+        for each_size, each_prior_size in zip(
+            _all_measured_sizes(message), _all_measured_sizes(prior_message)
+        )
+    )
+
+
+def _prior_messages_by_identity(
+    all_prior_messages: tuple[str, ...],
+) -> dict[str, list[str]]:
+    all_prior_by_identity: dict[str, list[str]] = {}
+    for each_prior_message in all_prior_messages:
+        all_prior_by_identity.setdefault(
+            _message_identity(each_prior_message), []
+        ).append(each_prior_message)
+    return all_prior_by_identity
+
+
+def _is_introduced_message(
+    message: str, all_prior_by_identity: dict[str, list[str]]
+) -> bool:
+    all_matches = all_prior_by_identity.get(_message_identity(message))
+    if not all_matches:
+        return True
+    return _has_grown_since(message, all_matches.pop())
+
+
+def _messages_introduced_by_the_change(
+    all_candidate_messages: tuple[str, ...],
+    all_prior_messages: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Keep the messages the prior text did not already carry.
+
+    ::
+
+        prior: Function 'main' is 47 lines (max 30)
+        now:   Function 'main' is 47 lines (max 30)   -> dropped, untouched debt
+        now:   Function 'main' is 61 lines (max 30)   -> kept, the change grew it
+        now:   Function 'added' is 47 lines (max 30)  -> kept, a new breach
+
+    A message keeps its identity when it moves down the file or its measured
+    size falls, so only a new breach or a worse one survives. Each prior message
+    covers one candidate.
+
+    Args:
+        all_candidate_messages: Messages the post-edit text produced.
+        all_prior_messages: Messages the prior text produced.
+
+    Returns:
+        The messages this change is answerable for.
+    """
+    all_prior_by_identity = _prior_messages_by_identity(all_prior_messages)
+    return tuple(
+        each_message
+        for each_message in all_candidate_messages
+        if _is_introduced_message(each_message, all_prior_by_identity)
+    )
+
+
 def validator_diagnostics(
     document: Document,
     repository_root: Path,
     load_module: adapter_support.HookModuleLoader,
 ) -> tuple[Diagnostic, ...]:
-    """Run the fast validator set on one document.
+    """Run the fast validator set on one document, scoped to the change.
+
+    A module already over the file-length cap reported that breach on every edit
+    it received, so a one-line change failed on debt it did not create. Grading
+    the prior text the same way and subtracting leaves the breaches this change
+    introduced or made worse.
 
     Args:
-        document: Current source text and path.
+        document: Current source text, prior text, and path.
         repository_root: Request repository root for configuration resolution.
         load_module: Hook module loader.
 
     Returns:
-        Path-normalized diagnostics for failed validators.
+        Path-normalized diagnostics for the failures this change is answerable for.
     """
     absolute_path = adapter_support._document_path(repository_root, document)
     validator_module = load_module("validators.run_all_validators")
-    all_validator_outcomes = validator_module.validate_proposed_file(
-        absolute_path.as_posix(),
-        document.text,
-        config_source_path=absolute_path,
-        include_ruff=False,
-        excluded_validator_names=constants.ALL_OVERLAPPING_VALIDATOR_NAMES,
+    all_messages = _validator_messages_for_text(
+        document, absolute_path, document.text, validator_module
     )
-    all_messages = _messages_for_validator_outcomes(document, all_validator_outcomes)
+    if document.prior_text is not None:
+        all_prior_messages = _validator_messages_for_text(
+            document, absolute_path, document.prior_text, validator_module
+        )
+        all_messages = _messages_introduced_by_the_change(
+            all_messages, all_prior_messages
+        )
     return adapter_support._diagnostics_for_messages(document, "validators", all_messages)
 
 
