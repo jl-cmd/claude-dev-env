@@ -21,7 +21,13 @@ function recordingRunner(outcomeForCommand = () => ({ status: 0, stderr: '' })) 
     };
 }
 
-const ROOTS = { claudeRoot: '/managed/.claude', codexHome: '/managed/.codex' };
+const ROOTS = Object.freeze({
+    claudeRoot: '/managed/.claude',
+    codexHome: '/managed/.codex',
+    environment: {},
+});
+
+const WINDOWS_ENVIRONMENT = Object.freeze({ ComSpec: 'C:\\Windows\\system32\\cmd.exe' });
 
 test('the Claude plan carries the two documented plugin commands', () => {
     const plan = pstackPluginPlan('claude');
@@ -123,9 +129,9 @@ test('a non-Windows platform launches the host command directly', () => {
 
 test('Windows launches the host command through cmd.exe, which alone can run a .cmd shim', () => {
     const invocation = hostCommandInvocation(
-        'claude', ['plugin', 'install', PSTACK_PLUGIN_IDENTIFIER], 'win32', { ComSpec: 'C:\\Windows\\system32\\cmd.exe' },
+        'claude', ['plugin', 'install', PSTACK_PLUGIN_IDENTIFIER], 'win32', WINDOWS_ENVIRONMENT,
     );
-    assert.equal(invocation.file, 'C:\\Windows\\system32\\cmd.exe');
+    assert.equal(invocation.file, WINDOWS_ENVIRONMENT.ComSpec);
     assert.deepEqual(invocation.args, [
         '/d',
         '/s',
@@ -140,12 +146,17 @@ test('a Windows executable path holding a space stays one quoted token', () => {
         'C:\\Program Files\\nodejs\\claude.cmd',
         ['plugin', 'marketplace', 'add', PSTACK_MARKETPLACE_REPOSITORY],
         'win32',
+        WINDOWS_ENVIRONMENT,
     );
-    assert.equal(invocation.file, 'cmd.exe');
     assert.equal(
         invocation.args.at(-1),
         `""C:\\Program Files\\nodejs\\claude.cmd" plugin marketplace add ${PSTACK_MARKETPLACE_REPOSITORY}"`,
     );
+});
+
+test('a Windows environment without ComSpec falls back to the bare shell name', () => {
+    const invocation = hostCommandInvocation('claude', ['plugin'], 'win32', {});
+    assert.equal(invocation.file, 'cmd.exe');
 });
 
 test("cmd.exe's command-not-found exit code reads as an absent host, not a failure", () => {
