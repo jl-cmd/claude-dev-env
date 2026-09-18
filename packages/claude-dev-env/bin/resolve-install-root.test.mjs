@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
     resolveInstallRoot,
@@ -15,7 +16,7 @@ import {
     PACKAGE_AGENTS_HOME_DIRECTORY_NAME,
 } from './install-constants.mjs';
 
-const HOME_DIRECTORY = join('/tmp', 'cdev-resolve-roots-home');
+const HOME_DIRECTORY = join(tmpdir(), 'cdev-resolve-roots-home');
 
 function resolveFrom(environment, explicitTarget = null) {
     return resolveInstallRoot({ homeDirectory: HOME_DIRECTORY, environment, explicitTarget });
@@ -28,8 +29,8 @@ test('the managed root falls back to the default Claude directory under the home
 });
 
 test('CLAUDE_CONFIG_DIR names the managed root and an explicit target outranks it', () => {
-    const configuredRoot = join('/tmp', 'cdev-configured');
-    const explicitRoot = join('/tmp', 'cdev-explicit');
+    const configuredRoot = join(tmpdir(), 'cdev-configured');
+    const explicitRoot = join(tmpdir(), 'cdev-explicit');
     const configured = resolveFrom({ [CLAUDE_CONFIG_DIR_ENVIRONMENT_VARIABLE]: configuredRoot });
     assert.equal(configured.managedRoot, configuredRoot);
     assert.equal(configured.source, 'claude-config-dir');
@@ -51,7 +52,7 @@ test('the Codex home is the directory holding the rules and hooks destinations',
 });
 
 test('CODEX_HOME relocates the Codex home the pstack plugin step installs into', () => {
-    const relocatedHome = join('/tmp', 'cdev-relocated-codex');
+    const relocatedHome = join(tmpdir(), 'cdev-relocated-codex');
     const resolution = resolveFrom({ [CODEX_HOME_ENVIRONMENT_VARIABLE]: relocatedHome });
     assert.equal(resolution.codexHomeDirectory, relocatedHome);
     assert.equal(resolution.codexRulesInstallDirectory, join(relocatedHome, CODEX_RULES_DIRECTORY_NAME));
