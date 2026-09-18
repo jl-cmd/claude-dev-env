@@ -51,21 +51,26 @@ untouched.
    - Before push: `gh pr ready --undo`
    - After review approved: `gh pr ready`
 
-## Run the required checks locally before the first push
+## Confirm the required checks fired, and let CI run them
 
-Read the branch ruleset for the required check contexts before you push a branch,
-or any level of a stack: `gh api repos/<owner>/<repo>/rules/branches/<trunk>`.
-Then run that exact gate command locally against that level's own base, on every
-level. A required check that never fired is invisible debt at every level, and it
-surfaces only after the whole stack is pushed, when the repair costs a second pass
-over every branch.
+CI is the gate. Push the branch and read its verdict. Do not rehearse the gate
+on your own machine first. [`ci-owns-the-gate.md`](ci-owns-the-gate.md) holds
+the reasoning and the one narrow exception.
 
-A red local run blocks the push, whoever owns the failing line. The gate charges
-a change for the whole file it touches, so "pre-existing on main" is a blame
-note, not a pass. Fix the line in the same push or report the branch blocked. A
-single-file mypy call is not the gate on this repository: it cannot see sibling
-modules and reports false import errors. Run the repository's `local_verify.py`
-over the changed set instead.
+Read the branch ruleset for the required check contexts before you push a
+branch, or any level of a stack: `gh api repos/<owner>/<repo>/rules/branches/<trunk>`.
+You read it to learn which checks must report, not to reproduce them locally.
+After the push, confirm each of those contexts appears on that level's head. A
+required check that never fired is invisible debt at every level, and it
+surfaces only after the whole stack is pushed, when the repair costs a second
+pass over every branch.
+
+A red required check blocks the branch, whoever owns the failing line. The gate
+charges a change for the whole file it touches, so "pre-existing on main" is a
+blame note, not a pass. Fix the line in the next push or report the branch
+blocked. Read the gate's own report rather than a narrower substitute. A
+single-file mypy call cannot see sibling modules and reports false import
+errors, so it neither clears nor convicts a change.
 
 A checks listing that reports nothing on the branch is a finding, not a neutral
 state. Find out whether the workflow's event filters exclude the branch, or whether
