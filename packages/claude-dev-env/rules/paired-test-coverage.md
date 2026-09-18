@@ -18,7 +18,7 @@ When you add a public function to a module whose test suite already exercises th
 
 ## What the check covers
 
-Two complementary checks in `code_rules_paired_test.py` reach changed files through `code_rules_enforcer.py`, which the staged policy lint runs under its `code-rules` rule. No write-time hook runs them, so run `python packages/claude-dev-env/scripts/cde_lint.py --staged` before you commit. CI runs the same lint against the merge base. The two checks cover the two write orders.
+Two complementary checks in `code_rules_paired_test.py` reach changed files through `code_rules_enforcer.py`, which the staged policy lint runs under its `code-rules` rule. No write-time hook runs them, so CI is where they report, against the merge base. The two checks cover the two write orders.
 
 `check_public_function_missing_paired_test` runs on a production Python write or edit and flags a public function when all of these hold:
 

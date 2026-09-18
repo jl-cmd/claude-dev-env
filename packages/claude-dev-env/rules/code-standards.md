@@ -2,7 +2,7 @@
 
 > **Canonical review contract:** [`CODE_RULES.md`](../docs/CODE_RULES.md) — the human and AI review contract for code quality, loaded on demand.
 > **Checked-in pointer:** [`.cursor/BUGBOT.md`](../../../.cursor/BUGBOT.md) — the file Cursor BugBot reads; it points at `CODE_RULES.md`.
-> **Production enforcement.** The staged policy lint runs `hooks/blocking/code_rules_enforcer.py` over each changed file. No write-time hook runs it. Use `python packages/claude-dev-env/scripts/cde_lint.py --staged` before you commit, and CI runs the same lint against the merge base. Each mechanical rule carries a synchronization test.
+> **Production enforcement.** The staged policy lint runs `hooks/blocking/code_rules_enforcer.py` over each changed file. No write-time hook runs it. CI runs that lint against the merge base. Each mechanical rule carries a synchronization test.
 
 ## Policy surface map
 
