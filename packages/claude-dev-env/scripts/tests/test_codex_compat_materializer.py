@@ -826,7 +826,7 @@ def test_failure_blast_radius_projection_uses_the_canonical_excerpt() -> None:
     projected_instruction = materializer.render_codex_failure_blast_radius(canonical_rule)
 
     assert projected_instruction.startswith("Failure handling for this run")
-    assert "Three real attempts, then park." in projected_instruction
+    assert "Three attempts, then park." in projected_instruction
     assert "Report as: N of M complete" in projected_instruction
 
 
@@ -851,7 +851,7 @@ def test_build_plan_publishes_owned_agents_projection_and_tracks_drift(
     assert manifest_record["source"] == "rules/failure-blast-radius.md"
 
     rule_path.write_text(
-        rule_path.read_text(encoding="utf-8").replace("Three real attempts, then park.", "Three tested attempts, then park."),
+        rule_path.read_text(encoding="utf-8").replace("Three attempts, then park.", "Three tested attempts, then park."),
         encoding="utf-8",
     )
     drifted_plan, _ = build_plan(config, all_agents=[])
@@ -1021,7 +1021,7 @@ def _assert_projection_and_manifest(
 ) -> None:
     assert not retired_owned_path.exists()
     projected_instruction = (target / "AGENTS.md").read_text(encoding="utf-8")
-    assert "Three real attempts, then park." in projected_instruction
+    assert "Three attempts, then park." in projected_instruction
     manifest = json.loads((target / "hooks.json").read_text(encoding="utf-8"))
     assert manifest["hooks"]["PreToolUse"][0]["matcher"] == "apply_patch"
     assert manifest["hooks"]["PreToolUse"][1] == existing_hooks["hooks"]["PreToolUse"][1]
