@@ -9,7 +9,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from sync_to_cursor.rules import build_mappings
+from sync_to_cursor.rules import build_mappings, merge_code_standards
 
 _PACKAGE_ROOT = _SCRIPTS_DIR.parent
 _SKIPPED_RULE_FILE_NAMES = frozenset({"CLAUDE.md", "AGENTS.md"})
@@ -225,3 +225,14 @@ def test_comment_policy_removes_directive_justification_guidance() -> None:
     assert "without clear justification" not in react_patterns
     assert "changed `# noqa` directives are removed or resolved" in category_e_prompt
     assert "every `# noqa` on an import line must be justified" not in category_e_prompt
+
+
+def test_merge_code_standards_resolves_every_heading_it_names() -> None:
+    merged_text = merge_code_standards(
+        (
+            _PACKAGE_ROOT / "rules" / "code-standards.md",
+            _PACKAGE_ROOT / "docs" / "CODE_RULES.md",
+        )
+    )
+    assert "## Reference (full text:" in merged_text
+    assert "## COMMENT PRESERVATION" in merged_text
