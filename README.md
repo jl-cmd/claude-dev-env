@@ -130,7 +130,6 @@ Behavioral rules loaded into every session.
 | `paired-test-coverage` | Every public function in an established suite carries a behavioral test |
 | `plain-illustrative-docstrings` | Docstring narrative reads plainly on the first pass |
 | `pstack-models` | Portable role requirements for pstack delegation |
-| `prompt-workflow-context-controls` | Prompt workflows stay low-context |
 | `re-stage-before-commit` | Stage this session's edits right before the commit |
 | `research-mode` | Cite sources, say "I don't know", use direct quotes |
 | `shell-invocation` | Use pwsh, and keep shell substitution out of Bash commands |

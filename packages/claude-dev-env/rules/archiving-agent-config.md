@@ -29,9 +29,9 @@ here.
 ## Retire with `git rm`, and let history be the archive
 
 Remove the file with `git rm`. Git history is the archive. No archive directory
-lives in this tree, because the plugin channel carries every tracked file and
-the npm `files` list packs `.agents/` whole. A retired file kept in the tree
-ships to every install that uses either channel.
+lives in this tree, because the plugin channel carries every tracked file. The
+npm `files` list also packs `.agents/` whole, so a retired skill kept under
+`.agents/` ships in the tarball too.
 
 State the restore in the commit message that retires the file: why it went, and
 every other edit a restore has to undo. The file comes back with

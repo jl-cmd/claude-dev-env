@@ -2183,7 +2183,6 @@ rule:packages/claude-dev-env/rules/anti-corollary-tests.md	references	rule:packa
 rule:packages/claude-dev-env/rules/anti-corollary-tests.md	references	rule:packages/claude-dev-env/rules/paired-test-coverage.md
 rule:packages/claude-dev-env/rules/anti-corollary-tests.md	references	rule:packages/claude-dev-env/rules/testing.md
 rule:packages/claude-dev-env/rules/archiving-agent-config.md	invokes	bin_script:packages/claude-dev-env/bin/ever-shipped-skills.mjs
-rule:packages/claude-dev-env/rules/archiving-agent-config.md	invokes	bin_script:packages/claude-dev-env/bin/install.mjs
 rule:packages/claude-dev-env/rules/archiving-agent-config.md	invokes	scripts_module:packages/claude-dev-env/scripts/active_capability_references.py
 rule:packages/claude-dev-env/rules/archiving-agent-config.md	references	doc:packages/claude-dev-env/CHANGELOG.md
 rule:packages/claude-dev-env/rules/archiving-agent-config.md	references	rule:packages/claude-dev-env/rules/doc-inventory-integrity.md

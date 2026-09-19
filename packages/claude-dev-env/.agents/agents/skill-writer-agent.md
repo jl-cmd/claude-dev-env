@@ -46,7 +46,7 @@ A refine packet instead carries: the current SKILL.md, what was observed, what t
 
 ## Deterministic elements
 
-Honor `deterministic-elements.md` in every skill you author. A step is deterministic when the same inputs give the same outputs, success is machine-checkable, and a human could write it as a pure function or a fixed sequence. Route each kind to its home:
+Route deterministic work out of prose in every skill you author. A step is deterministic when the same inputs give the same outputs, success is machine-checkable, and a human could write it as a pure function or a fixed sequence. Route each kind to its home:
 
 - Validators, transforms, detection, and mechanical sequences ship as `scripts/` or `workflow/*.mjs`, each with tests and a `*_constants/` package.
 - Verbatim templates ship in `templates/`.
