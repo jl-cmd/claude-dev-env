@@ -1,0 +1,2 @@
+#!/bin/sh
+exec python "$(dirname "$0")/gh_shim.py" "$@"
