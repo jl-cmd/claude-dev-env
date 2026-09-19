@@ -40,7 +40,35 @@ Work a disagreement in this order: keep the observed evidence in the record, nam
 
 ## Recovery record
 
-When an optional reference is missing, record its path, status, repair action, and repair result before continuing. When a fallback bind is used, record the selected tier, fallback kind, fallback reason, and reply path. First, recovery, and completion consults record changed evidence, validation, unresolved risks, and report-back status.
+Keep one versioned `evidence` object in the session-controlled `model-tier-run.json` record. A missing optional reference belongs in `reference.status`; it keeps the bind result independent. `fallback_kind: "broken"` identifies a bind or reply failure. On a Codex host, a successful native route records `selected_tier: "Astra"` and `reply_path: "native"`.
+
+```json
+{
+  "evidence": {
+    "schema_version": 1,
+    "reference": {
+      "path": "~/.claude/docs/references/advisor-tool.md",
+      "status": "missing",
+      "repair_action": "use the projected docs root",
+      "repair_result": "read"
+    },
+    "fallback": {
+      "selected_tier": "Astra",
+      "fallback_kind": null,
+      "fallback_reason": null,
+      "reply_path": "native"
+    },
+    "consult": {
+      "changed_evidence": ["native bind returned a reply"],
+      "validation": ["signal and session id read back"],
+      "unresolved_risks": ["optional reference projection"],
+      "report_back_status": "recorded"
+    }
+  }
+}
+```
+
+The repair fields preserve the reference-path result. The fallback fields preserve route selection and bind or reply failures. The consult fields preserve first, recovery, and completion readback.
 
 ## Escalation shapes
 

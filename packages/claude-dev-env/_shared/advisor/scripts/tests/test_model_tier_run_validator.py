@@ -37,6 +37,105 @@ ADVISOR_MODEL_TIER = model_tier_run_validator.ADVISOR_MODEL_TIER
 CODEX_BIND_SUCCESS_TOKEN = model_tier_run_validator.CODEX_BIND_SUCCESS_TOKEN
 
 
+def _native_codex_evidence(
+    *,
+    reply_path: str = "native",
+    reference_status: str = "missing",
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "reference": {
+            "path": "~/.claude/docs/references/advisor-tool.md",
+            "status": reference_status,
+            "repair_action": "use the projected docs root",
+            "repair_result": "read",
+        },
+        "fallback": {
+            "selected_tier": "Astra",
+            "fallback_kind": None,
+            "fallback_reason": None,
+            "reply_path": reply_path,
+        },
+        "consult": {
+            "changed_evidence": ["native bind returned a reply"],
+            "validation": ["signal and session id read back"],
+            "unresolved_risks": ["optional reference projection"],
+            "report_back_status": "recorded",
+        },
+    }
+
+
+def test_codex_native_bind_and_reply_readback_validate() -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=[ADVISOR_MODEL_TIER],
+        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
+        selected_tier=ADVISOR_MODEL_TIER,
+        host_profile="Codex",
+        evidence=_native_codex_evidence(),
+    )
+
+    assert validate_model_tier_run(run) is None
+
+
+def test_codex_native_success_rejects_non_native_reply_path() -> None:
+    evidence = _native_codex_evidence(reply_path="cli")
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=[ADVISOR_MODEL_TIER],
+        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
+        selected_tier=ADVISOR_MODEL_TIER,
+        host_profile="Codex",
+        evidence=evidence,
+    )
+
+    with pytest.raises(ModelTierRunError, match="native reply path"):
+        validate_model_tier_run(run)
+
+
+def test_broken_bind_keeps_fallback_evidence_separate_from_reference_gap() -> None:
+    evidence = _native_codex_evidence()
+    evidence["fallback"] = {
+        "selected_tier": None,
+        "fallback_kind": "broken",
+        "fallback_reason": "native Astra bind failed",
+        "reply_path": "none",
+    }
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=[ADVISOR_MODEL_TIER],
+        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "unavailable"}],
+        selected_tier=None,
+        fallback_reason="native Astra bind failed",
+        host_profile="Codex",
+        evidence=evidence,
+    )
+
+    assert validate_model_tier_run(run) is None
+
+
+def test_cli_reads_versioned_advisor_evidence(tmp_path: Path) -> None:
+    log_path = tmp_path / "model-tier-run.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                "own_tier": "Opus",
+                "candidate_tiers": [ADVISOR_MODEL_TIER],
+                "attempts": [{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
+                "selected_tier": ADVISOR_MODEL_TIER,
+                "host_profile": "Codex",
+                "evidence": _native_codex_evidence(reference_status="read"),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert main([str(log_path)]) == 0
+    loaded_run = load_model_tier_run_from_json_path(from_path=log_path)
+    assert loaded_run.evidence is not None
+    assert loaded_run.evidence["consult"]["report_back_status"] == "recorded"
+
+
 def test_clean_single_spawn_at_top_of_slice_passes() -> None:
     run = ModelTierRun(
         own_tier="Opus",
