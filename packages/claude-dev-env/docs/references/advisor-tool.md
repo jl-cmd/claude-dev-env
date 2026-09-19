@@ -6,7 +6,7 @@ Source bones: [Anthropic Advisor tool](https://platform.claude.com/docs/en/agent
 
 ## What it is
 
-`/team-advisor` is the repository's advisor implementation. It carries the full first packet explicitly, sends later deltas, and owns the warm Agent/SendMessage or read-only Sol CLI lifecycle.
+`/team-advisor` is the repository's advisor implementation. On a Claude host with the built-in `advisor` tool on, it calls `advisor()`, which reads the whole transcript. Otherwise it carries the full first packet explicitly, sends later deltas, and owns the warm Agent/SendMessage or read-only Astra CLI lifecycle.
 
 See `team-advisor-skill.md` for the bind and lifecycle map.
 
