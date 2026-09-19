@@ -9,11 +9,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
 import pytest
+import arm_isolation
 import run_arm
 from graders import GRADER_BY_KIND, GraderResult, GradingContext, run_graders
 
@@ -699,6 +703,7 @@ class TestPathExistsFamily:
 
 JSON_FLAG_BODY = """
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -849,3 +854,278 @@ class TestHarnessFailuresStayOrdinary:
         assert session["GIT_CONFIG_GLOBAL"] == install_environment["GIT_CONFIG_GLOBAL"]
         assert session.get("USERPROFILE") != str(layout.home)
         assert "CLAUDE_CONFIG_DIR" not in session
+
+
+class TestLiveHomeRewrite:
+    def install_with(self, tmp_path: Path, text: str) -> tuple[Path, Path]:
+        config = tmp_path / "work" / ".claude"
+        (config / "rules").mkdir(parents=True)
+        rule_path = config / "rules" / "rule.md"
+        rule_path.write_text(text, encoding="utf-8")
+        return config, rule_path
+
+    def test_should_point_every_home_form_at_the_arm_install(
+        self, tmp_path: Path
+    ) -> None:
+        config, rule_path = self.install_with(
+            tmp_path,
+            "python ~/.claude/scripts/a.py\n"
+            "python $HOME/.claude/scripts/b.py\n"
+            "python ${HOME}/.claude/scripts/c.py\n"
+            "type %USERPROFILE%\\.claude\\rules\\d.md\n"
+            "gc $env:USERPROFILE\\.claude\\rules\\e.md\n"
+            "see `~/.claude`.\n",
+        )
+        report = arm_isolation.rewrite_live_home_references([config], config)
+        rewritten = rule_path.read_text(encoding="utf-8")
+        assert report.replacement_count == 6
+        assert rewritten.count(config.as_posix()) == 6
+        assert "~" not in rewritten and "HOME" not in rewritten
+        assert "USERPROFILE" not in rewritten
+        assert config.as_posix() + "\\rules\\d.md" in rewritten
+
+    def test_should_leave_near_neighbor_names_alone(self, tmp_path: Path) -> None:
+        untouched = (
+            "edit ~/.claude.json\nls ~/.claudette/x\ncat ~/.ssh/id\n"
+            "cd $HOME/.claude-dev/x\nrun ./.claude/settings.json\n"
+        )
+        config, rule_path = self.install_with(tmp_path, untouched)
+        report = arm_isolation.rewrite_live_home_references([config], config)
+        assert report.replacement_count == 0
+        assert rule_path.read_text(encoding="utf-8") == untouched
+
+    def test_should_skip_binary_files_and_count_changed_files(
+        self, tmp_path: Path
+    ) -> None:
+        config, _ = self.install_with(tmp_path, "~/.claude/x and ~/.claude/y\n")
+        binary_path = config / "blob.bin"
+        binary_bytes = b"\xff\xfe~/.claude/z\x00\x80"
+        binary_path.write_bytes(binary_bytes)
+        report = arm_isolation.rewrite_live_home_references([config], config)
+        assert (report.replacement_count, report.changed_file_count) == (2, 1)
+        assert binary_path.read_bytes() == binary_bytes
+
+    def test_should_redirect_a_child_python_home_lookup(self, tmp_path: Path) -> None:
+        import subprocess
+        import sys
+
+        layout = run_arm.RunLayout(
+            tmp_path,
+            tmp_path / "s",
+            tmp_path / "home",
+            tmp_path / "work" / ".claude",
+            tmp_path / "work",
+            tmp_path / "shim",
+        )
+        layout.home.mkdir()
+        layout.config.mkdir(parents=True)
+        (layout.config / "marker.txt").write_text("arm", encoding="utf-8")
+        arm_isolation.link_arm_home(layout.home, layout.work)
+        session = run_arm.session_environment(layout)
+        probe = "from pathlib import Path; print((Path.home()/'.claude'/'marker.txt').read_text())"
+        redirected = subprocess.run(
+            [sys.executable, "-c", probe],
+            env=session,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert redirected.stdout.strip() == "arm"
+        assert session["CLAUDE_HOME"] == str(layout.config)
+        assert Path(session["TEMP"]).parent == tmp_path
+        assert Path(session["PYTHONPATH"].split(os.pathsep)[0]).parent == tmp_path
+        assert session.get("USERPROFILE") != str(layout.home)
+
+
+class TestLiveHomeTripwire:
+    LIVE = (Path.home() / ".claude").as_posix()
+
+    def events_for(self, tool_name: str, tool_input: dict[str, str]) -> list[dict[str, Any]]:
+        return [
+            {"type": "system", "subtype": "init"},
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "tool_use", "name": tool_name, "input": tool_input}
+                    ]
+                },
+            },
+        ]
+
+    def test_should_pass_a_read_inside_the_run_directory(self) -> None:
+        all_events = self.events_for(
+            "Read", {"file_path": "C:\\Temp\\cde-bench\\runs\\r\\work\\.claude\\rules\\a.md"}
+        )
+        assert arm_isolation.find_live_home_tool_calls(all_events) == []
+
+    @pytest.mark.parametrize(
+        ("tool_name", "tool_input"),
+        [
+            ("Read", {"file_path": str(Path.home() / ".claude" / "rules" / "a.md")}),
+            ("Bash", {"command": "cat ~/.claude/rules/a.md"}),
+            ("Bash", {"command": 'python "$HOME/.claude/scripts/x.py"'}),
+            ("PowerShell", {"command": "gc $env:USERPROFILE\\.claude\\settings.json"}),
+            ("Glob", {"pattern": "*.md", "path": LIVE}),
+            ("Bash", {"command": "ls " + LIVE.replace("C:/", "/c/")}),
+        ],
+    )
+    def test_should_flag_a_tool_call_under_the_live_home(
+        self, tool_name: str, tool_input: dict[str, str]
+    ) -> None:
+        all_found = arm_isolation.find_live_home_tool_calls(
+            self.events_for(tool_name, tool_input)
+        )
+        assert len(all_found) == 1 and all_found[0].startswith(tool_name)
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "cat ~/.claude.json",
+            "ls ~/.claudette",
+            "cat ./.claude/settings.json",
+            "cat " + str(Path.home() / "project" / ".claude" / "settings.json"),
+        ],
+    )
+    def test_should_pass_near_neighbor_paths(self, command: str) -> None:
+        all_events = self.events_for("Bash", {"command": command})
+        assert arm_isolation.find_live_home_tool_calls(all_events) == []
+
+    def test_should_ignore_live_paths_that_only_appear_in_tool_results(self) -> None:
+        all_events = [
+            {
+                "type": "user",
+                "message": {
+                    "content": [{"type": "tool_result", "content": self.LIVE + "/x"}]
+                },
+            }
+        ]
+        assert arm_isolation.find_live_home_tool_calls(all_events) == []
+
+
+class TestFixtureCheckoutLeak:
+    ESCAPING_ARM = {
+        "id": "bare",
+        "kind": "cde",
+        "base_sha": REGISTRY["baseline_sha"],
+        "removed_paths": ["../home"],
+    }
+
+    def ghost_row(self, tmp_path: Path, leaked_name: str) -> dict[str, str]:
+        fixture = tmp_path / "cases" / "ghost" / "fixture"
+        (fixture / "__pycache__").mkdir(parents=True)
+        (fixture / "README.md").write_text("plain", encoding="utf-8")
+        (fixture / leaked_name).write_bytes(b"\x00" + str(BENCH_DIRECTORY).encode())
+        ghost = dict(case_by_id("bugfix-discount-rounding"), id="ghost")
+        registry_path = tmp_path / "cases.json"
+        registry_path.write_text(
+            json.dumps({"cases": [ghost], "arms": [self.ESCAPING_ARM]}),
+            encoding="utf-8",
+        )
+        return run_arm.execute_run(
+            argparse.Namespace(
+                registry=str(registry_path),
+                case="ghost",
+                arm="bare",
+                repetition=1,
+                model="no-model-is-called",
+                repo=str(BENCH_DIRECTORY.parents[2]),
+            )
+        )
+
+    def test_should_refuse_a_work_file_that_names_the_checkout(
+        self, tmp_path: Path
+    ) -> None:
+        assert self.ghost_row(tmp_path, "notes.bin")["exit"] == "harness_error:fixture-leak"
+
+    def test_should_drop_compiled_caches_before_the_leak_check(
+        self, tmp_path: Path
+    ) -> None:
+        row = self.ghost_row(tmp_path, "__pycache__/stale.pyc")
+        assert row["exit"] == "harness_error:removal"
+
+
+class TestOutsideWriteTripwire:
+    RUN_ROOT = Path(tempfile.gettempdir()) / "cde-bench" / "runs" / "case--arm--r1--abc"
+    OUTSIDE = Path.home() / "projects" / "app" / "build"
+
+    def found(self, tool_name: str, tool_input: dict[str, str]) -> list[str]:
+        all_events = [
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "tool_use", "name": tool_name, "input": tool_input}
+                    ]
+                },
+            }
+        ]
+        return arm_isolation.find_outside_writes(all_events, self.RUN_ROOT)
+
+    @pytest.mark.parametrize(
+        ("tool_name", "tool_input"),
+        [
+            ("Write", {"file_path": str(RUN_ROOT / "work" / "a.py"), "content": "x"}),
+            ("Edit", {"file_path": "app/core.py", "old_string": "a", "new_string": "b"}),
+            ("Bash", {"command": "rm -rf build tests/__pycache__"}),
+            ("Bash", {"command": f'rm -rf "{(RUN_ROOT / "work" / "build").as_posix()}"'}),
+            ("Bash", {"command": "python -m pytest -q > /dev/null 2>&1"}),
+            ("Edit", {"file_path": "/tmp/cde-bench/runs/case--arm--r1--abc/work/a.py"}),
+            ("Bash", {"command": "cat > /tmp/pr-body.md <<X"}),
+            ("Bash", {"command": "echo body > $TEMP/pr-body.md"}),
+            ("Write", {"file_path": str(Path(tempfile.gettempdir()) / "pr-body.md")}),
+            ("Bash", {"command": f'"{sys.executable}" -m pytest -q'}),
+            ("Bash", {"command": f"cat {OUTSIDE.as_posix()}/log.txt"}),
+            ("PowerShell", {"command": "Remove-Item -Recurse -Force .\\build"}),
+        ],
+    )
+    def test_should_pass_writes_inside_the_run_and_reads_anywhere(
+        self, tool_name: str, tool_input: dict[str, str]
+    ) -> None:
+        assert self.found(tool_name, tool_input) == []
+
+    @pytest.mark.parametrize(
+        ("tool_name", "tool_input"),
+        [
+            ("Write", {"file_path": str(OUTSIDE / "a.txt"), "content": "x"}),
+            ("Edit", {"file_path": str(OUTSIDE / "a.txt"), "old_string": "a", "new_string": "b"}),
+            ("PowerShell", {"command": f"Remove-Item -Recurse -Force -Confirm:$false '{OUTSIDE}'"}),
+            ("Bash", {"command": f"rm -rf {OUTSIDE.as_posix()}"}),
+            ("Bash", {"command": f"mv notes.md {OUTSIDE.as_posix()}/notes.md"}),
+            ("Bash", {"command": f"echo hi > {OUTSIDE.as_posix()}/out.txt"}),
+            ("Bash", {"command": "rm -rf ~/projects/app/build"}),
+            ("Bash", {"command": "cd .. && rm -rf ../../other-run"}),
+            (
+                "Bash",
+                {"command": f"rm -rf {(RUN_ROOT.parent / 'other--run').as_posix()}"},
+            ),
+        ],
+    )
+    def test_should_flag_a_write_delete_or_move_outside_the_run(
+        self, tool_name: str, tool_input: dict[str, str]
+    ) -> None:
+        assert len(self.found(tool_name, tool_input)) == 1
+
+    def test_should_skip_an_outside_write_the_cli_denied(self) -> None:
+        all_events = [
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "toolu_denied",
+                            "name": "Write",
+                            "input": {"file_path": str(self.OUTSIDE / "a.txt")},
+                        }
+                    ]
+                },
+            }
+        ]
+        assert arm_isolation.find_outside_writes(all_events, self.RUN_ROOT) != []
+        assert (
+            arm_isolation.find_outside_writes(
+                all_events, self.RUN_ROOT, frozenset({"toolu_denied"})
+            )
+            == []
+        )

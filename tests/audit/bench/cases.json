@@ -16,6 +16,15 @@
       "base_sha": "",
       "removed_paths": [],
       "removal_patch": null
+    },
+    {
+      "id": "proof-no-durable-post-lint",
+      "kind": "cde",
+      "base_sha": "6274a010c967f1c8dbd31c68af2771df536cecaf",
+      "removed_paths": [
+        "packages/claude-dev-env/scripts/durable_post_lint.py"
+      ],
+      "removal_patch": null
     }
   ],
   "defaults": {

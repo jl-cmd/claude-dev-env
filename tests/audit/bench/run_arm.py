@@ -29,10 +29,17 @@ import tempfile
 import time
 import uuid
 import zipfile
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from arm_isolation import (
+    find_live_home_tool_calls,
+    find_outside_writes,
+    link_arm_home,
+    redirect_environment,
+    rewrite_live_home_references,
+)
 from graders import GraderResult, GradingContext, run_graders
 
 BENCH_DIRECTORY = Path(__file__).resolve().parent
@@ -40,10 +47,11 @@ BENCH_DIRECTORY = Path(__file__).resolve().parent
 INSTALLER_RELATIVE_PATH = Path("packages/claude-dev-env/bin/install.mjs")
 ALL_AUTH_PASSTHROUGH_VARIABLES = ("ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN")
 ALL_SESSION_VARIABLE_PREFIXES = ("CLAUDE", "ANTHROPIC")
-DEFAULT_ALLOWED_TOOLS = "Bash,PowerShell,Read,Edit,Write,Glob,Grep"
-ALL_PROJECT_INSTALL_NAMES = (".claude", ".claude.agents")
+DEFAULT_ALLOWED_TOOLS = "Bash,PowerShell,Read,Glob,Grep"
+ALL_PROJECT_INSTALL_NAMES = (".claude", ".agents")
 SHIM_LOG_RELATIVE_PATH = Path(".git") / "bench-shim.log"
 DEFAULT_SESSION_TIMEOUT_SECONDS = 1800
+ALL_FIXTURE_CACHE_NAMES = ("__pycache__", ".pytest_cache", "*.pyc")
 INSTALL_TIMEOUT_SECONDS = 600
 ALL_ROW_COLUMNS = (
     "run_id",
@@ -294,6 +302,11 @@ def session_environment(layout: RunLayout) -> dict[str, str]:
             environment.pop(each_name, None)
     environment["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
     environment["BENCH_SHIM_LOG"] = str(layout.work / SHIM_LOG_RELATIVE_PATH)
+    environment.update(redirect_environment(layout.home, layout.config))
+    run_temp_directory = layout.root / "tmp"
+    run_temp_directory.mkdir(parents=True, exist_ok=True)
+    for each_name in ("TEMP", "TMP", "TMPDIR"):
+        environment[each_name] = str(run_temp_directory)
     return environment
 
 
@@ -335,7 +348,40 @@ def build_install(
     )
     settings["claudeMdExcludes"] = live_home_exclude_patterns()
     settings_path.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+    all_install_roots = [
+        each_root
+        for each_root in (layout.config, layout.work / ".agents")
+        if each_root.is_dir()
+    ]
+    report = rewrite_live_home_references(all_install_roots, layout.config)
+    all_linked = link_arm_home(layout.home, layout.work)
+    (layout.root / "isolation.json").write_text(
+        json.dumps({"rewrite": asdict(report), "linked": all_linked}, indent=2),
+        encoding="utf-8",
+    )
     return identity
+
+
+def find_checkout_mentions(work_directory: Path) -> list[str]:
+    """Name each work file whose bytes hold the path of this checkout.
+
+    ::
+
+        flag: tests/__pycache__/test_core.pyc   (compiled inside the fixture)
+        ok:   tests/test_core.py
+
+    A session that sees the checkout path can reach out of its run directory.
+    """
+    all_needles = [
+        str(BENCH_DIRECTORY).encode("utf-8").lower(),
+        BENCH_DIRECTORY.as_posix().encode("utf-8").lower(),
+    ]
+    return [
+        each_path.relative_to(work_directory).as_posix()
+        for each_path in sorted(work_directory.rglob("*"))
+        if each_path.is_file()
+        and any(each_needle in each_path.read_bytes().lower() for each_needle in all_needles)
+    ]
 
 
 def expand_tokens(all_parts: list[Any], case_directory: Path) -> list[str]:
@@ -359,7 +405,11 @@ def prepare_work_directory(
     fixture_directory = case_directory / str(case["fixture"])
     if not fixture_directory.is_dir():
         raise StageRunFatal("fixture", f"fixture missing: {fixture_directory}")
-    shutil.copytree(fixture_directory, layout.work)
+    shutil.copytree(
+        fixture_directory,
+        layout.work,
+        ignore=shutil.ignore_patterns(*ALL_FIXTURE_CACHE_NAMES),
+    )
     shim_directory = case_directory / "shim"
     if shim_directory.is_dir():
         shutil.copytree(shim_directory, layout.shim, dirs_exist_ok=True)
@@ -393,6 +443,11 @@ def prepare_work_directory(
     ]
     if all_failures:
         raise StageRunFatal("setup", "; ".join(all_failures))
+    all_checkout_mentions = find_checkout_mentions(layout.work)
+    if all_checkout_mentions:
+        raise StageRunFatal(
+            "fixture-leak", f"work files name the checkout: {all_checkout_mentions[:5]}"
+        )
 
 
 def read_stream_events(raw_stdout: str) -> list[dict[str, Any]]:
@@ -475,6 +530,21 @@ def run_session(
     all_leaks = find_live_home_leaks(init_event)
     if all_leaks:
         raise StageRunFatal("leak", f"init event names the live home: {all_leaks}")
+    all_live_reads = find_live_home_tool_calls(all_events)
+    if all_live_reads:
+        raise StageRunFatal(
+            "live-home-read", f"tool calls under the live home: {all_live_reads[:5]}"
+        )
+    all_denied_ids = frozenset(
+        str(each_denial.get("tool_use_id"))
+        for each_denial in payload.get("permission_denials") or []
+        if isinstance(each_denial, dict)
+    )
+    all_outside_writes = find_outside_writes(all_events, layout.root, all_denied_ids)
+    if all_outside_writes:
+        raise StageRunFatal(
+            "outside-write", f"writes outside the run: {all_outside_writes[:5]}"
+        )
     usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
     token_detail = {
         each_key: int(usage.get(each_key, 0) or 0)
