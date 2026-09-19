@@ -79,7 +79,7 @@ GitHub closes the sub-issue when someone **merges** a pull request into the **de
 
 **Preferred on commits:** also put `Closes #N` in the first commit message when the fix starts. Commit alone is backup; the PR body is the contract.
 
-**Stacked / intermediate PRs** that do not merge into the default branch: use a plain `#N` reference in the body so the issue links without a false close promise. Put `Closes #N` only on the PR that actually lands on the default branch.
+**Stacked / intermediate PRs** that do not merge into the default branch: use a plain `#N` reference in the body so the issue links without a false close promise. Put `Closes #N` only on the PR that lands on the default branch.
 
 **Not enough:** a Development "related" link with no closing keyword. **Not enough:** closing the PR without merging.
 

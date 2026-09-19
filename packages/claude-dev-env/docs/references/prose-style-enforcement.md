@@ -10,7 +10,7 @@ The flag is `PROSE_STYLE_ENFORCEMENT_ENABLED` in `hooks/blocking/config/prose_st
 
 ## Always on
 
-Historical/comparative language detection in `state_description_blocker.py` runs unconditionally and does not read this flag. Apply `rules/asd-ste100-language.md` for user-facing word choice and sentence style. Code-rules and security blockers are out of scope for this switch.
+Historical and comparative language detection lives in `state_description_blocker.py`, which the staged policy lint applies under its state-description rule whatever this flag holds. Apply `rules/asd-ste100-language.md` for user-facing word choice and sentence style. Code-rules and security blockers are out of scope for this switch.
 
 ## Hedging claims
 

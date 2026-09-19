@@ -66,7 +66,7 @@ After fixes land, report the same findings list again through the structured
 findings-report call, the call that renders this review's results as a typed
 list in the host UI, with each finding now carrying an `outcome`:
 `fixed`, `no_change_needed` (the finding was wrong or already handled), or
-`skipped` (real but not applied). Do not repeat the findings as text in the
+`skipped` (the finding stands but no fix was applied). Do not repeat the findings as text in the
 response body; the structured call is the record the host UI reads, and the
 batched skip list from above goes in the prose that follows it.
 

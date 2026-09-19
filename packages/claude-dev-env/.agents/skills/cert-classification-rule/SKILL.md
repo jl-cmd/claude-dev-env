@@ -135,7 +135,7 @@ truthful note, because it becomes the pasted sentence for those classes.
 
 Do **not** fabricate a "Samsung confirmed" claim. State only what is true. The shipped Gallery
 note is true because Samsung Support did confirm that issue; a new pattern for a different
-issue must not borrow that wording unless the confirmation actually happened.
+issue must not borrow that wording unless the confirmation happened.
 
 ## How to add the paired production-path test
 
@@ -143,7 +143,7 @@ Every new unfixable pattern gets a paired test in
 `shared_utils/samsung_utils/tests/test_cert_failure_classifier.py` that drives the production
 path:
 
-1. Load the real patterns with `load_unfixable_patterns()` (no path argument, so it reads the
+1. Load the patterns with `load_unfixable_patterns()` (no path argument, so it reads the
    shipped config).
 2. Build the report HTML with the live must-fix title text, run it through
    `extract_issue_titles`, then `classify_failure`, and assert the result is `unfixable`.
@@ -153,7 +153,7 @@ path:
 
 Use the exact title strings Samsung's report produces. The existing
 `TestClassifyFailure::test_gallery_regex_matches_all_known_variants` shows the shape: a list of
-real title variants, each asserted as `unfixable` through `classify_failure`.
+title variants, each asserted as `unfixable` through `classify_failure`.
 
 Run the tests from the `shared_utils` directory (its pytest config is anchored there):
 

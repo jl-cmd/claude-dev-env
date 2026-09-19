@@ -57,7 +57,7 @@ ID prefix: `find`.
 
 **O6. Free-form `Args:`-adjacent claims**
 - Judgment: thick rubric O6 (unions, suppressors, exclusion axis, delegation summaries, Returns/Raises/Note claims, run-mode field meaning). Gate inventory and free-form checklist live in the rubric.
-- Adversarial probes: (a) check `Returns:` claims against every `return` statement in the body — is the documented return shape the actual return shape; (b) check `Raises:` claims against every `raise` and propagating callee — is every documented raise reachable; (c) check `Example:` snippets — does the snippet actually compile against the signature.
+- Adversarial probes: (a) check `Returns:` claims against every `return` statement in the body — is the documented return shape the shape the body returns; (b) check `Raises:` claims against every `raise` and propagating callee — is every documented raise reachable; (c) check `Example:` snippets — does the snippet compile against the signature.
 
 **O7. Module-doc-vs-split-module after refactor**
 - Judgment: thick rubric O7.
@@ -89,7 +89,7 @@ Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket O1-O9, produce Shape A 
 
 Audit jl-cmd/claude-dev-env PR #522 for **Category O only** (docstring / fixture-prose vs implementation drift). Skip A-N, P. Sub-bucket forced-exhaustion mode: Category O is decomposed into 9 sub-buckets below.
 
-PR #522 split `pr_description_command_parser.py` into two modules — the original parser and a new `pr_description_pr_number.py` — but the originating module's docstring still claims the PR-number recovery responsibility. A sibling change to `pr_description_body_audit.py` introduced a module docstring whose verb (`detects vague language`) overstates the module's actual responsibility (it only exposes `_extract_vague_scan_text()`; detection runs elsewhere).
+PR #522 split `pr_description_command_parser.py` into two modules — the original parser and a new `pr_description_pr_number.py` — but the originating module's docstring still claims the PR-number recovery responsibility. A sibling change to `pr_description_body_audit.py` introduced a module docstring whose verb (`detects vague language`) overstates the module's responsibility (it only exposes `_extract_vague_scan_text()`; detection runs elsewhere).
 
 Expected findings on PR #522:
 - **O1 finding:** `pr_description_body_audit.py:8` docstring uses verb `detects`, but the only exported symbol prepares input for a regex scan that fires in a different module. Body line(s) showing `_extract_vague_scan_text` returning normalized text without a detection call.

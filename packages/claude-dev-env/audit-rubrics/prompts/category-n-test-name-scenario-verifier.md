@@ -11,7 +11,7 @@ Audit [REPO/ARTIFACT] [TARGET_ID] for **Category N only** (test-name scenario ve
 
 ID prefix: `find`.
 
-[ONE-PARAGRAPH FRAME: enumerate every test whose name includes a scenario claim (`_when_*`, `_at_*`, `_under_*`, `_with_*`, `_on_*`, `_after_*`, `_during_*`). State the audit goal: for each scenario-named test, verify the body sets up the named condition via fixture / monkeypatch / environment gate so the production code's scenario-named branch actually runs during the act phase.]
+[ONE-PARAGRAPH FRAME: enumerate every test whose name includes a scenario claim (`_when_*`, `_at_*`, `_under_*`, `_with_*`, `_on_*`, `_after_*`, `_during_*`). State the audit goal: for each scenario-named test, verify the body sets up the named condition via fixture / monkeypatch / environment gate so the production code's scenario-named branch runs during the act phase.]
 
 ## Source material ([N] files/sections, all lines in scope)
 
@@ -37,12 +37,12 @@ ID prefix: `find`.
 
 **N5. Assertion shape mismatch**
 - For every assertion, verify the assertion's shape can fail by construction. `assert <substring> not in result` where the substring is misspelled relative to the production output, or `assert result == ""` when the production function returns `None` on the negative case, or `len(result) > 0` when the production function returns an empty list on the no-feature path.
-- Adversarial probes: (a) inspect each assertion's shape against the production function's actual return-value space; (b) check for assertions where the substring shape never appears in the production output by construction; (c) check for `assert x is True` where the production function returns truthy non-bool values.
+- Adversarial probes: (a) inspect each assertion's shape against the production function's return-value space; (b) check for assertions where the substring shape never appears in the production output by construction; (c) check for `assert x is True` where the production function returns truthy non-bool values.
 
 **N6. Cross-platform scenario gating**
 - For every test named `_on_windows` / `_on_linux` / `_on_macos`, verify the body gates on `sys.platform`, `monkeypatch.setattr(os, "name", ...)`, or `@pytest.mark.skipif`.
 - Bare scenario names that run unchanged across platforms claim more than they prove.
-- Adversarial probes: (a) does the production function's platform-specific branch get skipped on the CI runner's actual platform; (b) does the test pass against the platform fallback rather than the platform-specific code; (c) is the platform fixture installed and respected by the test runner.
+- Adversarial probes: (a) does the production function's platform-specific branch get skipped on the CI runner's platform; (b) does the test pass against the platform fallback rather than the platform-specific code; (c) is the platform fixture installed and respected by the test runner.
 
 **N7. Time / clock scenario gating**
 - For every test named `_after_<duration>` / `_at_midnight` / `_during_business_hours`, verify the body injects a frozen clock (`freezegun.freeze_time`, `monkeypatch.setattr(time, "time", ...)`, `unittest.mock.patch("datetime.now")`).
@@ -62,8 +62,8 @@ ID prefix: `find`.
 - For every test, verify the fixture / path / import wiring resolves to the artifact the test name claims.
 - Path arithmetic: walk every `Path(__file__).parents[k]` chain symbolically and confirm it reaches the directory the assertion expects — a `parents[3]` that stops at `skills/` while the test expects the package root cannot fail for the right reason.
 - Same-symbol dual imports: `from module import helper` plus `from module import helper as helper_alias` bind two names to the same function object, so any parity assertion between the two bound names is true by construction and proves nothing.
-- Fixture file lookups: confirm every `open(Path(__file__).parent / "fixture.txt")` (or equivalent) reaches a file that actually exists in the repo.
-- Adversarial probes: (a) re-derive each `parents[k]` index against the real directory depth and flag any off-by-k; (b) check whether two imports in the test resolve to the same object before trusting a cross-name comparison; (c) confirm each referenced fixture path exists on disk at the depth the arithmetic produces.
+- Fixture file lookups: confirm every `open(Path(__file__).parent / "fixture.txt")` (or equivalent) reaches a file that exists in the repo.
+- Adversarial probes: (a) re-derive each `parents[k]` index against the directory depth and flag any off-by-k; (b) check whether two imports in the test resolve to the same object before trusting a cross-name comparison; (c) confirm each referenced fixture path exists on disk at the depth the arithmetic produces.
 
 ## Cross-bucket questions to answer at the end
 
@@ -87,7 +87,7 @@ PR: refactor(hooks): cross-platform path resolution for windows-rmtree-blocker
 Head SHA: (the commit that landed the platform-conditional logic)
 ID prefix: `find`.
 
-The PR adds platform-conditional path-resolution logic to `windows_rmtree_blocker.py` and ships 5 new tests named `test_*_on_windows` and `test_*_on_linux` across `test_windows_rmtree_blocker.py`. The audit goal: verify each scenario-named test sets up the named platform via monkeypatch or skipif gate so the production function's platform-specific branch actually runs during the act phase.
+The PR adds platform-conditional path-resolution logic to `windows_rmtree_blocker.py` and ships 5 new tests named `test_*_on_windows` and `test_*_on_linux` across `test_windows_rmtree_blocker.py`. The audit goal: verify each scenario-named test sets up the named platform via monkeypatch or skipif gate so the production function's platform-specific branch runs during the act phase.
 
 ## Sub-buckets (each requires Shape A finding OR Shape B with ≥3 adversarial probes)
 
@@ -128,7 +128,7 @@ The PR adds platform-conditional path-resolution logic to `windows_rmtree_blocke
 
 ## Cross-bucket questions to answer at the end
 
-Q1: Five scenario-named tests (F5, F21, F23, F26, F27) do not gate on `sys.platform` and pass against the Linux-fallback branch on the CI runner. The Windows-specific code path has zero actual coverage despite the test names claiming it. Cite `test_windows_rmtree_blocker.py:42` (F5 first test) and `windows_rmtree_blocker.py:67` (the `if sys.platform == "win32":` branch) as the misclaim pair.
+Q1: Five scenario-named tests (F5, F21, F23, F26, F27) do not gate on `sys.platform` and pass against the Linux-fallback branch on the CI runner. The Windows-specific code path has zero coverage despite the test names claiming it. Cite `test_windows_rmtree_blocker.py:42` (F5 first test) and `windows_rmtree_blocker.py:67` (the `if sys.platform == "win32":` branch) as the misclaim pair.
 
 Q2: Worst false-coverage signal: F5 — the test's name `test_resolves_path_on_windows` reads as Windows-branch coverage in the PR review, but the act phase exercises the Linux fallback. A reviewer reading the test name during PR review would assume Windows coverage exists; it does not.
 

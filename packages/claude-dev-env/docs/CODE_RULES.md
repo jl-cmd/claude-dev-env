@@ -2,7 +2,7 @@
 
 The canonical review-criteria instruction set for every AI agent that audits pull requests in this repository, loaded on demand. [`.cursor/BUGBOT.md`](../../../.cursor/BUGBOT.md) is the checked-in pointer file Cursor BugBot reads; it points here.
 
-⚡ marks rules enforced by hand-maintained `code_rules_enforcer.py` — the hook blocks the Write/Edit and returns the corrective detail at violation time, so this document lists those rules by name only. Session policy (question routing, task tracking) lives in `rules/*.md`; see [`code-standards.md`](../rules/code-standards.md).
+⚡ marks rules the hand-maintained `code_rules_enforcer.py` carries. The staged policy lint runs it over each changed file and returns the corrective detail, so this document lists those rules by name only. Session policy (question routing, task tracking) lives in `rules/*.md`; see [`code-standards.md`](../rules/code-standards.md).
 
 ---
 
@@ -25,9 +25,9 @@ Production and tests follow one rule. Changed directive, TODO, FIXME, HACK, XXX,
 
 ---
 
-## ⚡ HOOK-ENFORCED RULES
+## ⚡ LINT-ENFORCED RULES
 
-`code_rules_enforcer.py` blocks each of these at Write/Edit and explains the specific violation when it fires; exact patterns and exemption lists live in the hook:
+The staged policy lint reports each of these through `code_rules_enforcer.py` and names the specific breach; exact patterns and exemption lists live in that module:
 
 no new comments · imports at top · logging format args (`log_*("...", arg)`) · no `%s`/`%d` printf tokens in a `str.format`-logger message (`log_*` imported from `automation_logging`; `str.format` drops the args — use `{}`) · no magic values in production bodies (0, 1, -1 exempt) · UPPER_SNAKE constants only in `config/` (exempt: `config/*`; `/migrations/`; Workflow registries: path contains any of these substrings — `/workflow/`, `_tab.py`, `/states.py`, or `/modules.py`, each matching independently as a substring, so `pkg/states.py` qualifies while a top-level `states.py` follows the standard `config/` rule; test files — path or filename matches `test_`, `_test.`, `.spec.`, `conftest`, or `/tests/`) · no hardcoded user home paths · guarded `sys.path.insert` · banned identifiers (`ctx`, `cfg`, `msg`, `btn`, `idx`, `cnt`, `tmp`, `elem`, `val`) · banned function prefixes (`handle_`, `process_`, `manage_`, `do_`) · no type escape hatches (`Any` import, `cast()`, inline `Any`, a parameter typed bare `object` whose body reads `param.attribute`) outside boundary files · no bare/broad `except` · no `Any` in signatures or class attributes · no stub bodies (`pass`/`...`/`raise NotImplementedError`) outside abstract/Protocol · TypedDict `_encode_*`/`_decode_*` companions in the same module · no test-mode branching in production (use dependency injection) · no thin wrapper modules · Google-style docstrings on public functions with `Args:` matching the signature · boolean names prefixed `is_`/`has_`/`should_`/`can_`/`was_`/`did_` (assignments AND bool-typed parameters) · must-check returns (`find_and_click`, `write_outcome`) assigned and checked · known pytest fixture parameters in test files annotated with their single documented type (`tmp_path: Path`, `monkeypatch: pytest.MonkeyPatch`, `capsys`, `caplog`, `request`, …) · known pytest fixture parameters a test function declares but never references (drop the unused parameter — pytest still pays its setup cost) · JavaScript/TypeScript boolean declarations (`const`/`let`/`var` bound to a boolean literal or negation) and `@param {boolean}` JSDoc names prefixed `is`/`has`/`should`/`can`/`was`/`did` (camelCase forms) · banned identifiers as `.mjs`/`.js` declaration names (`result`, `data`, `ctx`, `msg`, …), scoped to changed lines · in test files, banned identifiers fire on changed lines, and pytest-collectable `test_*` functions need a return annotation · unused module-level imports and unsorted import blocks are ruff's job (F401, isort I001), not this hook's · a `hooks/blocking/` command classifier anchors its multi-word command regex to the command start (`^`/`\A`) or tokenizes the first word (`shlex.split`), never matching a command as a bare substring
 
@@ -53,7 +53,7 @@ The banned-noun check applies to public function definitions, parameters, and bo
 
 ## 6. COMPLETE TYPE HINTS
 
-ALL parameters typed, ALL returns typed. No `Any`. Avoid `# type: ignore`; remove it and use a typed boundary or real type. Prefer fixing the type over an ignore when a real annotation is available.
+ALL parameters typed, ALL returns typed. No `Any`. Avoid `# type: ignore`; remove it and use a typed boundary or the type. Prefer fixing the type over an ignore when an annotation is available.
 
 ## 6.5 FILE LENGTH GUIDANCE
 
@@ -83,7 +83,7 @@ Components own their complete feature (state, modals, overlays, toasts). Parents
 
 ## 9.5 NO THIN WRAPPER MODULES
 
-A non-`__init__.py` module whose body is only imports (optionally `__all__`) is indirection without payload — callers import the real module. `__init__.py` is the canonical re-export surface and is exempt.
+A non-`__init__.py` module whose body is only imports (optionally `__all__`) is indirection without payload — callers import the module. `__init__.py` is the canonical re-export surface and is exempt.
 
 ## 9.6 NO BACKWARDS-COMPATIBILITY SHIMS
 
@@ -111,7 +111,7 @@ If you already have the data, don't fetch it again.
 
 ## 11.5 VALIDATION-PHASE PRECEDENCE
 
-`code_rules_enforcer.py` decides what a run checks and reports along three independent axes. Each axis filters a narrower scope than the one before it; none widens what the axis before it already decided.
+A staged policy lint run of `code_rules_enforcer.py` selects what it checks and reports along three independent axes. Each axis filters a narrower scope than the one before it; none widens what the axis before it already decided.
 
 1. **Phase selects the roster.** `EDIT_LANE_PHASE` or `FULL_GATE_PHASE` decides which checks exist in the lane at all. `validate_content_for_phase` takes `phase` keyword-only with no default, so every caller names its lane explicitly.
 2. **Target classification filters within a lane.** The hook-infrastructure patterns and the ephemeral-path check decide whether a target is validated, and with which subset. Classification narrows a lane; it never adds a check the phase already excluded.
@@ -127,6 +127,6 @@ Hook-infrastructure targets run three checks in the edit lane — `check_same_fi
 
 Three surfaces report on the roster, and each reports a specific thing:
 
-- `hooks/validators/hook_timing_harness.py` builds a `Write` payload against a target that already holds content. `_contents_for_validation` returns `None` for that payload, so the harness times interpreter start and hook dispatch. Time an `Edit` payload against a real file to measure the checks.
+- `hooks/validators/hook_timing_harness.py` builds a `Write` payload against a target that already holds content. `_contents_for_validation` returns `None` for that payload, so the harness times interpreter start and hook dispatch. Time an `Edit` payload against a file to measure the checks.
 - `~/.claude/logs/hook-blocks.log` records the denials raised by fixtures in `test_code_rules_enforcer_*.py` and by the timing harness's default target.
 - `hooks/validators/run_all_validators.py` stages the target under a temporary root and rebuilds the shortest path tail that carries every exemption signal. The walk starts at the target's own project root and skips a directory pytest generated for its own scratch tree, so the staged path reads the same wherever `--basetemp` places that tree.

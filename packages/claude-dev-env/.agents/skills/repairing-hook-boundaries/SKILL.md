@@ -27,7 +27,7 @@ output envelope, and exit status as separate boundaries.
 Use this skill for Claude or Codex hook failures involving registered events,
 settings, launchers, imports, paths, payloads, output envelopes, or exit status.
 
-For installer-only work, say: `Use /run-claude-dev-env for installer work that has no hook-boundary failure.`
+For installer-only work, say: `Installer work with no hook-boundary failure belongs outside this skill.`
 
 ## Process
 

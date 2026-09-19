@@ -195,3 +195,49 @@ def test_the_committed_rules_directory_names_no_gate_that_stopped_running() -> N
             )
         )
     assert all_messages == []
+
+
+def _diagnostics_for_path(
+    repository_root: Path, document_path: str, prose: str
+) -> tuple[str, ...]:
+    document = Document(
+        PurePosixPath(document_path),
+        prose,
+        None,
+        None,
+        ContentOrigin.WORKTREE,
+    )
+    all_diagnostics = adapter_retired_hook_prose.retired_hook_prose_diagnostics(
+        document, repository_root
+    )
+    return tuple(each_diagnostic.message for each_diagnostic in all_diagnostics)
+
+
+def test_instruction_surfaces_outside_rules_are_in_scope() -> None:
+    for each_path in (
+        "packages/claude-dev-env/rules/example.md",
+        "packages/claude-dev-env/.agents/skills/example/SKILL.md",
+        "packages/claude-dev-env/.agents/agents/example.md",
+        "packages/claude-dev-env/commands/example.md",
+        "packages/claude-dev-env/docs/example.md",
+    ):
+        document = Document(
+            PurePosixPath(each_path), "", None, None, ContentOrigin.WORKTREE
+        )
+        assert adapter_retired_hook_prose.accepts_instruction_markdown(document), each_path
+
+
+def test_a_skill_claim_for_a_surviving_unregistered_hook_is_reported(
+    tmp_path: Path,
+) -> None:
+    _build_package(tmp_path)
+    (tmp_path / "packages" / "claude-dev-env" / ".agents" / "skills" / "example").mkdir(
+        parents=True
+    )
+    all_messages = _diagnostics_for_path(
+        tmp_path,
+        "packages/claude-dev-env/.agents/skills/example/SKILL.md",
+        "The `windows_rmtree_blocker.py` PreToolUse hook blocks the unsafe pattern.\n",
+    )
+    assert len(all_messages) == 1
+    assert "windows_rmtree_blocker" in all_messages[0]

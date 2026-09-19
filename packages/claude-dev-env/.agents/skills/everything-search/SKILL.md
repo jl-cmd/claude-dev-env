@@ -152,16 +152,16 @@ Run separate searches for each extension type:
 
 ### Junctions, Symlinks & Drive Mapping
 
-Everything indexes REAL paths only, not junctions or mapped drives.
+Everything indexes paths only, not junctions or mapped drives.
 
 | Drive | Type | Indexed? | Action |
 |-------|------|----------|--------|
-| Y:\ | Real NTFS | Yes | Use this path |
+| Y:\ | NTFS | Yes | Use this path |
 | Z:\ | Junction to Y: | No | Use Y:\ instead |
 
 **If search returns empty:**
 1. Check if the path is a junction/symlink
-2. Find the real path and search that instead
+2. Find the path the junction targets and search that instead
 3. Or use Glob tool as fallback (works on any path)
 
 **Common drive mappings:**

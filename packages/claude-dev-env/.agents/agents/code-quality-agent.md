@@ -127,7 +127,7 @@ evidence, report an evidence gap or open question.
 
 `id` uses the form `loop<N>-<K>` when the orchestrator supplies a loop prefix and `find<K>` for standalone audit calls. Honor the prefix supplied in the prompt.
 
-**The `failure_mode` field is the audit-to-fix handoff.** State the failing line, the desired post-fix property, and a one-line validation the fix agent can run to confirm correctness. The fix agent reads `failure_mode` without re-running your audit — make it self-sufficient.
+**The `failure_mode` field is the audit-to-fix handoff.** State the failing line, the desired post-fix property, and a one-line validation the fix agent can run to confirm correctness. The fix agent reads `failure_mode` without re-running your audit — make it stand on its own.
 
 Each audit→fix→audit cycle in the calling skill adds wall-clock latency. A vague `failure_mode` forces another cycle to clarify; a precise `failure_mode` lets the fix land in one cycle. Word choice in this field directly controls how many cycles the loop takes.
 
@@ -165,9 +165,9 @@ not a Shape B entry.
 
 ## Collection before filtering
 
-Report every real finding at its true severity. Collection retains P0, P1, and
+Report every finding at the severity it warrants. Collection retains P0, P1, and
 P2 findings with file, line, evidence (`excerpt` / `failure_mode`), and
-category. Do not drop lower-severity real findings during collection so a later
+category. Do not drop lower-severity findings during collection so a later
 consumer can filter. Severity or action filtering is a separate stage after the
 collection record is complete.
 
@@ -197,7 +197,7 @@ When the primary and adversarial passes flag the same file:line:
 
 - Merge into a single Shape A finding using max-wins severity (P0 > P1 > P2).
 - Concatenate the `failure_mode` strings (separator: " // adversarial: ") so both pass narratives survive.
-- For Shape B entries on the same category, keep every distinct `adversarial_probe` from both passes — collapsing them would drop information that was actually found.
+- For Shape B entries on the same category, keep every distinct `adversarial_probe` from both passes — collapsing them would drop information that was found.
 
 The merge runs at the end of the adversarial pass, before constructing the output. The output preamble's `Total: N` counts merged findings, not pre-merge total.
 

@@ -255,8 +255,8 @@ Routing rules:
   detection system, with no second one.
 - Resume a warm workflow agent before creating a new workflow run when
   the warm agent holds the relevant context.
-- Review and verification workflows apply the [review guide](../reviews/SKILL.md#review-workflow).
-- PR-description workflows include the actual changed-file list in the
+- Review and verification workflows apply the [review guide](../e-code-review/SKILL.md).
+- PR-description workflows include the changed-file list in the
   prompt and verify the final body against that file list before posting
   or returning it.
 - Exploration workflows return file paths, line numbers, and direct
@@ -274,7 +274,7 @@ Routing rules:
   background spawn — keep the `agentId` (format `a...-...`) from the
   spawn result so `SendMessage` can reach that agent later.
 - **Spawn a fresh agent only when** no existing agent holds relevant
-  context, or a genuine task switch needs a clean context.
+  context, or a task switch needs a clean context.
 - **Reuse is a cost rule, not a correctness dependency.** The run
   artifacts keep every executor replaceable (Run state section).
 - **Name the agent to resume.** When a PLAN from this session fits

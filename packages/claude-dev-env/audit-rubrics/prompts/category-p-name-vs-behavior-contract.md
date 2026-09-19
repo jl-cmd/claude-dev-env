@@ -37,11 +37,11 @@ Two canonical failures to probe for:
 
 **P1. Boolean / flag names assert state the body keeps**
 - For every new `is_*` / `has_*` / `was_*` / `should_*` flag, trace the body. Every set site must be paired with a reset site that fires when the named condition becomes false.
-- Adversarial probes: (a) grep every assignment to the flag — count set-true vs set-false; (b) for AST-driven flags, walk the visit method and confirm scope-exit semantics (def visited → flag set; dedent / function-exit → flag reset); (c) construct an input where the flag should be false after a prior true region — does the code agree.
+- Adversarial probes: (a) grep every assignment to the flag — count set-true vs set-false; (b) for AST-driven flags, walk the visit method and confirm scope-exit semantics (def visited → flag set; dedent / function-exit → flag reset); (c) construct an input where the flag should be false after a region that set it true — does the code agree.
 
 **P2. Predicate-name breadth matches body coverage**
 - For every new `_is_*` / `_has_*` / `_can_*` predicate function, list the body's `return True` branches. The named predicate must hold on the union of those branches and nothing else.
-- Adversarial probes: (a) construct an input that satisfies the name but returns False — that is a P2 narrowness finding; (b) construct an input that does not satisfy the name but returns True — that is a P2 breadth finding; (c) check neighbor predicates — is the body's actual contract the responsibility of a different helper.
+- Adversarial probes: (a) construct an input that satisfies the name but returns False — that is a P2 narrowness finding; (b) construct an input that does not satisfy the name but returns True — that is a P2 breadth finding; (c) check neighbor predicates — is the body's contract the responsibility of a different helper.
 
 **P3. Regex name vs regex shape** ⭐ canonical P case
 - For every new `*_PATTERN` / `*_REGEX` constant, read the regex source. Confirm the anchors (`^`, `$`, `\b`, lookarounds) match the name's promised shape. `FILE_PATH_PATTERN` implies path shape; the regex must include path-shape anchors (slash count, segment shape, length bounds) enough to reject non-path inputs.
@@ -73,7 +73,7 @@ Q3: Which identifier most clearly shows the body should be renamed (the name is 
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket P1-P7, produce Shape A or Shape B (with ≥3 probes). Each Shape A finding must cite (a) the identifier file:line, (b) one concrete input that shows the name-vs-body gap, and (c) the recommended fix direction (rename vs body-tighten). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 identifiers whose names overstate what the body actually does — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket P1-P7, produce Shape A or Shape B (with ≥3 probes). Each Shape A finding must cite (a) the identifier file:line, (b) one concrete input that shows the name-vs-body gap, and (c) the recommended fix direction (rename vs body-tighten). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 identifiers whose names overstate what the body does — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
 ---
 

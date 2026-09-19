@@ -31,7 +31,7 @@ Use this skill after committing inside a checked-out submodule when its parent r
 Refusals use the first matching line:
 
 - Clone, initialize, or check out a submodule: `Use Git's submodule commands. This skill records an existing submodule commit in its parent.`
-- Fast-forward `main`: `Use /update. This skill changes one parent submodule pointer.`
+- Fast-forward `main`: `Use Git directly. This skill changes one parent submodule pointer.`
 - Make an ordinary commit or push: `Use /source-command-commit. This skill commits only a parent submodule pointer.`
 
 ## Process

@@ -125,7 +125,7 @@ directly; the wording lives under **Brevity cue** in
 Direct address works because the advisor reads the executor's prompt as
 quoted context: "instructions that address the advisor directly are followed
 much more reliably than third-person descriptions." A brief that asks for
-roughly 80 percent of the true ceiling raises consult frequency while
+roughly 80 percent of the ceiling raises consult frequency while
 lowering total cost.
 
 Typical advisor output runs 400–700 text tokens, or 1,400–1,800 with

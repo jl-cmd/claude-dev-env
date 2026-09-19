@@ -20,7 +20,7 @@ ID prefix: `find`.
 
 **A2. Return-type annotation vs every code path**
 - For each annotated function, walk every code path: explicit `return X`, fall-through to implicit `None`, exception-handler exit, generator `yield` paths, async coroutine return value.
-- Verify each path's actual return value is assignable to the declared annotation; flag `-> bool` functions that can return `None`, `-> list[T]` functions that can return `None` on an early exit, etc.
+- Verify each path's return value is assignable to the declared annotation; flag `-> bool` functions that can return `None`, `-> list[T]` functions that can return `None` on an early exit, etc.
 - For functions that raise instead of returning on some path, confirm the annotation does not promise a value the caller will dereference.
 - Inspect `try/except/finally` chains for paths that return from `finally` and override `try`/`except` returns.
 - For async functions, confirm the annotation refers to the awaited type, not the coroutine wrapper.
@@ -46,7 +46,7 @@ ID prefix: `find`.
 - Verify kwargs are valid for the targeted runtime version (`capture_output`, `text`, `encoding`, `check`, `timeout`); flag combinations that conflict (`stdout=PIPE` + `capture_output=True`).
 - Exception contract under `check=True` (raises `CalledProcessError` on non-zero exit) — verify callers either propagate or handle, with no silent swallow that masks failure.
 - Verify quoting/escaping of arguments crossing the subprocess boundary, especially when interpolating untrusted strings.
-- Verify the resolved executable path is real on the target platform, not assumed (`which` / `Get-Command` failure paths).
+- Verify the resolved executable path exists on the target platform, not assumed (`which` / `Get-Command` failure paths).
 
 **A6. Shell/host-language cmdlet or function parameter sets and binding**
 - For every shell or host-language function/cmdlet declaration with parameter sets (PowerShell `param(...)` with `ParameterSetName=`, Bash `getopts`, etc.), verify the declaration matches every invocation pattern. Confirm a default parameter set is declared if no-arg invocation is reachable.

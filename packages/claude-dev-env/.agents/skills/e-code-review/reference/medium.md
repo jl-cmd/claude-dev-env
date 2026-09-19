@@ -2,7 +2,7 @@
 
 You are reviewing for **precision** at medium effort: assign severity carefully
 so a later consumer can select maintainer-action findings. **Collection
-reports every real finding** (including `low` and `nit`); do not drop by
+reports every finding** (including `low` and `nit`); do not drop by
 severity during collection. Severity filtering is a separate consumer stage
 after the collection record is complete.
 
@@ -44,7 +44,7 @@ wrong-variable copy-paste, error swallowed in catch, unescaped regex metachars.
 For every line the diff DELETES or replaces, name the invariant or behavior it
 enforced, then search the new code for where that invariant is re-established.
 If you can't find it, that's a candidate: a removed guard, a dropped error
-path, a narrowed validation, a deleted test that was covering a real case.
+path, a narrowed validation, a deleted test that was covering a case.
 
 ### Angle C — cross-file tracer
 
@@ -115,7 +115,7 @@ file(s), and the candidate, and have it return exactly one of:
 
 - **CONFIRMED** — can name the inputs/state that trigger it and the wrong
   output or crash. Quote the line.
-- **PLAUSIBLE** — mechanism is real, trigger is uncertain (timing, env,
+- **PLAUSIBLE** — mechanism is present in the code, trigger is uncertain (timing, env,
   config). State what would confirm it.
 - **REFUTED** — factually wrong (code doesn't say that) or guarded elsewhere.
   Quote the line that proves it.
@@ -126,7 +126,7 @@ Keep candidates where the vote is CONFIRMED or PLAUSIBLE.
 
 **Collection stage first.** Keep every CONFIRMED or PLAUSIBLE finding in the
 collection record, including `low` and `nit`. Drop only REFUTED candidates.
-Do not drop a real finding because its severity is low.
+Do not drop a finding because its severity is low.
 
 Report this review's results — `{level, findings}` — through the structured
 findings-report call: the mechanism that renders a review's results as a typed
