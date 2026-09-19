@@ -1,5 +1,35 @@
 # Changelog
 
+## [8.2.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.1.0...claude-dev-env-v8.2.0) (2026-09-19)
+
+
+### Features
+
+* hold the trim's four leftovers with lint and tests ([f807c2c](https://github.com/jl-cmd/claude-dev-env/commit/f807c2c91e02e2375a742bccddd7543280e6caf2))
+* **policy-lint:** read hook claims on every instruction surface ([8706fa5](https://github.com/jl-cmd/claude-dev-env/commit/8706fa5920db02538d3e39d72654a5d8b6871649))
+* **scripts:** resolve capability names instead of reading a hand-kept list ([5c45ae0](https://github.com/jl-cmd/claude-dev-env/commit/5c45ae0f47bf297df410a50615bb7d6dc83e3c31))
+* **skills:** add plugin-eval-standalone-skill and tighten team-advisor triggers ([e4a0032](https://github.com/jl-cmd/claude-dev-env/commit/e4a00327b03ea4bf03847a24f54aabd892d9361d))
+* **skills:** add plugin-eval-standalone-skill and tighten team-advisor triggers ([0df8248](https://github.com/jl-cmd/claude-dev-env/commit/0df8248a466b444d67dd3ad7aef94ac95531e78e))
+* **team-advisor:** use the built-in advisor tool on Claude and allow model invocation ([06fd6a9](https://github.com/jl-cmd/claude-dev-env/commit/06fd6a919e60863d1fe4f71efcdfd9d575ba3bfb))
+* **team-advisor:** use the built-in advisor tool on Claude and allow model invocation ([5155b11](https://github.com/jl-cmd/claude-dev-env/commit/5155b117f3523d308753d018326a96d20835cb72))
+
+
+### Bug Fixes
+
+* clear the policy lint and the cursor sync on the new heading ([6c9272e](https://github.com/jl-cmd/claude-dev-env/commit/6c9272eef426138dcec9a502514beaec05e1471a))
+
+
+### Documentation
+
+* **advisor:** state the built-in tool block as a present fact ([ee485ba](https://github.com/jl-cmd/claude-dev-env/commit/ee485ba74e51172e214c09ee8bc5e37365e9f7d4))
+* clear the banned emphasis words from every shipped surface ([84eb33d](https://github.com/jl-cmd/claude-dev-env/commit/84eb33df24b73b35e220330d9f693fc0eec8d9d8))
+
+
+### Tests
+
+* **policy:** scan the governed surfaces for the banned emphasis words ([a0b82b8](https://github.com/jl-cmd/claude-dev-env/commit/a0b82b85fa53b859fec09b79bbf72ded250da42b))
+* **sync:** cover the headings the cursor merge names ([0abf009](https://github.com/jl-cmd/claude-dev-env/commit/0abf009c9d86e3257583ae2b9efbf3d921e2b1c0))
+
 ## [8.1.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.0.0...claude-dev-env-v8.1.0) (2026-09-18)
 
 
