@@ -41,6 +41,10 @@ test('EVER_SHIPPED_SKILL_NAMES includes the windows scheduled task skill', () =>
     assert.equal(EVER_SHIPPED_SKILL_NAMES.has('windows-scheduled-task'), true);
 });
 
+test('EVER_SHIPPED_SKILL_NAMES includes the plugin eval standalone skill', () => {
+    assert.equal(EVER_SHIPPED_SKILL_NAMES.has('plugin-eval-standalone-skill'), true);
+});
+
 test('EVER_SHIPPED_SKILL_NAMES includes the session continuity companion', () => {
     assert.equal(EVER_SHIPPED_SKILL_NAMES.has('session-continuity'), true);
 });

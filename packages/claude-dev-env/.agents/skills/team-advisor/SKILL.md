@@ -1,10 +1,11 @@
 ---
 name: team-advisor
 description: >-
-  Spawn one warm session-advisor at the strongest reachable tier and consult
-  it before substantive work, completion, commits, or when stuck. Triggers:
-  'team-advisor', 'team advisor', 'second opinion', 'advisor', 'consult',
-  'verify', 'validate', 'commit', 'push'.
+  Bind one advisor, the built-in advisor tool or a warm session-advisor, and
+  consult it before substantive work, completion, commits, or when stuck.
+  Triggers:
+  'team-advisor', 'team advisor', 'second opinion', 'consult the advisor',
+  'get an advisor', 'check my approach with an advisor'.
 ---
 
 # Team Advisor

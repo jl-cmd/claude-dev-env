@@ -59,6 +59,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'pmax',
     'pmid',
     'pmin',
+    'plugin-eval-standalone-skill',
     'post-audit-findings',
     'pr-cleanup',
     'pr-consistency-audit',
