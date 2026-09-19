@@ -3,7 +3,7 @@
 Detail behind the **Advisor block** section of [`advisor-protocol.md`](../advisor-protocol.md).
 Open this when assembling the block for an executor spawn prompt.
 
-Assembly order: one transport preamble picked by host profile, then the shared core, then the weak-executor add-on for an executor at Sonnet or below. A Claude host with the built-in advisor tool uses its own block instead of the preamble and the shared core.
+Assembly order: one transport preamble picked by host profile, then the shared core, then the weak-executor add-on for an executor at Sonnet or below. A Claude host with the built-in advisor tool takes its own block and skips the preamble and the shared core.
 Paste the assembled block at the **top** of the spawn prompt, ahead of any other sentence that mentions the advisor.
 The assembled block is self-contained. The executor receives this text alone, so every path it names is absolute.
 The consult rules it restates are owned by [`consult-format.md`](consult-format.md); edit that file first and carry the change here.
