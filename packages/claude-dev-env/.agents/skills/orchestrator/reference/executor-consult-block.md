@@ -31,7 +31,7 @@ Fill `<orchestrator-name>` with the name the executor can address.
 > failure repeats or progress has stalled, and when the chosen approach
 > is being reconsidered.
 > The first consult carries: assignment, desired outcome, constraints
-> and exclusions, actions taken in order, real output and current
+> and exclusions, actions taken in order, output and current
 > state, live decision or blocker, validation evidence, unresolved
 > risks, load-bearing paths or excerpts, and who is asking. Later
 > consults carry only changed evidence.

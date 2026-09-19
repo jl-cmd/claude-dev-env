@@ -53,7 +53,7 @@ The banned-noun check applies to public function definitions, parameters, and bo
 
 ## 6. COMPLETE TYPE HINTS
 
-ALL parameters typed, ALL returns typed. No `Any`. Avoid `# type: ignore`; remove it and use a typed boundary or real type. Prefer fixing the type over an ignore when a real annotation is available.
+ALL parameters typed, ALL returns typed. No `Any`. Avoid `# type: ignore`; remove it and use a typed boundary or the type. Prefer fixing the type over an ignore when an annotation is available.
 
 ## 6.5 FILE LENGTH GUIDANCE
 
@@ -83,7 +83,7 @@ Components own their complete feature (state, modals, overlays, toasts). Parents
 
 ## 9.5 NO THIN WRAPPER MODULES
 
-A non-`__init__.py` module whose body is only imports (optionally `__all__`) is indirection without payload — callers import the real module. `__init__.py` is the canonical re-export surface and is exempt.
+A non-`__init__.py` module whose body is only imports (optionally `__all__`) is indirection without payload — callers import the module. `__init__.py` is the canonical re-export surface and is exempt.
 
 ## 9.6 NO BACKWARDS-COMPATIBILITY SHIMS
 
@@ -127,6 +127,6 @@ Hook-infrastructure targets run three checks in the edit lane — `check_same_fi
 
 Three surfaces report on the roster, and each reports a specific thing:
 
-- `hooks/validators/hook_timing_harness.py` builds a `Write` payload against a target that already holds content. `_contents_for_validation` returns `None` for that payload, so the harness times interpreter start and hook dispatch. Time an `Edit` payload against a real file to measure the checks.
+- `hooks/validators/hook_timing_harness.py` builds a `Write` payload against a target that already holds content. `_contents_for_validation` returns `None` for that payload, so the harness times interpreter start and hook dispatch. Time an `Edit` payload against a file to measure the checks.
 - `~/.claude/logs/hook-blocks.log` records the denials raised by fixtures in `test_code_rules_enforcer_*.py` and by the timing harness's default target.
 - `hooks/validators/run_all_validators.py` stages the target under a temporary root and rebuilds the shortest path tail that carries every exemption signal. The walk starts at the target's own project root and skips a directory pytest generated for its own scratch tree, so the staged path reads the same wherever `--basetemp` places that tree.

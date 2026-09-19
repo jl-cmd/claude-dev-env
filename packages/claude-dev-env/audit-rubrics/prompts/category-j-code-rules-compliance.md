@@ -36,7 +36,7 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 - Walk every numeric or non-trivial literal other than `0`, `1`, `-1` inside production function bodies.
 - Test files follow the same no-new-comment policy.
 - Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified. Module-level declarations are J3-scope, not J1-scope.
-- For each literal found, decide: structural value that belongs in `config/` (flag) vs. truly local arithmetic constant tied to the line's logic (defendable).
+- For each literal found, decide: structural value that belongs in `config/` (flag) vs. local arithmetic constant tied to the line's logic (defendable).
 - Adversarial probes must each verify a distinct angle: (a) does the literal duplicate an existing value already centralized in `config/`? (b) does the literal silently couple two languages (e.g., a Python config value and a hand-typed PowerShell / shell mirror)? (c) does the literal appear in user-facing help/doc text in a way that would silently lie if the canonical value changed?
 
 **J2. String-template magic**
@@ -53,12 +53,12 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 **J5. Abbreviations**
 - Walk every parameter, local, and attribute name across production, test, and JavaScript changed lines. Flag: `ctx`, `cfg`, `msg`, `btn`, `idx`, `cnt`, `elem`, `val`, `tmp`, `str`, `num`, `arr`, `obj`, `fn`, `cb`, `req`, `res`. Loop counters `i`/`j`/`k` and `e` for exceptions are exempt.
 - This audit walks changed test-file and `.mjs` / `.js` lines for this rule, even though the write-time hook skips them.
-- Adversarial probes: (a) is there a borderline name (e.g., `removed`, `arguments`) that someone might mis-classify as an abbreviation but is actually a full English word? Confirm. (b) does any callback / parameter / attribute use a short variant of a domain term that is technically a full word but conventionally abbreviates a longer one? (c) does any variable in a comprehension or lambda use a single letter outside the `i`/`j`/`k`/`e` exemption?
+- Adversarial probes: (a) is there a borderline name (e.g., `removed`, `arguments`) that someone might mis-classify as an abbreviation but is a full English word? Confirm. (b) does any callback / parameter / attribute use a short variant of a domain term that is technically a full word but conventionally abbreviates a longer one? (c) does any variable in a comprehension or lambda use a single letter outside the `i`/`j`/`k`/`e` exemption?
 
 **J6. Vague names**
 - Flag any name from the vague list: `result`, `data`, `output`, `response`, `value`, `item`, `temp`, `info`, `stuff`, `thing`. Vague verb prefixes for function names: `handle`, `process`, `manage`, `do`.
 - This audit walks changed test-file and `.mjs` / `.js` lines for this rule, even though the write-time hook skips them.
-- Adversarial probes: (a) does any local variable use a domain-adjacent name that is actually on the vague list (e.g., `result` from a parser, `data` from a fetch)? (b) does any newly-introduced function name start with a vague prefix? (c) does any public attribute / dict key use a vague label that the call site has to disambiguate by surrounding context?
+- Adversarial probes: (a) does any local variable use a domain-adjacent name that is on the vague list (e.g., `result` from a parser, `data` from a fetch)? (b) does any newly-introduced function name start with a vague prefix? (c) does any public attribute / dict key use a vague label that the call site has to disambiguate by surrounding context?
 
 **J7. Type hints**
 - Walk every function across production, test, and JavaScript changed lines. Verify parameter and return types are present, no `Any`, no `# type: ignore`.
@@ -71,7 +71,7 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 - Comments tied to untouched code remain unchanged; a changed comment is removed with the code it describes.
 - Test files follow the same no-new-comment policy.
 - Changed directive, TODO, FIXME, HACK, XXX, and type-ignore comments are removed rather than added or justified.
-- Adversarial probes: (a) is there any `# type:` or marker comment that is actually inert prose rather than a real type-checker / linter directive? (b) is any docstring carrying inline-comment content (line-level explanations rather than module/function description)? (c) does any newly-added blank line between code stanzas function as a comment substitute, suggesting the author wanted to add a comment but couldn't?
+- Adversarial probes: (a) is there any `# type:` or marker comment that is inert prose rather than a type-checker / linter directive? (b) is any docstring carrying inline-comment content (line-level explanations rather than module/function description)? (c) does any newly-added blank line between code stanzas function as a comment substitute, suggesting the author wanted to add a comment but couldn't?
 
 **J9. Logging format**
 - Walk every `log_*(...)` call. Must be `log_*("template with {}", arg)`, not `log_*(f"...")`.
@@ -179,7 +179,7 @@ ID prefix: `find`.
 - `config/sweep_config.py` — line 140 is a module-level docstring. No inline comments. Clean.
 - Test file — the same no-new-comment rule applies.
 - `Install-SweepEmptyDirs.ps1` — line 227 (`#!/usr/bin/env pwsh`) is a shebang, exempt. No inline `#` comments added in the PowerShell file. Clean.
-- Adversarial probes: (a) is there any `# type:` comment that is actually inert noise rather than a type-checker directive? No occurrences in the diff. (b) is any docstring carrying inline-comment content as line-level explanations rather than module/function description? Module docstring on line 62 is one line ("Delete empty directories older than 2 minutes under a given root."); function docstrings on 78 and 102 are one-liners. Clean. (c) does any newly-added blank line between code stanzas function as a comment substitute? Visual whitespace is allowed.
+- Adversarial probes: (a) is there any `# type:` comment that is inert noise rather than a type-checker directive? No occurrences in the diff. (b) is any docstring carrying inline-comment content as line-level explanations rather than module/function description? Module docstring on line 62 is one line ("Delete empty directories older than 2 minutes under a given root."); function docstrings on 78 and 102 are one-liners. Clean. (c) does any newly-added blank line between code stanzas function as a comment substitute? Visual whitespace is allowed.
 
 **J9. Logging format**
 - Walk every `log_*(...)` call. Must be `log_*("template with {}", arg)`, not `log_*(f"...")`.

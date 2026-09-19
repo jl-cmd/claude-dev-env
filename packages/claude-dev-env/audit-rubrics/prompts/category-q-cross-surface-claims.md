@@ -30,13 +30,13 @@ ID prefix: `find`.
 
 **Q2. PR-description claim verification**
 - Read the PR body. List each falsifiable claim — a dead-code removal, a performance or ceiling number, a "last caller" assertion, a "no remaining X" cleanup claim.
-- Verify each claim two ways against the diff and the repo. A dead-code claim gets a reference search across the repo for the named symbol. A ceiling or performance claim gets checked against the actual config value the diff sets and the call sites it touches. Cite the PR-body line and the diff or repo line that confirms or contradicts it.
+- Verify each claim two ways against the diff and the repo. A dead-code claim gets a reference search across the repo for the named symbol. A ceiling or performance claim gets checked against the config value the diff sets and the call sites it touches. Cite the PR-body line and the diff or repo line that confirms or contradicts it.
 - Adversarial probes when the body looks correct: (a) search the repo for a surviving caller of any symbol the body calls dead; (b) compare each stated number against the config constant the diff sets; (c) check whether a "this finishes the cleanup" claim leaves a matching pattern in an unchanged sibling file.
 
 **Q3. Message-vs-guard consistency**
 - For every log, error, and evidence string the diff adds or edits, read the branch condition that gates it. The message text matches what that guard guarantees: a string asserting an outcome fires only on a branch that reaches the outcome.
 - Check temporal wording against the lifetime of the state variable the message names: "this run" versus "this round", "is open" versus "was opened", "reached" versus "attempted". Cite the message line and the guard or state-variable line.
-- Adversarial probes when messages look aligned: (a) trace each success message back to the return value or flag it claims and confirm the branch cannot reach it with the opposite value; (b) check every "missing" / "not found" error against the exception class the branch actually catches; (c) check every counter-based message against where the counter resets.
+- Adversarial probes when messages look aligned: (a) trace each success message back to the return value or flag it claims and confirm the branch cannot reach it with the opposite value; (b) check every "missing" / "not found" error against the exception class the branch catches; (c) check every counter-based message against where the counter resets.
 
 ## Cross-bucket questions to answer at the end
 

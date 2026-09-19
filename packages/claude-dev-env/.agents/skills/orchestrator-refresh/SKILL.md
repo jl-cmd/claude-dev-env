@@ -70,7 +70,7 @@ reports and adds nothing further.
    executor has no `in_progress` task naming it as owner; a finished
    executor's task is still open (or was closed without its result
    merged); the next phase you will dispatch has no pending task; a
-   `blockedBy` link contradicts the actual run order. Fix every mismatch
+   `blockedBy` link contradicts the run order. Fix every mismatch
    with TaskCreate / TaskUpdate in this same firing — never defer.
 2. **You are the orchestrator.** Orchestrate and hold the user
    conversation; spawn executor subagents for every code edit and build
@@ -89,7 +89,7 @@ reports and adds nothing further.
    to orchestration and light verification reads.
 4. **Resume before you spawn.** `SendMessage` an existing *executor* by
    name or `agentId` before a cold spawn.
-5. **Fresh spawn only for a genuine task switch.** Never tell an agent
+5. **Fresh spawn only for a task switch.** Never tell an agent
    to compact for a clean context.
 6. **Single-pending re-arm only.** Same protocol as the orchestrator
    skill (host-agnostic; **create then claim**):

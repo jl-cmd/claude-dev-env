@@ -79,7 +79,7 @@ Load only the group that matches the task. Keep session policy details in these 
 
 Material implementation questions must return to the caller for `AskUserQuestion` handling; do not ask in plain text or guess.
 
-Type-ignore rule (AGENTS Types): avoid `# type: ignore`; remove it and use a typed boundary or real type.
+Type-ignore rule (AGENTS Types): avoid `# type: ignore`; remove it and use a typed boundary or type.
 
 Constants (AGENTS Magic values): use named constants from the target layout. Search its constants module first. Do not force a generic `config/` layout. Example:
 
@@ -101,7 +101,7 @@ def fetch_with_retries(fetch_text: Callable[[str], str], url: str) -> str:
 - **No secrets in context.** Never open `.env` / `.env.*` / credential files. The sensitive-file protector blocks editing them.
 - **No lock-file hand edits.** Do not edit lock files by hand; regenerate with the package manager.
 - **No unasked scratch files.** Follow the target repo's policy for scratch, planning, and image files. Do not create temporary scratch files or working docs. Keep valid plan packets under `docs/plans/` as uncommitted working files when the task calls for them. Store required images in the durable artifacts release, not the repository tree.
-- **Pre-check before Write.** Run `python <managed-root>/hooks/blocking/code_rules_enforcer.py --check <candidate> --as <real destination>` (install path; monorepo: `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py`) until clean, then Write/Edit once. Use the real `--as` path; a wrong path can hide violations. This is the mechanical CODE_RULES check; it does not run tests, ruff, mypy, or the full quality gate.
+- **Pre-check before Write.** Run `python <managed-root>/hooks/blocking/code_rules_enforcer.py --check <candidate> --as <destination>` (install path; monorepo: `packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py`) until clean, then Write/Edit once. Use the `--as` path; a wrong path can hide violations. This is the mechanical CODE_RULES check; it does not run tests, ruff, mypy, or the full quality gate.
 - **Candidate check vs full gate.** The pre-check tests CODE_RULES only. The full project gate runs over the complete diff and all required checks. `code_rules_enforcer.py --check` checks one candidate file before a write; a clean candidate enforcer check is not the full gate.
 - **Windows shell.** Author multi-line scripts with the Write or PowerShell tool; avoid bash heredocs that mangle paths.
 - **`gh` bodies.** Always `--body-file`; never use `--body` or `-b` with markdown.
@@ -113,7 +113,7 @@ def fetch_with_retries(fetch_text: Callable[[str], str], url: str) -> str:
 
 Every behavior change follows Red-Green-Refactor:
 
-1. **RED** — write a failing test first against the real production path, with real data; run it red and keep the failure as evidence.
+1. **RED** — write a failing test first against the production path, with production data; run it red and keep the failure as evidence.
 2. **GREEN** — write the minimum production change, then run the focused test.
 3. **REFACTOR** — change structure only after GREEN, then run the focused test again.
 
@@ -121,7 +121,7 @@ Do not write production behavior before RED, skip the red run, or call a green t
 
 ## Hook-specific workflow
 
-For a hook change, use the target package's active managed root for installed files, not the current working directory. The default is `~/.claude`; `--target` or `CLAUDE_CONFIG_DIR` selects another managed root. Read `<managed-root>/hooks/AGENTS.md` (default: `~/.claude/hooks/AGENTS.md`; source fallback: `packages/claude-dev-env/hooks/AGENTS.md`), each closer `AGENTS.md` and `CLAUDE.md`, and the registered hook entry before editing. Trace the lifecycle event, stdin JSON, output contract, exit code, and registration. Reuse the target hook area's constants package. Run `<managed-root>/scripts/check.ps1` (default: `~/.claude/scripts/check.ps1`; source fallback: `packages/claude-dev-env/scripts/check.ps1`) and drive the real production entry point with event payloads. The RED test covers each allow and deny outcome. Run every applicable test file and suite for the hook, then the full quality gates required by the affected package.
+For a hook change, use the target package's active managed root for installed files, not the current working directory. The default is `~/.claude`; `--target` or `CLAUDE_CONFIG_DIR` selects another managed root. Read `<managed-root>/hooks/AGENTS.md` (default: `~/.claude/hooks/AGENTS.md`; source fallback: `packages/claude-dev-env/hooks/AGENTS.md`), each closer `AGENTS.md` and `CLAUDE.md`, and the registered hook entry before editing. Trace the lifecycle event, stdin JSON, output contract, exit code, and registration. Reuse the target hook area's constants package. Run `<managed-root>/scripts/check.ps1` (default: `~/.claude/scripts/check.ps1`; source fallback: `packages/claude-dev-env/scripts/check.ps1`) and drive the production entry point with event payloads. The RED test covers each allow and deny outcome. Run every applicable test file and suite for the hook, then the full quality gates required by the affected package.
 
 ## Session advisor
 

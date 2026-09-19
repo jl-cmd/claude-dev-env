@@ -39,7 +39,7 @@ Review each hit. Ignore:
 
 | Hit | Fix |
 |---|---|
-| Real email | Replace with `user@example.com` or remove |
+| Email address | Replace with `user@example.com` or remove |
 | Home path | Use `Path.home()`, `~`, or `C:/Users/<you>/` |
 | LAN address | Remove, use a hostname, or — for your own NAS — set the host in `CLAUDE_NAS_HOST` or `~/.claude/local-identity.json`, both of which stay out of git |
 | Credential material | Remove from the tree; rotate the credential; load from env/secret store |

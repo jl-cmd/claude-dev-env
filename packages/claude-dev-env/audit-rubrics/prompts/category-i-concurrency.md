@@ -1,6 +1,6 @@
 Audit [REPO/ARTIFACT] [TARGET_ID] for **Category I only** (concurrency hazards). Skip A–H, J–P. Sub-bucket forced-exhaustion mode: Category I is decomposed into 8 sub-buckets below. Each sub-bucket REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket. A sub-bucket returning neither is a protocol gap.
 
-[ARTIFACT METADATA — including: is this code single-threaded, threaded, asyncio, multiprocessing, or mixed? Name the runtime (CPython 3.x, Node, Go, JVM, .NET, PowerShell runspace, browser JS), the concurrency primitives actually present (`threading`, `asyncio`, `multiprocessing`, `concurrent.futures`, `Thread`, `goroutine`, `Promise`, `Task`, `Start-ThreadJob`, `ForEach-Object -Parallel`, etc.), and the inter-process surface (shared filesystem, shared DB, shared cache, shared queue, signals). State explicitly which primitives are absent so each sub-bucket has a Shape B basis.]
+[ARTIFACT METADATA — including: is this code single-threaded, threaded, asyncio, multiprocessing, or mixed? Name the runtime (CPython 3.x, Node, Go, JVM, .NET, PowerShell runspace, browser JS), the concurrency primitives present (`threading`, `asyncio`, `multiprocessing`, `concurrent.futures`, `Thread`, `goroutine`, `Promise`, `Task`, `Start-ThreadJob`, `ForEach-Object -Parallel`, etc.), and the inter-process surface (shared filesystem, shared DB, shared cache, shared queue, signals). State explicitly which primitives are absent so each sub-bucket has a Shape B basis.]
 
 ID prefix: `find`.
 
@@ -46,23 +46,23 @@ Inline the artifact under audit below this section. Chunking guidance — pick t
 - Compound filesystem ops where no single syscall expresses the intent: "delete if older than X" (must `stat` then `unlink`), "rename if doesn't exist" (must `stat` then `rename` — POSIX `rename` is atomic but overwrites, Windows `rename` fails on overwrite).
 - DB compound ops outside a transaction: read-then-update without `SELECT FOR UPDATE`, `UPDATE ... WHERE version = ?` (optimistic locking missing).
 - CPython GIL gives some atomicity to single bytecode ops (list.append, dict.__setitem__) but not to `+=` or `dict.setdefault` callbacks.
-- Adversarial probes: (a) does any single statement compile to multiple bytecodes (e.g., `obj.attr += 1`) that the GIL does not protect? (b) is there a JSON config rewritten by `json.dump(open(path, 'w'))` — non-atomic; concurrent reader sees a truncated file mid-write? (c) does a "transactional" wrapper actually start a transaction, or just open a connection?
+- Adversarial probes: (a) does any single statement compile to multiple bytecodes (e.g., `obj.attr += 1`) that the GIL does not protect? (b) is there a JSON config rewritten by `json.dump(open(path, 'w'))` — non-atomic; concurrent reader sees a truncated file mid-write? (c) does a "transactional" wrapper start a transaction, or just open a connection?
 
 **I6. Thread-local / async-local context bleed**
 - `threading.local()` instances surviving thread-pool reuse (the same OS thread services many tasks; the `local` is keyed to the OS thread, not the logical task).
 - `contextvars.ContextVar` set without `Context.run(...)` — propagation across `asyncio.create_task` is automatic but copying-on-create; mutations after task creation do not propagate.
-- Request-scoped state stored on a module global (Flask `g`, Django thread-local request) leaking when the framework's scoping does not match the actual concurrency model.
+- Request-scoped state stored on a module global (Flask `g`, Django thread-local request) leaking when the framework's scoping does not match the concurrency model.
 - ORM session-per-request that is reused across requests due to a misconfigured scope.
 - `asyncio` task-local state inside an executor (`run_in_executor` runs in a thread, not a coroutine — `contextvars` may or may not propagate depending on Python version and library version).
 - Adversarial probes: (a) does any helper called from both sync and async paths assume the same context-storage primitive? (b) is there a pool-warmup that pre-populates `threading.local` and assumes it stays populated forever? (c) does logging context (correlation ID) propagate across `loop.run_in_executor`?
 
 **I7. Cancellation handling**
 - Every `await` inside an `async def` is a cancellation point. Cleanup code that follows `await` may be skipped on `CancelledError`.
-- `asyncio.shield(...)` to protect critical cleanup; verify that what is shielded is genuinely critical and not just convenient.
+- `asyncio.shield(...)` to protect critical cleanup; verify that what is shielded is critical and not just convenient.
 - `try/except Exception:` swallowing `CancelledError` — `CancelledError` inherits from `BaseException` in 3.8+ but the codebase may run on older Python.
 - Synchronous cancellation: `KeyboardInterrupt` landing between two syscalls; `SIGTERM` arriving mid-cleanup.
 - `asyncio.timeout()` (3.11+) vs `asyncio.wait_for(...)` semantics — both raise `CancelledError`, both can race with the wrapped task completing.
-- Adversarial probes: (a) does any `finally` block contain an `await` that could itself be cancelled, leaving cleanup half-done? (b) does the code rely on `__aexit__` running to release a resource, and does the cancellation path actually invoke `__aexit__`? (c) is there a `task.cancel()` call without `await task` afterward to surface the cancellation result?
+- Adversarial probes: (a) does any `finally` block contain an `await` that could itself be cancelled, leaving cleanup half-done? (b) does the code rely on `__aexit__` running to release a resource, and does the cancellation path invoke `__aexit__`? (c) is there a `task.cancel()` call without `await task` afterward to surface the cancellation result?
 
 **I8. Signal handling in multi-threaded code**
 - Python: signals are always delivered to the main thread. A custom signal handler installed by `signal.signal(...)` on a non-main thread silently no-ops.
@@ -131,7 +131,7 @@ This is the highest-signal sub-bucket. There are TWO concrete TOCTOU windows in 
   - Delete the directory entirely → `getctime` raises `FileNotFoundError` (subclass of `OSError`), absorbed by the except at sweep_empty_dirs.py:28-29 (`continue`). Race handled.
   - Repopulate the directory with files → `os.rmdir` raises `OSError` (`ENOTEMPTY`), absorbed by sweep_empty_dirs.py:35-36 (`pass`). Race handled — but `removed.append(...)` at sweep_empty_dirs.py:34 was NOT yet appended (it's inside the same try). Verify the append is correctly gated by successful `rmdir`.
   - Replace the directory with a symlink → `os.rmdir` on a symlink targeting a populated dir behaves OS-dependently; on Windows `os.rmdir` removes a directory symlink without touching the target, on POSIX it raises `ENOTDIR`. Verify the protective except is broad enough.
-  - Update creation time on the directory between `getctime` (sweep_empty_dirs.py:27) and the `if` check (sweep_empty_dirs.py:30) → no real window here because the local `created` is already captured; the `now - created` comparison uses the captured value. Verify by re-reading the loop body.
+  - Update creation time on the directory between `getctime` (sweep_empty_dirs.py:27) and the `if` check (sweep_empty_dirs.py:30) → no window here because the local `created` is already captured; the `now - created` comparison uses the captured value. Verify by re-reading the loop body.
 - `topdown=False` means children are visited before parents. Verify that another process creating a file inside a child directory between the child's `rmdir` and the parent's `rmdir` does not cause the parent's `rmdir` to silently spare a now-non-empty parent — and that this is the *intended* behavior (skip parents whose children re-populated).
 
 *Window 2 — PowerShell Test-Path vs Register-ScheduledTask.*

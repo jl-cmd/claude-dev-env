@@ -30,7 +30,7 @@ ID prefix: `find`.
 **H3. Path traversal**
 - Surface check: any filesystem operation (`open`, `os.walk`, `os.rmdir`, `Path(…).read_text`, `shutil.copy`, `Get-Content`, `Test-Path`, `Remove-Item`) whose path is built from attacker-controlled input?
 - Shape A pattern: user input joined to a base path without `realpath`/`normpath` and without a containment check verifying the resolved path stays under the intended root; symlink-following enabled where it shouldn't be; UNC / device-namespace paths (`\\?\`, `\\.\`) accepted without filtering; trailing-dot or trailing-space Windows pathname tricks.
-- Shape B probes (when no traversal surface exists): (1) `os.walk` / equivalent does not follow symlinks (`followlinks=False` in Python; `-NoFollowSymlink` semantics in PowerShell). (2) UNC / drive-letter / reparse-point handling — document whether the artifact honors them as given (operator authority) or rejects them. (3) Path normalization — does the code call `realpath`/`normpath` before filesystem ops? (4) TOCTOU between any pre-flight check (`isdir`, `Test-Path`) and the actual filesystem op. (5) Pre-flight gate identification — what is the only validation between attacker input and the filesystem syscall?
+- Shape B probes (when no traversal surface exists): (1) `os.walk` / equivalent does not follow symlinks (`followlinks=False` in Python; `-NoFollowSymlink` semantics in PowerShell). (2) UNC / drive-letter / reparse-point handling — document whether the artifact honors them as given (operator authority) or rejects them. (3) Path normalization — does the code call `realpath`/`normpath` before filesystem ops? (4) TOCTOU between any pre-flight check (`isdir`, `Test-Path`) and the filesystem op. (5) Pre-flight gate identification — what is the only validation between attacker input and the filesystem syscall?
 
 **H4. Authentication bypass**
 - Surface check: any HTTP / RPC / IPC entry point that should require authentication?
@@ -54,7 +54,7 @@ ID prefix: `find`.
 
 **H8. CSRF / state-changing without token**
 - Surface check: any state-changing HTTP handler (POST, PUT, DELETE, PATCH) reachable by an authenticated browser session?
-- Shape A pattern: state-changing handler with no CSRF token validation; SameSite-cookie assumption used as the sole CSRF defense without verifying the framework actually sets it; pre-flight CORS check trusted as authentication; same-origin assumed without enforcement.
+- Shape A pattern: state-changing handler with no CSRF token validation; SameSite-cookie assumption used as the sole CSRF defense without verifying the framework sets it; pre-flight CORS check trusted as authentication; same-origin assumed without enforcement.
 - Shape B probes (when no CSRF surface exists): (1) confirm no `@app.route`-style POST handler, no `@router.post`, no `flask.Flask`, no `fastapi.FastAPI`, no `aiohttp.web.RouteTableDef`, no Express `app.post`. (2) Confirm any local trigger surface (named pipe, Unix socket, COM endpoint, scheduled task) is local-only and not reachable by a remote unauthenticated caller. (3) Confirm no inter-process listener exists that an unprivileged caller could poke to trigger the state change.
 
 **H9. Deserialization**
@@ -71,7 +71,7 @@ ID prefix: `find`.
 
 Q1: Are there any inputs that cross two H sub-buckets? (e.g., a path that flows through H3-style filesystem handling AND becomes an interpolated argument in an H2 shell command — are the two trust assumptions consistent across both sites?)
 Q2: What's the worst injection / leakage hazard introduced by this artifact? Cite `<file>:<line>` for the specific construction.
-Q3: Which input is most fragile to a future API addition — i.e., where would a future change most likely turn an operator-trust assumption into an actual attacker-reachable surface? Name the line(s) most likely to break.
+Q3: Which input is most fragile to a future API addition — i.e., where would a future change most likely turn an operator-trust assumption into an attacker-reachable surface? Name the line(s) most likely to break.
 
 ## Output
 
@@ -167,7 +167,7 @@ This sub-bucket has TWO distinct command-string-build sites in the diff, both wi
 
 Q1: Are there any inputs that cross two H sub-buckets? (For PR #394, the candidate is `arguments.root` flowing through H3-style path-handling code that ALSO becomes the `$Target` interpolated into the H2 PowerShell argument string when an operator re-runs the installer with the same path. Are the two trust assumptions consistent?)
 Q2: What's the worst injection / leakage hazard introduced by this PR? Cite `<file>:<line>` for the specific construction. (Candidate: `Install-SweepEmptyDirs.ps1:69` `New-ScheduledTaskAction -Argument` interpolating `$Target` — embedded-`$` and trailing-backslash hazards are both reachable in normal Windows path-naming.)
-Q3: Which input is most fragile to a future API addition — i.e., where would a future change most likely turn an operator-trust assumption into an actual attacker-reachable surface? Name the line(s) most likely to break. (Candidate: `test_sweep_empty_dirs.py:25` `_set_creation_time_windows` — if a future test parametrizes `path` from a non-tempfile source, the f-string-into-single-quoted-PowerShell pattern flips from "fragile-but-bounded" to "exploitable.")
+Q3: Which input is most fragile to a future API addition — i.e., where would a future change most likely turn an operator-trust assumption into an attacker-reachable surface? Name the line(s) most likely to break. (Candidate: `test_sweep_empty_dirs.py:25` `_set_creation_time_windows` — if a future test parametrizes `path` from a non-tempfile source, the f-string-into-single-quoted-PowerShell pattern flips from "fragile-but-bounded" to "exploitable.")
 
 ## Output
 

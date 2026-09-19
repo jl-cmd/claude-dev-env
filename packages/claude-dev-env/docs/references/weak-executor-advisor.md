@@ -30,7 +30,7 @@ carries its own packet:
 
 - **First consult** — use the complete packet in
   `~/.claude/_shared/advisor/reference/consult-format.md`: assignment,
-  desired outcome, constraints and exclusions, actions taken in order, real
+  desired outcome, constraints and exclusions, actions taken in order,
   output and current state, decision or blocker, validation evidence,
   unresolved risks, and load-bearing paths or excerpts.
 - **Later consults** — the delta since the last consult.

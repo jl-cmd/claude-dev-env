@@ -6,7 +6,7 @@ Source: Smart & Molak, *BDD in Action* 2e, Chapter 7.6 — scenario quality patt
 
 ## Declarative Focus
 
-Scenarios work best when they name what users want to achieve in the language of the business. Lead with goals and recognizable domain tasks so readers grasp intent at a glance. Reserve step-level or UI detail for places where it truly clarifies behavior.
+Scenarios work best when they name what users want to achieve in the language of the business. Lead with goals and recognizable domain tasks so readers grasp intent at a glance. Reserve step-level or UI detail for places where it clarifies behavior.
 
 > "Good scenarios model business behavior, not system interactions." — Smart & Molak §7.6.3
 
@@ -42,7 +42,7 @@ Then I should be presented with the following hotels:
 
 Personas ground scenarios in realistic goals and context. Use light soap-opera personas when you need depth before full UX research: introduce names and roles as needed and deepen them across scenarios.
 
-> Smart & Molak §7.6.5 describe personas as rich, realistic descriptions: each persona captures goals, abilities, and background information that ground the test scenario in a real user context.
+> Smart & Molak §7.6.5 describe personas as rich, realistic descriptions: each persona captures goals, abilities, and background information that ground the test scenario in a user context.
 
 Good scenarios name who acts and what they need in plain language.
 

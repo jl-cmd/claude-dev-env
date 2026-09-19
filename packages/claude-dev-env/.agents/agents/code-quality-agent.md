@@ -165,9 +165,9 @@ not a Shape B entry.
 
 ## Collection before filtering
 
-Report every real finding at its true severity. Collection retains P0, P1, and
+Report every finding at the severity it warrants. Collection retains P0, P1, and
 P2 findings with file, line, evidence (`excerpt` / `failure_mode`), and
-category. Do not drop lower-severity real findings during collection so a later
+category. Do not drop lower-severity findings during collection so a later
 consumer can filter. Severity or action filtering is a separate stage after the
 collection record is complete.
 
@@ -197,7 +197,7 @@ When the primary and adversarial passes flag the same file:line:
 
 - Merge into a single Shape A finding using max-wins severity (P0 > P1 > P2).
 - Concatenate the `failure_mode` strings (separator: " // adversarial: ") so both pass narratives survive.
-- For Shape B entries on the same category, keep every distinct `adversarial_probe` from both passes — collapsing them would drop information that was actually found.
+- For Shape B entries on the same category, keep every distinct `adversarial_probe` from both passes — collapsing them would drop information that was found.
 
 The merge runs at the end of the adversarial pass, before constructing the output. The output preamble's `Total: N` counts merged findings, not pre-merge total.
 
