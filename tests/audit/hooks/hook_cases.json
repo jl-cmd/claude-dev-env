@@ -1,0 +1,125 @@
+{
+  "contract": "source lock W1 (Claude Code hooks reference)",
+  "note": "Case rows for every hook the shipped hooks.json registers.",
+  "hooks": [
+    {
+      "hook_id": "PreToolUse:subagent_model_routing.mjs",
+      "claim": "Deny a Codex subagent spawn whose model and effort pair the policy does not approve, and remap an aliased pair to its approved replacement.",
+      "claim_source": "packages/claude-dev-env/docs/codex-compatibility.md; rules/subagent-model-policy.json",
+      "component_class": "compatibility",
+      "cases": [
+        {"kind": "prohibited", "payload": {"tool_name": "multi_agent_v1__spawn_agent", "tool_input": {"prompt": "do work", "model": "not-a-model", "reasoning_effort": "high"}}, "expect": {"outcome": "block"}},
+        {"kind": "prohibited", "payload": {"tool_name": "multi_agent_v1__spawn_agent", "tool_input": {"prompt": "do work", "model": "gpt-5.6-luna", "reasoning_effort": "low"}}, "expect": {"outcome": "rewrite", "updated_input_contains": ["high"]}},
+        {"kind": "near_neighbor", "payload": {"tool_name": "multi_agent_v1__spawn_agent", "tool_input": {"prompt": "do work", "model": "gpt-5.6-luna", "reasoning_effort": "high"}}, "expect": {"outcome": "silent"}}
+      ]
+    },
+    {
+      "hook_id": "PreToolUse:pre_tool_use_dispatcher.py",
+      "claim": "Warn in context when an Edit writes an unsafe Django migration operation or a refactor that reaches past the edit surface; never block.",
+      "claim_source": "hooks/advisory/migration_safety_advisor.py and hooks/advisory/refactor_guard.py docstrings",
+      "component_class": "output",
+      "cases": [
+        {"kind": "prohibited", "hosted_hook": "advisory/migration_safety_advisor.py", "setup": {"files": [{"path": "{sandbox}/app/migrations/0002_drop.py", "content": "operations = []\n"}]}, "payload": {"tool_name": "Edit", "tool_input": {"file_path": "{sandbox}/app/migrations/0002_drop.py", "old_string": "operations = []", "new_string": "operations = [migrations.RemoveField('order', 'total')]"}}, "expect": {"outcome": "advise", "stdout_contains": ["MIGRATION SAFETY"]}},
+        {"kind": "near_neighbor", "setup": {"files": [{"path": "{sandbox}/app/migrations/0002_add.py", "content": "operations = []\n"}]}, "payload": {"tool_name": "Edit", "tool_input": {"file_path": "{sandbox}/app/migrations/0002_add.py", "old_string": "operations = []", "new_string": "operations = [migrations.AddField('order', 'note', field)]"}}, "expect": {"outcome": "silent"}}
+      ]
+    },
+    {
+      "hook_id": "PreToolUse:bash_pre_tool_use_dispatcher.py",
+      "claim": "Rewrite a git command so Git Bash leaves a <rev>:<path> argument unconverted, naming only the detected prefixes.",
+      "claim_source": "hooks/blocking/msys_rev_path_rewriter.py docstring; rules/shell-invocation.md",
+      "component_class": "safety",
+      "cases": [
+        {"kind": "prohibited", "payload": {"tool_name": "Bash", "tool_input": {"command": "git show origin/main:.claude/settings.json", "description": "Show a file"}}, "expect": {"outcome": "rewrite", "updated_input_contains": ["MSYS2_ARG_CONV_EXCL='origin/main:'", "git show origin/main:.claude/settings.json"]}},
+        {"kind": "near_neighbor", "payload": {"tool_name": "Bash", "tool_input": {"command": "git show HEAD:.claude/settings.json", "description": "Show a file"}}, "expect": {"outcome": "silent"}},
+        {"kind": "near_neighbor", "payload": {"tool_name": "Bash", "tool_input": {"command": "git show origin/main:packages/app.py", "description": "Show a file"}}, "expect": {"outcome": "silent"}}
+      ]
+    },
+    {
+      "hook_id": "PreToolUse:enter_worktree_origin_prefetch.py",
+      "claim": "Fetch origin's default branch before EnterWorktree creates a worktree, so the new worktree does not start behind the remote.",
+      "claim_source": "hooks/lifecycle/enter_worktree_origin_prefetch.py docstring",
+      "component_class": "infrastructure",
+      "cases": [
+        {"kind": "prohibited", "setup": {"git_fixture": "stale_clone"}, "payload": {"tool_name": "EnterWorktree", "tool_input": {}, "cwd": "{sandbox}/clone"}, "expect": {"outcome": "silent", "origin_ref_current": true}},
+        {"kind": "near_neighbor", "setup": {"git_fixture": "stale_clone"}, "payload": {"tool_name": "EnterWorktree", "tool_input": {"path": "{sandbox}/clone"}, "cwd": "{sandbox}/clone"}, "expect": {"outcome": "silent", "origin_ref_current": false}}
+      ]
+    },
+    {
+      "hook_id": "UserPromptSubmit:style_reminder_prompt.py",
+      "claim": "Add the style reminder to the context of every user message.",
+      "claim_source": "hooks/session/style_reminder_prompt.py docstring",
+      "component_class": "output",
+      "cases": [
+        {"kind": "prohibited", "payload": {"prompt": "Write a function to calculate a factorial"}, "expect": {"outcome": "advise", "stdout_contains": ["small words"]}}
+      ]
+    },
+    {
+      "hook_id": "SessionStart:session_env_cleanup.py",
+      "claim": "On Windows, remove this session's pre-existing session-env directory and prune siblings older than seven days so a later Bash call does not abort with EEXIST.",
+      "claim_source": "hooks/session/session_env_cleanup.py docstring",
+      "component_class": "infrastructure",
+      "cases": [
+        {"kind": "prohibited", "setup": {"dirs": [{"path": "{home}/.claude/session-env/audit-session-0001"}, {"path": "{home}/.claude/session-env/stale-session", "age_days": 10}]}, "payload": {"source": "resume", "model": "claude-sonnet-5"}, "expect": {"outcome": "silent", "paths_absent": ["{home}/.claude/session-env/audit-session-0001", "{home}/.claude/session-env/stale-session"]}},
+        {"kind": "near_neighbor", "setup": {"dirs": [{"path": "{home}/.claude/session-env/other-live-session", "age_days": 1}]}, "payload": {"source": "startup", "model": "claude-sonnet-5"}, "expect": {"outcome": "silent", "paths_present": ["{home}/.claude/session-env/other-live-session"]}}
+      ]
+    },
+    {
+      "hook_id": "SessionStart:task_tool_prompt.py",
+      "claim": "Direct the session to track its work with the host's task tool.",
+      "claim_source": "hooks/session/task_tool_prompt.py docstring",
+      "component_class": "output",
+      "cases": [
+        {"kind": "prohibited", "payload": {"source": "startup", "model": "claude-sonnet-5"}, "expect": {"outcome": "advise"}}
+      ]
+    },
+    {
+      "hook_id": "SessionStart:working_style_prompt.py",
+      "claim": "Inject the fixed working-style guidance block at session start.",
+      "claim_source": "hooks/session/working_style_prompt.py docstring",
+      "component_class": "output",
+      "cases": [
+        {"kind": "prohibited", "payload": {"source": "startup", "model": "claude-sonnet-5"}, "expect": {"outcome": "advise"}}
+      ]
+    },
+    {
+      "hook_id": "SessionStart:orchestrator_auto_starter.py",
+      "claim": "When the opt-in variable is set, point the session at the orchestrator skill; otherwise stay quiet.",
+      "claim_source": "hooks/session/orchestrator_auto_starter.py docstring",
+      "component_class": "output",
+      "cases": [
+        {"kind": "prohibited", "env": {"CLAUDE_ORCHESTRATOR_AUTO_STARTER_ENABLED": "1"}, "payload": {"source": "startup", "model": "claude-sonnet-5"}, "expect": {"outcome": "advise"}},
+        {"kind": "near_neighbor", "env": {"CLAUDE_ORCHESTRATOR_AUTO_STARTER_ENABLED": ""}, "payload": {"source": "startup", "model": "claude-sonnet-5"}, "expect": {"outcome": "silent"}}
+      ]
+    },
+    {
+      "hook_id": "SessionStart:issue_tracker_session_starter.py",
+      "claim": "When the opt-in variable is set and the cwd's git root is in the project-paths registry, point the session at the issue-tracker skill; otherwise stay quiet.",
+      "claim_source": "hooks/session/issue_tracker_session_starter.py docstring",
+      "component_class": "output",
+      "cases": [
+        {"kind": "prohibited", "env": {"CLAUDE_ISSUE_TRACKER_SESSION_STARTER_ENABLED": "1"}, "setup": {"git_fixture": "stale_clone", "files": [{"path": "{home}/.claude/project-paths.json", "content": "{\"audit\": \"{sandbox}/clone\"}"}]}, "payload": {"source": "startup", "model": "claude-sonnet-5", "cwd": "{sandbox}/clone"}, "expect": {"outcome": "advise"}},
+        {"kind": "near_neighbor", "env": {"CLAUDE_ISSUE_TRACKER_SESSION_STARTER_ENABLED": "1"}, "setup": {"git_fixture": "stale_clone", "files": [{"path": "{home}/.claude/project-paths.json", "content": "{\"audit\": \"{sandbox}/elsewhere\"}"}]}, "payload": {"source": "startup", "model": "claude-sonnet-5", "cwd": "{sandbox}/clone"}, "expect": {"outcome": "silent"}}
+      ]
+    },
+    {
+      "hook_id": "PostToolUse:post_tool_use_dispatcher.py",
+      "claim": "Format an eligible newly written source file after a Write without blocking the write.",
+      "claim_source": "hooks/workflow/auto_formatter.py docstring",
+      "component_class": "infrastructure",
+      "cases": [
+        {"kind": "prohibited", "setup": {"files": [{"path": "{sandbox}/messy.py", "content": "x = {  'a':1 }\n"}]}, "payload": {"tool_name": "Write", "tool_input": {"file_path": "{sandbox}/messy.py", "content": "x = {  'a':1 }\n"}, "tool_response": {"filePath": "{sandbox}/messy.py", "type": "create"}}, "expect": {"outcome": "silent", "file_contains": [{"path": "{sandbox}/messy.py", "text": "x = {\"a\": 1}"}]}},
+        {"kind": "near_neighbor", "setup": {"files": [{"path": "{sandbox}/messy.py", "content": "x = {  'a':1 }\n"}]}, "payload": {"tool_name": "Edit", "tool_input": {"file_path": "{sandbox}/messy.py", "old_string": "2", "new_string": "1"}, "tool_response": {"filePath": "{sandbox}/messy.py"}}, "expect": {"outcome": "silent", "file_contains": [{"path": "{sandbox}/messy.py", "text": "x = {  'a':1 }"}]}}
+      ]
+    },
+    {
+      "hook_id": "PostToolUse:bash_post_call_dispatcher.py",
+      "claim": "After a Bash call, record a failing single-file pytest run, remind about the PR done checklist after a push, and explain a git failure that MSYS path conversion caused; never block.",
+      "claim_source": "hooks/blocking/bash_post_call_dispatcher.py and hosted hook docstrings",
+      "component_class": "output",
+      "cases": [
+        {"kind": "prohibited", "hosted_hook": "advisory/msys_path_conversion_advisor.py", "event": "PostToolUseFailure", "payload": {"tool_name": "Bash", "tool_input": {"command": "git show origin/main:.claude/x.py", "description": "Show"}, "error": "Exit code 128\nfatal: invalid object name 'origin\\main;.claude\\x.py'.", "is_interrupt": false}, "expect": {"outcome": "advise"}},
+        {"kind": "near_neighbor", "payload": {"tool_name": "Bash", "tool_input": {"command": "git status", "description": "Status"}, "tool_response": {"stdout": "clean", "stderr": "", "interrupted": false, "isImage": false}}, "expect": {"outcome": "silent"}}
+      ]
+    }
+  ]
+}

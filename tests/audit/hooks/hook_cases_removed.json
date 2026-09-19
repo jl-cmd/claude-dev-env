@@ -1,0 +1,75 @@
+{
+  "contract": "source lock W1 (Claude Code hooks reference)",
+  "note": "Case rows for hooks removed after the baseline run at cf4f126d9. Rerun them against a checkout of that commit with --plugin-root and --cases.",
+  "hooks": [
+    {
+      "hook_id": "SessionStart:plugin_data_dir_cleanup.py",
+      "claim": "Remove the empty ralph-loop plugin data directory at session start so the client's non-recursive mkdir does not fail with EEXIST.",
+      "claim_source": "hooks/session/plugin_data_dir_cleanup.py docstring",
+      "component_class": "infrastructure",
+      "cases": [
+        {"kind": "prohibited", "setup": {"dirs": [{"path": "{home}/.claude/plugins/data/ralph-loop-claude-plugins-official"}]}, "payload": {"source": "startup", "model": "claude-sonnet-5"}, "expect": {"outcome": "silent", "paths_absent": ["{home}/.claude/plugins/data/ralph-loop-claude-plugins-official"]}},
+        {"kind": "near_neighbor", "setup": {"files": [{"path": "{home}/.claude/plugins/data/ralph-loop-claude-plugins-official/state.json", "content": "{}"}]}, "payload": {"source": "startup", "model": "claude-sonnet-5"}, "expect": {"outcome": "silent", "paths_present": ["{home}/.claude/plugins/data/ralph-loop-claude-plugins-official/state.json"]}}
+      ]
+    },
+    {
+      "hook_id": "SessionStart:session_edit_tracker_cleanup.py",
+      "claim": "Delete this session's edit-tracker file at a fresh startup and keep it across a resume or compact.",
+      "claim_source": "hooks/session/session_edit_tracker_cleanup.py docstring",
+      "component_class": "infrastructure",
+      "cases": [
+        {"kind": "prohibited", "setup": {"files": [{"path": "{temp}/claude-session-edits-audit-session-0001.json", "content": "[]"}]}, "payload": {"source": "startup", "model": "claude-sonnet-5"}, "expect": {"outcome": "silent", "paths_absent": ["{temp}/claude-session-edits-audit-session-0001.json"]}},
+        {"kind": "near_neighbor", "setup": {"files": [{"path": "{temp}/claude-session-edits-audit-session-0001.json", "content": "[]"}]}, "payload": {"source": "resume", "model": "claude-sonnet-5"}, "expect": {"outcome": "silent", "paths_present": ["{temp}/claude-session-edits-audit-session-0001.json"]}}
+      ]
+    },
+    {
+      "hook_id": "SessionEnd:session_end_cleanup.py",
+      "claim": "At session end, delete context-cache and .tmp files older than 7 days and transcript backups older than 30 days under ~/.claude/cache.",
+      "claim_source": "hooks/lifecycle/session_end_cleanup.py body (the module has no docstring)",
+      "component_class": "infrastructure",
+      "cases": [
+        {"kind": "prohibited", "setup": {"files": [{"path": "{home}/.claude/cache/claude-ctx-old.json", "age_days": 10}, {"path": "{home}/.claude/cache/transcript-backups/old.jsonl", "age_days": 40}]}, "payload": {"reason": "other"}, "expect": {"outcome": "silent", "paths_absent": ["{home}/.claude/cache/claude-ctx-old.json", "{home}/.claude/cache/transcript-backups/old.jsonl"]}},
+        {"kind": "near_neighbor", "setup": {"files": [{"path": "{home}/.claude/cache/claude-ctx-new.json", "age_days": 1}, {"path": "{home}/.claude/cache/notes.json", "age_days": 10}]}, "payload": {"reason": "other"}, "expect": {"outcome": "silent", "paths_present": ["{home}/.claude/cache/claude-ctx-new.json", "{home}/.claude/cache/notes.json"]}}
+      ]
+    },
+    {
+      "hook_id": "SessionEnd:session_edit_tracker_cleanup.py",
+      "claim": "Delete this session's edit-tracker file at session end and leave every other session's file.",
+      "claim_source": "hooks/session/session_edit_tracker_cleanup.py docstring",
+      "component_class": "infrastructure",
+      "cases": [
+        {"kind": "prohibited", "setup": {"files": [{"path": "{temp}/claude-session-edits-audit-session-0001.json", "content": "[]"}]}, "payload": {"reason": "other"}, "expect": {"outcome": "silent", "paths_absent": ["{temp}/claude-session-edits-audit-session-0001.json"]}},
+        {"kind": "near_neighbor", "setup": {"files": [{"path": "{temp}/claude-session-edits-another-session.json", "content": "[]"}]}, "payload": {"reason": "other"}, "expect": {"outcome": "silent", "paths_present": ["{temp}/claude-session-edits-another-session.json"]}}
+      ]
+    },
+    {
+      "hook_id": "PostToolUse:session_file_edit_tracker.py",
+      "claim": "Record every file the session edits so the stage gate stops a commit that would drop an edited, unstaged file.",
+      "claim_source": "hooks/observability/session_file_edit_tracker.py docstring",
+      "component_class": "safety",
+      "cases": [
+        {"kind": "prohibited", "setup": {"files": [{"path": "{sandbox}/edited.py", "content": "x = 1\n"}]}, "payload": {"tool_name": "Write", "tool_input": {"file_path": "{sandbox}/edited.py", "content": "x = 1\n"}, "tool_response": {"filePath": "{sandbox}/edited.py", "type": "create"}}, "expect": {"outcome": "silent", "file_contains": [{"path": "{temp}/claude-session-edits-audit-session-0001.json", "text": "edited.py"}]}, "claim_chain": {"event": "PreToolUse", "payload": {"tool_name": "Bash", "tool_input": {"command": "git commit -m wip", "description": "Commit"}}, "expect_outcome": "block"}},
+        {"kind": "near_neighbor", "payload": {"tool_name": "Read", "tool_input": {"file_path": "{sandbox}/edited.py"}, "tool_response": {}}, "expect": {"outcome": "silent", "paths_absent": ["{temp}/claude-session-edits-audit-session-0001.json"]}}
+      ]
+    },
+    {
+      "hook_id": "PostToolUse:investigation_tracker_reset.py",
+      "claim": "Clear the serial-investigation tracker after a delegation so the companion PreToolUse blocker on Read, Bash, and Grep lets the lead investigate again.",
+      "claim_source": "hooks/workflow/investigation_tracker_reset.py docstring",
+      "component_class": "safety",
+      "cases": [
+        {"kind": "prohibited", "setup": {"files": [{"path": "{home}/.claude/runtime/investigation-tracker.json", "content": "{}"}]}, "payload": {"tool_name": "Agent", "tool_input": {"prompt": "do work", "description": "delegate", "subagent_type": "general-purpose"}, "tool_response": {}}, "expect": {"outcome": "silent", "paths_absent": ["{home}/.claude/runtime/investigation-tracker.json"]}},
+        {"kind": "near_neighbor", "setup": {"files": [{"path": "{home}/.claude/runtime/investigation-tracker.json", "content": "{\"timestamps\": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]}"}]}, "payload": {"tool_name": "Read", "tool_input": {"file_path": "{sandbox}/a.py"}, "tool_response": {}}, "expect": {"outcome": "silent", "paths_present": ["{home}/.claude/runtime/investigation-tracker.json"]}, "claim_chain": {"event": "PreToolUse", "payload": {"tool_name": "Read", "tool_input": {"file_path": "{sandbox}/a.py"}}, "expect_outcome": "block"}}
+      ]
+    },
+    {
+      "hook_id": "InstructionsLoaded:instructions_loaded_logger.py",
+      "claim": "Append one record per loaded instruction file to ~/.claude/logs/instructions_loaded.jsonl.",
+      "claim_source": "hooks/observability/instructions_loaded_logger.py body (the module has no docstring)",
+      "component_class": "infrastructure",
+      "cases": [
+        {"kind": "prohibited", "payload": {"file_path": "{sandbox}/CLAUDE.md", "memory_type": "Project", "load_reason": "session_start"}, "expect": {"outcome": "silent", "file_contains": [{"path": "{home}/.claude/logs/instructions_loaded.jsonl", "text": "CLAUDE.md"}]}}
+      ]
+    }
+  ]
+}

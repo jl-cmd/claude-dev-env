@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "prohibited",
+    "payload": {"tool_name": "Bash", "tool_input": {"command": "forbidden-op --force target"}},
+    "expect": {"outcome": "block"}
+  },
+  {
+    "kind": "near_neighbor",
+    "payload": {"tool_name": "Bash", "tool_input": {"command": "forbidden-op --dry-run target"}},
+    "expect": {"outcome": "silent"}
+  },
+  {"kind": "malformed", "expect": {}},
+  {
+    "kind": "non_matching",
+    "payload": {"tool_name": "Read", "tool_input": {"file_path": "{sandbox}/notes.txt"}},
+    "expect": {"outcome": "silent"}
+  }
+]

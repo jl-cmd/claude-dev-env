@@ -53,7 +53,6 @@ def test_write_edit_hook_commands_reads_the_real_hooks_json_roster() -> None:
     assert all_labels == [
         "pre_tool_use_dispatcher",
         "post_tool_use_dispatcher",
-        "session_file_edit_tracker",
     ]
 
 
@@ -145,32 +144,32 @@ def test_ensure_real_repository_target_refuses_a_path_under_runner_temp_alone(
         hook_timing_harness.ensure_real_repository_target(ephemeral_target)
 
 
-def test_run_hosted_command_once_milliseconds_drives_the_real_tracker() -> None:
-    """A live subprocess run against a real repository file measures a positive time.
+def test_run_hosted_command_once_milliseconds_drives_a_registered_command() -> None:
+    """A live subprocess run against a repository file measures a positive time.
 
     ::
 
-        session_file_edit_tracker is the fastest hosted command, so this is the
-        cheap live end-to-end proof: it drives the actual registered
+        post_tool_use_dispatcher is the fastest registered Write command, so
+        this is the cheap live end-to-end proof: it drives the registered
         ``hooks.json`` command line, not a standalone hosted check module.
     """
     all_commands = hook_timing_harness.write_edit_hook_commands(_HOOKS_JSON_PATH)
-    tracker_command = next(
+    dispatcher_command = next(
         each_command
         for each_label, each_command in all_commands
-        if each_label == "session_file_edit_tracker"
+        if each_label == "post_tool_use_dispatcher"
     )
     payload_text = hook_timing_harness._write_tool_payload(_REAL_TARGET_FILE)
     elapsed_milliseconds = hook_timing_harness.run_hosted_command_once_milliseconds(
-        tracker_command, _PACKAGE_ROOT, payload_text
+        dispatcher_command, _PACKAGE_ROOT, payload_text
     )
     assert 0.0 < elapsed_milliseconds < 5000.0
 
 
 def test_measure_hosted_command_wall_times_covers_the_real_roster() -> None:
-    """A live run against the real hooks.json roster returns all three hooks.
+    """A live run against the shipped hooks.json roster returns both hooks.
 
-    Runs each registered command once against a real repository file,
+    Runs each registered command once against a repository file,
     so this is the one place the suite pays its full wall time to prove the roster end to end.
     """
     all_wall_times_by_label = hook_timing_harness.measure_hosted_command_wall_times(
@@ -179,7 +178,6 @@ def test_measure_hosted_command_wall_times_covers_the_real_roster() -> None:
     assert set(all_wall_times_by_label) == {
         "pre_tool_use_dispatcher",
         "post_tool_use_dispatcher",
-        "session_file_edit_tracker",
     }
     assert all(
         each_time > 0.0

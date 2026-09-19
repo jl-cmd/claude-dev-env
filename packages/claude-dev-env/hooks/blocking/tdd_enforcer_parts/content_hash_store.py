@@ -16,9 +16,7 @@ longer satisfies the gate.
     seen before, hash matches, expired     -> deny
 
 The state lives in one JSON file per (session, repository root) pair under the
-OS temp directory, shaped like the per-session tracker in
-hooks/observability/session_file_edit_tracker.py, so two worktrees open in one
-session never share a file.
+OS temp directory, so two worktrees open in one session never share a file.
 """
 
 from __future__ import annotations

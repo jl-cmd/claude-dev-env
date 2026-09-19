@@ -1199,6 +1199,12 @@ test('retired hook registrations stay managed so reinstall removes them', () => 
         'blocking/send_user_file_open_locally_blocker.py',
         'blocking/question_to_user_enforcer.py',
         'blocking/session_handoff_blocker.py',
+        'workflow/investigation_tracker_reset.py',
+        'observability/session_file_edit_tracker.py',
+        'session/session_edit_tracker_cleanup.py',
+        'observability/instructions_loaded_logger.py',
+        'session/plugin_data_dir_cleanup.py',
+        'lifecycle/session_end_cleanup.py',
     ]);
     const shippedHooks = JSON.parse(
         readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')
@@ -1280,7 +1286,7 @@ test('mergeHooksIntoSettings removes the retired SessionStart detector and keeps
                 matcher: '',
                 hooks: [{
                     type: 'command',
-                    command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/plugin_data_dir_cleanup.py',
+                    command: 'python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/session_env_cleanup.py',
                 }],
             }],
         },
@@ -1291,7 +1297,7 @@ test('mergeHooksIntoSettings removes the retired SessionStart detector and keeps
     const commands = settings.hooks.SessionStart[0].hooks.map(hook => hook.command);
     assert.equal(commands.includes(retiredCommand), false);
     assert.equal(commands.includes(userCommand), true);
-    assert.equal(commands.some(command => command.includes('plugin_data_dir_cleanup.py')), true);
+    assert.equal(commands.some(command => command.includes('session_env_cleanup.py')), true);
 });
 
 
@@ -1357,7 +1363,6 @@ test('shipped SessionEnd hook timeouts stay within the Codex runtime limit', () 
     const allSessionEndHooks = (shippedHooksConfig.hooks.SessionEnd || [])
         .flatMap(eachMatcherGroup => eachMatcherGroup.hooks);
 
-    assert.ok(allSessionEndHooks.length > 0, 'shipped hooks.json must register SessionEnd hooks');
     for (const eachSessionEndHook of allSessionEndHooks) {
         assert.ok(
             eachSessionEndHook.timeout <= 3,

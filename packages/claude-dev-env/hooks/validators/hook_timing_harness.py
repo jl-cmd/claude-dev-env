@@ -11,7 +11,6 @@ count, and reported as p50 and p95 milliseconds.
     run_all_validators         p50=1948.3ms  p95=3020.1ms
     pre_tool_use_dispatcher    p50=180.2ms   p95=230.4ms
     post_tool_use_dispatcher   p50=80.1ms    p95=1200.5ms
-    session_file_edit_tracker  p50=31.0ms    p95=34.2ms
 
 This harness refuses a target under the OS temp root, and runs the whole
 command line ``hooks.json`` registers.
@@ -21,10 +20,6 @@ The payload names the Write tool and carries the target's own current content.
 file, so the ``pre_tool_use_dispatcher`` figure covers interpreter start and
 hook dispatch. Time an Edit payload against a real file to measure the
 CODE_RULES checks themselves.
-
-The timed payload carries no ``session_id``, so ``session_file_edit_tracker``
-writes its edit record to the default-session file rather than to a
-caller-specific one.
 """
 
 from __future__ import annotations
