@@ -102,6 +102,10 @@ the installed `pr-description-writer` to draft them from the diff. A comment or
 review may use a supplied body file when it does not rewrite the pull request
 description.
 
+Check each behavior claim against the final diff and verification evidence.
+Preserve whether a rule is added, removed, or narrowed, and distinguish tests
+added from tests run. Refresh these claims after a rebase or correction.
+
 ### 3. Run the local linter
 
 Resolve the active managed root (`CLAUDE_CONFIG_DIR` when set, `~/.claude`
@@ -152,6 +156,9 @@ Use the same selected process-local author for a read-only remote readback.
 Confirm the pull request URL and number, title, body, head SHA, and draft state.
 For comments and reviews, confirm the new remote entry. Report artifact URLs
 without exposing author values.
+
+Confirm the published claims still describe the verified head and preserve the
+scope of its evidence, including whether checks used saved artifacts or a new run.
 
 ## Exit handling
 
