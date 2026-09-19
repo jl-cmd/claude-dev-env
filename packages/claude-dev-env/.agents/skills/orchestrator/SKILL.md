@@ -255,7 +255,7 @@ Routing rules:
   detection system, with no second one.
 - Resume a warm workflow agent before creating a new workflow run when
   the warm agent holds the relevant context.
-- Review and verification workflows apply the [review guide](../reviews/SKILL.md#review-workflow).
+- Review and verification workflows apply the [review guide](../e-code-review/SKILL.md).
 - PR-description workflows include the actual changed-file list in the
   prompt and verify the final body against that file list before posting
   or returning it.

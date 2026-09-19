@@ -14,17 +14,17 @@ PACKAGE_ROOT_SKILLS_DIRECTORY: str = "skills"
 PACKAGE_ROOT_AGENTS_DIRECTORY: str = "agents"
 SKILL_MANIFEST_FILENAME: str = "SKILL.md"
 
-# Slash-command and skill names that must never appear as active instructions.
-ALL_BANNED_ACTIVE_CAPABILITY_NAMES: frozenset[str] = frozenset(
+# Capability names this package retired before the ever-shipped registry
+# recorded them. Every other retired name resolves from that registry.
+ALL_UNREGISTERED_RETIRED_CAPABILITY_NAMES: frozenset[str] = frozenset(
     {
         "stub-detector",
         "superpowers",
-        "qbug",
-        "findbugs",
-        "fixbugs",
-        "monitor-open-prs",
     }
 )
+
+EVER_SHIPPED_REGISTRY_RELATIVE_PATH: str = "bin/ever-shipped-skills.mjs"
+EVER_SHIPPED_NAME_PATTERN: str = r"'([a-z][a-z0-9-]*)'"
 
 # Fence languages treated as inert historical/example content.
 ALL_INERT_FENCE_LANGUAGES: frozenset[str] = frozenset(
@@ -37,13 +37,17 @@ ALL_INERT_FENCE_LANGUAGES: frozenset[str] = frozenset(
     }
 )
 
-SLASH_CAPABILITY_PATTERN: str = r"(?<![`\w])/([a-z][a-z0-9-]{2,})"
-BACKTICK_CAPABILITY_PATTERN: str = (
-    r"`(?:skills/)?([a-z][a-z0-9-]{2,})(?:/SKILL\.md)?`"
+SLASH_CAPABILITY_PATTERN: str = r"(?<![`\w./-])/([a-z][a-z0-9-]{2,})(?![\w/-])"
+ALL_QUALIFIED_CAPABILITY_PATTERNS: tuple[str, ...] = (
+    r"(?<![\w-])([a-z][a-z0-9-]{2,})/SKILL\.md",
+    r"`skills/([a-z][a-z0-9-]{2,})`",
 )
+URL_PATTERN: str = r"\b[a-z][a-z0-9+.-]*://\S+"
+MULTI_SEGMENT_PATH_PATTERN: str = r"(?<![\w-])[\w.{}-]*/[\w.{}/-]*/[\w.{}-]+"
+BLANKED_SPAN: str = " "
 FENCE_OPEN_PATTERN: str = r"^```([A-Za-z0-9_-]*)\s*$"
 FENCE_CLOSE_PATTERN: str = r"^```\s*$"
-BANNED_REASON_PREFIX: str = "banned_active_capability:"
+RETIRED_REASON_PREFIX: str = "retired_capability:"
 
 UTF8_ENCODING: str = "utf-8"
 NEWLINE_JOIN_SEPARATOR: str = "\n"
