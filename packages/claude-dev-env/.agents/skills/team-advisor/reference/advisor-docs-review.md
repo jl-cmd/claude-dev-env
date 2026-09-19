@@ -205,3 +205,30 @@ successful task.
 
 Track, per route: completion rate, regression rate, tool calls, tokens by
 tier, and latency.
+
+## I. Verifying the built-in tool path
+
+Repository practice, observed on Claude Code 2.1.277: `claude plugin eval`
+cannot reach the built-in tool path. Its sandbox turns off feature-flag
+fetching, and `/advisor` replies "isn't available in this environment". A
+plugin-eval suite therefore grades the warm-agent path alone.
+
+Drive the built-in tool path with a headless run, once with the skill and once
+without:
+
+```text
+claude -p "<task>" --advisor opus --plugin-dir <wrapper> \
+  --setting-sources project --strict-mcp-config \
+  --allowedTools "Read,Glob,Grep,Skill,Agent,SendMessage,Write,Edit" \
+  --permission-mode dontAsk --output-format stream-json --verbose
+```
+
+Count main-thread content blocks with `type: server_tool_use` and
+`name: advisor`. Keep each run's folder outside `<wrapper>`, because
+`dontAsk` denies writes under a loaded plugin directory. Read
+`permission_denials` in each run before you compare the two arms.
+
+Run a positive control first, with a prompt that asks for the advisor by name.
+A zero count means the tool was never attached, or the model chose not to
+call it. The control tells the two apart. An empty `CLAUDE_CONFIG_DIR` drops
+the login, so keep the user config and use `--setting-sources project`.

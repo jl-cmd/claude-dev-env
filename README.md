@@ -210,6 +210,7 @@ that carry them.
 | `issue-tracker` | File, update, and close GitHub work as one epic with native sub-issues |
 | `orchestrator` | Turn the session into an advisor-orchestrator that spawns executor subagents |
 | `orchestrator-refresh` | Re-assert orchestrator discipline on a delayed wake |
+| `plugin-eval-standalone-skill` | Run `claude plugin eval` against a skill that is not a plugin |
 | `privacy-hygiene` | Full-repo sweep for personal data and secrets before a commit or post |
 | `pull-request` | Validate and publish GitHub pull request actions |
 | `recovering-codex-startup` | Diagnose Windows Codex startup with fresh read-only process evidence |
