@@ -137,7 +137,6 @@ archive_item:docs/records/agents-md	references	cursor_projection:packages/claude
 archive_item:docs/records/agents-md	references	cursor_projection:packages/claude-dev-env/scripts/sync_to_cursor/rules.py
 archive_item:docs/records/agents-md	references	doc:docs/claude-code-on-the-web.md
 archive_item:docs/records/agents-md	references	doc:docs/references/anthropic-harnessing-claudes-intelligence-technique-inventory.md
-archive_item:docs/records/agents-md	references	doc:docs/references/cloud-pr-loop-compatibility.md
 archive_item:docs/records/agents-md	references	doc:docs/references/plugin-channel-inventory.json
 archive_item:docs/records/agents-md	references	doc:docs/references/skill-install-system.md
 archive_item:docs/records/agents-md	references	doc:docs/references/tabbed-decision-artifact-template.html
@@ -1241,7 +1240,6 @@ command:packages/claude-dev-env/commands/sr-loop.md	references	rule:packages/cla
 cursor_projection:.cursor/environment.json	projects	cursor_projection:.cursor/install.sh
 cursor_projection:.cursor/install.sh	projects	bin_script:packages/claude-dev-env/bin/install.mjs
 cursor_projection:.cursor/install.sh	projects	scripts_module:packages/claude-dev-env/scripts/check.ps1
-cursor_projection:.cursor/skills/parallel-debug	projects	agent:packages/claude-dev-env/.agents/agents/clean-coder.md
 cursor_projection:.cursor/skills/verify-claude-dev-env	projects	audit_record:.audit/hook-linter-conversion
 cursor_projection:.cursor/skills/verify-claude-dev-env	projects	bin_script:packages/claude-dev-env/bin/cde.mjs
 cursor_projection:.cursor/skills/verify-claude-dev-env	projects	bin_script:packages/claude-dev-env/bin/install.mjs
@@ -1329,20 +1327,6 @@ doc:docs/claude-code-on-the-web.md	invokes	hook_module:.claude/hooks/session_sta
 doc:docs/claude-code-on-the-web.md	references	instruction_file:docs/CLAUDE.md
 doc:docs/claude-code-on-the-web.md	references	settings_manifest:.claude/settings.json
 doc:docs/pstack-installation.md	references	rule:packages/claude-dev-env/rules/subagent-model-policy.json
-doc:docs/references/cloud-pr-loop-compatibility.md	invokes	bin_script:packages/claude-dev-env/bin/install.mjs
-doc:docs/references/cloud-pr-loop-compatibility.md	invokes	git_hook:packages/claude-dev-env/hooks/git-hooks/pre_commit.py
-doc:docs/references/cloud-pr-loop-compatibility.md	invokes	git_hook:packages/claude-dev-env/hooks/git-hooks/pre_push_base_reference.py
-doc:docs/references/cloud-pr-loop-compatibility.md	invokes	shared_module:packages/claude-dev-env/_shared/pr-loop/scripts/check_bugbot_ci.py
-doc:docs/references/cloud-pr-loop-compatibility.md	invokes	shared_module:packages/claude-dev-env/_shared/pr-loop/scripts/check_convergence.py
-doc:docs/references/cloud-pr-loop-compatibility.md	invokes	shared_module:packages/claude-dev-env/_shared/pr-loop/scripts/check_pending_reviews.py
-doc:docs/references/cloud-pr-loop-compatibility.md	invokes	shared_module:packages/claude-dev-env/_shared/pr-loop/scripts/copilot_quota.py
-doc:docs/references/cloud-pr-loop-compatibility.md	invokes	shared_module:packages/claude-dev-env/_shared/pr-loop/scripts/fetch_copilot_reviews.py
-doc:docs/references/cloud-pr-loop-compatibility.md	invokes	shared_module:packages/claude-dev-env/_shared/pr-loop/scripts/post_fix_reply.py
-doc:docs/references/cloud-pr-loop-compatibility.md	invokes	shared_module:packages/claude-dev-env/_shared/pr-loop/scripts/reviewer_availability.py
-doc:docs/references/cloud-pr-loop-compatibility.md	invokes	test:packages/claude-dev-env/hooks/git-hooks/test_pre_push_base_reference.py
-doc:docs/references/cloud-pr-loop-compatibility.md	references	instruction_file:packages/claude-dev-env/_shared/pr-loop/scripts/CLAUDE.md
-doc:docs/references/cloud-pr-loop-compatibility.md	references	settings_manifest:packages/claude-dev-env/hooks/hooks.json
-doc:docs/references/cloud-pr-loop-compatibility.md	references	skill:packages/claude-dev-env/.agents/skills/test-runner
 doc:docs/references/plugin-channel-inventory.json	references	settings_manifest:.claude-plugin/marketplace.json
 doc:docs/references/plugin-channel-inventory.json	references	settings_manifest:.claude-plugin/plugin.json
 doc:docs/references/plugin-channel-inventory.json	references	settings_manifest:packages/claude-dev-env/package.json
@@ -2112,7 +2096,6 @@ instruction_file:.cursor/BUGBOT.md	references	rule:packages/claude-dev-env/rules
 instruction_file:.cursor/BUGBOT.md	references	rule:packages/claude-dev-env/rules/code-standards.md
 instruction_file:.cursor/CLAUDE.md	references	instruction_file:.cursor/AGENTS.md
 instruction_file:.cursor/skills/CLAUDE.md	references	instruction_file:.cursor/skills/AGENTS.md
-instruction_file:.cursor/skills/parallel-debug/CLAUDE.md	references	instruction_file:.cursor/skills/parallel-debug/AGENTS.md
 instruction_file:.github/CLAUDE.md	references	instruction_file:.github/AGENTS.md
 instruction_file:.github/ISSUE_TEMPLATE/CLAUDE.md	references	instruction_file:.github/ISSUE_TEMPLATE/AGENTS.md
 instruction_file:.github/copilot-instructions.md	references	doc:packages/claude-dev-env/docs/CODE_RULES.md

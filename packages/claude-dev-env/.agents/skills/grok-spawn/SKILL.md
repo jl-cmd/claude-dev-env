@@ -42,8 +42,6 @@ Good fits:
 - Claude-only tools (Agent tool, warm session-advisor, Claude MCP surfaces the
   grok CLI does not load the same way)
 
-For a single interactive Grok Build handoff paste, use `/grokify` instead.
-
 **Refusal:** no concrete worker tasks — reply `What should the grok workers do?
 List each role in one line.` and stop.
 
@@ -215,8 +213,6 @@ Build workers stop at stage-ready edits and a written report. They do not run
 | `grok_worker_preflight.py` | Soft gate (#96): binary, auth, install, optional ping |
 | `spawn_grok_batch.py` | Batch launch, stagger, report collect |
 | `grok_headless_runner.py` | One-worker runner (called by the batch launcher) |
-
-Sibling skill: `/grokify` for a single paste-ready interactive Grok Build handoff.
 
 ## File index
 

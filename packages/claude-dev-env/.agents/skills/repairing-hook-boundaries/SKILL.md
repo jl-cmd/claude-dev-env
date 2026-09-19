@@ -17,7 +17,6 @@ output envelope, and exit status as separate boundaries.
 - A correct source entry does not prove the installed configuration matches it.
 - A valid launcher can receive an invalid payload or emit an invalid envelope.
 - State exact source, installed, and repository-root paths for each claim.
-- Route installer-only work to `/run-claude-dev-env`.
 - Get explicit approval before changing live configuration.
 - Run `/privacy-hygiene` before durable output.
 - Reuse project validators. Do not copy their commands or implementation here.
@@ -36,15 +35,13 @@ For installer-only work, say: `Installer work with no hook-boundary failure belo
 3. Check each boundary in order and identify the first mismatch.
 4. Repair only that boundary. Leave unrelated hooks and user settings unchanged.
 5. Recheck the boundary and its direct consumer with existing project validators.
-6. Use `/run-claude-dev-env` when packaging is involved.
-7. Get explicit approval before a live configuration change.
+6. Get explicit approval before a live configuration change.
 8. Run `/privacy-hygiene` before a durable report or publication.
 
 ## Sub-skills
 
 | Skill | Use | Produces |
 | --- | --- | --- |
-| `/run-claude-dev-env` | Packaging or install work | Install result |
 | `/privacy-hygiene` | Durable-output privacy review | Privacy result |
 
 ## Files

@@ -9,7 +9,7 @@ agent:packages/claude-dev-env/.agents/agents/reference/README.md	packages/claude
 agent:packages/claude-dev-env/.agents/agents/reference/pr-description-illustrative-voice.md	packages/claude-dev-env/.agents/agents/reference/pr-description-illustrative-voice.md	agent	OUTPUT	yes	yes		2317	50	benchmark ablation: with versus without on the representative task set	
 agent:packages/claude-dev-env/.agents/agents/reference/pr-description-verification.md	packages/claude-dev-env/.agents/agents/reference/pr-description-verification.md	agent	OUTPUT	yes	yes		689	19	benchmark ablation: with versus without on the representative task set	
 agent:packages/claude-dev-env/.agents/agents/session-advisor.md	packages/claude-dev-env/.agents/agents/session-advisor.md	agent	OUTPUT	yes	yes		3590	27	benchmark ablation: with versus without on the representative task set	
-agent:packages/claude-dev-env/.agents/agents/skill-writer-agent.md	packages/claude-dev-env/.agents/agents/skill-writer-agent.md	agent	OUTPUT	yes	yes		5222	72	benchmark ablation: with versus without on the representative task set	
+agent:packages/claude-dev-env/.agents/agents/skill-writer-agent.md	packages/claude-dev-env/.agents/agents/skill-writer-agent.md	agent	OUTPUT	yes	yes		5226	72	benchmark ablation: with versus without on the representative task set	
 archive_item:docs/records/AGENTS.md	docs/records/AGENTS.md	archive_item	ARCHIVE	no	no		1	1	show absence from packed tarball, installed tree, and agent context	
 archive_item:docs/records/CLAUDE.md	docs/records/CLAUDE.md	archive_item	ARCHIVE	no	no		11	1	show absence from packed tarball, installed tree, and agent context	
 archive_item:docs/records/README.md	docs/records/README.md	archive_item	ARCHIVE	no	no		468	11	show absence from packed tarball, installed tree, and agent context	
@@ -99,8 +99,7 @@ codex_projection:packages/claude-dev-env/codex-rules/claude-dev-env.rules	packag
 command:packages/claude-dev-env/commands/sr-loop.md	packages/claude-dev-env/commands/sr-loop.md	command	OUTPUT	yes	yes		3617	79	benchmark ablation: with versus without on the representative task set	
 cursor_projection:.cursor/environment.json	.cursor/environment.json	cursor_projection	COMPATIBILITY	no	unknown		71	4	install into the named client and show the dependency breaks without it	
 cursor_projection:.cursor/install.sh	.cursor/install.sh	cursor_projection	COMPATIBILITY	no	unknown		1635	42	install into the named client and show the dependency breaks without it	
-cursor_projection:.cursor/skills/parallel-debug	.cursor/skills/parallel-debug	cursor_projection	COMPATIBILITY	no	unknown		11525	230	install into the named client and show the dependency breaks without it	
-cursor_projection:.cursor/skills/verify-claude-dev-env	.cursor/skills/verify-claude-dev-env	cursor_projection	COMPATIBILITY	no	unknown		28758	748	install into the named client and show the dependency breaks without it	
+cursor_projection:.cursor/skills/verify-claude-dev-env	.cursor/skills/verify-claude-dev-env	cursor_projection	COMPATIBILITY	no	unknown		28745	748	install into the named client and show the dependency breaks without it	
 cursor_projection:.cursorignore	.cursorignore	cursor_projection	COMPATIBILITY	no	unknown		34	1	install into the named client and show the dependency breaks without it	
 cursor_projection:packages/claude-dev-env/scripts/sync_to_cursor/__init__.py	packages/claude-dev-env/scripts/sync_to_cursor/__init__.py	cursor_projection	COMPATIBILITY	yes	unknown		444	13	install into the named client and show the dependency breaks without it	
 cursor_projection:packages/claude-dev-env/scripts/sync_to_cursor/canonical_docs.py	packages/claude-dev-env/scripts/sync_to_cursor/canonical_docs.py	cursor_projection	COMPATIBILITY	yes	unknown		2154	66	install into the named client and show the dependency breaks without it	
@@ -110,11 +109,10 @@ cursor_projection:packages/claude-dev-env/scripts/sync_to_cursor/hashing.py	pack
 cursor_projection:packages/claude-dev-env/scripts/sync_to_cursor/paths.py	packages/claude-dev-env/scripts/sync_to_cursor/paths.py	cursor_projection	COMPATIBILITY	yes	unknown		607	18	install into the named client and show the dependency breaks without it	
 cursor_projection:packages/claude-dev-env/scripts/sync_to_cursor/rules.py	packages/claude-dev-env/scripts/sync_to_cursor/rules.py	cursor_projection	COMPATIBILITY	yes	unknown		16767	494	install into the named client and show the dependency breaks without it	
 doc:LICENSE	LICENSE	doc	DOCUMENTATION	no	unknown		1069	21	confirm the described behavior is retained and the doc is not loaded	
-doc:README.md	README.md	doc	DOCUMENTATION	no	unknown		15754	308	confirm the described behavior is retained and the doc is not loaded	
+doc:README.md	README.md	doc	DOCUMENTATION	no	unknown		15679	307	confirm the described behavior is retained and the doc is not loaded	
 doc:docs/claude-code-on-the-web.md	docs/claude-code-on-the-web.md	doc	DOCUMENTATION	no	unknown		3824	85	confirm the described behavior is retained and the doc is not loaded	
 doc:docs/pstack-installation.md	docs/pstack-installation.md	doc	DOCUMENTATION	no	unknown		3947	58	confirm the described behavior is retained and the doc is not loaded	
 doc:docs/references/anthropic-harnessing-claudes-intelligence-technique-inventory.md	docs/references/anthropic-harnessing-claudes-intelligence-technique-inventory.md	doc	DOCUMENTATION	no	unknown		25497	248	confirm the described behavior is retained and the doc is not loaded	
-doc:docs/references/cloud-pr-loop-compatibility.md	docs/references/cloud-pr-loop-compatibility.md	doc	DOCUMENTATION	no	unknown		41335	538	confirm the described behavior is retained and the doc is not loaded	
 doc:docs/references/plugin-channel-inventory.json	docs/references/plugin-channel-inventory.json	doc	DOCUMENTATION	no	unknown		3518	28	confirm the described behavior is retained and the doc is not loaded	
 doc:docs/references/skill-install-system.md	docs/references/skill-install-system.md	doc	DOCUMENTATION	no	unknown		14236	97	confirm the described behavior is retained and the doc is not loaded	
 doc:docs/references/tabbed-decision-artifact-multiview-example.html	docs/references/tabbed-decision-artifact-multiview-example.html	doc	DOCUMENTATION	no	unknown		41796	1075	confirm the described behavior is retained and the doc is not loaded	
@@ -138,7 +136,7 @@ doc:packages/claude-dev-env/docs/references/prose-style-enforcement.md	packages/
 doc:packages/claude-dev-env/docs/references/team-advisor-skill.md	packages/claude-dev-env/docs/references/team-advisor-skill.md	doc	DOCUMENTATION	yes	unknown		1214	20	confirm the described behavior is retained and the doc is not loaded	
 doc:packages/claude-dev-env/docs/references/weak-executor-advisor.md	packages/claude-dev-env/docs/references/weak-executor-advisor.md	doc	DOCUMENTATION	yes	unknown		3836	91	confirm the described behavior is retained and the doc is not loaded	
 doc:packages/claude-dev-env/docs/subagent-model-routing.md	packages/claude-dev-env/docs/subagent-model-routing.md	doc	DOCUMENTATION	yes	unknown		2480	69	confirm the described behavior is retained and the doc is not loaded	
-doc:packages/claude-dev-env/docs/worker-completion-gate.md	packages/claude-dev-env/docs/worker-completion-gate.md	doc	DOCUMENTATION	yes	unknown		2253	33	confirm the described behavior is retained and the doc is not loaded	
+doc:packages/claude-dev-env/docs/worker-completion-gate.md	packages/claude-dev-env/docs/worker-completion-gate.md	doc	DOCUMENTATION	yes	unknown		2123	32	confirm the described behavior is retained and the doc is not loaded	
 doc:packages/claude-dev-env/docs/wsl-docker-cowork-starter-matrix.md	packages/claude-dev-env/docs/wsl-docker-cowork-starter-matrix.md	doc	DOCUMENTATION	yes	unknown		9826	89	confirm the described behavior is retained and the doc is not loaded	
 git_hook:packages/claude-dev-env/hooks/git-hooks/gate_utils.py	packages/claude-dev-env/hooks/git-hooks/gate_utils.py	git_hook	SAFETY	yes	no		3794	101	drive the named bad behavior with and without the item; show unique prevention	
 git_hook:packages/claude-dev-env/hooks/git-hooks/git_hooks_constants/__init__.py	packages/claude-dev-env/hooks/git-hooks/git_hooks_constants/__init__.py	git_hook	SAFETY	yes	no		5242	130	drive the named bad behavior with and without the item; show unique prevention	
@@ -407,8 +405,6 @@ instruction_file:.cursor/BUGBOT.md	.cursor/BUGBOT.md	instruction_file	OUTPUT	no	
 instruction_file:.cursor/CLAUDE.md	.cursor/CLAUDE.md	instruction_file	OUTPUT	no	yes		11	1	benchmark ablation: with versus without on the representative task set	
 instruction_file:.cursor/skills/AGENTS.md	.cursor/skills/AGENTS.md	instruction_file	OUTPUT	no	yes		1	1	benchmark ablation: with versus without on the representative task set	
 instruction_file:.cursor/skills/CLAUDE.md	.cursor/skills/CLAUDE.md	instruction_file	OUTPUT	no	yes		11	1	benchmark ablation: with versus without on the representative task set	
-instruction_file:.cursor/skills/parallel-debug/AGENTS.md	.cursor/skills/parallel-debug/AGENTS.md	instruction_file	OUTPUT	no	yes		1	1	benchmark ablation: with versus without on the representative task set	
-instruction_file:.cursor/skills/parallel-debug/CLAUDE.md	.cursor/skills/parallel-debug/CLAUDE.md	instruction_file	OUTPUT	no	yes		11	1	benchmark ablation: with versus without on the representative task set	
 instruction_file:.github/AGENTS.md	.github/AGENTS.md	instruction_file	OUTPUT	no	yes		1	1	benchmark ablation: with versus without on the representative task set	
 instruction_file:.github/CLAUDE.md	.github/CLAUDE.md	instruction_file	OUTPUT	no	yes		11	1	benchmark ablation: with versus without on the representative task set	
 instruction_file:.github/ISSUE_TEMPLATE/AGENTS.md	.github/ISSUE_TEMPLATE/AGENTS.md	instruction_file	OUTPUT	no	yes		1	1	benchmark ablation: with versus without on the representative task set	
@@ -535,14 +531,14 @@ instruction_file:packages/claude-dev-env/system-prompts/CLAUDE.md	packages/claud
 instruction_file:tests/AGENTS.md	tests/AGENTS.md	instruction_file	OUTPUT	no	yes		1	1	benchmark ablation: with versus without on the representative task set	
 instruction_file:tests/CLAUDE.md	tests/CLAUDE.md	instruction_file	OUTPUT	no	yes		11	1	benchmark ablation: with versus without on the representative task set	
 root_config:.gitattributes	.gitattributes	root_config	INFRASTRUCTURE	no	no		1231	61	remove in a disposable copy; run install, pack, and CI operations	
-root_config:.gitignore	.gitignore	root_config	INFRASTRUCTURE	no	no		1870	76	remove in a disposable copy; run install, pack, and CI operations	
+root_config:.gitignore	.gitignore	root_config	INFRASTRUCTURE	no	no		1683	73	remove in a disposable copy; run install, pack, and CI operations	
 root_config:.pre-commit-config.yaml	.pre-commit-config.yaml	root_config	INFRASTRUCTURE	no	no		320	9	remove in a disposable copy; run install, pack, and CI operations	
 root_config:packages/claude-dev-env/.env.example	packages/claude-dev-env/.env.example	root_config	INFRASTRUCTURE	no	no		899	16	remove in a disposable copy; run install, pack, and CI operations	
 root_config:packages/claude-dev-env/.gitignore	packages/claude-dev-env/.gitignore	root_config	INFRASTRUCTURE	no	no		188	11	remove in a disposable copy; run install, pack, and CI operations	
 root_config:packages/claude-dev-env/.npmignore	packages/claude-dev-env/.npmignore	root_config	INFRASTRUCTURE	no	no		398	14	remove in a disposable copy; run install, pack, and CI operations	
 root_config:pytest.ini	pytest.ini	root_config	INFRASTRUCTURE	no	no		513	10	remove in a disposable copy; run install, pack, and CI operations	
 rule:packages/claude-dev-env/rules/anti-corollary-tests.md	packages/claude-dev-env/rules/anti-corollary-tests.md	rule	OUTPUT	yes	yes		4525	71	benchmark ablation: with versus without on the representative task set	
-rule:packages/claude-dev-env/rules/archiving-agent-config.md	packages/claude-dev-env/rules/archiving-agent-config.md	rule	OUTPUT	yes	yes		3131	62	benchmark ablation: with versus without on the representative task set	
+rule:packages/claude-dev-env/rules/archiving-agent-config.md	packages/claude-dev-env/rules/archiving-agent-config.md	rule	OUTPUT	yes	yes		3119	62	benchmark ablation: with versus without on the representative task set	
 rule:packages/claude-dev-env/rules/asd-ste100-language.md	packages/claude-dev-env/rules/asd-ste100-language.md	rule	OUTPUT	yes	yes		2452	39	benchmark ablation: with versus without on the representative task set	
 rule:packages/claude-dev-env/rules/bdd.md	packages/claude-dev-env/rules/bdd.md	rule	OUTPUT	yes	yes		1514	26	benchmark ablation: with versus without on the representative task set	
 rule:packages/claude-dev-env/rules/ci-owns-the-gate.md	packages/claude-dev-env/rules/ci-owns-the-gate.md	rule	OUTPUT	yes	yes		3464	73	benchmark ablation: with versus without on the representative task set	
@@ -1445,7 +1441,7 @@ test:tests/audit/bench/run_arm.py	tests/audit/bench/run_arm.py	test	INFRASTRUCTU
 test:tests/audit/bench/smoke/smoke-runs.tsv	tests/audit/bench/smoke/smoke-runs.tsv	test	INFRASTRUCTURE	no	no		1741	4	remove in a disposable copy; run install, pack, and CI operations	
 test:tests/audit/bench/test_bench_calibration.py	tests/audit/bench/test_bench_calibration.py	test	INFRASTRUCTURE	no	no		29539	851	remove in a disposable copy; run install, pack, and CI operations	
 test:tests/audit/build_inventory.py	tests/audit/build_inventory.py	test	INFRASTRUCTURE	no	no		33940	927	remove in a disposable copy; run install, pack, and CI operations	
-test:tests/audit/data/dependencies.tsv	tests/audit/data/dependencies.tsv	test	INFRASTRUCTURE	no	no		815113	5288	remove in a disposable copy; run install, pack, and CI operations	
+test:tests/audit/data/dependencies.tsv	tests/audit/data/dependencies.tsv	test	INFRASTRUCTURE	no	no		814993	5287	remove in a disposable copy; run install, pack, and CI operations	
 test:tests/audit/data/inventory.tsv	tests/audit/data/inventory.tsv	test	INFRASTRUCTURE	no	no		376024	1462	remove in a disposable copy; run install, pack, and CI operations	
 test:tests/audit/test_build_inventory.py	tests/audit/test_build_inventory.py	test	INFRASTRUCTURE	no	no		8378	226	remove in a disposable copy; run install, pack, and CI operations	
 test:tests/conftest.py	tests/conftest.py	test	INFRASTRUCTURE	no	no		197	7	remove in a disposable copy; run install, pack, and CI operations	

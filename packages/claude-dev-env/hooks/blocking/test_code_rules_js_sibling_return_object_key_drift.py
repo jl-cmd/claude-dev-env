@@ -33,10 +33,6 @@ check_js_sibling_return_object_key_drift = (
 
 _MJS_PATH = "skills/autoconverge/workflow/converge_multi.mjs"
 
-_SHIPPED_CONVERGE_MJS = (
-    _HOOK_DIRECTORY.parents[1] / ".agents" / "skills" / "autoconverge" / "workflow" / "converge.mjs"
-)
-
 _SHIPPED_INSTALL_MYPY_INI_MJS = (
     _HOOK_DIRECTORY.parents[1] / "bin" / "install_mypy_ini.mjs"
 )
@@ -478,13 +474,5 @@ def test_trailing_comment_after_shared_discriminant_does_not_suppress_drift() ->
 def test_skips_python_files() -> None:
     issues = check_js_sibling_return_object_key_drift(
         _drifted_blocker_source(), "workflow/converge_multi.py"
-    )
-    assert issues == []
-
-
-def test_shipped_converge_mjs_passes_its_own_check() -> None:
-    shipped_source = _SHIPPED_CONVERGE_MJS.read_text(encoding="utf-8")
-    issues = check_js_sibling_return_object_key_drift(
-        shipped_source, str(_SHIPPED_CONVERGE_MJS)
     )
     assert issues == []
