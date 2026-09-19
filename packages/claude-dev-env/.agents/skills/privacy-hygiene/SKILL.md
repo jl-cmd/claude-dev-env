@@ -1,13 +1,13 @@
 ---
 name: privacy-hygiene
-description: Full-repo sweep for personal data and secrets before commit or durable GitHub post. Use when preparing a PR, cleaning a leak, or when `pii_prevention_blocker` denies a write, post, or commit. Triggers on "privacy hygiene", "personal data", "secret sweep", "sanitize repository", "/privacy-hygiene".
+description: Full-repo sweep for personal data and secrets before commit or durable GitHub post. Use when preparing a PR or cleaning a leak. Triggers on "privacy hygiene", "personal data", "secret sweep", "sanitize repository", "/privacy-hygiene".
 ---
 
 # privacy-hygiene
 
 ## Overview
 
-Find and remove personal data and high-confidence secrets before they land in git history or a durable GitHub post. The `pii_prevention_blocker` hook blocks the common cases at write, post, and commit time. This skill is the full sweep when you need a broader pass or a remediation plan.
+Find and remove personal data and high-confidence secrets before they land in git history or a durable GitHub post. No write-time hook scans for these; `pii_prevention_blocker` was retired. This skill is the sweep.
 
 **Announce at start:** "Running privacy-hygiene sweep."
 
@@ -40,8 +40,7 @@ Run the full-tree sweep in
 run the ripgrep pass for the four high-confidence pattern families (email, home
 path, LAN address, secret), review each hit against the ignore list, and
 remediate. It also lists the accepted residual — what to leave in place rather
-than over-scrub. The ripgrep command is the only full-tree pass; the write-time
-`pii_prevention_blocker` scans one payload at a time.
+than over-scrub. The ripgrep command is the only pass over the tree.
 
 ## Enable on any machine / public repository
 

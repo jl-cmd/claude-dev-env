@@ -1,10 +1,9 @@
 # Full-tree PII sweep procedure
 
-The on-demand full-repository sweep for the `privacy-hygiene` skill — the
-complement to the write-time `pii_prevention_blocker`, which scans one payload at
-a time. The canonical per-payload patterns live in the hooks' `pii_scanner` and
-`pii_prevention_constants` modules; the ripgrep command below is the only
-full-tree pass. The hub ([`../SKILL.md`](../SKILL.md)) points here.
+The on-demand full-repository sweep for the `privacy-hygiene` skill. The
+per-payload patterns live in the hooks' `pii_scanner` and
+`pii_prevention_constants` modules; the ripgrep command below is the only pass
+over the tree. The hub ([`../SKILL.md`](../SKILL.md)) points here.
 
 ## 1. Scope the tree
 

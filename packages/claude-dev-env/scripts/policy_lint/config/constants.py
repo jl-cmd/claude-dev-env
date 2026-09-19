@@ -92,6 +92,14 @@ VIOLATION_SCOPING_MODULE_NAME = "code_rules_gate_parts.violation_scoping"
 
 RETIRED_HOOK_PROSE_RULE_ID = "retired-hook-prose"
 RULES_DIRECTORY_NAME = "rules"
+ALL_HOOK_PROSE_SURFACE_SEGMENTS = (
+    "/.agents/",
+    "/commands/",
+    "/docs/",
+    "/output-styles/",
+    "/rules/",
+    "/system-prompts/",
+)
 HOOKS_DIRECTORY_NAME = "hooks"
 HOOKS_CONFIGURATION_FILE_NAME = "hooks.json"
 HOOK_CONSTANTS_DIRECTORY_NAME = "hooks_constants"

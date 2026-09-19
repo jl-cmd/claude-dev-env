@@ -427,25 +427,25 @@ def accepts_plans(document: Document) -> bool:
     )
 
 
-def accepts_rules_markdown(document: Document) -> bool:
-    """Return whether the document is Markdown in a rules directory.
+def accepts_instruction_markdown(document: Document) -> bool:
+    """Return whether the document is authored instruction Markdown.
 
     Args:
         document: Candidate document.
 
     Returns:
-        True for a Markdown file directly under a ``rules`` directory.
+        True for Markdown on an instruction surface.
     """
-    return adapter_retired_hook_prose.accepts_rules_markdown(document)
+    return adapter_retired_hook_prose.accepts_instruction_markdown(document)
 
 
 def retired_hook_prose_diagnostics(
     document: Document, repository_root: Path
 ) -> tuple[Diagnostic, ...]:
-    """Report rules prose that credits an unregistered hook with a live action.
+    """Report instruction prose that credits an unregistered hook with a live action.
 
     Args:
-        document: Current rules Markdown text and path.
+        document: Current instruction Markdown text and path.
         repository_root: Request repository root for package resolution.
 
     Returns:

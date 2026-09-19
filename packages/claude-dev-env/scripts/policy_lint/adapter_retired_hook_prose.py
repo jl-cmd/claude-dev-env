@@ -15,23 +15,33 @@ from .config import constants
 from .model import Diagnostic, Document, Location, Severity
 
 
-def accepts_rules_markdown(document: Document) -> bool:
-    """Return whether the document is Markdown in a rules directory.
+def accepts_instruction_markdown(document: Document) -> bool:
+    """Return whether the document is authored instruction Markdown.
+
+    Rules, skills, agents, commands, documentation and stored system prompts
+    all describe hooks to a reader, so each one carries the same claim.
 
     Args:
         document: Candidate document.
 
     Returns:
-        True for a Markdown file directly under a ``rules`` directory.
+        True for Markdown on an instruction surface.
     """
-    return (
-        document.path.suffix.lower() in constants.ALL_MARKDOWN_SUFFIXES
-        and document.path.parent.name == constants.RULES_DIRECTORY_NAME
+    if document.path.suffix.lower() not in constants.ALL_MARKDOWN_SUFFIXES:
+        return False
+    normalized_path = f"/{document.path.as_posix().lower()}"
+    return any(
+        each_segment in normalized_path
+        for each_segment in constants.ALL_HOOK_PROSE_SURFACE_SEGMENTS
     )
 
 
 def _package_root(repository_root: Path, document: Document) -> Path:
-    return repository_root / document.path.parent.parent.as_posix()
+    for each_ancestor in document.path.parents:
+        candidate_root = repository_root / each_ancestor.as_posix()
+        if (candidate_root / constants.HOOKS_DIRECTORY_NAME).is_dir():
+            return candidate_root
+    return repository_root / document.path.parent.as_posix()
 
 
 def _read_text(path: Path) -> str:
