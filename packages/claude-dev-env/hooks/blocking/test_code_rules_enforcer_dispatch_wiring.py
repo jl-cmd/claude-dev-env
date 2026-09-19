@@ -183,7 +183,7 @@ def test_enforcer_dispatches_no_check_for_an_archived_rule() -> None:
         encoding="utf-8"
     )
     assert ARCHIVED_USE_COUNT_CHECK_NAME not in enforcer_source, (
-        "The file-global constant use-count rule moved to rules-archived, so the "
+        "The file-global constant use-count rule was retired, so the "
         "enforcer must import and dispatch no check that enforces it. A check "
         "left wired here blocks a write against a rule the package no longer "
         "documents."

@@ -9,7 +9,6 @@ from types import ModuleType
 from policy_lint.config.constants import PATH_SEPARATOR, UTF8_ENCODING
 
 from repository_checks.config.constants import (
-    ALL_ARCHIVED_SKILL_DIRECTORY_SEGMENTS,
     CHECK_ID_PACKAGE_INVENTORY,
     PACKAGE_INVENTORY_CONSTANTS_MODULE_NAME,
     PACKAGE_INVENTORY_DETECTION_MODULE_NAME,
@@ -64,8 +63,6 @@ def find_inventory_finding_for_path(
     Returns:
         The finding when the file is missing from its inventory.
     """
-    if _is_archived_skill_path(relative_path):
-        return None
     absolute_path = repository_root / relative_path
     if not absolute_path.is_file():
         return None
@@ -83,21 +80,6 @@ def _build_finding(relative_path: str) -> RepositoryFinding:
         relative_path.replace(WINDOWS_PATH_SEPARATOR, PATH_SEPARATOR),
         PACKAGE_INVENTORY_MESSAGE_TEMPLATE,
     )
-
-
-def _is_archived_skill_path(relative_path: str) -> bool:
-    all_path_segments = relative_path.replace(
-        WINDOWS_PATH_SEPARATOR, PATH_SEPARATOR
-    ).split(PATH_SEPARATOR)
-    segment_count = len(ALL_ARCHIVED_SKILL_DIRECTORY_SEGMENTS)
-    last_start_index = len(all_path_segments) - segment_count
-    for each_start_index in range(max(last_start_index + 1, 0)):
-        compared_segments = tuple(
-            all_path_segments[each_start_index : each_start_index + segment_count]
-        )
-        if compared_segments == ALL_ARCHIVED_SKILL_DIRECTORY_SEGMENTS:
-            return True
-    return False
 
 
 def _require_readable_inventory_documents(

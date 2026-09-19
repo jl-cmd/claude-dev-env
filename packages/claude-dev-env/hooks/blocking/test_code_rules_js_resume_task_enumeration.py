@@ -16,11 +16,6 @@ import importlib.util
 import pathlib
 import sys
 
-_PACKAGE_ROOT = pathlib.Path(__file__).resolve().parents[2]
-_ARCHIVED_CONVERGE_MJS = (
-    _PACKAGE_ROOT.parents[1] / "skill-archive" / "autoconverge" / "workflow" / "converge.mjs"
-)
-
 _HOOK_DIRECTORY = pathlib.Path(__file__).parent
 if str(_HOOK_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_HOOK_DIRECTORY))
@@ -748,11 +743,3 @@ def should_still_flag_real_dispatch_alongside_task_substring_identifier() -> Non
     assert "real-leak" in issues[0]
     assert "phantom-sub" not in issues[0]
     assert "spawnVerifierAgent" in issues[0]
-
-
-def should_not_flag_archived_converge_regression_fixture() -> None:
-    converge_source = _ARCHIVED_CONVERGE_MJS.read_text(encoding="utf-8")
-    issues = check_js_resume_task_enumeration_coverage(
-        converge_source, "skills/autoconverge/workflow/converge.mjs"
-    )
-    assert issues == []

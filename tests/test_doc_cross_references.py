@@ -262,17 +262,3 @@ def test_iter_repo_files_finds_files_when_repo_path_contains_skip_segment() -> N
         "(e.g., a checkout under '.../.claude/worktrees/...' or '.../venv/...'). "
         "Skip filtering must apply to repo-internal segments only."
     )
-
-
-def test_autoconverge_documents_are_archived_outside_active_skills() -> None:
-    archive_directory = REPOSITORY_ROOT / "skill-archive" / "autoconverge"
-    active_directory = (
-        REPOSITORY_ROOT / "packages" / "claude-dev-env" / ".agents" / "skills" / "autoconverge"
-    )
-    assert not active_directory.exists()
-    for each_relative_path in (
-        "SKILL.md",
-        "reference/convergence.md",
-        "workflow/converge.mjs",
-    ):
-        assert (archive_directory / each_relative_path).is_file()

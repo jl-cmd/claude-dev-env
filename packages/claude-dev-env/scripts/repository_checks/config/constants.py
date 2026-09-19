@@ -73,14 +73,8 @@ ALL_FAIL_CLOSED_EXCEPTION_TYPES = (
     ValueError,
 )
 
-ALL_ARCHIVED_SKILL_DIRECTORY_SEGMENTS = (".agents", "skills-archived")
 ALL_TRACKED_SECRET_EXACT_EXEMPTIONS: frozenset[tuple[str, str, str]] = frozenset(
     (
-        (
-            "packages/claude-dev-env/.agents/skills-archived/pr-converge/reference/per-tick.md",
-            "email",
-            "3de132cd98be7bf26b6f08e81c31c799a891bc32046b61f0b6fe3671ca2e44b5",
-        ),
         (
             "packages/claude-dev-env/.agents/skills/_shared/pr-loop/prompts/pr-consistency-audit.xml",
             "home-path",

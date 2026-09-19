@@ -26,24 +26,19 @@ lives in the host repository is working as intended. Ask whether the specific
 script or id it names resolves where it would run, not whether the path exists
 here.
 
-## Archive rather than delete
+## Retire with `git rm`, and let history be the archive
 
-Move the file with `git mv` into the archive sibling: `rules-archived/` beside
-`rules/`, `.agents/skills-archived/` beside `.agents/skills/`. The archive is a
-sibling and never a child, because the installer copies a content directory
-whole.
+Remove the file with `git rm`. Git history is the archive. No archive directory
+lives in this tree, because the plugin channel carries every tracked file and
+the npm `files` list packs `.agents/` whole. A retired file kept in the tree
+ships to every install that uses either channel.
 
-Archives ship nothing by omission. `CONTENT_DIRECTORIES` in `bin/install.mjs`
-names the directories the installer writes, and no archive sibling is on that
-list; skills are enumerated from `.agents/skills` alone. So an archived file
-leaves every install without any further step, and it comes back with the
-reverse `git mv`.
+State the restore in the commit message that retires the file: why it went, and
+every other edit a restore has to undo. The file comes back with
+`git show <commit>^:<path>` written to the same path. A restore that has to be
+reconstructed from the diff alone costs the next reader the search.
 
-Record a row in the archive manifest for each file: why it went, the `git mv`
-that restores it, and every other edit a restore has to undo. A restore that has
-to be reconstructed from the diff is not recoverable in any useful sense.
-
-## Make the archive stick
+## Make the retirement stick
 
 Two things do not follow the file on their own.
 
@@ -55,8 +50,8 @@ and the copy is stranded on every machine that has it. The reference checker in
 so the registry entry is also what makes a leftover mention of the archived
 name report. No second list needs the name.
 
-**A renamed skill directory takes its tests out of the run.** The node test
-command globs `.agents/skills/**/*.test.mjs`, so a suite under an archived skill
+**A removed skill directory takes its tests out of the run.** The node test
+command globs `.agents/skills/**/*.test.mjs`, so a suite under a retired skill
 stops running without failing. Check that the count you expect still runs.
 
 ## Sibling rules

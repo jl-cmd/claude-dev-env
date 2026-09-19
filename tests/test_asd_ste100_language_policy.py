@@ -123,15 +123,6 @@ def test_active_runtime_projections_use_the_canonical_language_rule() -> None:
             )
 
 
-def test_archived_session_log_preserves_its_language_policy() -> None:
-    archived_path = REPOSITORY_ROOT / "skill-archive" / "session-log" / "SKILL.md"
-    archived_text = _read(archived_path).lower()
-    assert "asd-ste100-language" in archived_text
-    assert not (PACKAGE_ROOT / ".agents" / "skills" / "session-log").exists()
-    for each_retired_reference in RETIRED_LANGUAGE_REFERENCES:
-        assert each_retired_reference not in archived_text
-
-
 def test_package_hub_preserves_operational_contract() -> None:
     package_text = _read(PACKAGE_HUB_PATH)
     required_operational_sections = (

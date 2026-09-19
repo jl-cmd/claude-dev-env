@@ -45,19 +45,15 @@ def test_should_flag_a_stale_package_inventory(tmp_path: Path) -> None:
     assert "pipeline/check_dialer_seam_cli.py" in stdout_text
 
 
-def test_should_check_active_skills_and_exclude_archived_skills(tmp_path: Path) -> None:
+def test_should_check_active_skills(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     initialize_repository(repository_root)
     _seed_skill_package(repository_root / ".agents" / "skills" / "live-skill")
-    _seed_skill_package(repository_root / ".agents" / "skills-archived" / "old-skill")
     commit_tracked_files(repository_root)
     exit_code, stdout_text, _stderr_text = run_policy(repository_root)
     assert exit_code == FINDINGS_EXIT_CODE
     assert CHECK_ID_PACKAGE_INVENTORY in stdout_text
     assert ".agents/skills/live-skill/scripts/unlisted_gamma.py" in stdout_text
-    assert (
-        ".agents/skills-archived/old-skill/scripts/unlisted_gamma.py" not in stdout_text
-    )
 
 
 def test_should_fail_closed_when_a_package_inventory_document_cannot_be_read(
