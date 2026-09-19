@@ -5,7 +5,6 @@ description: >-
   it before substantive work, completion, commits, or when stuck. Triggers:
   'team-advisor', 'team advisor', 'second opinion', 'advisor', 'consult',
   'verify', 'validate', 'commit', 'push'.
-disable-model-invocation: true
 ---
 
 # Team Advisor
@@ -24,7 +23,7 @@ One warm advisor at the strongest tier this session can reach. This session is t
 ## Bind
 
 1. Name the session identity first (protocol **Host profiles**), then walk the model floor.
-2. Claude: Fable first in-session at `ADVISOR_EFFORT` (default low). When Fable is out of usage, bind Astra at the same effort. Codex: Astra in-session. Third-party: headless Fable then Astra. When the host's walk fails, fail closed.
+2. Claude: when `advisor` is in this session's tool list, the built-in advisor tool is the advisor. Spawn nothing and call `advisor()` at each consult point. Otherwise spawn Fable in-session at `ADVISOR_EFFORT` (default low). When Fable is out of usage, bind Astra at the same effort. Codex: Astra in-session. Third-party: headless Fable then Astra. When the host's walk fails, fail closed.
 3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); a native Astra subagent on Codex; one CLI `session_id` on a third-party host via the protocol Claude-chain or Astra helper.
 4. Skip the multi-consumer "who you are" opener. This session is the sole consumer.
 5. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound advisor issues ENDORSE / CORRECTION / PLAN / STOP.
@@ -39,10 +38,12 @@ Follow **When to call**, **Hard rule**, and **How to treat advice** in `advisor-
 
 Build every first brief with [`_shared/advisor/reference/consult-format.md`](../../_shared/advisor/reference/consult-format.md). Later briefs carry only the delta and changed evidence.
 
+With the built-in advisor tool, call `advisor()` with no brief. The tool forwards the whole transcript. Its reply is free text, not one of the four signal words, so weigh it per **How to treat advice** in `advisor-tool.md`.
+
 Aim for two consults on a normal task: one after orientation and one after writes and validation. Reserve a third for advisory recovery or reconciliation guidance, and add a consult when a material fork produces new evidence. This is an advisory target owned by the task, not a cap or gate.
 
 ## Constraints
 
-- One bind per session; this session owns spawn, in-session Astra spawn, or CLI bind, drift re-bind, and shutdown.
+- One bind per session; this session owns the built-in tool choice, spawn, in-session Astra spawn, or CLI bind, drift re-bind, and shutdown.
 - Bind at or above the protocol floor for this host.
 - The advisor only answers (messaging); the session runs tools and posts.

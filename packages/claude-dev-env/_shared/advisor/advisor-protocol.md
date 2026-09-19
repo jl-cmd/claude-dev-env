@@ -62,7 +62,9 @@ On Codex: Astra is the in-session default. The `ADVISOR_ASTRA` flag is not requi
 
 ### Claude host
 
-Use the **Model floor** ladder below (Fable first, then Astra when Fable is out of usage).
+When `advisor` is in the session's tool list, the built-in advisor tool is the advisor. The user turns it on with `/advisor`, the `advisorModel` setting, or `--advisor`. Spawn nothing and call `advisor()` at each consult point. The tool forwards the whole transcript, so a consult needs no packet. Its reply is free text, so the four signal words do not apply; weigh it per `docs/references/advisor-tool.md` **How to treat advice**. It is a server tool, so hooks and the spawn-walk log do not see it. A Fable or Opus 5 advisor returns an encrypted result that a log cannot read. When a readable record matters, use the warm agent below.
+
+When `advisor` is not in the tool list, use the **Model floor** ladder below (Fable first, then Astra when Fable is out of usage).
 Warm-up spawns `subagent_type: session-advisor` via the Agent tool for Fable; consults go through `SendMessage` to that warm agent. Astra uses the Codex helper.
 Assemble and paste each executor's Advisor block per the **Advisor block** section.
 
@@ -85,6 +87,7 @@ Executors report to the orchestrating session; that session consults the bound a
 
 ## Model floor
 
+The built-in advisor tool sits outside this ladder. Claude Code and the API accept it only when the advisor is at least as capable as the main model, and that check is its floor.
 On Claude and ThirdParty the advisor ladder is `Fable` first, then Astra (flag-gated, Codex CLI) when Fable is out of usage.
 On Codex the walk is Astra only, in-session.
 Opus is not an advisor candidate. `Sonnet` and `Haiku` are executor tiers only.
@@ -103,7 +106,8 @@ The validator checks ladder shape only; host policy sits on top.
 
 ## Warm-up (once per session)
 
-On a **Claude host**, spawn `session-advisor` at the Fable alias with the charter as its prompt. When Fable is out of usage and the Astra rung is open, bind Astra through the Codex helper instead.
+On a **Claude host** with `advisor` in the tool list, skip the warm-up; the built-in tool needs none.
+On a **Claude host** without it, spawn `session-advisor` at the Fable alias with the charter as its prompt. When Fable is out of usage and the Astra rung is open, bind Astra through the Codex helper instead.
 Full spawn fields and the charter template: [`reference/warm-up.md`](reference/warm-up.md).
 
 On a **Codex host**, spawn a native in-session Astra subagent with the same charter. Bind fields: [`reference/identity.md`](reference/identity.md) and [`reference/warm-up.md`](reference/warm-up.md).
@@ -141,7 +145,7 @@ Modes and failover, the tier-to-alias table, brief piping, and `--resume` sessio
 
 **Codex host:** do not use this runner as the primary path. Astra binds in-session.
 
-**Claude host:** fall back to this runner exactly when one of these holds:
+**Claude host:** the built-in advisor tool never falls back to this runner. On the warm-agent path, fall back to this runner exactly when one of these holds:
 - The Agent-tool spawn errors at every candidate tier down to the floor. The tool itself is unavailable.
 - `SendMessage` to the shared advisor errors, or draws no reply within the bound in `ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS` (120) in `$HOME/.claude/_shared/advisor/scripts/config/advisor_scripts_constants/model_tier_run_validator_constants.py`, and a re-spawn also fails.
 - The running session is itself a subagent barred from spawning further agents.

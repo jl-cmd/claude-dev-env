@@ -3,7 +3,7 @@
 Detail behind the **Advisor block** section of [`advisor-protocol.md`](../advisor-protocol.md).
 Open this when assembling the block for an executor spawn prompt.
 
-Assembly order: one transport preamble picked by host profile, then the shared core, then the weak-executor add-on for an executor at Sonnet or below.
+Assembly order: one transport preamble picked by host profile, then the shared core, then the weak-executor add-on for an executor at Sonnet or below. A Claude host with the built-in advisor tool takes its own block and skips the preamble and the shared core.
 Paste the assembled block at the **top** of the spawn prompt, ahead of any other sentence that mentions the advisor.
 The assembled block is self-contained. The executor receives this text alone, so every path it names is absolute.
 The consult rules it restates are owned by [`consult-format.md`](consult-format.md); edit that file first and carry the change here.
@@ -11,6 +11,13 @@ The consult rules it restates are owned by [`consult-format.md`](consult-format.
 ## Transport preamble for a Claude host
 
 > A shared session advisor named `<name>` is reachable via SendMessage; send each consult to it directly by that name.
+
+## Block for a Claude host with the built-in advisor tool
+
+Subagents inherit the session's advisor tool, so the executor calls it directly. Paste this block alone, then the weak-executor add-on for an executor at Sonnet or below. The shared core's packet and signal-word lines do not apply, and neither does the add-on's 80-word line.
+
+> Your session has the built-in `advisor` tool. Call `advisor()` before locking in a nontrivial approach, once you believe your assignment is done, before any hard-to-reverse action, when the same failure repeats or progress has stalled, and when the chosen approach is being reconsidered.
+> The tool reads your whole transcript, so call it with no brief. Its reply is free text. Give it serious weight; when your evidence contradicts it, call again and name the conflict.
 
 ## Transport preamble for a Codex host
 
