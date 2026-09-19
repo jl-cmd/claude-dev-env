@@ -209,6 +209,14 @@ test('core includeDirectories ships _shared and scripts for advisor protocol and
 });
 
 
+test('team-advisor records fallback repair and consult evidence', () => {
+    const skillPath = new URL('../.agents/skills/team-advisor/SKILL.md', import.meta.url);
+    const skillSource = readFileSync(skillPath, 'utf8');
+    assert.match(skillSource, /record the selected tier, fallback kind, fallback reason, and reply path/);
+    assert.match(skillSource, /changed evidence, validation, unresolved risks, and report-back status/);
+});
+
+
 test('CORE_SKILLS ships issue-tracker so the core group installs the skill the SessionStart injector needs', () => {
     assert.ok(
         CORE_SKILLS.includes('issue-tracker'),

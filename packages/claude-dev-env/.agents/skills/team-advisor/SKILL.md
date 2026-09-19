@@ -48,3 +48,6 @@ Aim for two consults on a normal task: one after orientation and one after write
 - One bind per session; this session owns the built-in tool choice, spawn, in-session Astra spawn, or CLI bind, drift re-bind, and shutdown.
 - Bind at or above the protocol floor for this host.
 - The advisor only answers (messaging); the session runs tools and posts.
+- When an optional reference is missing, record its path, status, repair action, and repair result before continuing.
+- When a fallback bind is used, record the selected tier, fallback kind, fallback reason, and reply path.
+- First, recovery, and completion consults record changed evidence, validation, unresolved risks, and report-back status.

@@ -38,6 +38,10 @@ If your data points one way and the advisor points another: do not silently swit
 
 Work a disagreement in this order: keep the observed evidence in the record, name the conflict plainly, ask the advisor which constraint breaks the tie, then act on the reconciled plan.
 
+## Recovery record
+
+When an optional reference is missing, record its path, status, repair action, and repair result before continuing. When a fallback bind is used, record the selected tier, fallback kind, fallback reason, and reply path. First, recovery, and completion consults record changed evidence, validation, unresolved risks, and report-back status.
+
 ## Escalation shapes
 
 Four shapes cover how a harder task gets more strength behind it. Route to the one that matches the work, not by default to the advisor.
