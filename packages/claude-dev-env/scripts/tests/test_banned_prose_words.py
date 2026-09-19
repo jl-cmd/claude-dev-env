@@ -7,7 +7,9 @@ from pathlib import Path
 from banned_prose_words import (
     banned_prose_words_in_tree,
     find_banned_prose_words,
+    governed_paths,
     governs_path,
+    prose_lines,
 )
 
 
@@ -66,6 +68,21 @@ def test_predicative_true_carries_no_finding() -> None:
     assert find_banned_prose_words(document_text) == []
 
 
+def test_prose_lines_blank_code_and_keep_the_line_count() -> None:
+    document_text = "Prose here.\n```python\nactual = 1\n```\nMore prose.\n"
+    assert prose_lines(document_text) == ["Prose here.", "", "", "", "More prose."]
+
+
+def test_governed_paths_lists_the_shipped_surfaces(tmp_path: Path) -> None:
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "rules" / "one.md").write_text("Prose.\n", encoding="utf-8")
+    (tmp_path / "rules-archived").mkdir()
+    (tmp_path / "rules-archived" / "two.md").write_text("Prose.\n", encoding="utf-8")
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "three.py").write_text("x = 1\n", encoding="utf-8")
+    assert governed_paths(tmp_path) == ["rules/one.md"]
+
+
 def test_governed_paths_cover_instruction_surfaces_and_skip_archives() -> None:
     assert governs_path("rules/git-workflow.md")
     assert governs_path(".agents/skills/eli5/SKILL.md")
@@ -80,7 +97,7 @@ def test_shipped_instruction_surfaces_carry_no_banned_word() -> None:
     package_root = Path(__file__).resolve().parent.parent.parent
     all_hits = banned_prose_words_in_tree(package_root)
     report = "\n".join(
-        f"{each_path}:{each_line} {each_word}"
-        for each_path, each_line, each_word in all_hits[:40]
+        f"{each_path}:{each_line}:{each_column} {each_word}"
+        for each_path, each_line, each_column, each_word in all_hits[:40]
     )
     assert not all_hits, f"{len(all_hits)} banned words on shipped surfaces:\n{report}"

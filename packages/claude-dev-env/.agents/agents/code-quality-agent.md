@@ -127,7 +127,7 @@ evidence, report an evidence gap or open question.
 
 `id` uses the form `loop<N>-<K>` when the orchestrator supplies a loop prefix and `find<K>` for standalone audit calls. Honor the prefix supplied in the prompt.
 
-**The `failure_mode` field is the audit-to-fix handoff.** State the failing line, the desired post-fix property, and a one-line validation the fix agent can run to confirm correctness. The fix agent reads `failure_mode` without re-running your audit — make it self-sufficient.
+**The `failure_mode` field is the audit-to-fix handoff.** State the failing line, the desired post-fix property, and a one-line validation the fix agent can run to confirm correctness. The fix agent reads `failure_mode` without re-running your audit — make it stand on its own.
 
 Each audit→fix→audit cycle in the calling skill adds wall-clock latency. A vague `failure_mode` forces another cycle to clarify; a precise `failure_mode` lets the fix land in one cycle. Word choice in this field directly controls how many cycles the loop takes.
 

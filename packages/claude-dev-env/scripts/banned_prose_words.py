@@ -136,22 +136,24 @@ def governed_paths(from_package_root: Path) -> list[str]:
 
 def banned_prose_words_in_tree(
     from_package_root: Path,
-) -> list[tuple[str, int, str]]:
+) -> list[tuple[str, int, int, str]]:
     """Return every banned word occurrence across the governed surfaces.
 
     Args:
         from_package_root: ``packages/claude-dev-env`` root.
 
     Returns:
-        Ordered ``(package-relative path, line number, word)`` triples.
+        Ordered ``(package-relative path, line number, column, word)`` tuples.
     """
-    all_hits: list[tuple[str, int, str]] = []
+    all_hits: list[tuple[str, int, int, str]] = []
     for each_relative_path in governed_paths(from_package_root):
         document_text = (from_package_root / each_relative_path).read_text(
             encoding=UTF8_ENCODING, errors="replace"
         )
-        for each_line_number, _column, each_word in find_banned_prose_words(
+        for each_line_number, each_column, each_word in find_banned_prose_words(
             document_text
         ):
-            all_hits.append((each_relative_path, each_line_number, each_word))
+            all_hits.append(
+                (each_relative_path, each_line_number, each_column, each_word)
+            )
     return all_hits

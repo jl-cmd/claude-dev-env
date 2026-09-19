@@ -16,7 +16,7 @@ from sync_to_cursor.engine import run as run_sync_to_cursor
 _CODE_STANDARDS_SECTION_ORDER = (
     "COMMENT PRESERVATION",
     "CORE PRINCIPLES",
-    "⚡ HOOK-ENFORCED RULES",
+    "⚡ LINT-ENFORCED RULES",
     "3. REUSE CONSTANTS / 4. CONFIG LOCATIONS",
     "5. NO ABBREVIATIONS",
     "6. COMPLETE TYPE HINTS",

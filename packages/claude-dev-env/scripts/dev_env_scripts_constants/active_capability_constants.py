@@ -14,8 +14,6 @@ PACKAGE_ROOT_SKILLS_DIRECTORY: str = "skills"
 PACKAGE_ROOT_AGENTS_DIRECTORY: str = "agents"
 SKILL_MANIFEST_FILENAME: str = "SKILL.md"
 
-# Capability names this package retired before the ever-shipped registry
-# recorded them. Every other retired name resolves from that registry.
 ALL_UNREGISTERED_RETIRED_CAPABILITY_NAMES: frozenset[str] = frozenset(
     {
         "stub-detector",

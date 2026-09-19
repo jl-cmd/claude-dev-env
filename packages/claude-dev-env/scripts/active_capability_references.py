@@ -3,9 +3,9 @@
 
 Builds inventories from committed skill manifests, agent markdown files, and
 commands. Scans active prompt text for slash and backticked capability names.
-Fails when an active (non-inert) reference names a capability this package
-shipped once and ships no longer, resolved from the ever-shipped registry
-against what the tree holds today.
+Fails when an active (non-inert) reference names a capability the tree
+dropped, resolved from the ever-shipped registry against what the tree
+holds today.
 
 ::
 
@@ -59,7 +59,7 @@ class CapabilityInventory:
 
 @dataclass(frozen=True)
 class UnresolvedCapabilityReference:
-    """One active reference that names a capability the tree no longer holds."""
+    """One active reference that names a capability outside the shipped tree."""
 
     file_path: str
     line_number: int
@@ -188,7 +188,7 @@ def extract_active_capability_names(markdown_text: str) -> list[tuple[int, str]]
 def retired_capability_names(
     from_package_root: Path, inventory: CapabilityInventory
 ) -> frozenset[str]:
-    """Return the capability names this package shipped once and ships no longer.
+    """Return the capability names the shipped tree dropped.
 
     The ever-shipped registry keeps every skill name the package released.
     Subtracting what the tree holds today leaves the retired set, so no hand
@@ -221,7 +221,7 @@ def classify_capability_reference(
     """Return a failure reason when the capability left the tree.
 
     Extractors also match ordinary prose tokens, so a name the package never
-    shipped passes. A name it shipped once and ships no longer fails.
+    shipped passes. A name the registry records and the tree dropped fails.
 
     Args:
         capability_name: Extracted skill/command-like name.
