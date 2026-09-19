@@ -1,13 +1,13 @@
 ---
 name: privacy-hygiene
-description: Full-repo sweep for personal data and secrets before commit or durable GitHub post. Use when preparing a PR, cleaning a leak, or when `pii_prevention_blocker` denies a write, post, or commit. Triggers on "privacy hygiene", "personal data", "secret sweep", "sanitize repository", "/privacy-hygiene".
+description: Full-repo sweep for personal data and secrets before commit or durable GitHub post. Use when preparing a PR or cleaning a leak. Triggers on "privacy hygiene", "personal data", "secret sweep", "sanitize repository", "/privacy-hygiene".
 ---
 
 # privacy-hygiene
 
 ## Overview
 
-Find and remove personal data and high-confidence secrets before they land in git history or a durable GitHub post. The `pii_prevention_blocker` hook blocks the common cases at write, post, and commit time. This skill is the full sweep when you need a broader pass or a remediation plan.
+Find and remove personal data and high-confidence secrets before they land in git history or a durable GitHub post. No write-time hook scans for these; `pii_prevention_blocker` was retired. This skill is the sweep.
 
 **Announce at start:** "Running privacy-hygiene sweep."
 
@@ -40,8 +40,7 @@ Run the full-tree sweep in
 run the ripgrep pass for the four high-confidence pattern families (email, home
 path, LAN address, secret), review each hit against the ignore list, and
 remediate. It also lists the accepted residual — what to leave in place rather
-than over-scrub. The ripgrep command is the only full-tree pass; the write-time
-`pii_prevention_blocker` scans one payload at a time.
+than over-scrub. The ripgrep command is the only pass over the tree.
 
 ## Enable on any machine / public repository
 
@@ -56,9 +55,9 @@ Hooks register via `hooks/hooks.json` into `~/.claude/settings.json`. Once insta
 
 ## Open knobs
 
-- **NAS / LAN allowlist:** Unlisted private IPs are blocked. The scanner resolves your NAS host from `CLAUDE_NAS_HOST`, then `~/.claude/local-identity.json` (`nas.host`), and allowlists it when it is a private address, so the committed tree holds no real host. `ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES` in `hooks_constants` holds the static allowlist for any host every machine must share.
+- **NAS / LAN allowlist:** Unlisted private IPs are blocked. The scanner resolves your NAS host from `CLAUDE_NAS_HOST`, then `~/.claude/local-identity.json` (`nas.host`), and allowlists it when it is a private address, so the committed tree holds no host address. `ALL_ALLOWLISTED_PRIVATE_IP_ADDRESSES` in `hooks_constants` holds the static allowlist for any host every machine must share.
 - **Commit-scan exempt repositories:** named owner/repo slugs skip the staged-commit PII scan only. Set `CLAUDE_PII_EXEMPT_REPOS` (comma-separated `owner/repo` values) or list them under `pii_exempt_repositories` in `~/.claude/local-identity.json`. Matching uses the repository's `remote.origin.url` and accepts only the exact host `github.com` (https, ssh scheme, or scp-style). A repository with no readable origin is never exempt (fail-closed to scanning). Write / Edit / MultiEdit and durable post bodies still scan in every repository.
-- **Public maintainer identity:** when a real email or name is intentional product surface, keep it and note that in the PR body so reviewers do not treat it as a leak.
+- **Public maintainer identity:** when an email or name is intentional product surface, keep it and note that in the PR body so reviewers do not treat it as a leak.
 
 ## What this skill does not do
 

@@ -11,8 +11,8 @@ ID prefix: `find`.
 
 **B1. CSS / DOM selector vs target browser engine**
 - Every CSS selector in the diff — verify pseudo-class support (`:has()`, `:is()`, `:where()`, `:focus-visible`, `:focus-within`) against every browser engine in the declared support matrix; flag any selector that requires an engine version newer than the declared minimum.
-- Every attribute selector, `::part()`, `::slotted()`, and shadow-DOM piercing pattern — verify the target engine actually exposes the matching DOM (e.g. shadow boundaries, scoped styles).
-- Every selector fed to `document.querySelector` / `querySelectorAll` / jQuery `$()` / Selenium `By.css_selector` / Playwright `page.locator` — verify the **runtime** selector engine matches the **target browser** engine; a Node-side jsdom selector parse can succeed where the real browser fails (or vice versa).
+- Every attribute selector, `::part()`, `::slotted()`, and shadow-DOM piercing pattern — verify the target engine exposes the matching DOM (e.g. shadow boundaries, scoped styles).
+- Every selector fed to `document.querySelector` / `querySelectorAll` / jQuery `$()` / Selenium `By.css_selector` / Playwright `page.locator` — verify the **runtime** selector engine matches the **target browser** engine; a Node-side jsdom selector parse can succeed where the browser fails (or vice versa).
 - Every CSS feature query (`@supports`), media query level, and container query — verify availability across the declared engine matrix and that fallback paths exist for engines that do not parse the syntax.
 - Every test-runner DOM assertion (snapshot, `outerHTML`/`innerHTML` equality, computed-style read) — verify the runner uses the same engine as the production target, or document the divergence.
 - Cross-engine quirks: WebKit-only `-webkit-` prefixes, Gecko-only `-moz-`, IE/Edge legacy filters; flag any production reliance on a single-engine prefix without a standard fallback.
@@ -35,7 +35,7 @@ ID prefix: `find`.
 
 **B4. Shell / CLI / cmdlet syntax vs runtime version**
 - Every PowerShell cmdlet — verify availability across the declared edition matrix (Windows PowerShell 5.1 ↔ PowerShell 7+ ↔ PowerShell on Linux/macOS) and version-specific parameter sets.
-- Every shebang (`#!/usr/bin/env pwsh`, `#!/bin/bash`, `#!/usr/bin/env python3`) vs the actual interpreter resolved at runtime — flag mismatches between declared and invoked interpreter (e.g. shebang says `pwsh` but Python `subprocess.run(["powershell", …])` resolves to PS 5.1 on Windows).
+- Every shebang (`#!/usr/bin/env pwsh`, `#!/bin/bash`, `#!/usr/bin/env python3`) vs the interpreter resolved at runtime — flag mismatches between declared and invoked interpreter (e.g. shebang says `pwsh` but Python `subprocess.run(["powershell", …])` resolves to PS 5.1 on Windows).
 - Every parameter set in a `param(...)` block — verify `[CmdletBinding(DefaultParameterSetName=…)]` is set when ambiguity is possible; missing default = `Parameter set cannot be resolved` at runtime.
 - Every cmdlet flag combination — verify both flags belong to the same parameter set per Microsoft docs (e.g. `-RepetitionInterval` is an `-Once` parameter, NOT `-Daily`).
 - Every bash-ism — `[[ ... ]]` (bash 3+ only, not POSIX `sh`), arrays, process substitution `<(…)`, `${var,,}` lower-case expansion (bash 4+), associative arrays — verify against the declared minimum shell.

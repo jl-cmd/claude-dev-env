@@ -49,7 +49,7 @@ Inline the artifact under this section using the section types defined in the ch
 - Tuple-unpack discards (`for path, _, _ in os.walk(...)`) are out of scope — E5 specifically scopes "function parameters never read"; state this exclusion explicitly.
 - `*args` / `**kwargs` / TypeScript rest spreads: confirm at least one consumer (forwarded to another call, iterated, indexed) or mark the parameter unused.
 - Cross-language parameter declarations (PowerShell `param(...)`, shell positional `$1..$N`, Bash `getopts`): confirm each named parameter has at least one body reference.
-- Adversarial probes for proof-of-absence: (a) any test fixture parameter (e.g., `def test_x(tmp_path):`) declared but never used? (b) any non-Python script parameter declared but never referenced? (c) any CLI flag parsed by argparse / Click / Cobra but unreachable on every invocation path the artifact actually uses?
+- Adversarial probes for proof-of-absence: (a) any test fixture parameter (e.g., `def test_x(tmp_path):`) declared but never used? (b) any non-Python script parameter declared but never referenced? (c) any CLI flag parsed by argparse / Click / Cobra but unreachable on every invocation path the artifact uses?
 
 **E6. Removed-but-not-deleted symbol references**
 - If the artifact deletes or renames a symbol, confirm every import, call site, string reference, and docstring/comment mentioning the old name has been updated or removed.
@@ -88,7 +88,7 @@ Q3: Which symbol most likely will *become* dead code after a near-future refacto
 
 Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket E1-E9, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P2 dead-code instances across these 9 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
-Note: most Category E findings are P2 (style / cleanup) unless the dead code masks an actual bug; the adversarial-pass quota uses P2 here.
+Note: most Category E findings are P2 (style / cleanup) unless the dead code masks a bug; the adversarial-pass quota uses P2 here.
 
 ---
 
@@ -184,7 +184,7 @@ Q3: Which symbol most likely will *become* dead code after a near-future refacto
 
 Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket E1-E9, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 P2 dead-code instances across these 9 sub-buckets — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
 
-Note: most Category E findings are P2 (style / cleanup) unless the dead code masks an actual bug; the adversarial-pass quota uses P2 here.
+Note: most Category E findings are P2 (style / cleanup) unless the dead code masks a bug; the adversarial-pass quota uses P2 here.
 
 ## Diff (4 new files, all lines in scope)
 

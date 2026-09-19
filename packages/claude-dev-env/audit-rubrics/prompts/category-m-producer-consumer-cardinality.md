@@ -34,7 +34,7 @@ ID prefix: `find`.
 **M3. Consumer-expects-set anti-pattern**
 - For every consumer that calls `set(producer())`, `dict.fromkeys(producer())`, `dict((k, v) for k, v in producer())`, `INSERT ... ON CONFLICT`, or `pandas.DataFrame.set_index`, walk back to the producer: should the producer have returned the set/dict directly?
 - The anti-pattern is a sign that the producer's `list[X]` return type lied about cardinality — the consumer is paying for the deduplication that the producer should have done.
-- Adversarial probes: (a) does any test mock the producer with a list containing duplicates — does the consumer's set-conversion silently drop them? (b) does the consumer's set / dict size differ from the producer's list length in production logs? (c) does the consumer raise `RuntimeError: duplicate key` on real-world inputs?
+- Adversarial probes: (a) does any test mock the producer with a list containing duplicates — does the consumer's set-conversion silently drop them? (b) does the consumer's set / dict size differ from the producer's list length in production logs? (c) does the consumer raise `RuntimeError: duplicate key` on production inputs?
 
 **M4. `extend(...)` into list consumers (acceptable)**
 - For every consumer whose only operation is `accumulator.extend(producer())` into a list, verify the accumulator's downstream consumers tolerate duplicates.

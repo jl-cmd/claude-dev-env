@@ -21,7 +21,7 @@ The first consult is complete. It carries:
 - Assignment and desired outcome
 - Constraints and exclusions
 - Actions taken in order
-- Real output and current state
+- Output and current state
 - Live decision or blocker
 - Validation evidence
 - Unresolved risks

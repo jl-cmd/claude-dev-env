@@ -183,7 +183,7 @@ round's progress report. Then take the one case that matches the round's
 findings.
 
 - Any bug-severity finding: validate each bug with an advisor before touching
-  code. Confirm it's real and confirm the intended fix, then fix every
+  code. Confirm the bug exists and confirm the intended fix, then fix every
   validated bug and every nit on the review target. A refuted bug removes only
   itself from the round's work; the nits are fixed either way.
 - Nits only, with at least one nit present: fix all of them on the review

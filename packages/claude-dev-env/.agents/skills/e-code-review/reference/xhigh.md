@@ -1,7 +1,7 @@
 `xhigh effort → 5+5 angles → 1-vote verify → sweep`
 
-You are reviewing for **recall** at extra-high effort: catch every real bug. At
-this level, catching real bugs matters more than avoiding false positives — a
+You are reviewing for **recall** at extra-high effort: catch every bug. At
+this level, catching bugs matters more than avoiding false positives — a
 missed bug ships. Err on the side of surfacing.
 
 ## Phase 0 — Gather the diff
@@ -42,7 +42,7 @@ wrong-variable copy-paste, error swallowed in catch, unescaped regex metachars.
 For every line the diff DELETES or replaces, name the invariant or behavior it
 enforced, then search the new code for where that invariant is re-established.
 If you can't find it, that's a candidate: a removed guard, a dropped error
-path, a narrowed validation, a deleted test that was covering a real case.
+path, a narrowed validation, a deleted test that was covering a case.
 
 ### Angle C — cross-file tracer
 
@@ -65,7 +65,7 @@ adapter): check that every method routes to the wrapped instance and not back
 through a registry/session/global — e.g. a caching provider holding a
 `delegate` field that resolves IDs via `session.get(...)` instead of
 `delegate.get(...)` will re-enter the cache or recurse. Also check that the
-wrapper forwards all the methods the callers actually use.
+wrapper forwards all the methods the callers use.
 
 ### Reuse
 
@@ -125,7 +125,7 @@ file(s), and the candidate, and have it return exactly one of:
 
 - **CONFIRMED** — can name the inputs/state that trigger it and the wrong
   output or crash. Quote the line.
-- **PLAUSIBLE** — mechanism is real, trigger is uncertain (timing, env,
+- **PLAUSIBLE** — mechanism is present in the code, trigger is uncertain (timing, env,
   config). State what would confirm it.
 - **REFUTED** — factually wrong (code doesn't say that) or guarded elsewhere.
   Quote the line that proves it.

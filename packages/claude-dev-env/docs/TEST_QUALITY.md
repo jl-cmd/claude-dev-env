@@ -85,7 +85,7 @@
 
 **Mock too much** - Prefer integration tests
 - Bad: Mock every hook and function
-- Good: Render with real hooks, mock only API calls
+- Good: Render with unmocked hooks, mock only API calls
 
 **Test implementation details** - Test what user experiences
 - Bad: Assert on state values, hook return values

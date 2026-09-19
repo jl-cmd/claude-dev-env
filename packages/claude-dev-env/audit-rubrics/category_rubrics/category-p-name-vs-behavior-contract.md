@@ -2,7 +2,7 @@
 
 **What this category audits:** identifiers and reference data whose label asserts a contract the body does not deliver. The label may be too broad (`is_inside_function` flag set on def but never reset on scope exit), too narrow (`_is_docstring_section_header` matching only terminating headers), or shaped as one thing while behaving as another (`FILE_PATH_PATTERN` regex matching `client/server` because it lacks path-shape anchors; a hard-deny replacement word list containing ordinary technical English).
 
-The label-vs-body gap is its own failure mode independent of behavior-equivalence (L) because nothing was rewritten — the contract is broken at the moment the name is first chosen. The hook-enforced naming rules (J5 abbreviations, J6 vague nouns) ban specific identifiers but say nothing about precision-of-fit between what a name promises and what its body actually does.
+The label-vs-body gap is its own failure mode independent of behavior-equivalence (L) because nothing was rewritten — the contract is broken at the moment the name is first chosen. The hook-enforced naming rules (J5 abbreviations, J6 vague nouns) ban specific identifiers but say nothing about precision-of-fit between what a name promises and what its body does.
 
 **Examples of Category P findings:**
 - A flag `is_inside_function` set on `def` and never reset on scope exit — name asserts state the body fails to keep.
@@ -25,7 +25,7 @@ For every regex, brace or token scanner, or word-list the diff adds or edits, bu
 
 Walk each input character by character (or token by token) and write down what the pattern returns. A pattern that returns the wrong answer on any of the three inputs is a Category P finding; cite the input that breaks it. The pattern is clean only after all three inputs return the answer the contract promises.
 
-`hooks/blocking/` is the priority surface. Its patterns gate every write, so a pattern that matches too much or too little there fires on real edits across the whole codebase.
+`hooks/blocking/` is the priority surface. Its patterns gate every write, so a pattern that matches too much or too little there fires on edits across the whole codebase.
 
 Two canonical failures show why the hand trace is binding:
 
@@ -56,4 +56,4 @@ The reusable Variant C template for Category P is in [`../prompts/category-p-nam
 
 ## Why Category P matters as its own bucket
 
-Category L (behavior-equivalence) audits a rewrite against a prior implementation — it only fires when there is a `before` state to compare. Category P audits a fresh identifier whose label asserts a contract; the bug is that the body never delivered the named contract, even on the first commit. The hook-enforced J5 / J6 naming rules ban specific identifiers (`ctx`, `cfg`, `data`, `result`, `handle_*`) but say nothing about whether the identifier the author chose actually matches the body's reach. P is the bucket that catches a regex named `FILE_PATH_PATTERN` that accepts `TCP/IP`, a hard-deny word list that bans `function` and `address`, and a predicate named for the general case that only handles a subset — at audit time, before the gate ships and starts producing false positives in production.
+Category L (behavior-equivalence) audits a rewrite against a prior implementation — it only fires when there is a `before` state to compare. Category P audits a fresh identifier whose label asserts a contract; the bug is that the body never delivered the named contract, even on the first commit. The hook-enforced J5 / J6 naming rules ban specific identifiers (`ctx`, `cfg`, `data`, `result`, `handle_*`) but say nothing about whether the identifier the author chose matches the body's reach. P is the bucket that catches a regex named `FILE_PATH_PATTERN` that accepts `TCP/IP`, a hard-deny word list that bans `function` and `address`, and a predicate named for the general case that only handles a subset — at audit time, before the gate ships and starts producing false positives in production.

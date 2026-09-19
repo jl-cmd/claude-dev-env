@@ -65,7 +65,7 @@ Inline the artifact under audit using one `###` header per section. Pick the chu
 
 **D7. Async/sync ordering of side effects**
 - Scan the entire artifact for `async def`, `await`, `asyncio.gather` / `asyncio.create_task` / `asyncio.run`, JavaScript `async` / `await` / `Promise.all`, or any other deferred-execution primitive. If any are present, walk the ordering of side effects.
-- For each `await` site, identify whether a side effect that should have happened *before* the suspension point is actually flushed before yielding control. Probe what an interleaved coroutine could observe.
+- For each `await` site, identify whether a side effect that should have happened *before* the suspension point is flushed before yielding control. Probe what an interleaved coroutine could observe.
 - For purely synchronous artifacts, cite proof-of-absence with explicit keyword counts ("0 occurrences of `async`, `await`, `asyncio` across all [N] sections").
 
 **D8. Class-attribute vs instance-attribute confusion**

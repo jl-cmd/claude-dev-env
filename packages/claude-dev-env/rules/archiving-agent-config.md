@@ -45,18 +45,15 @@ to be reconstructed from the diff is not recoverable in any useful sense.
 
 ## Make the archive stick
 
-Three things do not follow the file on their own.
+Two things do not follow the file on their own.
 
 **A skill's name stays in `bin/ever-shipped-skills.mjs`.** The prune computes
 the retired set as every name ever shipped minus the names installed now, and
 that is how a stale copy is moved out of a host's agents home. Delete the name
-and the copy is stranded on every machine that has it.
-
-**Add the archived name to the banned active-capability list.** The reference
-checker in `scripts/active_capability_references.py` does not resolve a named
-capability against the shipped inventory; it reports a name only when that name
-sits on `ALL_BANNED_ACTIVE_CAPABILITY_NAMES`. Until the archived name is on that
-list, every leftover mention of it passes.
+and the copy is stranded on every machine that has it. The reference checker in
+`scripts/active_capability_references.py` derives its retired set the same way,
+so the registry entry is also what makes a leftover mention of the archived
+name report. No second list needs the name.
 
 **A renamed skill directory takes its tests out of the run.** The node test
 command globs `.agents/skills/**/*.test.mjs`, so a suite under an archived skill

@@ -33,7 +33,7 @@ On exit 0 the script prints one JSON object:
 | `session_utilization` | Percent of the 5-hour window spent (null on override) |
 | `weekly_utilization` | Percent of the weekly window spent (null on override) |
 | `weekly_resets_at` | When the weekly window resets (null on override) |
-| `weekly_near_cap` | True when the weekly meter is at or past the warn threshold |
+| `weekly_near_cap` | `true` when the weekly meter is at or past the warn threshold |
 
 On exit 2 the script prints `{"error": ...}`. Ask the user for a manual reset time via AskUserQuestion (offer clock-time and duration examples), then rerun with `--override`.
 
@@ -68,7 +68,7 @@ Before the first sleep:
 
 The stage plan (`stages_seconds` from the resolver) keeps every stage under the maximum stage length and ends with a short tail so the final firing lands just past the reset. Stage sizing constants live in `scripts/usage_pause_constants/resolve_usage_window_constants.py`; a leftover too short to stand alone folds into the tail.
 
-Every wakeup does exactly three things — ping, record, schedule — and dispatches no new work. The cache rationale: an unpinged idle agent left past the cache window resumes cold and re-reads its whole transcript, so pings run tighter than the cache lifetime and keep each agent's next real invocation cheap.
+Every wakeup does exactly three things — ping, record, schedule — and dispatches no new work. The cache rationale: an unpinged idle agent left past the cache window resumes cold and re-reads its whole transcript, so pings run tighter than the cache lifetime and keep each agent's next invocation cheap.
 
 ### Stage wakeup prompt template
 
@@ -78,7 +78,7 @@ Remaining chain (seconds): <remaining_stage_durations>. Cancelled crons: <cancel
 1. Ping every live agent AND every idle-but-warm agent with exactly this one line:
    "status checkpoint: reply with where you stand, do not start new work"
    An unpinged idle agent past the cache window resumes cold and re-reads its whole
-   transcript; the ping keeps its next real invocation cheap.
+   transcript; the ping keeps its next invocation cheap.
 2. Record any finished agent results on the task list. Dispatch nothing.
 3. Take the first duration off the remaining chain and ScheduleWakeup it, passing this
    same prompt with that duration removed and the stage number advanced. When the

@@ -66,7 +66,7 @@ running anything.
 The NAS is a Linux box and this machine is Windows, so two classes of difference show up only there:
 syntax newer than the NAS interpreter accepts, and tests that assert Windows paths.
 
-**Always separate a real break from a platform-only one.** Run the same test file at the branch head
+**Always separate a break in the code from a platform-only one.** Run the same test file at the branch head
 and at the commit the work started from. Identical failures at both mean the environment, not the
 change. Report both numbers rather than the head alone.
 

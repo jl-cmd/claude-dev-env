@@ -1,4 +1,4 @@
-"""Tests for magic-value allowlist alignment with CODE_RULES §HOOK-ENFORCED.
+"""Tests for magic-value allowlist alignment with CODE_RULES §LINT-ENFORCED.
 
 CODE_RULES.md states that only
 0, 1, and -1 (plus their float forms 0.0, 1.0) are exempt from the
