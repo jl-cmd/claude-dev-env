@@ -53,7 +53,7 @@ Do not run `node packages/claude-dev-env/bin/install.mjs` without an isolated ho
 
 ## Evidence
 
-Store evidence in `.audit/hook-linter-conversion/evidence/`.
+Store evidence in `tests/audit/data/hook-linter-conversion/evidence/`.
 
 - `installer-doctor.json` records tool availability.
 - `installer-transcript.json` records the command, exit status, actions, and results.

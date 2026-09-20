@@ -168,8 +168,6 @@ def _missing_references_for_markdown_files() -> dict[str, set[str]]:
         relative_source_path = each_markdown_file.relative_to(
             REPOSITORY_ROOT
         ).as_posix()
-        if relative_source_path.startswith("docs/records/"):
-            continue
         try:
             each_text = each_markdown_file.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
