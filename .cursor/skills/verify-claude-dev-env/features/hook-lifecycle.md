@@ -12,9 +12,9 @@ The package registers session, tool, stop, and session-end hooks. Policy checks 
 
 Install into a disposable profile. Exercise one edit, one staged lint, and the package audit.
 
-## Driving it with Node.js
+## Driving it with the package
 
-Run the installer helper. Then run `node packages/claude-dev-env/scripts/audit-hooks-cli.mjs --format text` and the hook tests.
+Run the installer helper. Then run the hook tests.
 
 ## Gotchas
 
