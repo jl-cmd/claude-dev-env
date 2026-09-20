@@ -79,6 +79,8 @@ reports and adds nothing further.
      Claude host, or the resolver-printed sonnet-equivalent id on a
      third-party host, and fails closed — see Workflow Agent Routing in
      [`skills/orchestrator/SKILL.md`](../orchestrator/SKILL.md#workflow-agent-routing).
+     Advisor spawns use `flags: ["--advisor"]` only when they intentionally
+     select Astra.
    - **Focused tickets.** One mechanical done-check per ticket; resume a
      warm agent with a thin next-slice ticket rather than a fresh cold
      spawn, and keep thick context in the assignment file.
