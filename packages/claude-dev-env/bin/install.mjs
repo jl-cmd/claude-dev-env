@@ -1228,6 +1228,8 @@ export const POST_FOLDED_HOOK_RELATIVE_PATHS = new Set([
 ]);
 
 export const RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS = new Set([
+    'observability/test_failure_recorder.py',
+    'advisory/msys_path_conversion_advisor.py',
     'session/untracked_repo_detector.py',
     'session/gh_pr_author_session_cleanup.py',
     'observability/pr_description_writer_spawn_tracker.py',

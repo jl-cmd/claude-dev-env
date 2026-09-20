@@ -33,5 +33,3 @@ export MSYS2_ARG_CONV_EXCL='origin/main:'; git show origin/main:.claude/settings
 `MSYS2_ARG_CONV_EXCL` takes a semicolon-separated list of argument prefixes. Naming one prefix per detected token leaves every other argument in the command converting as before. The blanket pair `MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'` turns conversion off for the whole command, which changes a path the command meant to convert, so the rewriter does not emit it.
 
 A quoted token is not a revision. `git commit -m "fix a/b:.py"` carries a slash and a dot in one token, and a rewrite there would break the message, so the detection skips a token holding whitespace or a quote.
-
-`advisory/msys_path_conversion_advisor.py` (PostToolUse on Bash, hosted by `bash_post_call_dispatcher`) stays behind it. It reads a failed git call, looks for the mark MSYS leaves, and names the fix. It covers a shape the rewriter misses.
