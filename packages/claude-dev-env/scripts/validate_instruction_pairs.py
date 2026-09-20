@@ -29,7 +29,7 @@ from dev_env_scripts_constants.followup_constants import (
     REGULAR_FILE_RULE_ID,
     SEVERITY_BY_RULE_ID,
 )
-from followup_ledger import FollowupFinding, record_followup_finding
+from followup_ledger import FollowupFinding, head_commit, record_followup_finding
 from hooks_constants.followup_ledger_constants import SEVERITY_BREAKING
 
 class InstructionFinding(NamedTuple):
@@ -358,7 +358,14 @@ def _record_smell(repository_root: Path, finding: InstructionFinding) -> None:
     """
     record_followup_finding(
         repository_root,
-        FollowupFinding(finding.rule_id, finding.file_path, finding.message),
+        FollowupFinding(
+            finding.rule_id,
+            finding.file_path,
+            finding.message,
+            finding.rule_id,
+            finding.severity,
+            head_commit(repository_root),
+        ),
     )
     logger.warning(RECORDED_SMELL_TEMPLATE, finding.message)
 

@@ -15,7 +15,8 @@ _hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
 if _hooks_directory not in sys.path:
     sys.path.insert(0, _hooks_directory)
 
-from followup_ledger import all_recorded_findings
+from followup_ledger import all_recorded_findings, head_commit
+from hooks_constants.followup_ledger_constants import SEVERITY_SMELL
 
 
 def read_workflow(workflow_filename: str) -> str:
@@ -232,6 +233,27 @@ def test_run_gate_passes_a_smell_and_records_it(tmp_path: Path) -> None:
     assert [
         each_finding.rule_id for each_finding in all_recorded_findings(tmp_path)
     ] == ["instruction-git-mode"]
+
+
+def test_a_recorded_smell_carries_its_severity_and_the_checked_out_revision(
+    tmp_path: Path,
+) -> None:
+    initialize_repository(tmp_path)
+    write_valid_pair(tmp_path)
+    make_git_mode_executable(tmp_path)
+    subprocess.run(
+        ["git", "commit", "--quiet", "-m", "instruction pair"],
+        cwd=tmp_path,
+        check=True,
+    )
+
+    run_gate(tmp_path)
+
+    recorded_finding = all_recorded_findings(tmp_path)[0]
+    assert recorded_finding.severity == SEVERITY_SMELL
+    assert recorded_finding.check_id == "instruction-git-mode"
+    assert recorded_finding.origin_commit == head_commit(tmp_path)
+    assert recorded_finding.origin_commit
 
 
 def test_run_gate_records_a_smell_it_finds_beside_a_breaking_finding(

@@ -26,6 +26,12 @@ from typing import TextIO
 from dev_env_scripts_constants.followup_constants import (
     ABSENT_LOCATION_PATH,
     ALL_COMMAND_NAMES,
+    BACKLOG_EXCEEDED_EXIT_CODE,
+    BACKLOG_EXCEEDED_TEMPLATE,
+    BACKLOG_WITHIN_TEMPLATE,
+    COUNT_COMMAND_NAME,
+    DIAGNOSTIC_CHECK_ID_KEY,
+    FOLLOWUP_BACKLOG_THRESHOLD,
     BRIEF_COMMAND_NAME,
     BRIEF_FINDING_TEMPLATE,
     BRIEF_FOOTER_TEMPLATE,
@@ -54,8 +60,10 @@ from followup_ledger import (
     FollowupFinding,
     all_recorded_findings,
     followup_ledger_path,
+    head_commit,
     record_followup_finding,
 )
+from hooks_constants.followup_ledger_constants import SEVERITY_SMELL
 
 
 def _parse_arguments(all_arguments: list[str]) -> argparse.Namespace | None:
@@ -99,7 +107,8 @@ def _formatted_finding(finding_template: str, finding: FollowupFinding) -> str:
     """Fill one template with a finding's fields.
 
     Args:
-        finding_template: A template naming rule_id, file_path, and message.
+        finding_template: A template naming any of rule_id, check_id,
+            severity, origin_commit, file_path, and message.
         finding: The finding whose fields fill the template.
 
     Returns:
@@ -107,6 +116,9 @@ def _formatted_finding(finding_template: str, finding: FollowupFinding) -> str:
     """
     return finding_template.format(
         rule_id=finding.rule_id,
+        check_id=finding.check_id or finding.rule_id,
+        severity=finding.severity,
+        origin_commit=finding.origin_commit,
         file_path=finding.file_path,
         message=finding.message,
     )
@@ -156,18 +168,25 @@ def _run_ingest(repository_root: Path, report_path: Path | None, stdout: TextIO)
     all_diagnostics = parsed_report.get(DIAGNOSTICS_KEY, [])
     if not isinstance(all_diagnostics, list):
         return SUCCESS_EXIT_CODE
+    origin_commit = head_commit(repository_root)
     for each_diagnostic in all_diagnostics:
-        each_finding = _finding_from_diagnostic(each_diagnostic)
+        each_finding = _finding_from_diagnostic(each_diagnostic, origin_commit)
         if each_finding is not None:
             record_followup_finding(repository_root, each_finding)
     return SUCCESS_EXIT_CODE
 
 
-def _finding_from_diagnostic(diagnostic_by_key: object) -> FollowupFinding | None:
+def _finding_from_diagnostic(
+    diagnostic_by_key: object, origin_commit: str
+) -> FollowupFinding | None:
     """Convert one lint diagnostic into a ledger finding.
+
+    A report reaches this command once its blocking findings are settled, so
+    every diagnostic it carries records as a smell.
 
     Args:
         diagnostic_by_key: One entry of the report's diagnostics list.
+        origin_commit: The revision the repository has checked out.
 
     Returns:
         The finding, or None when the entry carries no rule identifier and
@@ -179,7 +198,31 @@ def _finding_from_diagnostic(diagnostic_by_key: object) -> FollowupFinding | Non
     message = diagnostic_by_key.get(DIAGNOSTIC_MESSAGE_KEY)
     if not isinstance(rule_id, str) or not isinstance(message, str):
         return None
-    return FollowupFinding(rule_id, _diagnostic_file_path(diagnostic_by_key), message)
+    return FollowupFinding(
+        rule_id,
+        _diagnostic_file_path(diagnostic_by_key),
+        message,
+        _diagnostic_check_id(diagnostic_by_key, rule_id),
+        SEVERITY_SMELL,
+        origin_commit,
+    )
+
+
+def _diagnostic_check_id(diagnostic_by_key: dict[str, object], rule_id: str) -> str:
+    """Return the check identifier a diagnostic names.
+
+    Args:
+        diagnostic_by_key: One entry of the report's diagnostics list.
+        rule_id: The rule the diagnostic carries.
+
+    Returns:
+        The diagnostic's check identifier, or the rule identifier when a
+        report written before that field carries none.
+    """
+    check_id = diagnostic_by_key.get(DIAGNOSTIC_CHECK_ID_KEY)
+    if isinstance(check_id, str) and check_id:
+        return check_id
+    return rule_id
 
 
 def _diagnostic_file_path(diagnostic_by_key: dict[str, object]) -> str:
@@ -226,6 +269,35 @@ def _run_brief(repository_root: Path, stdout: TextIO) -> int:
     return SUCCESS_EXIT_CODE
 
 
+def _run_count(repository_root: Path, stdout: TextIO) -> int:
+    """Report the backlog size against the threshold.
+
+    Args:
+        repository_root: The repository whose ledger to measure.
+        stdout: The stream the line goes to.
+
+    Returns:
+        SUCCESS_EXIT_CODE while the backlog sits at or under the threshold,
+        and BACKLOG_EXCEEDED_EXIT_CODE once it passes it.
+    """
+    finding_count = len(all_recorded_findings(repository_root))
+    if finding_count <= FOLLOWUP_BACKLOG_THRESHOLD:
+        stdout.write(
+            BACKLOG_WITHIN_TEMPLATE.format(
+                finding_count=finding_count, threshold=FOLLOWUP_BACKLOG_THRESHOLD
+            )
+            + LINE_SEPARATOR
+        )
+        return SUCCESS_EXIT_CODE
+    stdout.write(
+        BACKLOG_EXCEEDED_TEMPLATE.format(
+            finding_count=finding_count, threshold=FOLLOWUP_BACKLOG_THRESHOLD
+        )
+        + LINE_SEPARATOR
+    )
+    return BACKLOG_EXCEEDED_EXIT_CODE
+
+
 def _run_clear(repository_root: Path) -> int:
     """Empty the repository's ledger.
 
@@ -266,6 +338,8 @@ def main(all_arguments: list[str], stdout: TextIO = sys.stdout) -> int:
         return _run_ingest(repository_root, report_path, stdout)
     if parsed_arguments.command == BRIEF_COMMAND_NAME:
         return _run_brief(repository_root, stdout)
+    if parsed_arguments.command == COUNT_COMMAND_NAME:
+        return _run_count(repository_root, stdout)
     return _run_clear(repository_root)
 
 
