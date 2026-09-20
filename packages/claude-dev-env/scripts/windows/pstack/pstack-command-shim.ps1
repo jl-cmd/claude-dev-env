@@ -32,8 +32,15 @@ $scriptsRoot = Split-Path -Parent (Split-Path -Parent $entrypoint)
 $exitCode = 1
 Push-Location $scriptsRoot
 try {
-  & bun $entrypoint @commandArguments
-  $exitCode = $LASTEXITCODE
+  & bun -e 'import { ensureDependenciesInstalled } from "./bootstrap.ts"; ensureDependenciesInstalled();'
+  $bootstrapExitCode = $LASTEXITCODE
+  if ($bootstrapExitCode -ne 0) {
+    Write-Error "The pstack dependencies could not be installed"
+    $exitCode = $bootstrapExitCode
+  } else {
+    & bun $entrypoint @commandArguments
+    $exitCode = $LASTEXITCODE
+  }
 }
 finally {
   Pop-Location
