@@ -19,7 +19,8 @@ export function buildSubagentModelRoutingResponse(hookPayload, routingOptions = 
     if (routingDecision.status === 'inherited') {
         return buildBlockedResponse('subagent model must resolve to gpt-*-luna');
     }
-    if (!isLunaModel(routingDecision.selected?.model)) {
+    if (!hasAdvisorBypass(hookPayload.tool_input)
+        && !isLunaModel(routingDecision.selected?.model)) {
         return buildBlockedResponse('only gpt-*-luna subagents are permitted');
     }
     if (routingDecision.status !== 'remapped') return {};
@@ -60,6 +61,10 @@ function isTargetSubagentTool(hookPayload) {
 
 function isLunaModel(model) {
     return typeof model === 'string' && /^gpt-.+-luna$/i.test(model);
+}
+
+function hasAdvisorBypass(toolInput) {
+    return Array.isArray(toolInput?.flags) && toolInput.flags.includes('--advisor');
 }
 
 function buildAllowResponse(updatedInput) {

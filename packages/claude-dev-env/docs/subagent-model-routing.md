@@ -60,8 +60,9 @@ The direct spawn hook and advisor bridge use the same shared resolver. A Sol
 Medium remap changes only the model and effort fields in the hook's tool input.
 The hook returns an allow decision with the updated input and emits no remap
 notice when the selected model matches `gpt-*-luna`. Any route that resolves to
-another model is denied. Parent inheritance is denied because the hook cannot
-verify the inherited model before the spawn.
+another model is denied unless the tool input carries the explicit
+`flags: ["--advisor"]` bypass. Parent inheritance is denied because the hook
+cannot verify the inherited model before the spawn.
 
 The hook blocks advisor role claims because the current Codex hook input has no
 host-provided role binding. The Python advisor bridge passes trusted session

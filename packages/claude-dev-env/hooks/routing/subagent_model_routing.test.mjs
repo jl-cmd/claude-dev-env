@@ -144,6 +144,33 @@ test('blocks a trusted session advisor route that resolves to Astra', () => {
         );
 });
 
+test('allows an Astra route when the explicit advisor flag is present', () => {
+    const toolInput = {
+        model: 'Astra',
+        reasoning_effort: 'high',
+        flags: ['--advisor'],
+    };
+    const hookResponse = buildSubagentModelRoutingResponse(buildHookPayload(toolInput));
+    assert.deepEqual(hookResponse.hookSpecificOutput.updatedInput, {
+        model: 'gpt-6-astra',
+        reasoning_effort: 'low',
+        flags: ['--advisor'],
+    });
+});
+
+test('does not treat unrelated flags as an advisor bypass', () => {
+    const hookResponse = buildSubagentModelRoutingResponse(buildHookPayload({
+        model: 'Astra',
+        reasoning_effort: 'high',
+        flags: ['--worker'],
+    }));
+    assert.equal(hookResponse.hookSpecificOutput.permissionDecision, 'deny');
+    assert.equal(
+        hookResponse.hookSpecificOutput.permissionDecisionReason,
+        'only gpt-*-luna subagents are permitted',
+    );
+});
+
 test('blocks parent inheritance because the selected model is unresolved', () => {
     const hookResponse = buildSubagentModelRoutingResponse(buildHookPayload({
         model: 'inherit-parent',

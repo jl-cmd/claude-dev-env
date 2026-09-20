@@ -255,6 +255,9 @@ Routing rules:
   detection system, with no second one.
 - Resume a warm workflow agent before creating a new workflow run when
   the warm agent holds the relevant context.
+- When a native subagent spawn is the advisor path, set
+  `flags: ["--advisor"]` with the Astra model. This is the explicit hook
+  bypass for advisor work. Do not add the flag to worker spawns.
 - Review and verification workflows apply the [review guide](../e-code-review/SKILL.md).
 - PR-description workflows include the changed-file list in the
   prompt and verify the final body against that file list before posting
