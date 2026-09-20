@@ -25,7 +25,7 @@ One warm advisor at the strongest tier this session can reach. This session is t
 
 1. Name the session identity first (protocol **Host profiles**), then walk the model floor.
 2. Claude: when `advisor` is in this session's tool list, the built-in advisor tool is the advisor. Spawn nothing and call `advisor()` at each consult point. Otherwise spawn Fable in-session at `ADVISOR_EFFORT` (default low). When Fable is out of usage, bind Astra at the same effort. Codex: Astra in-session. Third-party: headless Fable then Astra. When the host's walk fails, fail closed.
-3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); a native Astra subagent on Codex; one CLI `session_id` on a third-party host via the protocol Claude-chain or Astra helper.
+3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); a native Astra subagent on Codex with `flags: ["--advisor"]`; one CLI `session_id` on a third-party host via the protocol Claude-chain or Astra helper.
 4. Skip the multi-consumer "who you are" opener. This session is the sole consumer.
 5. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound advisor issues ENDORSE / CORRECTION / PLAN / STOP.
 
