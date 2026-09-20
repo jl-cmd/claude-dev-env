@@ -14,7 +14,7 @@ Install into a disposable profile. Exercise one edit, one staged lint, and the p
 
 ## Driving it with Node.js
 
-Run the installer helper. Then run `node packages/claude-dev-env/scripts/audit-hooks-cli.mjs --format text` and the hook tests.
+Run the installer helper. Then run `python tests/audit/hooks/run_hook_audit.py` and the hook tests.
 
 ## Gotchas
 
