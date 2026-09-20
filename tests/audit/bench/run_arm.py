@@ -43,7 +43,7 @@ from arm_isolation import (
     redirect_environment,
     rewrite_live_home_references,
 )
-from config.run_arm_constants import (
+from bench_parts.config.run_arm_constants import (
     ABLATE_ARM_PREFIX,
     ABLATE_PATH_SEPARATOR,
     AGENTS_DIRECTORY_NAME,

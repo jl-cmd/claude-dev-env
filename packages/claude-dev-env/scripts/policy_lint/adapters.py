@@ -333,6 +333,8 @@ def accepts_code(document: Document) -> bool:
 
 
 def accepts_markdown(document: Document) -> bool:
+    if is_graded_corpus(document):
+        return False
     return document.path.suffix.lower() in constants.ALL_MARKDOWN_SUFFIXES
 
 

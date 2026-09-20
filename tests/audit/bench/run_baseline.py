@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import TextIO
 
 import run_arm
-from config.run_baseline_constants import (
+from bench_parts.config.run_baseline_constants import (
     ALL_BASELINE_COLUMNS,
     ALL_EVIDENCE_SKIPPED_NAMES,
     CLAUDE_DIRECTORY_NAME,

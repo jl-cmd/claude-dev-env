@@ -22,21 +22,21 @@ The plan asks for a calibration set for each property: a passing control, an inv
 
 A hook that claims to block an input should exit with code 2 or return a deny decision for that input.
 
-- Source: `W1`, section "Exit code 2", strength normative.
+- Source: `W1`, section `Exit code 2`, normative.
 - Quote: "Exit 2 means a blocking error."
 - Classes: `hook_module`.
 - Observe: exit code. Run the hook with the claimed input on stdin and read the exit code.
-- Check: tests/audit/hooks/test_hook_harness.py.
+- Check: `tests/audit/hooks/test_hook_harness.py`
 
 ### P-HOOK-02
 
 A hook that exits 0 with no output should leave the tool call to the normal permission flow.
 
-- Source: `W1`, section "Exit code 0", strength normative.
+- Source: `W1`, section `Exit code 0`, normative.
 - Quote: "Exit code 0 with no output means the hook has no decision to report, so the tool call continues through the normal [permission flow](/docs/en/permissions)."
 - Classes: `hook_module`.
 - Observe: exit code; stdout. Run the hook with the valid near-neighbor input and read exit code and stdout.
-- Check: tests/audit/hooks/test_hook_harness.py.
+- Check: `tests/audit/hooks/test_hook_harness.py`
 
 ### P-HOOK-03
 
@@ -56,13 +56,13 @@ A PreToolUse hook that denies through JSON should put permissionDecision inside 
 - Quote: "`permissionDecision` (allow/deny/ask/defer), `permissionDecisionReason`"
 - Classes: `hook_module`.
 - Observe: stdout. Parse the hook stdout and read hookSpecificOutput.permissionDecision.
-- Check: tests/audit/hooks/test_hook_harness.py.
+- Check: `tests/audit/hooks/test_hook_harness.py`
 
 ### P-HOOK-05
 
 A hook that must block should print JSON that passes schema validation, because invalid JSON lets the action proceed.
 
-- Source: `W1`, section "Exit code 0", strength normative.
+- Source: `W1`, section `Exit code 0`, normative.
 - Quote: "exit 0 with a parsed object that fails schema validation is a non-blocking error: the action proceeds"
 - Classes: `hook_module`.
 - Observe: stdout; trace. Validate the hook stdout against the documented decision fields for its event.
@@ -215,7 +215,7 @@ A required check should report a successful, skipped, or neutral status before a
 - Source: `W10`, section "Require status checks before merging", strength normative.
 - Quote: "Required status checks must have a `successful`, `skipped`, or `neutral` status before collaborators can make changes to a protected branch."
 - Classes: `ci_workflow`.
-- Observe: exit code; trace. Read the check runs on the head commit and compare with the ruleset contexts.
+- Observe: the exit status and the run trace. Read the check runs on the head commit and compare with the ruleset contexts.
 - Check: none today.
 
 ### P-CI-02
@@ -316,7 +316,7 @@ An output-shaping component should score higher with the component than without 
 - Quote: "If a case scores 1.0 both with and without the plugin, the plugin isn't what made it pass."
 - Classes: `skill`, `rule`, `agent`, `command`, `instruction_file`, `system_prompt`.
 - Observe: trace. Run both arms on the same cases and compare the pass rates.
-- Check: tests/audit/bench/run_baseline.py.
+- Check: `tests/audit/bench/run_baseline.py`
 
 ### P-PROMPT-01
 
@@ -340,10 +340,10 @@ An instruction should avoid ALWAYS and NEVER in capital letters.
 
 ### P-STRUCT-01
 
-A rule that repeats one instruction should be replaced by a lint, flag, runtime check, or script.
+A rule that repeats one instruction belongs in a lint, flag, runtime check, or script.
 
 - Source: `PS-ENCODE`, section "description", strength advisory.
-- Quote: "Encode the rule as a lint, metadata flag, runtime check, or script instead of more text."
+- Quote: `Encode the rule as a lint, metadata flag, runtime check, or script instead of more text.`
 - Classes: `rule`, `doc`, `instruction_file`.
 - Observe: file. Review method: find instructions that occur in two or more files and look for a check that enforces each.
 - Check: none today.
@@ -375,7 +375,7 @@ A KEEP verdict should rest on a full-arm pass rate of 0.60 or more and a pass-ra
 - Source: `house`. No outside source backs this property. preferences.md order 21.
 - Classes: `skill`, `rule`, `agent`, `command`, `instruction_file`.
 - Observe: trace. Read the two-arm summary and compare with the bands.
-- Check: tests/audit/bench/summarize_baseline.py.
+- Check: `tests/audit/bench/summarize_baseline.py`
 
 ### H-STE-01
 

@@ -11,7 +11,7 @@ columns.
 
 from __future__ import annotations
 
-from config.summarize_baseline_constants import ALL_SUMMARY_COLUMNS
+from bench_parts.config.summarize_baseline_constants import ALL_SUMMARY_COLUMNS
 
 ALL_PILOT_COLUMNS = (*ALL_SUMMARY_COLUMNS, "source", "verdict")
 KEEP_FLOOR = 0.60

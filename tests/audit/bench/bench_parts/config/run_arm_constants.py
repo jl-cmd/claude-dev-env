@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-BENCH_DIRECTORY = Path(__file__).resolve().parents[1]
+BENCH_DIRECTORY = Path(__file__).resolve().parents[2]
 
 CLAUDE_DIRECTORY_NAME = ".claude"
 AGENTS_DIRECTORY_NAME = ".agents"

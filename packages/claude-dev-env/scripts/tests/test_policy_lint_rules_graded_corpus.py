@@ -15,6 +15,8 @@ from policy_lint.model import Document
 CORPUS_PATH = "tests/audit/bench/cases/bugfix/fixture/shop/pricing.py"
 HOOK_FIXTURE_PATH = "tests/audit/hooks/fixtures/hooks/overblocker.py"
 HARNESS_PATH = "tests/audit/bench/run_arm.py"
+CORPUS_README_PATH = "tests/audit/bench/cases/feature-cli-json-flag/fixture/README.md"
+HARNESS_DOCUMENT_PATH = "tests/audit/PROPERTIES.md"
 SOURCE = "value = 1\n"
 
 
@@ -36,3 +38,11 @@ def test_code_rules_skip_a_benchmark_case() -> None:
 
 def test_python_rules_accept_the_harness_itself() -> None:
     assert adapters.accepts_python(_document(HARNESS_PATH)) is True
+
+
+def test_markdown_rules_skip_a_benchmark_case() -> None:
+    assert adapters.accepts_markdown(_document(CORPUS_README_PATH)) is False
+
+
+def test_markdown_rules_accept_a_harness_document() -> None:
+    assert adapters.accepts_markdown(_document(HARNESS_DOCUMENT_PATH)) is True

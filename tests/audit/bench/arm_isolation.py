@@ -21,7 +21,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from config.arm_isolation_constants import (
+from bench_parts.config.arm_isolation_constants import (
     AGENTS_DIRECTORY_NAME,
     ALL_FILE_WRITING_TOOLS,
     ALL_HARMLESS_TARGETS,

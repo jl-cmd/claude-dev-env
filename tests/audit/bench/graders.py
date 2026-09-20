@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from config.graders_constants import (
+from bench_parts.config.graders_constants import (
     DEFAULT_COMMAND_TIMEOUT_SECONDS,
     DETAIL_CHARACTER_LIMIT,
 )

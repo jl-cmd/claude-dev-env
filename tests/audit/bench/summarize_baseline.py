@@ -21,7 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import run_arm
-from config.summarize_baseline_constants import (
+from bench_parts.config.summarize_baseline_constants import (
     ALL_BASELINE_ARMS,
     ALL_SUMMARY_COLUMNS,
     CLEAN_EXIT_CODE,

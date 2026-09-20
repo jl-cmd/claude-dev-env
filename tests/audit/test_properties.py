@@ -62,26 +62,41 @@ def read_tsv_rows(tsv_path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(tsv_file, delimiter="\t"))
 
 
+def _source_faults(property_id: str, source_id: str, quote: str) -> list[str]:
+    all_faults: list[str] = []
+    if source_id != HOUSE_SOURCE_ID and source_id not in ALL_LOCKED_SOURCE_IDS:
+        all_faults.append(f"{property_id}: unknown source id {source_id}")
+    if source_id in ALL_TARGET_EVIDENCE_SOURCE_IDS:
+        all_faults.append(f"{property_id}: target evidence {source_id} is no yardstick")
+    if source_id != HOUSE_SOURCE_ID and not quote.strip():
+        all_faults.append(f"{property_id}: empty quote on a sourced row")
+    return all_faults
+
+
+def _class_faults(
+    property_id: str, class_field: str, all_inventory_classes: frozenset[str]
+) -> list[str]:
+    return [
+        f"{property_id}: class {each_class!r} absent from inventory"
+        for each_class in class_field.split(CLASS_SEPARATOR)
+        if each_class not in all_inventory_classes
+    ]
+
+
 def find_property_faults(
     all_property_rows: list[dict[str, str]], all_inventory_classes: frozenset[str]
 ) -> list[str]:
     all_faults: list[str] = []
     for each_row in all_property_rows:
         property_id = each_row["property_id"]
-        source_id = each_row["source_id"]
-        if source_id != HOUSE_SOURCE_ID and source_id not in ALL_LOCKED_SOURCE_IDS:
-            all_faults.append(f"{property_id}: unknown source id {source_id}")
-        if source_id in ALL_TARGET_EVIDENCE_SOURCE_IDS:
-            all_faults.append(
-                f"{property_id}: target evidence {source_id} is no yardstick"
+        all_faults.extend(
+            _source_faults(property_id, each_row["source_id"], each_row["quote"])
+        )
+        all_faults.extend(
+            _class_faults(
+                property_id, each_row["component_classes"], all_inventory_classes
             )
-        if source_id != HOUSE_SOURCE_ID and not each_row["quote"].strip():
-            all_faults.append(f"{property_id}: empty quote on a sourced row")
-        for each_class in each_row["component_classes"].split(CLASS_SEPARATOR):
-            if each_class not in all_inventory_classes:
-                all_faults.append(
-                    f"{property_id}: class {each_class!r} absent from inventory"
-                )
+        )
     return all_faults
 
 

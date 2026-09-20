@@ -19,13 +19,13 @@ import sys
 from pathlib import Path
 
 import run_arm
-from config.summarize_baseline_constants import (
+from bench_parts.config.summarize_baseline_constants import (
     DECISIVE_DELTA,
     PASS_BAND,
     TOKEN_BAND,
     WALL_BAND,
 )
-from config.summarize_pilot_constants import (
+from bench_parts.config.summarize_pilot_constants import (
     ALL_PILOT_COLUMNS,
     BARE_ARM,
     CLEAN_EXIT_CODE,
