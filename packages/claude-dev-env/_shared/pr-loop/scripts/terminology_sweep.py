@@ -182,6 +182,21 @@ def _collect_introduced_identifiers(
     return frozenset(all_identifier_tuples)
 
 
+def _fragments_split_at_breaks(all_fragments: list[str]) -> list[str]:
+    """Split each fragment at every sentence, link, and code-span break in turn."""
+    for each_break_pattern in (
+        INLINE_CODE_SPAN_PATTERN,
+        MARKDOWN_LINK_TARGET_PATTERN,
+        SENTENCE_BOUNDARY_PATTERN,
+    ):
+        all_fragments = [
+            each_piece
+            for each_fragment in all_fragments
+            for each_piece in each_break_pattern.split(each_fragment)
+        ]
+    return all_fragments
+
+
 def _split_into_prose_fragments(raw_fragment: str) -> list[str]:
     """Split a raw prose fragment at every sentence, link, and code-span break.
 
@@ -194,9 +209,8 @@ def _split_into_prose_fragments(raw_fragment: str) -> list[str]:
 
     A sentence-ending period, a Markdown link's target, and a backticked code
     span each end whatever the reader was reading and start something new.
-    Splitting there, instead of blanking the removed text to a single space,
-    keeps a word window from spanning two sentences or reaching across a
-    stripped span into unrelated text on its far side.
+    Splitting there keeps a word window scoped to one sentence, clear of a
+    stripped span's unrelated text on its far side.
 
     Args:
         raw_fragment: One prose fragment collected from an added line.
@@ -205,17 +219,7 @@ def _split_into_prose_fragments(raw_fragment: str) -> list[str]:
         The fragment's pieces with every break removed, in order, dropping
         any piece left blank.
     """
-    all_fragments = [raw_fragment]
-    for each_break_pattern in (
-        INLINE_CODE_SPAN_PATTERN,
-        MARKDOWN_LINK_TARGET_PATTERN,
-        SENTENCE_BOUNDARY_PATTERN,
-    ):
-        all_fragments = [
-            each_piece
-            for each_fragment in all_fragments
-            for each_piece in each_break_pattern.split(each_fragment)
-        ]
+    all_fragments = _fragments_split_at_breaks([raw_fragment])
     return [
         each_fragment.strip() for each_fragment in all_fragments if each_fragment.strip()
     ]
@@ -606,6 +610,22 @@ def _findings_for_line(
     return all_findings
 
 
+def _stem_identifier_tuple_for_code_file(each_file_path: str) -> IdentifierTuple | None:
+    """Return a non-test code file's stem as a multi-word identifier tuple.
+
+    ``None`` when the path is not a swept code file, is a test file, or its
+    stem carries fewer than the minimum identifier token count.
+    """
+    if _file_extension(each_file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS or _is_test_file(
+        each_file_path
+    ):
+        return None
+    stem_tuple = _identifier_token_tuple(Path(each_file_path).stem)
+    if len(stem_tuple) < MINIMUM_IDENTIFIER_TOKEN_COUNT:
+        return None
+    return stem_tuple
+
+
 def _file_stem_identifier_tuples(
     all_added_lines: list[tuple[str, int, str]],
 ) -> frozenset[IdentifierTuple]:
@@ -627,16 +647,11 @@ def _file_stem_identifier_tuples(
         One tuple per distinct, multi-word stem of an added, non-test code
         file.
     """
-    all_stem_tuples: set[IdentifierTuple] = set()
-    for each_file_path, _, _ in all_added_lines:
-        if _file_extension(each_file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS or _is_test_file(
-            each_file_path
-        ):
-            continue
-        stem_tuple = _identifier_token_tuple(Path(each_file_path).stem)
-        if len(stem_tuple) >= MINIMUM_IDENTIFIER_TOKEN_COUNT:
-            all_stem_tuples.add(stem_tuple)
-    return frozenset(all_stem_tuples)
+    return frozenset(
+        stem_tuple
+        for each_file_path, _, _ in all_added_lines
+        if (stem_tuple := _stem_identifier_tuple_for_code_file(each_file_path)) is not None
+    )
 
 
 def _find_terminology_near_misses(
