@@ -1,5 +1,15 @@
 # Changelog
 
+## [8.6.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.5.0...claude-dev-env-v8.6.0) (2026-09-20)
+
+
+### Features
+
+* **cli:** report the follow-up backlog and reach it through cde ([747c31a](https://github.com/jl-cmd/claude-dev-env/commit/747c31ad534ce088cbcfca29653631570403ea43))
+* **hooks:** track each recorded smell by check, severity and revision ([9cc5a46](https://github.com/jl-cmd/claude-dev-env/commit/9cc5a46ba12a9b1654a6ab6ae2074a383eda88fa))
+* **lint:** name the check behind each bundled finding ([9673461](https://github.com/jl-cmd/claude-dev-env/commit/96734617ae5263f3be4934df244591021a7b0507))
+* track flagged findings by check, severity and revision ([93870db](https://github.com/jl-cmd/claude-dev-env/commit/93870db66ea9db7c4dc972f019c8d4410e83b1ba))
+
 ## [8.5.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.4.3...claude-dev-env-v8.5.0) (2026-09-20)
 
 
