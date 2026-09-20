@@ -17,7 +17,6 @@ _hooks_directory = str(Path(__file__).resolve().parent.parent)
 try:
     from project_roots import enclosing_project_root
     from pyproject_config_discovery import (
-        ancestor_directories,  # noqa: F401  re-exported for validation/mypy_validator
         find_pyproject_configuring_tool,
     )
 except ModuleNotFoundError:
@@ -25,7 +24,6 @@ except ModuleNotFoundError:
         sys.path.insert(0, _validators_directory)
     from project_roots import enclosing_project_root
     from pyproject_config_discovery import (
-        ancestor_directories,  # noqa: F401  re-exported for validation/mypy_validator
         find_pyproject_configuring_tool,
     )
 

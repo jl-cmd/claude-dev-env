@@ -1207,8 +1207,8 @@ export const FOLDED_HOOK_RELATIVE_PATHS = new Set([
 
 /**
  * After-write hook script paths the installer manages even though hooks.json
- * carries no standalone entry for them. mypy_validator and auto_formatter run
- * hosted inside the PostToolUse dispatcher; doc_gist_auto_publish and
+ * carries no standalone entry for them. auto_formatter runs
+ * hosted inside the PostToolUse dispatcher; mypy_validator, doc_gist_auto_publish and
  * md_to_html_companion are retired hooks with no script on disk. Each path stays
  * in this set so a reinstall from an older settings shape prunes its standalone
  * entry — a hosted hook would otherwise double-run alongside the dispatcher, and

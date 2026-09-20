@@ -24,7 +24,6 @@ ALL_RETIRED_HOOK_PATHS = (
     "blocking/open_questions_in_plans_blocker.py",
     "blocking/docstring_rule_gate_count_blocker.py",
     "blocking/plain_language_blocker.py",
-    "lifecycle/config_change_guard.py",
 )
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 ALL_RULE_FIXTURES = (

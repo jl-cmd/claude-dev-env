@@ -254,8 +254,6 @@ Automated enforcement that runs on Claude Code events. The installer detects you
 | Stop | `hedging-language-blocker` | Blocks responses with hedging language (anti-hallucination) |
 | SessionEnd | `session-end-cleanup` | Cleans temporary state on session end |
 | ConfigChange | `config-change-guard` | Guards against accidental settings changes |
-| PostToolUse (Write\|Edit) | `mypy_validator` | Runs mypy type checking after file writes |
-| PostToolUse (Write\|Edit) | `auto-formatter` | Auto-formats Python (ruff/black) and JS (prettier) on write |
 | PostToolUse (Agent\|Task) | `investigation-tracker-reset` | Resets investigation tracker after delegation |
 | Notification | `claude-notification-handler` | Routes Claude Code notifications to desktop |
 

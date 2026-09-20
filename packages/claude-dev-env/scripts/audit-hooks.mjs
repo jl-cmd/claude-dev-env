@@ -8,7 +8,6 @@ import { KNOWN_GIT_HOOK_NAMES } from "../bin/git_hooks_installer.mjs";
 const dispatcherSpecs = Object.freeze([
   ["script:blocking/pre_tool_use_dispatcher.py", "hooks_constants/pre_tool_use_dispatcher_constants.py", "ALL_HOSTED_HOOK_ENTRIES"],
   ["script:blocking/bash_pre_tool_use_dispatcher.py", "hooks_constants/bash_pre_tool_use_dispatcher_constants.py", "ALL_BASH_HOSTED_HOOK_ENTRIES"],
-  ["script:blocking/stop_dispatcher.py", "hooks_constants/stop_dispatcher_constants.py", "ALL_STOP_HOSTED_HOOK_PATHS"],
   ["script:validation/post_tool_use_dispatcher.py", "hooks_constants/post_tool_use_dispatcher_constants.py", "ALL_POST_HOSTED_HOOK_ENTRIES"],
   ["script:blocking/bash_post_call_dispatcher.py", "hooks_constants/bash_post_call_dispatcher_constants.py", "ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES"],
 ]);
