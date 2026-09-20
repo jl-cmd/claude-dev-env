@@ -60,6 +60,8 @@ Copy-Item -LiteralPath @(
 
 The shim selects the newest installed pstack version under `$CODEX_HOME`, or under `%USERPROFILE%\.codex` when `CODEX_HOME` is unset. It runs Bun from pstack's scripts directory so package resolution works from any current directory. It passes command arguments and the exit code through unchanged.
 
+Before launching the entrypoint, it runs pstack's dependency bootstrap in a separate Bun process. This makes the first invocation work when the installed plugin has not populated `node_modules` yet.
+
 Open a new PowerShell window, then run:
 
 ```powershell
