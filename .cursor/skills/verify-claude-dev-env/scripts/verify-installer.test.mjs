@@ -26,25 +26,25 @@ test('buildVerificationPaths keeps the driver and evidence paths inside the repo
     );
     assert.equal(
         paths.transcriptPath.replaceAll('\\', '/'),
-        'C:/workspace/.audit/hook-linter-conversion/evidence/installer-transcript.json',
+        'C:/workspace/tests/audit/data/hook-linter-conversion/evidence/installer-transcript.json',
     );
 });
 
 test('sanitizeTranscript removes repository-specific absolute paths', () => {
     const paths = buildVerificationPaths('C:/workspace');
     const sanitizedText = sanitizeTranscript(
-        'Sandbox C:/workspace/.audit and C:/workspace/packages/claude-dev-env',
+        'Sandbox C:/workspace/tests/audit/data and C:/workspace/packages/claude-dev-env',
         paths,
     );
-    assert.equal(sanitizedText, 'Sandbox <repository-root>/.audit and <repository-root>/packages/claude-dev-env');
+    assert.equal(sanitizedText, 'Sandbox <repository-root>/tests/audit/data and <repository-root>/packages/claude-dev-env');
 });
 
 test('sanitizeTranscript folds Windows path case', () => {
     const paths = buildVerificationPaths('C:/workspace');
-    const sanitizedText = sanitizeTranscript('Sandbox C:/WORKSPACE/.audit', paths);
+    const sanitizedText = sanitizeTranscript('Sandbox C:/WORKSPACE/tests/audit/data', paths);
     const expectedText = process.platform === 'win32'
-        ? 'Sandbox <repository-root>/.audit'
-        : 'Sandbox C:/WORKSPACE/.audit';
+        ? 'Sandbox <repository-root>/tests/audit/data'
+        : 'Sandbox C:/WORKSPACE/tests/audit/data';
     assert.equal(sanitizedText, expectedText);
 });
 
