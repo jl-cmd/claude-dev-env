@@ -4,6 +4,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from types import ModuleType
 
+from .check_catalog import check_id_for_message
 from .model import Diagnostic, Document, Location, Severity
 
 HookModuleLoader = Callable[[str], ModuleType]
@@ -69,7 +70,13 @@ def _diagnostics_for_messages(
             None if maybe_line is None else Location(document.path, maybe_line, 1)
         )
         all_diagnostics.append(
-            Diagnostic(rule_id, Severity.ERROR, each_message, location)
+            Diagnostic(
+                rule_id,
+                Severity.ERROR,
+                each_message,
+                location,
+                check_id_for_message(rule_id, each_message),
+            )
         )
     return tuple(all_diagnostics)
 
