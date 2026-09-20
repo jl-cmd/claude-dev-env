@@ -123,25 +123,25 @@ test('blocks malformed policy, unknown input, unavailable replacement, and untru
 });
 
 test('blocks a trusted session advisor route that resolves to Astra', () => {
-        const hookResponse = buildSubagentModelRoutingResponse(
-            buildHookPayload({
-                agent_type: 'session-advisor',
-                model: 'Astra',
-                reasoning_effort: 'high',
-            }),
-            {
-                trustedSessionMetadata: {
-                    authorized: true,
-                    registeredAgentType: 'session-advisor',
-                },
+    const hookResponse = buildSubagentModelRoutingResponse(
+        buildHookPayload({
+            agent_type: 'team-advisor',
+            model: 'Astra',
+            reasoning_effort: 'high',
+        }),
+        {
+            trustedSessionMetadata: {
+                authorized: true,
+                registeredAgentType: 'team-advisor',
             },
-        );
+        },
+    );
 
-        assert.equal(hookResponse.hookSpecificOutput.permissionDecision, 'deny');
-        assert.equal(
-            hookResponse.hookSpecificOutput.permissionDecisionReason,
-            'only gpt-*-luna subagents are permitted',
-        );
+    assert.equal(hookResponse.hookSpecificOutput.permissionDecision, 'deny');
+    assert.equal(
+        hookResponse.hookSpecificOutput.permissionDecisionReason,
+        'only gpt-*-luna subagents are permitted',
+    );
 });
 
 test('allows an Astra route when the explicit advisor flag is present', () => {
@@ -216,7 +216,7 @@ test('the standalone hook silently remaps native Sol Medium and preserves other 
 
 test('a session advisor name without trusted session metadata is blocked', () => {
     const hookResponse = buildSubagentModelRoutingResponse(buildHookPayload({
-        agent_type: 'session-advisor',
+        agent_type: 'team-advisor',
         model: 'Astra',
         reasoning_effort: 'high',
     }));
@@ -255,7 +255,7 @@ test('the standalone hook command blocks an advisor without host metadata', () =
         {
             encoding: 'utf8',
             input: JSON.stringify(buildHookPayload({
-                agent_type: 'session-advisor',
+                agent_type: 'team-advisor',
                 model: 'Astra',
                 reasoning_effort: 'high',
             })),

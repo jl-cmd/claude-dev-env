@@ -15,9 +15,9 @@ argument-hint: "[issue action - file | update | close | refresh-epic | full hand
 
 **dedup -> do the work -> markers only -> numbers + URLs**
 
-Run every step the ask needs in one go (file, label, attach, refresh, and so on). The `issue-tracker` agent is the primary handler for one action per turn; this skill is the session path when the agent is unavailable or the ask spans several steps.
+Run every step the ask needs in one go (file, label, attach, refresh, and so on). `pstack:poteto-agent` is the primary handler for one action per turn when it loads this skill; this skill is the session path when the agent is unavailable or the ask spans several steps.
 
-Prefer the **same warm** `issue-tracker` agent for follow-ups on the same issue or a related issue on the same epic. Spawn a new agent only for an unrelated work-stream or when the warm agent is gone.
+Prefer the **same warm** `pstack:poteto-agent` for follow-ups on the same issue or a related issue on the same epic. Spawn a new agent only for an unrelated work-stream or when the warm agent is gone.
 
 ## Voice
 

@@ -29,25 +29,17 @@
     "default": "worker",
     "worker": [
       "worker",
+      "poteto-agent",
+      "pstack:poteto-agent",
       "default",
       "explorer",
       "caveman",
-      "clean-coder",
-      "code-quality-agent",
       "code-verifier",
       "deep-research",
-      "docs-agent",
-      "git-commit-crafter",
-      "issue-tracker",
-      "plan-packet-validator",
-      "pr-description-writer",
-      "skill-writer-agent",
-      "theme-prompt-agent",
-      "theme-prompt-generator",
-      "translator"
+      "docs-agent"
     ],
-    "advisor": ["advisor", "session-advisor", "team-advisor", "code-advisor"],
-    "trustedAdvisor": ["session-advisor", "team-advisor", "code-advisor"]
+    "advisor": ["advisor", "team-advisor", "code-advisor"],
+    "trustedAdvisor": ["advisor", "team-advisor", "code-advisor"]
   },
   "approvedPairs": [
     {"model": "luna", "effort": "high"},

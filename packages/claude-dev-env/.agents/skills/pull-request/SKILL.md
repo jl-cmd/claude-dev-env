@@ -38,8 +38,9 @@ Use this skill for one pull request action:
 - Submit a pull request review.
 - Recover one selected legacy author record before the action.
 
-Send issue create, edit, and comment work to `issue-tracker`. Send review and
-fix-loop work to `e-code-review`. Send commits to `source-command-commit`.
+Send issue create, edit, and comment work to `pstack:poteto-agent` with the
+`issue-tracker` skill and one action. Send review and fix-loop work to
+`e-code-review`. Send commits to `source-command-commit`.
 
 Require one repository and one action target. Stop before author lookup or
 network work when the repository, pull request, action, author, or required
@@ -73,9 +74,9 @@ current process environment.
 
 | Skill | When | Produces | If missing |
 |---|---|---|---|
-| `pr-description-writer` | Create or a full body rewrite, when you want the body drafted for you | A reviewed title and body file | Write the title and body yourself |
+| `pstack:poteto-agent` with `pull-request` instructions | Create or a full body rewrite, when you want the body drafted for you | A reviewed title and body file | Write the title and body yourself |
 | `privacy-hygiene` | Before any durable GitHub post | A clean body and repository privacy sweep | Stop before publication and report the missing gate |
-| `issue-tracker` | Issue create, edit, or comment requests | Issue state and issue URLs | Route the request there. |
+| `pstack:poteto-agent` with `issue-tracker` | Issue create, edit, or comment requests | Issue state and issue URLs | Load the skill in this session. |
 | `e-code-review` | Review or review/fix loop requests | Structured findings or a clean review result | Route the request there. |
 | `source-command-commit` | Commit or push requests | A verified commit or pushed branch | Route the request there. |
 
@@ -98,7 +99,8 @@ request target. Create actions publish drafts. Record the target before any writ
 ### 2. Author the title and body
 
 For create and full body rewrite, write the title and a body file, or invoke
-the installed `pr-description-writer` to draft them from the diff. A comment or
+`pstack:poteto-agent` with the diff-specific writing instructions to draft
+them. A comment or
 review may use a supplied body file when it does not rewrite the pull request
 description.
 

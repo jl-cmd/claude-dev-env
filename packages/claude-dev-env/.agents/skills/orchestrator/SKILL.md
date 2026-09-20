@@ -24,7 +24,7 @@ than a solo frontier agent held to the same verification rigor, with
 84-98% of the team's input tokens billed at the worker rate.
 
 Under this skill the session is the orchestrator. It spawns and resumes
-executor subagents — `clean-coder` and the like — and those executors do
+executor subagents through `pstack:poteto-agent`, and those executors do
 every bit of the execution: the code edits, the build runs, the test
 runs. The orchestrating session drives the plan, keeps the run artifacts
 and the ledger current, and answers executor consults. Hard questions
@@ -190,7 +190,7 @@ Return: status, artifact paths, blockers — nothing else.
   unit that fits one sentence plus pointers, has one mechanical
   done-check, and needs no mid-run clarification. A task that does not
   fit gets split in the plan — never padded into a longer prompt.
-  Explore fan-outs run tiny; a `clean-coder` assignment can carry a
+  Explore fan-outs run tiny; a `pstack:poteto-agent` assignment can carry a
   whole scoped feature.
 - **Focused tickets are the house convention.** One mechanical done-check
   per ticket; thick context lives in the assignment file, not the ticket
@@ -204,10 +204,9 @@ Return: status, artifact paths, blockers — nothing else.
 - **Resume with a thin next-slice ticket.** A warm agent already holds
   the assignment's thick context, so its next ticket names only the next
   slice of work and the done-check — it does not restate the assignment.
-- **Do not restate what the agent definition carries.** The routing
-  table picks the definition, and `clean-coder` already holds the code
-  discipline. The ticket adds the task, the pointers, and the consult
-  block only.
+- **Keep the task brief specific.** The `pstack:poteto-agent` definition
+  carries poteto-mode style. The ticket adds the task, the pointers, the
+  task-specific instructions, and the consult block.
 - **The consult block is pasted, assembled text.** Assemble it at ticket
   write time from the parts in
   [`reference/executor-consult-block.md`](reference/executor-consult-block.md)
@@ -215,16 +214,15 @@ Return: status, artifact paths, blockers — nothing else.
 
 ## Workflow Agent Routing
 
-Every delegated task runs through a workflow-backed agent invocation. Do
-not spawn a flat subagent directly when a workflow invocation or
-workflow resume is available.
+Every delegated task uses `pstack:poteto-agent` with a task-specific prompt.
+Resume an existing agent when its context matches the task.
 
 | Work | Agent type | Model |
 |---|---|---|
-| Feature, bug, and refactor coding | `clean-coder` | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
-| Review and verification | `code-quality-agent` | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
-| Script runs, GitHub posting, and backfill driving | `general-purpose` runner | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
-| PR descriptions | `pr-description-writer` | `haiku`, with file-list grounding check |
+| Feature, bug, and refactor coding | `pstack:poteto-agent` | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
+| Review and verification | `pstack:poteto-agent` | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
+| Script runs, GitHub posting, and backfill driving | `pstack:poteto-agent` with an execution brief | `sonnet` on a Claude host; the sonnet-equivalent id the worker-model resolver prints on a third-party host |
+| PR descriptions | `pstack:poteto-agent` | `haiku`, with file-list grounding check |
 | Fan-out searches and checklist verification reads | `Explore` | `haiku`; use `sonnet` when judgment-heavy |
 
 Every row that edits code, runs a build, or runs a test is a coding row.
@@ -234,8 +232,8 @@ the worker model; the per-spawn `model:` field does.
 
 Routing rules:
 
-- Each row spawns workflow-backed with a ticket; the routing row and the
-  ticket together carry the agent type, model, task, and return
+- Each row spawns `pstack:poteto-agent` with a ticket; the routing row and
+  the ticket together carry the agent type, model, task, and return
   contract. A coding task category is never served by a different tier
   as a cost call — the table is the contract.
 - **Fail closed on a Claude host.** When `sonnet` cannot be spawned, use
