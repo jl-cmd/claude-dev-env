@@ -1,5 +1,19 @@
 # Changelog
 
+## [8.4.3](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.4.2...claude-dev-env-v8.4.3) (2026-09-20)
+
+
+### Bug Fixes
+
+* **windows:** bootstrap pstack dependencies before launch ([65f2124](https://github.com/jl-cmd/claude-dev-env/commit/65f2124c32c744998473f8046b3b51bcedc04875))
+* **windows:** bootstrap pstack dependencies before launch ([1ac116d](https://github.com/jl-cmd/claude-dev-env/commit/1ac116d6bb9de7452f46770a2d2201b271467457))
+
+
+### Maintenance
+
+* **scripts:** retire unused Node hook audit ([5814d74](https://github.com/jl-cmd/claude-dev-env/commit/5814d74f3807af5746fa10cc94fe28e81a60b0b4))
+* **scripts:** retire unused Node hook audit ([cec0b4d](https://github.com/jl-cmd/claude-dev-env/commit/cec0b4d3bed78683a607311926546ac583191fff))
+
 ## [8.4.2](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.4.1...claude-dev-env-v8.4.2) (2026-09-20)
 
 
