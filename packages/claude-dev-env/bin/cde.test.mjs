@@ -268,3 +268,28 @@ test("reports a synchronous child start failure as invalid input", async () => {
     assert.equal(exitCode, 2);
     assert.deepEqual(messages, ["Unable to start the policy linter.\n"]);
 });
+
+
+test("dispatches followup to the follow-up ledger command", async () => {
+    let receivedCommand;
+    const exitCode = await main(
+        ["followup", "--python", "python-test", "list"],
+        {
+            findPython: async () => "unused-python",
+            runCommand: async (command) => {
+                receivedCommand = command;
+                return 0;
+            },
+        },
+    );
+    assert.equal(exitCode, 0);
+    assert.equal(receivedCommand.executable, "python-test");
+    assert.match(receivedCommand.arguments[0], /followup_cli\.py$/);
+    assert.deepEqual(receivedCommand.arguments.slice(1), ["list"]);
+});
+
+
+test("help names the followup command", () => {
+    assert.match(createHelpText(), /cde <lint\|verify\|followup>/);
+    assert.match(createHelpText(), /cde followup count/);
+});

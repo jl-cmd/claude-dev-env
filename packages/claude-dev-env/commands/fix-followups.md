@@ -18,13 +18,19 @@ Run `cde followup brief --repository-root <root>`.
 When it prints `no follow-ups recorded`, report that and stop. There is no
 work.
 
-Otherwise the brief lists one line per finding, each carrying the rule
-identifier, the file, and the message.
+Otherwise the brief lists one line per finding, each carrying the check
+identifier, the file, the message, and the revision the finding was recorded
+against.
 
 ## 2. Group the findings
 
-Group the lines by rule identifier. A rule with several findings takes one
+Group the lines by check identifier. A check with several findings takes one
 pass over every file it names, so the same fix shape lands once.
+
+A finding whose check identifier ends in `unclassified` comes from a check the
+catalog does not name yet. Fix it like any other, and add its entry to
+`scripts/policy_lint/config/check_catalog_constants.py` with a sample in the
+catalog's synchronization test.
 
 Read each named file before editing it. A recorded finding names the state of
 the file at the moment the gate ran, so confirm the finding still holds.
@@ -41,14 +47,15 @@ finding names a generated file, regenerate it with the repository's tooling.
 
 ## 4. Open the pull request
 
-Branch from the repository's default branch. Commit each rule group on its
-own, with a message naming the rule identifier and the files.
+Branch from the repository's default branch. Commit each group on its own,
+with a message naming the check identifier and the files.
 
 Open the pull request as a draft. Write the body as:
 
 - One `Before:` paragraph saying which findings stood open.
 - One `After:` paragraph saying what the tree now holds.
-- A short `How` paragraph naming the rule groups and the files each touched.
+- A short `How` paragraph naming the groups, the files each touched, and the
+  revisions the findings were recorded against.
 
 Push, then confirm the required checks report on the branch head.
 
@@ -62,5 +69,5 @@ A finding the pull request left alone goes back in the ledger with
 
 ## Report
 
-Name the pull request link, the rule groups fixed, the findings dropped as no
-longer present, and anything left in the ledger.
+Name the pull request link, the groups fixed, the findings dropped because
+the current file reads clean, and anything left in the ledger.
