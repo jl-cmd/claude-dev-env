@@ -1,11 +1,11 @@
 """Shared helpers for reading and writing Claude permission settings.
 
-Writes to ~/.claude/settings.json are atomic and permission-preserving: the
-target file's existing POSIX mode is captured, a sibling temp file is
-created via os.open with O_CREAT | O_EXCL and the preserved mode, content
-is written, then os.replace swaps it into place. Output is serialized with
-sort_keys=True for a stable on-disk layout; the first run on a hand-ordered
-settings file produces a one-time re-sort diff, subsequent writes are stable.
+A write to ~/.claude/settings.json is atomic and keeps the file mode::
+
+    capture mode -> os.open(temp, O_CREAT | O_EXCL, mode) -> write -> os.replace
+
+Output uses sort_keys=True, so the first write to a hand-ordered file
+re-sorts it once and later writes are stable.
 """
 
 import json

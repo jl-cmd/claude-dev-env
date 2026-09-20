@@ -429,3 +429,7 @@ def test_find_pyproject_handles_malformed_toml(tmp_path: Path) -> None:
     target_file = project_root / "module.py"
     target_file.write_text("a = 1\n")
     assert find_pyproject_with_mypy_config(target_file) is None
+
+
+def test_should_not_re_export_the_pyproject_ancestor_walk() -> None:
+    assert not hasattr(mypy_integration_module, "ancestor_directories")
