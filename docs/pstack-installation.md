@@ -41,6 +41,35 @@ The plugin keeps its own state under each host's plugin store. The install manif
 
 Run `/pstack:setup-pstack` in Claude Code, or `setup-pstack` in Codex, to change the plugin's model defaults or turn its automatic routing off. This repository's own `subagent-model-policy.json` and its `subagent_model_routing` hook stay in place and are unrelated to the plugin's routing.
 
+## Windows command shims
+
+The pstack package provides `watch-pr` and `ship-pr` as extensionless Bun entrypoints. Windows cannot resolve those files as commands and opens the app picker when a playbook runs one by name.
+
+`claude-dev-env` does not modify the pstack package. It installs optional user-owned shims at `~/.claude/scripts/windows/pstack/`. Copy the three files to a directory on `PATH`, such as `%USERPROFILE%\.local\bin`:
+
+```powershell
+$source = Join-Path $env:USERPROFILE '.claude\scripts\windows\pstack'
+$target = Join-Path $env:USERPROFILE '.local\bin'
+New-Item -ItemType Directory -Force -Path $target | Out-Null
+Copy-Item -LiteralPath @(
+    (Join-Path $source 'pstack-command-shim.ps1'),
+    (Join-Path $source 'watch-pr.cmd'),
+    (Join-Path $source 'ship-pr.cmd')
+) -Destination $target -Force
+```
+
+The shim selects the newest installed pstack version under `$CODEX_HOME`, or under `%USERPROFILE%\.codex` when `CODEX_HOME` is unset. It runs Bun from pstack's scripts directory so package resolution works from any current directory. It passes command arguments and the exit code through unchanged.
+
+Open a new PowerShell window, then run:
+
+```powershell
+Get-Command watch-pr
+watch-pr --help
+ship-pr inspect --help
+```
+
+If the target directory is not on `PATH`, add it to the user `PATH` before running the checks.
+
 ## Retired integration points
 
 An earlier `claude-dev-env` installed pstack itself: a pinned upstream commit, a release store under the managed root, generated host adapters, a `cde-pstack` command, a copied model selector, seeded model preference files, and a `session-continuity` companion registered as a hook in Claude, Codex, and Cursor. The plugin covers each of those, including the SessionStart context the companion supplied.
