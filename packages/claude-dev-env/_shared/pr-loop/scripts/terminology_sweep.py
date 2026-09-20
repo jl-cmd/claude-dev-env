@@ -76,7 +76,6 @@ from pr_loop_shared_constants.terminology_sweep_constants import (
     TEST_FILE_PREFIX,
     TEST_FILE_SUFFIX,
 )
-
 from subprocess_window_access import hidden_window_creation_flags
 
 IdentifierTuple = tuple[str, ...]
