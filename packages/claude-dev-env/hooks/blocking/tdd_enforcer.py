@@ -4,9 +4,8 @@ Blocks a write to a production source file when no matching test was modified
 within the freshness window, enforcing "TDD IS NON-NEGOTIABLE" from CLAUDE.md.
 The gate records each candidate test's content hash at every sighting and
 compares that hash on the next write. A first sighting requires content that
-differs from HEAD. A recorded failing pytest run, written by
-``hooks/observability/test_failure_recorder.py``, is read before that fallback
-and applies while the candidate's content still matches what failed.
+differs from HEAD. A stored failing pytest run is read before that fallback
+and applies while the candidate's content still matches the stored hash.
 Each concern lives in a ``tdd_enforcer_parts`` submodule; this entry wires them
 into one PreToolUse gate and re-exports their surface for the test suite.
 """

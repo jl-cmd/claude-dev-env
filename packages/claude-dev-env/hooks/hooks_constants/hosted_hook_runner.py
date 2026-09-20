@@ -89,7 +89,7 @@ def resolved_hook_script_path(relative_path: str) -> str:
 
     ::
 
-        "observability/test_failure_recorder.py" -> <hooks>/observability/...
+        "advisory/pr_done_reminder.py" -> <hooks>/advisory/pr_done_reminder.py
 
     The root comes from this module's own location, so every dispatcher
     resolves against the same directory however deep it sits.

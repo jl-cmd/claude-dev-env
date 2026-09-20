@@ -2,8 +2,7 @@
 
 One interpreter start runs every hosted PostToolUse hook a Bash call fires.
 The unit tests pin selection and call order with a fake
-runner; the end-to-end test drives the real hosted hooks through a real
-payload and confirms the recorder's own real side effect lands.
+runner; the end-to-end test checks that an ordinary Bash call stays silent.
 ``hooks/conftest.py`` already puts the hooks and blocking directories on
 sys.path for test collection, so this file needs no bootstrap of its own.
 """
@@ -23,12 +22,9 @@ from bash_post_call_dispatcher import (
 )
 from hooks_constants.bash_pre_tool_use_dispatcher_constants import BASH_TOOL_NAME
 from hooks_constants.hosted_hook_runner import HostedHookRun
-from tdd_enforcer_parts import content_hash_store
 
 _ALL_EXPECTED_ROSTER_PATHS = [
-    "observability/test_failure_recorder.py",
     "advisory/pr_done_reminder.py",
-    "advisory/msys_path_conversion_advisor.py",
 ]
 
 
@@ -63,11 +59,9 @@ def test_dispatch_forwards_hosted_hook_additional_context_as_one_payload(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     context_by_hook = {
-        "test_failure_recorder.py": "",
         "pr_done_reminder.py": json.dumps(
             {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "PR #42"}}
         ),
-        "msys_path_conversion_advisor.py": "",
     }
 
     def _fake_run_hook(script_path: str, payload_text: str) -> HostedHookRun:
@@ -124,29 +118,18 @@ def test_main_exits_zero_and_writes_nothing_to_stdout(
     assert capsys.readouterr().out == ""
 
 
-def test_end_to_end_real_hosted_hooks_record_a_real_pytest_failure(tmp_path: Path) -> None:
-    """Drive the real recorder through the dispatcher."""
-    test_file = tmp_path / "test_orders.py"
-    test_file.write_text("def test_fulfill(): assert False\n")
-    session_id = "post-dispatcher-session"
-    failing_output = (
-        "Error: Exit code 1\n"
-        "FAILED test_orders.py::test_fulfill - AssertionError\n"
-        "1 failed in 0.02s"
-    )
+def test_end_to_end_hosted_hooks_leave_an_ordinary_call_silent(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     payload = json.dumps(
         {
-            "session_id": session_id,
             "cwd": str(tmp_path),
             "tool_name": "Bash",
-            "tool_input": {"command": "pytest test_orders.py"},
-            "tool_response": failing_output,
+            "tool_input": {"command": "git status"},
+            "tool_response": {"stdout": "clean", "stderr": ""},
         }
     )
 
     dispatch(payload, BASH_TOOL_NAME)
 
-    state_file = content_hash_store._state_file_path(session_id, str(tmp_path))
-    state = json.loads(state_file.read_text())
-    entry = state[content_hash_store._state_key_for(test_file)]
-    assert entry[content_hash_store.STORED_FAILURE_EXIT_STATUS_KEY] == 1
+    assert capsys.readouterr().out == ""

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from hooks_constants.bash_pre_tool_use_dispatcher_constants import (
     ALL_BASH_AND_POWERSHELL_TOOL_NAMES,
-    ALL_BASH_ONLY_TOOL_NAMES,
     BashHostedHookEntry,
 )
 
@@ -30,9 +29,7 @@ __all__ = [
 ]
 
 ALL_BASH_POST_TOOL_USE_HOSTED_HOOK_ENTRIES: tuple[BashHostedHookEntry, ...] = (
-    BashHostedHookEntry("observability/test_failure_recorder.py", ALL_BASH_ONLY_TOOL_NAMES),
     BashHostedHookEntry("advisory/pr_done_reminder.py", ALL_BASH_AND_POWERSHELL_TOOL_NAMES),
-    BashHostedHookEntry("advisory/msys_path_conversion_advisor.py", ALL_BASH_ONLY_TOOL_NAMES),
 )
 
 EXIT_CODE_ERROR_PREFIX: str = "Error: Exit code "
