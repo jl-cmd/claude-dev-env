@@ -1,5 +1,33 @@
 # Changelog
 
+## [8.3.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.2.0...claude-dev-env-v8.3.0) (2026-09-20)
+
+
+### Features
+
+* **codex:** allow explicit advisor Astra bypass ([b1da452](https://github.com/jl-cmd/claude-dev-env/commit/b1da4527084a49853a625a5fb07727cea614317f))
+* **codex:** allow explicit advisor Astra bypass ([1854aaa](https://github.com/jl-cmd/claude-dev-env/commit/1854aaaf034046b341e8f42416e10605054c0347))
+
+
+### Bug Fixes
+
+* **agents:** restore retirement branch gates ([210ef88](https://github.com/jl-cmd/claude-dev-env/commit/210ef88305a4ecdafb49fd1d0e0790fd9dddab16))
+* **codex:** allow only Luna subagents ([2191a17](https://github.com/jl-cmd/claude-dev-env/commit/2191a172390ed8605a8ab530853aa32820d721bc))
+
+
+### Documentation
+
+* **pull-request:** verify published claims ([a320bcc](https://github.com/jl-cmd/claude-dev-env/commit/a320bcc8bfd1a56942f6cea473efdcf84740b3cd))
+* tighten PR claim and evidence guidance ([0e8f642](https://github.com/jl-cmd/claude-dev-env/commit/0e8f642259746d77ebe271147c4f91ce1cbab2ff))
+
+
+### Refactoring
+
+* **agents:** retire personal agents for poteto dispatch ([e11cd66](https://github.com/jl-cmd/claude-dev-env/commit/e11cd66ede85b85b3ec053218608b42ce823ad2b))
+* **agents:** retire personal agents for poteto dispatch ([7927e0e](https://github.com/jl-cmd/claude-dev-env/commit/7927e0e874dda7e7eb3a5f6004bfa66d9057a51c))
+* **hooks:** retire unreachable Bash failure observers ([b53b7cd](https://github.com/jl-cmd/claude-dev-env/commit/b53b7cdbd55a218afac25937c360f9e3441b7cf5))
+* **hooks:** retire unreachable Bash failure observers ([2ef97c4](https://github.com/jl-cmd/claude-dev-env/commit/2ef97c42dcd15ef9a63403c6a8062bfcf1315159))
+
 ## [8.2.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.1.0...claude-dev-env-v8.2.0) (2026-09-19)
 
 
