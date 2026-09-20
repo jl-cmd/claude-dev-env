@@ -44,10 +44,12 @@ def repository_fixture(tmp_path: Path) -> Path:
     builder.run_git(tmp_path, ("init", "-q", "-b", "main"), None)
     builder.run_git(tmp_path, ("config", "user.email", "audit@example.com"), None)
     builder.run_git(tmp_path, ("config", "user.name", "Audit"), None)
-    (tmp_path / "README.md").write_text("# fixture\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("# fixture\n", encoding="utf-8", newline="\n")
     nested_directory = tmp_path / "src"
     nested_directory.mkdir()
-    (nested_directory / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (nested_directory / "app.py").write_text(
+        "VALUE = 1\n", encoding="utf-8", newline="\n"
+    )
     builder.run_git(tmp_path, ("add", "-A"), None)
     builder.run_git(tmp_path, ("commit", "-q", "-m", "fixture"), None)
     return tmp_path
