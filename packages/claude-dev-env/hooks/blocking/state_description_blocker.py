@@ -370,12 +370,12 @@ def find_violations_with_lines(text: str, file_path: str) -> list[tuple[str, int
     ::
 
         # config.py
-        1  fixture_text = "the field is `historically` required"
+        1  fixture_text = "the field was `previously` required"
         4  def read_field():
         5      \"\"\"Read the field.
-        7      `The field is historically required.`
+        7      `The field was previously required.`
         8      \"\"\"
-        flag: ("historically", 7)  -- the docstring sentence that tripped the rule
+        flag: ("previously", 7) and ("was previously", 7)  -- one per pattern
         ok:   line 1 never reported  -- a plain string literal is fixture data, not prose
 
     Each match is paired with the line it matched on, not an earlier mention
