@@ -1,10 +1,10 @@
-param(
-  [Parameter(Mandatory = $true, Position = 0)]
-  [ValidateSet("watch-pr", "ship-pr")]
-  [string]$Command,
-  [Parameter(ValueFromRemainingArguments = $true)]
-  [string[]]$CommandArguments
-)
+$command = $args[0]
+$commandArguments = @($args | Select-Object -Skip 1)
+
+if (@("watch-pr", "ship-pr") -notcontains $command) {
+  Write-Error "The command must be watch-pr or ship-pr"
+  exit 1
+}
 
 $codexHome = if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) {
   Join-Path $env:USERPROFILE ".codex"
@@ -22,7 +22,7 @@ if ($null -eq $pluginRoot) {
   exit 1
 }
 
-$entrypoint = Join-Path $pluginRoot.FullName "skills\poteto-mode\scripts\watch-pr\$Command"
+$entrypoint = Join-Path $pluginRoot.FullName "skills\poteto-mode\scripts\watch-pr\$command"
 if (-not (Test-Path -LiteralPath $entrypoint -PathType Leaf)) {
   Write-Error "The pstack entrypoint was not found: $entrypoint"
   exit 1
@@ -32,7 +32,7 @@ $scriptsRoot = Split-Path -Parent (Split-Path -Parent $entrypoint)
 $exitCode = 1
 Push-Location $scriptsRoot
 try {
-  & bun $entrypoint @CommandArguments
+  & bun $entrypoint @commandArguments
   $exitCode = $LASTEXITCODE
 }
 finally {
