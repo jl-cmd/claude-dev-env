@@ -122,16 +122,12 @@ test('blocks malformed policy, unknown input, unavailable replacement, and untru
     }
 });
 
-for (const [eachModel, eachEffort, eachSelectedModel, eachSelectedEffort] of [
-    ['Sol', 'medium', 'gpt-5.6-luna', 'max'],
-    ['Astra', 'high', 'gpt-6-astra', 'high'],
-]) {
-    test(`allows a trusted session advisor requesting ${eachModel} ${eachEffort}`, () => {
+test('blocks a trusted session advisor route that resolves to Astra', () => {
         const hookResponse = buildSubagentModelRoutingResponse(
             buildHookPayload({
                 agent_type: 'session-advisor',
-                model: eachModel,
-                reasoning_effort: eachEffort,
+                model: 'Astra',
+                reasoning_effort: 'high',
             }),
             {
                 trustedSessionMetadata: {
@@ -141,13 +137,23 @@ for (const [eachModel, eachEffort, eachSelectedModel, eachSelectedEffort] of [
             },
         );
 
-        assert.deepEqual(hookResponse.hookSpecificOutput.updatedInput, {
-            agent_type: 'session-advisor',
-            model: eachSelectedModel,
-            reasoning_effort: eachSelectedEffort,
-        });
-    });
-}
+        assert.equal(hookResponse.hookSpecificOutput.permissionDecision, 'deny');
+        assert.equal(
+            hookResponse.hookSpecificOutput.permissionDecisionReason,
+            'only gpt-*-luna subagents are permitted',
+        );
+});
+
+test('blocks parent inheritance because the selected model is unresolved', () => {
+    const hookResponse = buildSubagentModelRoutingResponse(buildHookPayload({
+        model: 'inherit-parent',
+    }));
+    assert.equal(hookResponse.hookSpecificOutput.permissionDecision, 'deny');
+    assert.equal(
+        hookResponse.hookSpecificOutput.permissionDecisionReason,
+        'subagent model must resolve to gpt-*-luna',
+    );
+});
 
 test('the standalone hook silently remaps native Sol Medium and preserves other fields', () => {
     const hookExecution = spawnSync(
