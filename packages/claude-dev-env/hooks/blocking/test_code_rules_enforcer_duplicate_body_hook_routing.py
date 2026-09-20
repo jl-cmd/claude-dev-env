@@ -5,6 +5,11 @@ modules in the ``blocking/`` hook directory itself — the exact directory the r
 the code-rules suite exempts. These tests drive the real entry points (the ``main()``
 stdin path and the pre-check CLI) with a hook-infrastructure target so the deny fires
 on the same path a live Write would take, rather than calling the check function
+directly. ``main()`` reaches this check by routing a hook-infrastructure target's
+live PreToolUse payload through ``_hook_infrastructure_blocking_issues`` at
+``FULL_GATE_PHASE``, the same phase the pre-check CLI already used; the
+edit-lane phase stays reserved for the checks the routing function's own
+``EDIT_LANE_PHASE`` contract in ``test_code_rules_validation_phase.py`` covers
 directly.
 
 Each test builds a temporary tree whose tail mirrors a production hook directory

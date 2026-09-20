@@ -1,4 +1,12 @@
-"""Test pairing behavior for changed source documents."""
+"""Test pairing behavior for changed source documents.
+
+``test_approved_pairs_name_files_that_exist`` and
+``test_every_approved_pair_actually_waives_its_production_file`` iterate the
+whole ``APPROVED_TEST_PATHS_BY_PRODUCTION_PATH`` mapping, so a later entry
+added there for a production file whose paired test carries an unrelated name
+(a hook-infrastructure entry-point test, for example) is exercised here
+without a further edit to this module.
+"""
 
 from __future__ import annotations
 
