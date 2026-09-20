@@ -7,9 +7,70 @@ import logging
 import os
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
+from typing import NamedTuple
+
 from subprocess_window_access import hidden_window_creation_flags
+
+_hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
+if _hooks_directory not in sys.path:
+    sys.path.insert(0, _hooks_directory)
+
+from followup_ledger import FollowupFinding, record_followup_finding
+from hooks_constants.followup_ledger_constants import SEVERITY_BREAKING, SEVERITY_SMELL
+
+FILENAME_RULE_ID = "instruction-filename"
+REGULAR_FILE_RULE_ID = "instruction-regular-file"
+GIT_MODE_RULE_ID = "instruction-git-mode"
+MISSING_AGENTS_RULE_ID = "instruction-missing-agents"
+IMPORT_TEXT_RULE_ID = "instruction-import-text"
+
+SEVERITY_BY_RULE_ID = {
+    FILENAME_RULE_ID: SEVERITY_SMELL,
+    REGULAR_FILE_RULE_ID: SEVERITY_BREAKING,
+    GIT_MODE_RULE_ID: SEVERITY_SMELL,
+    MISSING_AGENTS_RULE_ID: SEVERITY_BREAKING,
+    IMPORT_TEXT_RULE_ID: SEVERITY_BREAKING,
+}
+
+GATE_PASSED_EXIT_CODE = 0
+GATE_FAILED_EXIT_CODE = 1
+RECORDED_SMELL_TEMPLATE = "recorded for follow-up: %s"
+
+
+class InstructionFinding(NamedTuple):
+    """One instruction-pair finding and the severity that decides the gate.
+
+    Attributes:
+        rule_id: Stable identifier of the check that raised the finding.
+        file_path: Repository-relative path the finding names.
+        message: The text a reader acts on.
+        severity: Either SEVERITY_BREAKING or SEVERITY_SMELL.
+    """
+
+    rule_id: str
+    file_path: str
+    message: str
+    severity: str
+
+
+def _finding(rule_id: str, relative_path: Path, message: str) -> InstructionFinding:
+    """Build one finding carrying the severity its rule identifier declares.
+
+    Args:
+        rule_id: The check's stable identifier.
+        relative_path: Repository-relative path the finding names.
+        message: The text a reader acts on.
+
+    Returns:
+        The finding with its declared severity attached.
+    """
+    return InstructionFinding(
+        rule_id, relative_path.as_posix(), message, SEVERITY_BY_RULE_ID[rule_id]
+    )
+
 
 git_directory_name = ".git"
 git_listing_commands = (
@@ -97,17 +158,18 @@ def _is_regular_file(each_path: Path) -> bool:
         return False
 
 
-def validate_repository(repository_root: Path) -> list[str]:
-    """Validate instruction filenames, modes, and exact Claude imports.
+def all_instruction_findings(repository_root: Path) -> tuple[InstructionFinding, ...]:
+    """Collect every instruction-pair finding with the severity that decides the gate.
 
     Args:
         repository_root: Repository directory containing the Git metadata.
 
     Returns:
-        Human-readable validation errors, with an empty list for a valid tree.
+        Every finding in discovery order, each carrying its rule identifier,
+        the repository-relative path it names, its text, and its severity.
     """
     repository_root = repository_root.resolve()
-    all_errors: list[str] = []
+    all_findings: list[InstructionFinding] = []
     all_git_paths, modes_by_path = _read_git_paths_and_modes(repository_root)
     all_agents_paths = _discover_named_files(
         repository_root, all_git_paths, "AGENTS.md"
@@ -125,12 +187,28 @@ def validate_repository(repository_root: Path) -> list[str]:
         relative_path = each_instruction_path.relative_to(repository_root)
         tracked_modes = modes_by_path.get(each_instruction_path, set())
         if each_instruction_path.name not in canonical_instruction_names:
-            all_errors.append(f"Use the canonical filename: {relative_path}")
+            all_findings.append(
+                _finding(
+                    FILENAME_RULE_ID,
+                    relative_path,
+                    f"Use the canonical filename: {relative_path}",
+                )
+            )
         if not _is_regular_file(each_instruction_path):
-            all_errors.append(f"Use a regular file: {relative_path}")
+            all_findings.append(
+                _finding(
+                    REGULAR_FILE_RULE_ID,
+                    relative_path,
+                    f"Use a regular file: {relative_path}",
+                )
+            )
         if tracked_modes != {regular_git_file_mode}:
-            all_errors.append(
-                f"Commit the instruction file with Git mode 100644: {relative_path}"
+            all_findings.append(
+                _finding(
+                    GIT_MODE_RULE_ID,
+                    relative_path,
+                    f"Commit the instruction file with Git mode 100644: {relative_path}",
+                )
             )
 
     for each_claude_path in all_claude_paths:
@@ -139,7 +217,13 @@ def validate_repository(repository_root: Path) -> list[str]:
             each_claude_path, repository_root, agents_by_directory
         )
         if each_agents_path is None:
-            all_errors.append(f"Add the nearest governing AGENTS.md: {relative_claude_path}")
+            all_findings.append(
+                _finding(
+                    MISSING_AGENTS_RULE_ID,
+                    relative_claude_path,
+                    f"Add the nearest governing AGENTS.md: {relative_claude_path}",
+                )
+            )
             continue
         if not _is_regular_file(each_claude_path):
             continue
@@ -150,12 +234,69 @@ def validate_repository(repository_root: Path) -> list[str]:
                 each_claude_path, each_agents_path
             )
             relative_agents_path = each_agents_path.relative_to(repository_root)
-            all_errors.append(
-                f"Make {relative_claude_path} exactly import "
-                f"@{relative_import_path} for {relative_agents_path}"
+            all_findings.append(
+                _finding(
+                    IMPORT_TEXT_RULE_ID,
+                    relative_claude_path,
+                    f"Make {relative_claude_path} exactly import "
+                    f"@{relative_import_path} for {relative_agents_path}",
+                )
             )
 
-    return all_errors
+    return tuple(all_findings)
+
+
+def validate_repository(repository_root: Path) -> list[str]:
+    """Validate instruction filenames, modes, and exact Claude imports.
+
+    Args:
+        repository_root: Repository directory containing the Git metadata.
+
+    Returns:
+        Human-readable validation errors, with an empty list for a valid tree.
+    """
+    return [
+        each_finding.message
+        for each_finding in all_instruction_findings(repository_root)
+    ]
+
+
+def run_gate(repository_root: Path) -> int:
+    """Report breaking findings, record smells, and return the gate exit code.
+
+    A breaking finding means the instruction files do not load as written, so
+    the gate fails. A smell is recorded in the repository's follow-up ledger
+    and leaves the gate passing, so a later pull request resolves it.
+
+    Args:
+        repository_root: Repository directory containing the Git metadata.
+
+    Returns:
+        GATE_FAILED_EXIT_CODE when any breaking finding is present, otherwise
+        GATE_PASSED_EXIT_CODE.
+    """
+    resolved_root = repository_root.resolve()
+    all_findings = all_instruction_findings(resolved_root)
+    all_breaking_messages: list[str] = []
+
+    for each_finding in all_findings:
+        if each_finding.severity == SEVERITY_BREAKING:
+            all_breaking_messages.append(each_finding.message)
+            continue
+        record_followup_finding(
+            resolved_root,
+            FollowupFinding(
+                each_finding.rule_id, each_finding.file_path, each_finding.message
+            ),
+        )
+        logger.warning(RECORDED_SMELL_TEMPLATE, each_finding.message)
+
+    for each_message in all_breaking_messages:
+        logger.error("%s", each_message)
+
+    if all_breaking_messages:
+        return GATE_FAILED_EXIT_CODE
+    return GATE_PASSED_EXIT_CODE
 
 
 def _parse_arguments() -> argparse.Namespace:
@@ -173,13 +314,7 @@ def _parse_arguments() -> argparse.Namespace:
 
 def _main() -> int:
     parsed_arguments = _parse_arguments()
-    repository_root = parsed_arguments.repository_root.resolve()
-    all_errors = validate_repository(repository_root)
-    if all_errors:
-        for each_error in all_errors:
-            logger.error("%s", each_error)
-        return 1
-    return 0
+    return run_gate(parsed_arguments.repository_root)
 
 
 if __name__ == "__main__":

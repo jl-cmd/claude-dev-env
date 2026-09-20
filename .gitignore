@@ -74,3 +74,6 @@ pytestdebug.log
 # backslash path passes through Git Bash (separators eaten, colon encoded)
 *AppDataLocalTemp*
 
+
+# Follow-up ledger of non-breaking findings; per-checkout state
+.claude/followups/
