@@ -254,15 +254,18 @@ class Diagnostic:
     severity: Severity
     message: str
     location: Location | None = None
+    check_id: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         """Return a JSON-compatible diagnostic.
 
         Returns:
-            The diagnostic mapping.
+            The diagnostic mapping, whose check_id names the single check
+            behind the finding and falls back to the rule identifier.
         """
         return {
             "rule_id": self.rule_id,
+            "check_id": self.check_id or self.rule_id,
             "severity": self.severity.value,
             "message": self.message,
             "location": None if self.location is None else self.location.as_dict(),
