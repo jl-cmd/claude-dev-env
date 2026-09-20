@@ -26,5 +26,3 @@ Tests exercise production behavior, production data, and production code paths. 
 ## No Gate Holds the Test-First Order
 
 `tdd_enforcer.py` once required a fresh, failing test before a production module was written. Nothing runs it now, and the staged policy lint carries no replacement. Hold the red-green-refactor order yourself, and let review check it on the diff.
-
-`hooks/observability/test_failure_recorder.py` still runs on every Bash call. It records a single unchained pytest run that names a test file path and reports a failing exit status, storing the command, that exit status, and the path in the content-hash store. `content_hash_store.py`'s module docstring holds the full contract. No gate reads that store today, so the record serves as history rather than a precondition.

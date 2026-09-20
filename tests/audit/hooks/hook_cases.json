@@ -113,11 +113,10 @@
     },
     {
       "hook_id": "PostToolUse:bash_post_call_dispatcher.py",
-      "claim": "After a Bash call, record a failing single-file pytest run, remind about the PR done checklist after a push, and explain a git failure that MSYS path conversion caused; never block.",
+      "claim": "After a successful push, remind about the PR done checklist; other Bash calls remain silent.",
       "claim_source": "hooks/blocking/bash_post_call_dispatcher.py and hosted hook docstrings",
       "component_class": "output",
       "cases": [
-        {"kind": "prohibited", "hosted_hook": "advisory/msys_path_conversion_advisor.py", "event": "PostToolUseFailure", "payload": {"tool_name": "Bash", "tool_input": {"command": "git show origin/main:.claude/x.py", "description": "Show"}, "error": "Exit code 128\nfatal: invalid object name 'origin\\main;.claude\\x.py'.", "is_interrupt": false}, "expect": {"outcome": "advise"}},
         {"kind": "near_neighbor", "payload": {"tool_name": "Bash", "tool_input": {"command": "git status", "description": "Status"}, "tool_response": {"stdout": "clean", "stderr": "", "interrupted": false, "isImage": false}}, "expect": {"outcome": "silent"}}
       ]
     }
