@@ -218,8 +218,8 @@ test('team-advisor records fallback repair and consult evidence', () => {
     assert.match(skillSource, /reference gap.*bind status separate/);
     assert.match(skillSource, /selected_tier: Astra.*reply_path: native/);
     assert.match(skillSource, /model-tier-run\.json/);
-    const advisorToolPath = new URL('../docs/references/advisor-tool.md', import.meta.url);
-    assert.match(readFileSync(advisorToolPath, 'utf8'), /"schema_version": 1/);
+    const advisorReferenceDocumentUrl = new URL('../docs/references/advisor-tool.md', import.meta.url);
+    assert.match(readFileSync(advisorReferenceDocumentUrl, 'utf8'), /"schema_version": 1/);
 });
 
 

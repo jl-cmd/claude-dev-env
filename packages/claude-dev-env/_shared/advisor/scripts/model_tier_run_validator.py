@@ -67,6 +67,7 @@ from advisor_scripts_constants.astra_advisor_constants import (
     ASTRA_FALLBACK_KIND_DECLINED,
 )
 from advisor_scripts_constants.model_tier_run_validator_constants import (
+    ALL_ADVISOR_REPLY_PATHS,
     ATTEMPT_ORDER_MISMATCH_MESSAGE,
     ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE,
     CANDIDATE_TIERS_MISMATCH_MESSAGE,
@@ -107,51 +108,45 @@ class ModelTierRunError(ValueError):
 
 
 def _required_evidence_text(
-    section: Mapping[str, object], section_name: str, field_name: str
+    fields_by_name: Mapping[str, object], section_name: str, field_name: str
 ) -> str:
-    raw_value = section.get(field_name)
-    if not isinstance(raw_value, str) or not raw_value.strip():
+    raw_field_text = fields_by_name.get(field_name)
+    if not isinstance(raw_field_text, str) or not raw_field_text.strip():
         raise ModelTierRunError(
             f"evidence.{section_name}.{field_name} must be a non-empty string"
         )
-    return raw_value.strip()
+    return raw_field_text.strip()
 
 
 def _required_evidence_list(
-    section: Mapping[str, object], section_name: str, field_name: str
+    fields_by_name: Mapping[str, object], section_name: str, field_name: str
 ) -> list[str]:
-    raw_value = section.get(field_name)
-    if not isinstance(raw_value, list) or not raw_value:
+    raw_field_entries = fields_by_name.get(field_name)
+    if not isinstance(raw_field_entries, list) or not raw_field_entries:
         raise ModelTierRunError(
             f"evidence.{section_name}.{field_name} must be a non-empty list"
         )
-    if any(not isinstance(each_value, str) or not each_value.strip() for each_value in raw_value):
+    if any(
+        not isinstance(each_entry, str) or not each_entry.strip()
+        for each_entry in raw_field_entries
+    ):
         raise ModelTierRunError(
             f"evidence.{section_name}.{field_name} must contain non-empty strings"
         )
-    return [each_value.strip() for each_value in raw_value]
+    return [each_entry.strip() for each_entry in raw_field_entries]
 
 
 def _required_evidence_section(
-    evidence: Mapping[str, object], section_name: str
+    sections_by_name: Mapping[str, object], section_name: str
 ) -> Mapping[str, object]:
-    raw_section = evidence.get(section_name)
+    raw_section = sections_by_name.get(section_name)
     if not isinstance(raw_section, Mapping):
         raise ModelTierRunError(f"evidence.{section_name} must be an object")
     return raw_section
 
 
-def _validate_advisor_evidence(
-    evidence: object,
-    run: ModelTierRun,
-) -> None:
-    if not isinstance(evidence, Mapping):
-        raise ModelTierRunError("evidence must be an object")
-    raw_schema_version = evidence.get("schema_version")
-    if isinstance(raw_schema_version, bool) or raw_schema_version != 1:
-        raise ModelTierRunError("evidence.schema_version must be 1")
-
-    reference = _required_evidence_section(evidence, "reference")
+def _validate_reference_evidence(sections_by_name: Mapping[str, object]) -> None:
+    reference = _required_evidence_section(sections_by_name, "reference")
     _required_evidence_text(reference, "reference", "path")
     reference_status = _required_evidence_text(reference, "reference", "status")
     if reference_status not in {"missing", "read"}:
@@ -159,8 +154,11 @@ def _validate_advisor_evidence(
     _required_evidence_text(reference, "reference", "repair_action")
     _required_evidence_text(reference, "reference", "repair_result")
 
-    fallback = _required_evidence_section(evidence, "fallback")
-    raw_selected_tier = fallback.get("selected_tier")
+
+def _validate_fallback_tier(
+    fallback_by_name: Mapping[str, object], run: ModelTierRun
+) -> str | None:
+    raw_selected_tier = fallback_by_name.get("selected_tier")
     if raw_selected_tier is not None and not isinstance(raw_selected_tier, str):
         raise ModelTierRunError("evidence.fallback.selected_tier must be a string or null")
     maybe_selected_tier = (
@@ -177,7 +175,11 @@ def _validate_advisor_evidence(
         raise ModelTierRunError(
             "evidence.fallback.selected_tier must match selected_tier"
         )
-    raw_fallback_kind = fallback.get("fallback_kind")
+    return maybe_run_selected_tier
+
+
+def _validate_fallback_kind(fallback_by_name: Mapping[str, object]) -> None:
+    raw_fallback_kind = fallback_by_name.get("fallback_kind")
     if raw_fallback_kind not in {
         None,
         ASTRA_FALLBACK_KIND_BROKEN,
@@ -186,7 +188,7 @@ def _validate_advisor_evidence(
         raise ModelTierRunError(
             "evidence.fallback.fallback_kind must be declined, broken, or null"
         )
-    raw_fallback_reason = fallback.get("fallback_reason")
+    raw_fallback_reason = fallback_by_name.get("fallback_reason")
     if raw_fallback_reason is not None and (
         not isinstance(raw_fallback_reason, str) or not raw_fallback_reason.strip()
     ):
@@ -197,8 +199,15 @@ def _validate_advisor_evidence(
         raise ModelTierRunError(
             "evidence.fallback.fallback_reason is required for a fallback kind"
         )
-    reply_path = _required_evidence_text(fallback, "fallback", "reply_path")
-    if reply_path not in {"native", "sendmessage", "cli", "codex", "none"}:
+
+
+def _validate_fallback_reply_path(
+    fallback_by_name: Mapping[str, object],
+    run: ModelTierRun,
+    maybe_run_selected_tier: str | None,
+) -> None:
+    reply_path = _required_evidence_text(fallback_by_name, "fallback", "reply_path")
+    if reply_path not in ALL_ADVISOR_REPLY_PATHS:
         raise ModelTierRunError(
             "evidence.fallback.reply_path is not a known advisor path"
         )
@@ -211,10 +220,35 @@ def _validate_advisor_evidence(
             "Codex Astra success requires the native reply path"
         )
 
-    consult = _required_evidence_section(evidence, "consult")
-    for field_name in ("changed_evidence", "validation", "unresolved_risks"):
-        _required_evidence_list(consult, "consult", field_name)
+
+def _validate_fallback_evidence(
+    sections_by_name: Mapping[str, object], run: ModelTierRun
+) -> None:
+    fallback = _required_evidence_section(sections_by_name, "fallback")
+    maybe_run_selected_tier = _validate_fallback_tier(fallback, run)
+    _validate_fallback_kind(fallback)
+    _validate_fallback_reply_path(fallback, run, maybe_run_selected_tier)
+
+
+def _validate_consult_evidence(sections_by_name: Mapping[str, object]) -> None:
+    consult = _required_evidence_section(sections_by_name, "consult")
+    for each_field_name in ("changed_evidence", "validation", "unresolved_risks"):
+        _required_evidence_list(consult, "consult", each_field_name)
     _required_evidence_text(consult, "consult", "report_back_status")
+
+
+def _validate_advisor_evidence(
+    evidence: object,
+    run: ModelTierRun,
+) -> None:
+    if not isinstance(evidence, Mapping):
+        raise ModelTierRunError("evidence must be an object")
+    raw_schema_version = evidence.get("schema_version")
+    if isinstance(raw_schema_version, bool) or raw_schema_version != 1:
+        raise ModelTierRunError("evidence.schema_version must be 1")
+    _validate_reference_evidence(evidence)
+    _validate_fallback_evidence(evidence, run)
+    _validate_consult_evidence(evidence)
 
 
 def _canonical_tier_list(all_tier_names: list[str]) -> list[str] | None:

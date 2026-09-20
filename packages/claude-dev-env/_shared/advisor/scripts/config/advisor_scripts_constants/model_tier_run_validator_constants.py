@@ -102,3 +102,6 @@ CLI_MISSING_PATH_EXIT_CODE: int = 2
 CLI_INVALID_JSON_EXIT_CODE: int = 2
 CLI_VALIDATION_FAILURE_EXIT_CODE: int = 1
 CLI_SUCCESS_EXIT_CODE: int = 0
+ALL_ADVISOR_REPLY_PATHS: frozenset[str] = frozenset(
+    {"native", "sendmessage", "cli", "codex", "none"}
+)
