@@ -12,6 +12,7 @@ import {
     mkdirSync,
     mkdtempSync,
     readFileSync,
+    readdirSync,
     realpathSync,
     rmSync,
     writeFileSync,
@@ -35,38 +36,8 @@ const ELI5_SKILL_NAME = 'eli5';
 const E_CODE_REVIEW_SKILL_NAME = 'e-code-review';
 const TEAM_ADVISOR_SKILL_NAME = 'team-advisor';
 const REFERENCE_DIRECTORY_NAME = 'reference';
-const SHIPPED_AGENT_FILE_NAME = 'clean-coder.md';
-const SHIPPED_AGENT_FILE_NAMES = [
-    SHIPPED_AGENT_FILE_NAME,
-    'code-quality-agent.md',
-    'pr-description-writer.md',
-];
-const CLEAN_CODER_POLICY_REFERENCES = [
-    [
-        '<managed-root>/docs/CODE_RULES.md',
-        'packages/claude-dev-env/docs/CODE_RULES.md',
-    ],
-    [
-        '<managed-root>/hooks/blocking/code_rules_enforcer.py',
-        'packages/claude-dev-env/hooks/blocking/code_rules_enforcer.py',
-    ],
-    [
-        '<managed-root>/rules/code-standards.md',
-        'packages/claude-dev-env/rules/code-standards.md',
-    ],
-    [
-        '<managed-root>/rules/windows-filesystem-safe.md',
-        'packages/claude-dev-env/rules/windows-filesystem-safe.md',
-    ],
-    [
-        '<managed-root>/rules/gh-cli-conventions.md',
-        'packages/claude-dev-env/rules/gh-cli-conventions.md',
-    ],
-    [
-        '<managed-root>/rules/plain-illustrative-docstrings.md',
-        'packages/claude-dev-env/rules/plain-illustrative-docstrings.md',
-    ],
-];
+const SHIPPED_AGENT_FILE_NAME = 'AGENTS.md';
+const RETIRED_AGENT_FILE_NAMES = ['clean-coder.md', 'code-quality-agent.md', 'pr-description-writer.md'];
 const PERSONAL_SKILL_NAME = 'my-notes';
 const PREFLIGHT_PROPOSAL_FILE_NAME = 'preflight-proposal.md';
 
@@ -117,35 +88,46 @@ function assertProposalContractInstallation(installationPaths) {
     assert.equal(readFileSync(installedContractPath, 'utf8'), readFileSync(sourceContractPath, 'utf8'));
 }
 
-/**
- * @param {string} agentFilePath
- * @param {string} layoutName
- * @param {string} managedRoot
- * @returns {string[]}
- */
-function cleanCoderPolicyReferenceProblems(agentFilePath, layoutName, managedRoot) {
-    const agentBody = readFileSync(agentFilePath, 'utf8');
-    const missingReferences = [];
-    for (const [installedReference, sourceReference] of CLEAN_CODER_POLICY_REFERENCES) {
-        const eachReference = layoutName === 'source'
-            ? sourceReference
-            : installedReference;
-        const eachTargetPath = sourceReference.replace('packages/claude-dev-env/', '');
-        if (!agentBody.includes(eachReference)) {
-            missingReferences.push(eachReference + ' is absent');
-        }
-        const resolvedPath = layoutName === 'source'
-            ? join(PACKAGE_DIRECTORY, eachTargetPath)
-            : join(managedRoot, eachTargetPath);
-        if (!existsSync(resolvedPath)) {
-            missingReferences.push(layoutName + ': ' + resolvedPath);
-        }
-    }
-    return missingReferences.map((reference) => layoutName + ': ' + reference);
-}
 
 test('CONTENT_DIRECTORIES omits agents because that tree installs to the agents home', () => {
     assert.equal(CONTENT_DIRECTORIES.includes(MANAGED_AGENTS_DIRECTORY_NAME), false);
+});
+
+test('full install archives recorded retired agents and preserves third-party agents', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-agent-retirement-'));
+    try {
+        runInstaller(homeDirectory, []);
+        const agentsDirectory = join(homeDirectory, '.agents', 'agents');
+        const retiredPath = join(agentsDirectory, 'clean-coder.md');
+        const pluginPath = join(agentsDirectory, 'poteto-agent.md');
+        const activePath = join(agentsDirectory, 'AGENTS.md');
+        const sourcePluginPath = join(PACKAGE_DIRECTORY, '.agents', 'agents', 'poteto-agent.md');
+        assert.equal(readFileSync(pluginPath, 'utf8'), readFileSync(sourcePluginPath, 'utf8'));
+        writeFileSync(retiredPath, 'recover this retired definition\n');
+        writeFileSync(pluginPath, 'preserve this plugin definition\n');
+        const manifestPath = join(homeDirectory, '.claude', '.claude-dev-env-manifest.json');
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        manifest.files.push(retiredPath);
+        manifest.files.push(activePath);
+        writeFileSync(manifestPath, JSON.stringify(manifest));
+
+        runInstaller(homeDirectory, []);
+
+        assert.equal(existsSync(retiredPath), false);
+        assert.ok(existsSync(activePath));
+        const backupRoot = join(homeDirectory, '.claude', '.claude-dev-env-pruned');
+        const backupNames = readdirSync(backupRoot, { recursive: true });
+        const retiredBackup = backupNames.find(name => name.endsWith('clean-coder.md'));
+        assert.ok(retiredBackup);
+        assert.equal(readFileSync(join(backupRoot, retiredBackup), 'utf8'), 'recover this retired definition\n');
+        assert.equal(readFileSync(pluginPath, 'utf8'), 'preserve this plugin definition\n');
+        const updatedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        assert.equal(updatedManifest.files.includes(retiredPath), false);
+        runInstaller(homeDirectory, []);
+        assert.equal(readFileSync(pluginPath, 'utf8'), 'preserve this plugin definition\n');
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
 });
 
 test('a full install writes skills and agents under .agents and points .claude at them', () => {
@@ -211,18 +193,6 @@ test('a full install writes skills and agents under .agents and points .claude a
             readFileSync(lookupAgentFile, 'utf8'),
             readFileSync(canonicalAgentFile, 'utf8'),
         );
-        const sourceAgentFile = join(
-            resolvePackageManagedDirectory(
-                PACKAGE_DIRECTORY,
-                MANAGED_AGENTS_DIRECTORY_NAME,
-            ),
-            SHIPPED_AGENT_FILE_NAME,
-        );
-        const brokenPolicyReferences = [
-            ...cleanCoderPolicyReferenceProblems(sourceAgentFile, 'source', claudeHome),
-            ...cleanCoderPolicyReferenceProblems(canonicalAgentFile, 'installed', claudeHome),
-        ];
-        assert.deepEqual(brokenPolicyReferences, [], 'Clean Coder has broken policy references');
         assert.equal(realpathSync(lookupAgentFile), realpathSync(canonicalAgentFile));
         assert.equal(
             lstatSync(skillsInstallDirectory).isSymbolicLink(),
@@ -239,7 +209,7 @@ test('a full install writes skills and agents under .agents and points .claude a
     }
 });
 
-test('real installs place the Clean Coder in each active agents home', () => {
+test('installs omit retired agents in each active agents home', () => {
     const runRoot = mkdtempSync(join(tmpdir(), 'cdev-active-roots-'));
     const homeDirectory = join(runRoot, 'home');
     const configRoot = join(runRoot, 'config-profile');
@@ -293,7 +263,7 @@ test('real installs place the Clean Coder in each active agents home', () => {
                     ...eachInstallCase.environment,
                 },
             );
-            for (const eachAgentFileName of SHIPPED_AGENT_FILE_NAMES) {
+            for (const eachAgentFileName of RETIRED_AGENT_FILE_NAMES) {
                 const installedAgentPath = join(
                     eachInstallCase.agentsHome,
                     MANAGED_AGENTS_DIRECTORY_NAME,
@@ -301,30 +271,10 @@ test('real installs place the Clean Coder in each active agents home', () => {
                 );
                 assert.equal(
                     existsSync(installedAgentPath),
-                    true,
-                    `${eachInstallCase.name}: agent is under the active agents home`,
+                    false,
+                    `${eachInstallCase.name}: retired agent is absent`,
                 );
-                const installedAgentText = readFileSync(installedAgentPath, 'utf8');
-                assert.match(installedAgentText, /active managed root/i);
-                assert.match(installedAgentText, /active agents home/i);
-                assert.match(installedAgentText, /<managed-root>\//);
-                assert.match(installedAgentText, /<agents-home>\//);
             }
-            const installedCleanCoderPath = join(
-                eachInstallCase.agentsHome,
-                MANAGED_AGENTS_DIRECTORY_NAME,
-                SHIPPED_AGENT_FILE_NAME,
-            );
-            const policyReferenceProblems = cleanCoderPolicyReferenceProblems(
-                installedCleanCoderPath,
-                'installed',
-                eachInstallCase.managedRoot,
-            );
-            assert.deepEqual(
-                policyReferenceProblems,
-                [],
-                `${eachInstallCase.name}: Clean Coder has broken policy references`,
-            );
             assert.equal(
                 isDirectoryPointerTo(
                     join(eachInstallCase.managedRoot, MANAGED_AGENTS_DIRECTORY_NAME),

@@ -36,14 +36,14 @@ if (input !== undefined) {
         routingDecision = routingInputIssue
             ? blockedRoute(routingInputIssue)
             : resolveSubagentModelRoute({
-                agent_type: 'session-advisor',
+                agent_type: 'advisor',
                 ...(input.model !== undefined && input.model !== null ? { model: input.model } : {}),
                 ...(input.reasoning_effort !== undefined ? { reasoning_effort: input.reasoning_effort } : {}),
             }, {
                 policyPath: input.policyPath,
                 trustedSessionMetadata: {
                     authorized: true,
-                    registeredAgentType: 'session-advisor',
+                    registeredAgentType: 'advisor',
                 },
             });
     }

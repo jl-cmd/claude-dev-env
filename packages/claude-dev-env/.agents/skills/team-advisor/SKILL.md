@@ -1,7 +1,7 @@
 ---
 name: team-advisor
 description: >-
-  Bind one advisor, the built-in advisor tool or a warm session-advisor, and
+  Bind one advisor, the built-in advisor tool or a warm `pstack:poteto-agent`, and
   consult it before substantive work, completion, commits, or when stuck.
   Triggers:
   'team-advisor', 'team advisor', 'second opinion', 'consult the advisor',
@@ -18,14 +18,14 @@ One warm advisor at the strongest tier this session can reach. This session is t
 |---|---|
 | [`docs/references/advisor-tool.md`](../../../docs/references/advisor-tool.md) | **Consult cadence and weight.** When to call, the hard rule before first write, and how to treat advice. Read this for every consult. |
 | [`~/.claude/_shared/advisor/advisor-protocol.md`](../../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle.** Session identity, host detect, model floor, warm-up, CLI fallback. Its read map routes each moment to a `reference/` detail file. |
-| [`agents/session-advisor.md`](../../agents/session-advisor.md) | **Reply contract.** ENDORSE / CORRECTION / PLAN / STOP. SendMessage only. |
+| Installed `poteto-mode` skill | **Reply contract.** The advisor prompt carries ENDORSE / CORRECTION / PLAN / STOP. |
 | [`reference/advisor-docs-review.md`](reference/advisor-docs-review.md) | Anthropic advisor-tool source facts: measured effects, Sonnet steering, cost levers, failure modes. Background. Read it when tuning the bind, not on every consult. |
 
 ## Bind
 
 1. Name the session identity first (protocol **Host profiles**), then walk the model floor.
-2. Claude: when `advisor` is in this session's tool list, the built-in advisor tool is the advisor. Spawn nothing and call `advisor()` at each consult point. Otherwise spawn Fable in-session at `ADVISOR_EFFORT` (default low). When Fable is out of usage, bind Astra at the same effort. Codex: Astra in-session. Third-party: headless Fable then Astra. When the host's walk fails, fail closed.
-3. Name: `team-advisor-agent` on Claude (Agent spawn of `session-advisor`); a native Astra subagent on Codex with `flags: ["--advisor"]`; one CLI `session_id` on a third-party host via the protocol Claude-chain or Astra helper.
+2. Claude: when `advisor` is in this session's tool list, the built-in advisor tool is the advisor. Spawn nothing and call `advisor()` at each consult point. Otherwise spawn or resume `pstack:poteto-agent` at `ADVISOR_EFFORT` (default low) with the advisor response contract in the prompt. When the bound model is out of usage, use the configured fallback at the same effort. Codex: use the native advisor path. Third-party: use the headless advisor path. When the host's walk fails, fail closed.
+3. Name the warm instance `team-advisor-agent` and keep its advisor response contract in every first prompt. When a native Codex subagent spawn is the advisor path, pass `flags: ["--advisor"]` with Astra.
 4. Skip the multi-consumer "who you are" opener. This session is the sole consumer.
 5. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound advisor issues ENDORSE / CORRECTION / PLAN / STOP.
 

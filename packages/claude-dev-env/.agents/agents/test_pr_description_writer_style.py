@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 AGENT_DIRECTORY = Path(__file__).parent
-AGENT_PATH = AGENT_DIRECTORY / "pr-description-writer.md"
+AGENT_PATH = AGENT_DIRECTORY.parent / "agents-archived" / "pr-description-writer.md"
 VOICE_REFERENCE_PATH = AGENT_DIRECTORY / "reference" / "pr-description-illustrative-voice.md"
 VERIFICATION_REFERENCE_PATH = AGENT_DIRECTORY / "reference" / "pr-description-verification.md"
 

@@ -6,7 +6,7 @@ AGENT_PATH = (
     / "packages"
     / "claude-dev-env"
     / ".agents"
-    / "agents"
+    / "agents-archived"
     / "code-quality-agent.md"
 )
 

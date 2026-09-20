@@ -94,8 +94,8 @@ def _comment_policy_surfaces(package_root: Path) -> tuple[Path, ...]:
         package_root / "AGENTS.md",
         package_root / "docs" / "CODE_RULES.md",
         package_root / "system-prompts" / "software-engineer.xml",
-        package_root / ".agents" / "agents" / "clean-coder.md",
-        package_root / ".agents" / "agents" / "code-quality-agent.md",
+        package_root / ".agents" / "agents-archived" / "clean-coder.md",
+        package_root / ".agents" / "agents-archived" / "code-quality-agent.md",
         package_root / "audit-rubrics" / "category_rubrics" / "category-j-code-rules-compliance.md",
         package_root / "audit-rubrics" / "prompts" / "category-j-code-rules-compliance.md",
         package_root / "audit-rubrics" / "category_rubrics" / "category-l-behavior-equivalence.md",
@@ -119,7 +119,7 @@ def _worker_policy_surfaces(package_root: Path) -> tuple[Path, ...]:
         package_root / "AGENTS.md",
         package_root / "docs" / "CODE_RULES.md",
         package_root / "system-prompts" / "software-engineer.xml",
-        package_root / ".agents" / "agents" / "clean-coder.md",
+        package_root / ".agents" / "agents-archived" / "clean-coder.md",
         package_root / ".agents" / "skills" / "grok-spawn" / "reference" / "worker-briefs.md",
         package_root.parent.parent / ".github" / "copilot-instructions.md",
     )
@@ -185,14 +185,14 @@ def _category_l_policy_texts() -> tuple[str, str, str]:
 
 
 def _comment_policy_summary_texts() -> tuple[str, str, str]:
-    clean_coder = _PACKAGE_ROOT / ".agents" / "agents" / "clean-coder.md"
+    clean_coder = _PACKAGE_ROOT / ".agents" / "agents-archived" / "clean-coder.md"
     category_j = (
         _PACKAGE_ROOT
         / "audit-rubrics"
         / "category_rubrics"
         / "category-j-code-rules-compliance.md"
     )
-    code_quality = _PACKAGE_ROOT / ".agents" / "agents" / "code-quality-agent.md"
+    code_quality = _PACKAGE_ROOT / ".agents" / "agents-archived" / "code-quality-agent.md"
     return tuple(
         each_path.read_text(encoding="utf-8").lower()
         for each_path in (clean_coder, category_j, code_quality)

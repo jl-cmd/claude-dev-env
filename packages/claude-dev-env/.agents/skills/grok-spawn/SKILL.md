@@ -16,7 +16,11 @@ the scripts and the brief templates; it holds no spawn logic of its own.
 - Workers never commit, push, or call `gh`. The calling session stages, verifies,
   commits, pushes, and posts to GitHub.
 - Grok has no `SendMessage` and no Claude Agent tool. Work that needs live
-  teammate chat or Claude-only tools stays in this session or a Claude agent.
+  teammate chat stays in this session. Each Grok worker uses `poteto-agent`.
+  The runner resolves the user pstack plugin through the selected Claude
+  profile's `plugins/installed_plugins.json` and includes its poteto skill content and
+  its resolved path in the prompt. Each task states its role, permitted edits,
+  acceptance checks, and report contract.
 - Each worker gets its own `--leader-socket`. Sharing one socket across processes
   races and fails.
 - Preflight is a soft gate: a fallthrough reason means skip the fleet and use
@@ -39,7 +43,7 @@ Good fits:
 **Do not use** when the work needs:
 
 - Live `SendMessage` coordination between agents
-- Claude-only tools (Agent tool, warm session-advisor, Claude MCP surfaces the
+- Claude-only tools (Agent tool, warm advisor, Claude MCP surfaces the
   grok CLI does not load the same way)
 
 For a single interactive Grok Build handoff paste, use `/grokify` instead.
@@ -125,7 +129,7 @@ Shape:
       "tool_profile": "readonly",
       "timeout_seconds": 600,
       "is_repo_only": true,
-      "agent_name": null
+      "agent_name": "poteto-agent"
     }
   ]
 }
@@ -133,7 +137,7 @@ Shape:
 
 | Field | Meaning |
 |---|---|
-| `role` | Preflight role whose agent files must be installed (default `bugteam`) |
+| `role` | Preflight role configuration to check (default `bugteam`) |
 | `should_ping` | When true, preflight runs the opt-in live ping |
 | `workers` | Non-empty list of worker objects |
 | `role_name` | Label on the summary report for this worker |
@@ -142,7 +146,7 @@ Shape:
 | `tool_profile` | `readonly` or `build` |
 | `timeout_seconds` | Per-worker timeout (default 600, ceiling 5400). A spec asking for more is refused |
 | `is_repo_only` | Readonly only: when true, also pass `--disable-web-search` |
-| `agent_name` | Optional `--agent` name, or `null` |
+| `agent_name` | Use `poteto-agent`; prompts carry the worker role. |
 
 Workers run with no turn cap. The timeout is the only bound on a worker's
 length, and a worker that hits it is killed with its whole process tree and
@@ -235,4 +239,3 @@ Sibling skill: `/grokify` for a single paste-ready interactive Grok Build handof
 ## Worker advisors
 
 Each grok worker binds a unique Opus-high dvisor_session_id through the lead-supplied dvisor.launcher in the batch spec (committed default is a placeholder). Reports require the same handle\'s ENDORSE (or bounded CORRECTION/PLAN then ENDORSE); STOP or malformed signals end as advisor_blocked.
-
