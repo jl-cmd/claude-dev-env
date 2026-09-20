@@ -1,5 +1,13 @@
 # Changelog
 
+## [8.4.2](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.4.1...claude-dev-env-v8.4.2) (2026-09-20)
+
+
+### Maintenance
+
+* **hooks:** retire unregistered stop dispatcher ([b907f3d](https://github.com/jl-cmd/claude-dev-env/commit/b907f3dcc4ea12bf1910a9ffcbb8c3dc17e4a281))
+* **hooks:** retire unregistered stop dispatcher ([b7031a2](https://github.com/jl-cmd/claude-dev-env/commit/b7031a2795953ba343bc3693ec3bcbe6f104b66d))
+
 ## [8.4.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.4.0...claude-dev-env-v8.4.1) (2026-09-20)
 
 
