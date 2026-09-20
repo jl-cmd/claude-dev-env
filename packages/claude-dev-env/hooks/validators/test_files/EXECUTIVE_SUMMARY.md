@@ -23,7 +23,7 @@ class RegularComponent extends Component { }      // Line 4 - CAUGHT ✓
 class OptimizedComponent extends PureComponent { } // Line 9 - MISSED ✗
 ```
 
-**Impact:** HIGH - PureComponent is commonly used for performance optimization. Developers will bypass the check by using PureComponent instead of Component.
+**Impact:** HIGH - PureComponent is commonly used for performance optimization. Developers may bypass the check by selecting PureComponent where Component is expected.
 
 **Fix:** Add to regex pattern:
 ```python
@@ -149,7 +149,6 @@ Consider for future iteration if multi-class files become common.
 
 All test files in `test_files/` directory:
 - `01-16_*.tsx` - Individual test cases
-- `VALIDATION_REPORT.md` - Detailed test results
 - `EXECUTIVE_SUMMARY.md` - This file
 
 Run all tests:
