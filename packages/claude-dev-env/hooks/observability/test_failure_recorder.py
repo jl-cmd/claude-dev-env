@@ -38,8 +38,8 @@ parsing rather than reusing anything proven, which is the over-reach this
 mechanism is built to avoid.
 
 The recognizer here is deliberately its own small, stdlib-only ``shlex``
-check rather than a reuse of ``hooks_constants.pytest_invocation`` /
-``shell_command_pipeline``. Those solve the harder pipe-and-wrapper problem a
+check rather than a reuse of ``hooks_constants.pytest_invocation``.
+That module solves the harder pipe-and-wrapper problem a
 PreToolUse blocker needs, and this repository's own style rule forbids an
 import inside a function body, so importing that larger machinery here would
 mean paying its full transitive import cost on every single Bash call this

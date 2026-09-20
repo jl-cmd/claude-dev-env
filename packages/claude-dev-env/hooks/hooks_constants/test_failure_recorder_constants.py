@@ -7,9 +7,9 @@ and Python interpreter basenames, and the flag-token marker the path
 extractor uses to skip an option rather than an existing test file argument.
 
 The pytest-program and interpreter recognition here is deliberately its own small, stdlib-only
-check rather than a reuse of ``piped_pytest_blocker_constants`` /
-``pytest_invocation``: those solve the harder pipe-and-wrapper problem and
-pull in a much larger transitive import for every Bash call regardless of
+check rather than a reuse of
+``pytest_invocation``: that module solves the harder pipe-and-wrapper problem and
+pulls in a much larger transitive import for every Bash call regardless of
 content, working against the point of the recognizer's own cheap prefilter.
 """
 

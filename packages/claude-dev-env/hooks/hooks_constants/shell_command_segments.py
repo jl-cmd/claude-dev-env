@@ -6,9 +6,7 @@ wrappers. NAS ssh enforcement and unscoped-search blocking both need this
 shape, so one module owns it.
 
 ``split_into_segments`` is not quote-aware: a pipe inside ``-k "a|b"`` still
-splits. Quote-aware pipeline parsing — operators as their own tokens, heredoc
-bodies dropped, parenthesis groups joined — lives in
-``shell_command_pipeline``.
+splits.
 """
 
 from __future__ import annotations
