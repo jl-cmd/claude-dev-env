@@ -1,5 +1,26 @@
 # Changelog
 
+## [8.4.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.3.0...claude-dev-env-v8.4.0) (2026-09-20)
+
+
+### Features
+
+* record advisor fallback and consult evidence ([a392e8c](https://github.com/jl-cmd/claude-dev-env/commit/a392e8ce685d5cd3aceeac8fe542bb185721447d))
+
+
+### Bug Fixes
+
+* **hooks:** clarify validator impact wording ([a5bef28](https://github.com/jl-cmd/claude-dev-env/commit/a5bef28fe0afca35c83e4b4bda14b69466d3edec))
+* **windows:** add pstack command shims ([f41867d](https://github.com/jl-cmd/claude-dev-env/commit/f41867d470def572dcdf299ee464bfb4828defd8))
+
+
+### Maintenance
+
+* **audit:** remove-shipped-history-with-git-recovery ([2ca0209](https://github.com/jl-cmd/claude-dev-env/commit/2ca0209abf9edd6ac34716904d82ec02f089a955))
+* **audit:** retire shipped history with Git recovery ([4e02686](https://github.com/jl-cmd/claude-dev-env/commit/4e0268620528b39e8b85286c54164aae4f45c50d))
+* **hooks:** retire unused validator artifacts ([e928689](https://github.com/jl-cmd/claude-dev-env/commit/e9286894524e1de4228b59ea0a2361367b558769))
+* **hooks:** retire unused validator artifacts ([3841418](https://github.com/jl-cmd/claude-dev-env/commit/3841418d20a0f3c5d5b4e984a86c65dc1d79a105))
+
 ## [8.3.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.2.0...claude-dev-env-v8.3.0) (2026-09-20)
 
 
