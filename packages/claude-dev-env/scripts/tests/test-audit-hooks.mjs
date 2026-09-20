@@ -64,6 +64,32 @@ test("reports the canonical execution graph", () => {
   }
 });
 
+test("does not expand the retired stop dispatcher", () => {
+  const fixture = createAuditFixture({
+    canonicalHooks: {
+      Stop: [{
+        hooks: [{ type: "command", command: "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/blocking/stop_dispatcher.py" }],
+      }],
+    },
+  });
+  const constantsPath = path.join(
+    fixture.canonicalHooksRoot,
+    "hooks_constants",
+    "stop_dispatcher_constants.py",
+  );
+  writeHookFile(fixture.canonicalHooksRoot, "blocking/stop_dispatcher.py");
+  mkdirSync(path.dirname(constantsPath), { recursive: true });
+  writeFileSync(constantsPath, "ALL_STOP_HOSTED_HOOK_PATHS = ()\n", "utf8");
+  try {
+    const report = auditHooks({ repositoryRoot: fixture.fixtureRoot });
+    assert.equal(report.summary.dispatcherCount, 0);
+    assert.equal(report.hostedRegistrations.length, 0);
+    assert.equal(report.directRegistrations[0].target, "script:blocking/stop_dispatcher.py");
+  } finally {
+    rmSync(fixture.fixtureRoot, { force: true, recursive: true });
+  }
+});
+
 test("renders deterministic private JSON", () => {
   const report = auditHooks({ repositoryRoot });
   const first = JSON.stringify(report);
