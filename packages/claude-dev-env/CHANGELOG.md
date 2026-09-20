@@ -1,5 +1,30 @@
 # Changelog
 
+## [8.5.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.4.3...claude-dev-env-v8.5.0) (2026-09-20)
+
+
+### Features
+
+* **cde:** add the followup command over the smell ledger ([a2a70f8](https://github.com/jl-cmd/claude-dev-env/commit/a2a70f88790493cee685bd47f9854269f347cbd6))
+* flag non-breaking gate findings instead of blocking on them ([79a82a3](https://github.com/jl-cmd/claude-dev-env/commit/79a82a337672148bd734a8f3706efc28a7d3c6f3))
+* **hooks:** add a follow-up ledger for non-breaking findings ([951a940](https://github.com/jl-cmd/claude-dev-env/commit/951a9404f7997172766021f9501f280b55a3c647))
+* **scripts:** split instruction-pair findings into breaking and smell ([c6a4410](https://github.com/jl-cmd/claude-dev-env/commit/c6a44102c362a9d19d5580d320a96a2db3ef8628))
+
+
+### Bug Fixes
+
+* **ci:** carry the validator's new modules in the sparse checkout ([8f9be01](https://github.com/jl-cmd/claude-dev-env/commit/8f9be0126f167a20d99bd37298c2f68376a6ef0a))
+
+
+### Documentation
+
+* state the flag-non-breaking-findings gate contract ([9971dac](https://github.com/jl-cmd/claude-dev-env/commit/9971dac38c70e5745853a83573cb332b90cec922))
+
+
+### Refactoring
+
+* **scripts:** hold the follow-up code to the repository's rules ([fa6d450](https://github.com/jl-cmd/claude-dev-env/commit/fa6d45089582f46de4260db65a1d4e9e960bdc56))
+
 ## [8.4.3](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.4.2...claude-dev-env-v8.4.3) (2026-09-20)
 
 
