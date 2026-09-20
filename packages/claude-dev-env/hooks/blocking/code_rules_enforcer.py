@@ -126,6 +126,7 @@ from code_rules_shared import (  # noqa: E402
     changed_line_numbers,
     get_file_extension,
     is_ephemeral_script_path,
+    is_graded_corpus_path,
     is_hook_infrastructure,
     is_test_file,
     is_under_session_scratchpad,
@@ -653,7 +654,12 @@ def validate_content_for_phase(
     phase: str,
     include_comment_policy: bool = False,
 ) -> list[str]:
-    """Run all applicable validators on content for one named validation phase."""
+    """Run all applicable validators on content for one named validation phase.
+
+    A graded corpus carries its defects on purpose, so no phase reports them.
+    """
+    if is_graded_corpus_path(file_path):
+        return []
     validated_phase = _validated_phase(phase)
     extension = get_file_extension(file_path)
     effective_content, all_changed_lines = _effective_content_and_changed_lines(

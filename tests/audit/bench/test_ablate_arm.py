@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import uuid
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import summarize_pilot
 from test_bench_calibration import BASH, REGISTRY, grade, shell, write_transcript
 
 REPOSITORY = Path(__file__).resolve().parents[3]
+ARCHIVED_REVISION = "HEAD"
 ABLATED_RELATIVE_PATH = "rules/git-workflow.md"
 KEPT_RELATIVE_PATH = "rules/verify-runtime-state.md"
 SEARCH_CASE = "find-named-file"
@@ -19,7 +21,9 @@ POWERSHELL = "PowerShell"
 
 
 def installed_arm(arm_spec: str) -> Path:
-    arm = run_arm.resolve_arm(REGISTRY, arm_spec)
+    arm = dataclasses.replace(
+        run_arm.resolve_arm(REGISTRY, arm_spec), base_sha=ARCHIVED_REVISION
+    )
     layout = run_arm.make_layout(
         f"ablate-test--{run_arm.run_label(arm.arm_id)[:20]}--{uuid.uuid4().hex[:8]}"
     )

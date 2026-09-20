@@ -276,7 +276,26 @@ def hook_format_diagnostics(
     )
 
 
+def is_graded_corpus(document: Document) -> bool:
+    """Return whether the document sits inside a graded corpus.
+
+    A benchmark case and a hook fixture carry their defects on purpose: the
+    defects are what the run measures. This reuses the hook lane's own
+    predicate, so the two lanes cannot drift on what counts as a corpus.
+
+    Args:
+        document: Candidate document.
+
+    Returns:
+        True for a document under a corpus directory.
+    """
+    shared_module = _hooks_module("blocking.code_rules_shared")
+    return bool(shared_module.is_graded_corpus_path(f"/{document.path.as_posix()}"))
+
+
 def accepts_python(document: Document) -> bool:
+    if is_graded_corpus(document):
+        return False
     return document.path.suffix.lower() == constants.PYTHON_SUFFIX
 
 
@@ -308,6 +327,8 @@ def accepts_code(document: Document) -> bool:
     Returns:
         True for a supported source extension.
     """
+    if is_graded_corpus(document):
+        return False
     return document.path.suffix.lower() in constants.ALL_CODE_SUFFIXES
 
 

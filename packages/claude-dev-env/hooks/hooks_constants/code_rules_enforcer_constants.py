@@ -42,6 +42,7 @@ ALL_AGENT_HOME_TOOLING_PATTERNS = {"/.grok/", "\\.grok\\", "\\.grok/"}
 ALL_HOOK_INFRASTRUCTURE_PATTERNS = {"/.claude/hooks/", "\\.claude\\hooks\\", "\\.claude/hooks/", "/packages/claude-dev-env/hooks/", "\\packages\\claude-dev-env\\hooks\\"} | ALL_AGENT_HOME_TOOLING_PATTERNS
 ALL_WORKFLOW_REGISTRY_PATTERNS = {"/workflow/", "\\workflow\\", "_tab.py", "/states.py", "\\states.py", "/modules.py", "\\modules.py"}
 ALL_MIGRATION_PATH_PATTERNS = {"/migrations/", "\\migrations\\"}
+ALL_GRADED_CORPUS_PATH_PATTERNS = {"/tests/audit/bench/cases/", "/tests/audit/hooks/fixtures/"}
 
 CONSTANTS_MODULE_SUFFIX: str = "_constants.py"
 CONFIG_DIRECTORY_SEGMENT: str = "config"

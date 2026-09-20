@@ -291,3 +291,32 @@ def test_is_dedicated_constants_module_true_for_config_directory() -> None:
 
 def test_is_dedicated_constants_module_false_for_ordinary_module() -> None:
     assert _SHARED_MODULE._is_dedicated_constants_module("app/services/orders.py") is False
+
+
+def test_is_graded_corpus_path_true_for_a_benchmark_case_file() -> None:
+    assert (
+        _SHARED_MODULE.is_graded_corpus_path(
+            "/repo/tests/audit/bench/cases/bugfix-discount-rounding/fixture/shop/pricing.py"
+        )
+        is True
+    )
+
+
+def test_is_graded_corpus_path_true_for_a_hook_harness_fixture() -> None:
+    assert (
+        _SHARED_MODULE.is_graded_corpus_path(
+            "C:\\repo\\tests\\audit\\hooks\\fixtures\\hooks\\overblocker.py"
+        )
+        is True
+    )
+
+
+def test_is_graded_corpus_path_false_for_the_harness_module_itself() -> None:
+    assert _SHARED_MODULE.is_graded_corpus_path("/repo/tests/audit/bench/run_arm.py") is False
+
+
+def test_is_graded_corpus_path_true_for_a_repository_relative_path() -> None:
+    assert (
+        _SHARED_MODULE.is_graded_corpus_path("tests/audit/bench/cases/ci-repair-slug/fixture/x.py")
+        is True
+    )

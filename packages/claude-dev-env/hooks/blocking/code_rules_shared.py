@@ -12,6 +12,7 @@ from hooks_constants.code_rules_enforcer_constants import (
     ALL_DIFF_CHANGED_OPCODE_TAGS,
     ALL_EPHEMERAL_EXEMPT_DISABLE_TRUTHY_VALUES,
     ALL_HOOK_INFRASTRUCTURE_PATTERNS,
+    ALL_GRADED_CORPUS_PATH_PATTERNS,
     ALL_MIGRATION_PATH_PATTERNS,
     ALL_ROOT_ANCHORED_EPHEMERAL_DIRECTORIES,
     ALL_STRICT_TEST_DIRECTORY_SEGMENTS,
@@ -518,6 +519,33 @@ def _is_dedicated_constants_module(file_path: str) -> bool:
         return True
     path_segments = normalized_path.split("/")
     return CONFIG_DIRECTORY_SEGMENT in path_segments[:-1]
+
+
+def is_graded_corpus_path(file_path: str) -> bool:
+    """Return whether the path sits inside a graded corpus.
+
+    A graded corpus is the input side of a measurement: a benchmark case an
+    agent is asked to repair, or a hook fixture whose whole job is to block
+    when it should not. The defects in those files are the measurement, so a
+    gate that reports them asks the corpus to stop being the thing it measures.
+
+    ::
+
+        tests/audit/bench/cases/bugfix-discount-rounding/fixture/shop/pricing.py    corpus
+        tests/audit/hooks/fixtures/hooks/overblocker.py                             corpus
+        tests/audit/bench/run_arm.py                                                graded by the rules
+
+    Args:
+        file_path: The candidate path to classify.
+
+    Returns:
+        True when the path sits under a corpus directory.
+    """
+    path_lower = "/" + file_path.lower().replace("\\", "/").lstrip("/")
+    return any(
+        each_pattern.replace("\\", "/") in path_lower
+        for each_pattern in ALL_GRADED_CORPUS_PATH_PATTERNS
+    )
 
 
 def is_migration_file(file_path: str) -> bool:
