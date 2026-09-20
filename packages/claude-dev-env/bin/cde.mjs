@@ -7,16 +7,18 @@ import path from "node:path";
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const lintScriptPath = path.join(packageRoot, "scripts", "cde_lint.py");
 const verificationScriptPath = path.join(packageRoot, "scripts", "local_verification", "cli.py");
+const followupScriptPath = path.join(packageRoot, "scripts", "followup_cli.py");
 const posixSignalStatusOffset = 128;
 const lintCommandName = "lint";
 const verifyCommandName = "verify";
+const followupCommandName = "followup";
 const pythonOptionName = "--python";
 const pythonEnvironmentName = "CDE_PYTHON";
 
 
 export function createHelpText() {
     return [
-        "Usage: cde <lint|verify> [options]",
+        "Usage: cde <lint|verify|followup> [options]",
         "",
         "Run the policy linter with cde lint. Source modes are mutually exclusive:",
         "  --files PATH [PATH ...]  Current worktree files",
@@ -36,6 +38,13 @@ export function createHelpText() {
         "  --repo PATH               Candidate repository root",
         "  --base SHA                Trusted base revision",
         "  --output PATH             JSON verification report",
+        "",
+        "Read the follow-up ledger of non-breaking findings with cde followup:",
+        "  list                      Name every recorded follow-up",
+        "  ingest REPORT             Record the diagnostics in a lint JSON report",
+        "  brief                     Write the task an agent works them from",
+        "  clear                     Empty the ledger",
+        "  --repository-root PATH    Repository whose ledger to read",
         "",
         "Python may also be selected with CDE_PYTHON.",
     ].join("\n");
@@ -71,6 +80,14 @@ export function buildVerifyCommand(interpreter, forwardedArguments) {
     return {
         executable: interpreter,
         arguments: [verificationScriptPath, ...forwardedArguments],
+    };
+}
+
+
+export function buildFollowupCommand(interpreter, forwardedArguments) {
+    return {
+        executable: interpreter,
+        arguments: [followupScriptPath, ...forwardedArguments],
     };
 }
 
@@ -170,12 +187,31 @@ export function runVerifyCommand(command, dependencies = {}) {
 }
 
 
+export function runFollowupCommand(command, dependencies = {}) {
+    return runChildCommand(command, "Unable to start the follow-up command.", dependencies);
+}
+
+
+const buildCommandByName = {
+    [lintCommandName]: buildLintCommand,
+    [verifyCommandName]: buildVerifyCommand,
+    [followupCommandName]: buildFollowupCommand,
+};
+
+
+const runCommandByName = {
+    [lintCommandName]: runLintCommand,
+    [verifyCommandName]: runVerifyCommand,
+    [followupCommandName]: runFollowupCommand,
+};
+
+
 export async function main(argumentsList = process.argv.slice(2), dependencies = {}) {
     if (argumentsList.length === 0 || argumentsList.includes("--help") || argumentsList.includes("-h")) {
         process.stdout.write(`${createHelpText()}\n`);
         return 0;
     }
-    if (![lintCommandName, verifyCommandName].includes(argumentsList[0])) {
+    if (![lintCommandName, verifyCommandName, followupCommandName].includes(argumentsList[0])) {
         process.stderr.write(`${createHelpText()}\n`);
         return 2;
     }
@@ -190,10 +226,8 @@ export async function main(argumentsList = process.argv.slice(2), dependencies =
         process.stderr.write("No usable Python interpreter found. Use --python or CDE_PYTHON.\n");
         return 2;
     }
-    const buildCommand = argumentsList[0] === lintCommandName ? buildLintCommand : buildVerifyCommand;
-    const command = buildCommand(interpreter, remainingArguments);
-    const runCommand = dependencies.runCommand
-        ?? (argumentsList[0] === lintCommandName ? runLintCommand : runVerifyCommand);
+    const command = buildCommandByName[argumentsList[0]](interpreter, remainingArguments);
+    const runCommand = dependencies.runCommand ?? runCommandByName[argumentsList[0]];
     return await runCommand(command, dependencies);
 }
 
