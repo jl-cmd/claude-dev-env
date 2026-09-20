@@ -323,7 +323,6 @@ def test_team_advisor_source_references_resolve_from_the_package_tree() -> None:
     all_reference_targets = (
         "../../../docs/references/advisor-tool.md",
         "../../../_shared/advisor/advisor-protocol.md",
-        "../../agents/session-advisor.md",
         "../../../_shared/advisor/reference/third-party-bind.md",
         "../../../_shared/advisor/reference/astra-rung.md",
         "../../../_shared/advisor/reference/consult-format.md",

@@ -184,7 +184,7 @@ test('a full install writes skills and agents under .agents and points .claude a
             join(skillsInstallDirectory, TEAM_ADVISOR_SKILL_NAME, 'SKILL.md'),
             join(claudeHome, 'docs', 'references', 'advisor-tool.md'),
             join(claudeHome, '_shared', 'advisor', 'advisor-protocol.md'),
-            join(agentsInstallDirectory, 'session-advisor.md'),
+            join(agentsInstallDirectory, 'poteto-agent.md'),
         ];
         for (const eachPath of projectedAdvisorPaths) {
             assert.ok(existsSync(eachPath), eachPath);
