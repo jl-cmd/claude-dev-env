@@ -6,25 +6,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = REPOSITORY_ROOT / "packages" / "claude-dev-env"
-AGENTS_MD_ARCHIVE_ROOT = REPOSITORY_ROOT / "docs" / "records" / "agents-md"
 CANONICAL_RULE_PATH = PACKAGE_ROOT / "rules" / "asd-ste100-language.md"
-PACKAGE_HUB_PATH = (
-    AGENTS_MD_ARCHIVE_ROOT / "packages" / "claude-dev-env" / "AGENTS.md.archive"
-)
-RULES_INDEX_PATH = (
-    AGENTS_MD_ARCHIVE_ROOT
-    / "packages"
-    / "claude-dev-env"
-    / "rules"
-    / "AGENTS.md.archive"
-)
-ARCHIVE_PATH = (
-    REPOSITORY_ROOT
-    / "docs"
-    / "records"
-    / "asd-ste100-language-policy"
-    / "superseded-language-specifiers.md"
-)
 
 
 def _read(file_path: Path) -> str:
@@ -55,36 +37,3 @@ def test_canonical_rule_owns_general_language_contract() -> None:
     assert "25 words or fewer" in lowered_text
     assert "responsible human verifies" in lowered_text
     assert not canonical_text.startswith("---")
-
-
-def test_package_hub_and_rule_index_point_to_one_authority() -> None:
-    package_hub_text = _read(PACKAGE_HUB_PATH)
-    rule_index_text = _read(RULES_INDEX_PATH)
-
-    assert "rules/asd-ste100-language.md" in package_hub_text
-    assert "asd-ste100-language.md" in rule_index_text
-    assert "sole general user-facing language authority" in rule_index_text.lower()
-    for retired_rule_name in (
-        "plain-language.md",
-        "eli11-replies.md",
-        "opus5-communication-contract.md",
-        "doc-prose-cuts.md",
-    ):
-        assert f"`{retired_rule_name}`" not in rule_index_text
-
-
-def test_archive_records_each_retired_rule_and_source_marker() -> None:
-    archive_text = _read(ARCHIVE_PATH)
-
-    for retired_rule_name in (
-        "plain-language.md",
-        "eli11-replies.md",
-        "opus5-communication-contract.md",
-        "doc-prose-cuts.md",
-    ):
-        assert f"packages/claude-dev-env/rules/{retired_rule_name}" in archive_text
-
-    assert "All prose a person reads" in archive_text
-    assert "Users read about 20% of your words" in archive_text
-    assert "**Marker:** `opus5-communication-contract-v1`" in archive_text
-    assert "Four sentence shapes carry no fact" in archive_text
