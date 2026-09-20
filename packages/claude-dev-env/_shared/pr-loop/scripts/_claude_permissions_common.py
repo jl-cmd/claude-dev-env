@@ -1,4 +1,4 @@
-"""Shared helpers for grant_project_claude_permissions and revoke_project_claude_permissions.
+"""Shared helpers for reading and writing Claude permission settings.
 
 Writes to ~/.claude/settings.json are atomic and permission-preserving: the
 target file's existing POSIX mode is captured, a sibling temp file is

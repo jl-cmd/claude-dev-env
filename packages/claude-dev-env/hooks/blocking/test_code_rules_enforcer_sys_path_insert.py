@@ -1,7 +1,6 @@
 """Tests for sys.path.insert dedup-guard rule.
 
-Bot reviewers on PR #289 flagged grant_project_claude_permissions.py:13
-and revoke_project_claude_permissions.py for unconditionally calling
+Bot reviewers on PR #289 flagged two permission scripts for unconditionally calling
 sys.path.insert(0, X) without checking whether X was already present.
 The convention in the rest of the repo is to guard the call with
 `if str(X) not in sys.path:` (or equivalent) to avoid pushing the

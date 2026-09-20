@@ -149,12 +149,6 @@ if (-not $SkipMypy) {
             mypy --config-file (Join-Path $prLoopScriptsRoot 'pyproject.toml') `
                 _claude_permissions_common.py `
                 code_rules_gate.py `
-                fix_hookspath.py `
-                grant_project_claude_permissions.py `
-                preflight_self_heal.py `
-                preflight.py `
-                reviews_disabled.py `
-                revoke_project_claude_permissions.py `
                 terminology_sweep.py `
                 code_rules_gate_parts `
                 pr_loop_shared_constants

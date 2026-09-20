@@ -153,9 +153,7 @@ def check_sys_path_insert_deduplication_guard(content: str, file_path: str) -> l
 
     Repeated module reloads can push the same entry onto sys.path multiple
     times when the call is unguarded. The repo convention is to wrap the
-    call with `if <path> not in sys.path:`. The grant and revoke project
-    permission scripts (grant_project_claude_permissions.py,
-    revoke_project_claude_permissions.py) bypassed the convention.
+    call with `if <path> not in sys.path:`.
     """
     if is_test_file(file_path):
         return []

@@ -1,4 +1,4 @@
-"""Constants shared by grant_project_claude_permissions and revoke_project_claude_permissions."""
+"""Constants for Claude permission rules in the user settings file."""
 
 from pathlib import Path
 

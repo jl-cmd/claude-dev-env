@@ -1,4 +1,4 @@
-"""Configuration constants for the bugteam preflight script."""
+"""Configuration constants for repository layout and pytest discovery."""
 
 BUGTEAM_PREFLIGHT_SKIP_ENV_VAR_NAME: str = "BUGTEAM_PREFLIGHT_SKIP"
 
