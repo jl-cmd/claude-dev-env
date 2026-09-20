@@ -818,7 +818,7 @@ class TestHarnessFailuresStayOrdinary:
         arm = {
             "id": "escape",
             "kind": "cde",
-            "base_sha": REGISTRY["baseline_sha"],
+            "base_sha": "HEAD",
             "removed_paths": ["../home"],
         }
         row = self.run_with_registry(
@@ -1007,7 +1007,7 @@ class TestFixtureCheckoutLeak:
     ESCAPING_ARM = {
         "id": "bare",
         "kind": "cde",
-        "base_sha": REGISTRY["baseline_sha"],
+        "base_sha": "HEAD",
         "removed_paths": ["../home"],
     }
 
