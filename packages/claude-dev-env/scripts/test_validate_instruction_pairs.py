@@ -258,3 +258,33 @@ def test_run_gate_passes_a_valid_tree_and_records_nothing(tmp_path: Path) -> Non
 
     assert exit_code == GATE_PASSED_EXIT_CODE
     assert all_recorded_findings(tmp_path) == ()
+
+
+def read_sparse_checkout_paths() -> list[str]:
+    workflow_text = read_workflow("instruction-pairs-reusable.yml")
+    block_start = workflow_text.index("sparse-checkout: |")
+    block_end = workflow_text.index("sparse-checkout-cone-mode", block_start)
+    return [
+        each_line.strip()
+        for each_line in workflow_text[block_start:block_end].splitlines()
+        if each_line.strip().startswith("packages/")
+    ]
+
+
+def test_sparse_checkout_carries_every_module_the_validator_imports() -> None:
+    package_root = Path(__file__).resolve().parents[1]
+    all_checked_out_paths = set(read_sparse_checkout_paths())
+
+    all_required_paths = {
+        "packages/claude-dev-env/scripts/validate_instruction_pairs.py",
+        "packages/claude-dev-env/scripts/subprocess_window_access.py",
+        "packages/claude-dev-env/scripts/dev_env_scripts_constants/__init__.py",
+        "packages/claude-dev-env/scripts/dev_env_scripts_constants/followup_constants.py",
+        "packages/claude-dev-env/hooks/followup_ledger.py",
+        "packages/claude-dev-env/hooks/hooks_constants/__init__.py",
+        "packages/claude-dev-env/hooks/hooks_constants/followup_ledger_constants.py",
+    }
+
+    assert all_required_paths <= all_checked_out_paths
+    for each_path in all_checked_out_paths:
+        assert (package_root.parents[1] / each_path).is_file()
