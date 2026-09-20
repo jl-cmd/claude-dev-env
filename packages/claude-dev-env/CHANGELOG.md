@@ -1,5 +1,15 @@
 # Changelog
 
+## [8.4.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.4.0...claude-dev-env-v8.4.1) (2026-09-20)
+
+
+### Maintenance
+
+* **hooks:** retire staged payload gate ([51eca5b](https://github.com/jl-cmd/claude-dev-env/commit/51eca5b477c390d33c8a1571ae82be0f7bd958d8))
+* **hooks:** retire staged payload gate ([bcc4cf9](https://github.com/jl-cmd/claude-dev-env/commit/bcc4cf9bb6be9049a41725c4f8abf8f5dc647a56))
+* **scripts:** retire dedicated code-review constant tests ([3c29503](https://github.com/jl-cmd/claude-dev-env/commit/3c295032d82e8efa937d355ce53c34c2fa4efcb5))
+* **scripts:** retire dedicated code-review constant tests ([c639cf3](https://github.com/jl-cmd/claude-dev-env/commit/c639cf39acd25f2cf09d973bdd7f872b32c806c2))
+
 ## [8.4.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.3.0...claude-dev-env-v8.4.0) (2026-09-20)
 
 
