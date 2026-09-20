@@ -241,7 +241,7 @@ TEST_HELPER_DIRECTORY_PATH = "packages/foo/tests/helper_functions.py"
 NON_TEST_DIRECTORY_HELPER_PATH = "packages/foo/helpers/helper_functions.py"
 CONFIG_DIRECTORY_MAGIC_PATH = "packages/foo/config/threshold_values.py"
 CONFIG_CONSTANTS_DIRECTORY_MAGIC_PATH = (
-    "packages/foo/pr_converge_skill_constants/threshold_values.py"
+    "packages/foo/pr_loop_shared_constants/threshold_values.py"
 )
 NON_EXEMPT_MAGIC_PATH = "packages/foo/services/threshold_values.py"
 MAGIC_VALUE_VALIDATOR_NAME = "Magic Values"

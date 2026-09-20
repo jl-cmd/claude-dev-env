@@ -18,8 +18,6 @@ ALL_CONFIG_DIRECTORY_NAMES = frozenset(
         "git_hooks_constants",
         "pr_loop_shared_constants",
         "skills_pr_loop_constants",
-        "pr_converge_skill_constants",
-        "pr_converge_scripts_constants",
         "usage_pause_constants",
         "prototype_scripts_constants",
         "codex_review_scripts_constants",
