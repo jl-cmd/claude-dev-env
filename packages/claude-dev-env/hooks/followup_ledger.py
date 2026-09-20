@@ -22,12 +22,20 @@ if _hooks_directory not in sys.path:
     sys.path.insert(0, _hooks_directory)
 
 from hooks_constants.followup_ledger_constants import (
-    FILE_PATH_KEY,
+    ABSENT_ORIGIN_COMMIT,
     ALL_FOLLOWUP_LEDGER_PATH_SEGMENTS,
+    ALL_GIT_HEAD_PATH_SEGMENTS,
+    CHECK_ID_KEY,
+    FILE_PATH_KEY,
+    GIT_DIRECTORY_NAME,
+    GIT_REFERENCE_PREFIX,
     LEDGER_APPEND_MODE,
     LEDGER_ENCODING,
     MESSAGE_KEY,
+    ORIGIN_COMMIT_KEY,
     RULE_ID_KEY,
+    SEVERITY_KEY,
+    SEVERITY_SMELL,
 )
 
 
@@ -35,14 +43,33 @@ class FollowupFinding(NamedTuple):
     """One non-breaking finding a later pull request resolves.
 
     Attributes:
-        rule_id: Stable identifier of the check that raised the finding.
+        rule_id: Identifier of the rule that raised the finding.
         file_path: Repository-relative path the finding names.
         message: The text a reader acts on.
+        check_id: Identifier of the single check behind the finding. An empty
+            value reads back as the rule identifier.
+        severity: The class the gate put the finding in.
+        origin_commit: The revision checked out when the finding was recorded,
+            which groups a follow-up pull request by the change that raised it.
     """
 
     rule_id: str
     file_path: str
     message: str
+    check_id: str = ""
+    severity: str = SEVERITY_SMELL
+    origin_commit: str = ABSENT_ORIGIN_COMMIT
+
+    def tracking_key(self) -> tuple[str, str, str]:
+        """Return the fields that make this finding the same one over time.
+
+        The origin commit stays out of the key, so a smell seen again under a
+        later revision keeps the revision that first raised it.
+
+        Returns:
+            The check identifier, path, and message.
+        """
+        return (self.check_id or self.rule_id, self.file_path, self.message)
 
 
 def followup_ledger_path(repository_root: Path) -> Path:
@@ -69,7 +96,11 @@ def record_followup_finding(repository_root: Path, finding: FollowupFinding) -> 
         repository_root: The repository whose ledger receives the finding.
         finding: The non-breaking finding to record.
     """
-    if finding in all_recorded_findings(repository_root):
+    all_recorded_keys = {
+        each_finding.tracking_key()
+        for each_finding in all_recorded_findings(repository_root)
+    }
+    if finding.tracking_key() in all_recorded_keys:
         return
 
     ledger_path = followup_ledger_path(repository_root)
@@ -78,6 +109,9 @@ def record_followup_finding(repository_root: Path, finding: FollowupFinding) -> 
             RULE_ID_KEY: finding.rule_id,
             FILE_PATH_KEY: finding.file_path,
             MESSAGE_KEY: finding.message,
+            CHECK_ID_KEY: finding.check_id or finding.rule_id,
+            SEVERITY_KEY: finding.severity,
+            ORIGIN_COMMIT_KEY: finding.origin_commit,
         }
     )
     try:
@@ -140,4 +174,75 @@ def _finding_from_line(ledger_line: str) -> FollowupFinding | None:
         return None
     if not isinstance(message, str):
         return None
-    return FollowupFinding(rule_id, file_path, message)
+    return FollowupFinding(
+        rule_id,
+        file_path,
+        message,
+        _text_field(parsed_record, CHECK_ID_KEY, rule_id),
+        _text_field(parsed_record, SEVERITY_KEY, SEVERITY_SMELL),
+        _text_field(parsed_record, ORIGIN_COMMIT_KEY, ABSENT_ORIGIN_COMMIT),
+    )
+
+
+def _text_field(
+    all_record_fields: dict[str, object], field_key: str, fallback: str
+) -> str:
+    """Read one text field of a ledger record.
+
+    Args:
+        all_record_fields: The mapping one ledger line parsed into.
+        field_key: The key to read.
+        fallback: The value a record written before this field carried it takes.
+
+    Returns:
+        The field's text, or the fallback.
+    """
+    field_value = all_record_fields.get(field_key)
+    if isinstance(field_value, str) and field_value:
+        return field_value
+    return fallback
+
+
+def head_commit(repository_root: Path) -> str:
+    """Return the revision one repository has checked out.
+
+    ::
+
+        .git/HEAD holding "ref: refs/heads/main" -> the sha in refs/heads/main
+        .git/HEAD holding a sha                  -> that sha
+        no .git directory                        -> ""
+
+    The revision comes from the files git writes rather than from a git
+    process, so recording a finding starts no subprocess.
+
+    Args:
+        repository_root: The repository whose revision to read.
+
+    Returns:
+        The checked-out revision, or an empty string when none can be read.
+    """
+    head_path = repository_root.joinpath(*ALL_GIT_HEAD_PATH_SEGMENTS)
+    head_text = _file_text(head_path)
+    if head_text is None:
+        return ABSENT_ORIGIN_COMMIT
+    if not head_text.startswith(GIT_REFERENCE_PREFIX):
+        return head_text
+    reference_path = repository_root / GIT_DIRECTORY_NAME / head_text[
+        len(GIT_REFERENCE_PREFIX) :
+    ]
+    return _file_text(reference_path) or ABSENT_ORIGIN_COMMIT
+
+
+def _file_text(file_path: Path) -> str | None:
+    """Read one small git file into stripped text.
+
+    Args:
+        file_path: The file to read.
+
+    Returns:
+        The stripped text, or None when the file cannot be read.
+    """
+    try:
+        return file_path.read_text(encoding=LEDGER_ENCODING).strip()
+    except (OSError, UnicodeError):
+        return None
