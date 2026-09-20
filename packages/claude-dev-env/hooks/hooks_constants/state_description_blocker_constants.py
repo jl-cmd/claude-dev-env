@@ -40,7 +40,6 @@ ALL_COMMENT_TRANSITION_PATTERNS: list[Pattern[str]] = [
     compile(r"\bas of\b", IGNORECASE),
 ]
 
-CODE_FENCE_PATTERN: Pattern[str] = compile(r"```[\s\S]*?```")
 INLINE_CODE_PATTERN: Pattern[str] = compile(r"``[^`]+``|`[^`]+`")
 DOUBLE_QUOTED_SPAN_PATTERN: Pattern[str] = compile(r'"[^"\n]*"')
 TRIPLE_QUOTED_BLOCK_PATTERN: Pattern[str] = compile(

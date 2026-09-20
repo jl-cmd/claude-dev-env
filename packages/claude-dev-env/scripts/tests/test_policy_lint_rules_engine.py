@@ -296,7 +296,10 @@ def test_state_description_diagnostics_maps_and_scopes_phrases(
         adapters,
         "_hooks_module",
         lambda _module_name: types.SimpleNamespace(
-            find_violations=lambda _text, _path: ["used to", "replaced by"]
+            find_violations_with_lines=lambda _text, _path: [
+                ("used to", 2),
+                ("replaced by", 1),
+            ]
         ),
     )
     source_document = Document(

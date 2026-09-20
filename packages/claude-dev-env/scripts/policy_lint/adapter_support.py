@@ -74,23 +74,12 @@ def _diagnostics_for_messages(
     return tuple(all_diagnostics)
 
 
-def _source_line_for_phrase(source_text: str, phrase: str) -> int | None:
-    normalized_phrase = phrase.casefold()
-    for each_line_number, each_line in enumerate(source_text.splitlines(), 1):
-        if normalized_phrase in each_line.casefold():
-            return each_line_number
-    return None
-
-
 def _diagnostics_for_state_messages(
-    document: Document, all_messages: Iterable[str]
+    document: Document, all_messages: Iterable[tuple[str, int]]
 ) -> tuple[Diagnostic, ...]:
     all_diagnostics: list[Diagnostic] = []
-    for each_message in all_messages:
-        maybe_line = _source_line_for_phrase(document.text, each_message)
-        location = (
-            None if maybe_line is None else Location(document.path, maybe_line, 1)
-        )
+    for each_message, each_line_number in all_messages:
+        location = Location(document.path, each_line_number, 1)
         all_diagnostics.append(
             Diagnostic("state-description", Severity.ERROR, each_message, location)
         )
