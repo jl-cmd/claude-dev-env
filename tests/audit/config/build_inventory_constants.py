@@ -62,7 +62,6 @@ HOOK_SUPPORT_KIND = "hook_support"
 CODEX_PROJECTION_KIND = "codex_projection"
 CURSOR_PROJECTION_KIND = "cursor_projection"
 DOC_KIND = "doc"
-AUDIT_RECORD_KIND = "audit_record"
 AUDIT_RUBRIC_KIND = "audit_rubric"
 CI_WORKFLOW_KIND = "ci_workflow"
 CI_SUPPORT_KIND = "ci_support"
@@ -98,8 +97,6 @@ HOOK_CONSTANTS_SEGMENT = "/hooks_constants/"
 CODEX_BASENAME_PREFIX = "codex-"
 CODEX_RULES_PREFIX = "codex-rules/"
 SKILL_ARCHIVE_PREFIX = "skill-archive/"
-RECORDS_PREFIX = "docs/records/"
-AUDIT_PREFIX = ".audit/"
 CURSOR_SKILLS_PREFIX = ".cursor/skills/"
 CURSOR_DIRECTORY_PREFIX = ".cursor"
 CURSOR_IGNORE_PATH = ".cursorignore"
@@ -278,7 +275,7 @@ CODE_KINDS = frozenset(
     }
 )
 NAMED_COMPONENT_KINDS = frozenset({SKILL_KIND, AGENT_KIND, COMMAND_KIND})
-NON_LIVE_KINDS = frozenset({TEST_KIND, ARCHIVE_ITEM_KIND, AUDIT_RECORD_KIND})
+NON_LIVE_KINDS = frozenset({TEST_KIND, ARCHIVE_ITEM_KIND})
 
 ALL_PROOF_CLASS_BY_KIND: dict[str, str] = {
     RULE_KIND: "OUTPUT",
@@ -304,7 +301,6 @@ ALL_PROOF_CLASS_BY_KIND: dict[str, str] = {
     CODEX_PROJECTION_KIND: "COMPATIBILITY",
     CURSOR_PROJECTION_KIND: "COMPATIBILITY",
     DOC_KIND: "DOCUMENTATION",
-    AUDIT_RECORD_KIND: "DOCUMENTATION",
     ARCHIVE_ITEM_KIND: "ARCHIVE",
 }
 

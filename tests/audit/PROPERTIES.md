@@ -294,7 +294,7 @@ A check should take its expected result from outside the code it tests.
 
 - Source: `PS-TEST-BEHAVIOR`, section "Test behavior, not implementation", strength advisory.
 - Quote: "Use an independent expectation"
-- Classes: `test`, `audit_rubric`, `audit_record`.
+- Classes: `test`, `audit_rubric`.
 - Observe: file. Read the test and trace where the expected value comes from.
 - Check: none today.
 
@@ -364,7 +364,7 @@ Dead code should leave the tree before new code is added.
 
 - Source: `PS-SUBTRACT`, section "description", strength advisory.
 - Quote: "Remove dead code, redundant validators, and stub references first, then build on the simpler base."
-- Classes: `archive_item`, `shared_module`, `hook_support`, `scripts_module`.
+- Classes: `shared_module`, `hook_support`, `scripts_module`.
 - Observe: file. List the modules with no live inbound edge in tests/audit/data/dependencies.tsv.
 - Check: none today.
 

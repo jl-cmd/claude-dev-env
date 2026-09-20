@@ -48,8 +48,6 @@ from tests.audit.config.build_inventory_constants import (
     ARCHIVE_ITEM_KIND,
     ARCHIVE_SUFFIX,
     ASCII_ENCODING,
-    AUDIT_PREFIX,
-    AUDIT_RECORD_KIND,
     BLOB_SIZE_FIELD_INDEX,
     CHANGELOG_BASENAME,
     CHANGELOG_MARKER,
@@ -136,7 +134,6 @@ from tests.audit.config.build_inventory_constants import (
     PYTHON_SUFFIX,
     QUOTED_ENTRY,
     REACHABILITY_RELATIONS,
-    RECORDS_PREFIX,
     REFERENCES_RELATION,
     REGISTERS_RELATION,
     RELATIVE_PREFIX_LENGTH,
@@ -462,7 +459,7 @@ def classify_package_path(path: str, inner: str) -> tuple[str, str]:
 
 
 def classify_archive_path(path: str) -> tuple[str, str] | None:
-    """Classify a repository path that holds archived or recorded material.
+    """Classify a repository path that holds archived material.
 
     Args:
         path: Repository-relative POSIX path.
@@ -470,15 +467,14 @@ def classify_archive_path(path: str) -> tuple[str, str] | None:
     Returns:
         A kind and component path pair, or None when nothing archived matches.
     """
-    for each_prefix in (SKILL_ARCHIVE_PREFIX, RECORDS_PREFIX):
-        if path.startswith(each_prefix):
-            has_directory = PATH_SEPARATOR in path[len(each_prefix) :]
-            grouped = directory_group(path, each_prefix) if has_directory else path
-            return ARCHIVE_ITEM_KIND, grouped
+    if path.startswith(SKILL_ARCHIVE_PREFIX):
+        has_directory = PATH_SEPARATOR in path[len(SKILL_ARCHIVE_PREFIX) :]
+        grouped = (
+            directory_group(path, SKILL_ARCHIVE_PREFIX) if has_directory else path
+        )
+        return ARCHIVE_ITEM_KIND, grouped
     if posixpath.basename(path).endswith(ARCHIVE_SUFFIX):
         return ARCHIVE_ITEM_KIND, path
-    if path.startswith(AUDIT_PREFIX):
-        return AUDIT_RECORD_KIND, directory_group(path, AUDIT_PREFIX)
     return None
 
 
@@ -1405,7 +1401,7 @@ def is_live_source(component: Component) -> bool:
         component: Component to classify.
 
     Returns:
-        True for a component outside the test, archive, and record surfaces.
+        True for a component outside the test and archive surfaces.
     """
     return (
         component.kind not in NON_LIVE_KINDS

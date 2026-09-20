@@ -182,6 +182,22 @@ def test_pairing_rejects_an_approved_module_without_its_suite(
     assert all_paths == (_APPROVED_PRODUCTION_PATH,)
 
 
+def test_cursor_verifier_constants_require_the_changed_driver_suite(
+    tmp_path: Path,
+) -> None:
+    constants_path = PurePosixPath(
+        ".cursor/skills/verify-claude-dev-env/scripts/verify_installer_constants/constants.mjs"
+    )
+    suite_path = PurePosixPath(
+        ".cursor/skills/verify-claude-dev-env/scripts/verify-installer.test.mjs"
+    )
+    constants_change = _body_change_at(constants_path)
+    assert _diagnostic_paths(tmp_path, constants_change) == (constants_path,)
+    assert _diagnostic_paths(
+        tmp_path, constants_change, _body_change_at(suite_path)
+    ) == ()
+
+
 def test_pairing_rejects_an_unrelated_module_beside_a_changed_approved_suite(
     tmp_path: Path,
 ) -> None:
