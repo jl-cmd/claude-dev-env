@@ -62,10 +62,12 @@ from pr_loop_shared_constants.terminology_sweep_constants import (
     JAVASCRIPT_LINE_COMMENT_MARKER,
     JSDOC_CONTINUATION_MARKER,
     MARKDOWN_FILE_EXTENSION,
+    MARKDOWN_LINK_TARGET_PATTERN,
     MINIMUM_IDENTIFIER_TOKEN_COUNT,
     PROSE_WINDOW_WORD_SEPARATOR,
     PROSE_WORD_PATTERN,
     PYTHON_COMMENT_MARKER,
+    SENTENCE_BOUNDARY_PATTERN,
     SNAKE_CASE_IDENTIFIER_PATTERN,
     STRING_LITERAL_CONTENT_PATTERN,
     TERMINOLOGY_FINDING_TEMPLATE,
@@ -161,27 +163,74 @@ def _collect_introduced_identifiers(
 ) -> frozenset[IdentifierTuple]:
     """Return the identifier tuples introduced on added code lines.
 
+    A name bound only inside a test module is a fixture's own local variable,
+    not a term the rest of the repository is expected to agree with, so a
+    test file's identifiers are left out.
+
     Args:
         all_added_lines: Added-line triples from :func:`_parse_added_lines`.
 
     Returns:
-        Every multi-word identifier tuple appearing on an added code line.
+        Every multi-word identifier tuple appearing on an added,
+        non-test-module code line.
     """
     all_identifier_tuples: set[IdentifierTuple] = set()
     for each_file_path, _, each_text in all_added_lines:
-        if _file_extension(each_file_path) in ALL_SWEEP_CODE_FILE_EXTENSIONS:
+        if _file_extension(
+            each_file_path
+        ) in ALL_SWEEP_CODE_FILE_EXTENSIONS and not _is_test_file(each_file_path):
             all_identifier_tuples.update(_identifier_tuples_in_text(each_text))
     return frozenset(all_identifier_tuples)
+
+
+def _split_into_prose_fragments(raw_fragment: str) -> list[str]:
+    """Split a raw prose fragment at every sentence, link, and code-span break.
+
+    ::
+
+        raw:  "…gates the pull request. [`link`](docs/README.md) explains it."
+        split -> ["…gates the pull request", "explains it."]
+        flag: a window built from the joined text -- "pull request docs"
+        ok:   "pull request" and "docs" now sit in different fragments
+
+    A sentence-ending period, a Markdown link's target, and a backticked code
+    span each end whatever the reader was reading and start something new.
+    Splitting there, instead of blanking the removed text to a single space,
+    keeps a word window from spanning two sentences or reaching across a
+    stripped span into unrelated text on its far side.
+
+    Args:
+        raw_fragment: One prose fragment collected from an added line.
+
+    Returns:
+        The fragment's pieces with every break removed, in order, dropping
+        any piece left blank.
+    """
+    all_fragments = [raw_fragment]
+    for each_break_pattern in (
+        INLINE_CODE_SPAN_PATTERN,
+        MARKDOWN_LINK_TARGET_PATTERN,
+        SENTENCE_BOUNDARY_PATTERN,
+    ):
+        all_fragments = [
+            each_piece
+            for each_fragment in all_fragments
+            for each_piece in each_break_pattern.split(each_fragment)
+        ]
+    return [
+        each_fragment.strip() for each_fragment in all_fragments if each_fragment.strip()
+    ]
 
 
 def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     """Return the prose fragments of an added line worth scanning for terms.
 
-    A Markdown line is prose with its inline-code spans removed, since a
-    backticked span names code verbatim. A code line contributes its comment
-    tail, its JSDoc continuation text, and the contents of its string
-    literals. A test module contributes its comment tail and JSDoc text only.
-    Its string literals hold fixture data, not prose.
+    A Markdown line is prose split at its sentence, link, and code-span
+    breaks, since a backticked span names code verbatim and a link target is
+    a path, not a word. A code line contributes its comment tail, its JSDoc
+    continuation text, and the contents of its string literals, each split
+    the same way. A test module contributes its comment tail and JSDoc text
+    only. Its string literals hold fixture data, not prose.
 
     Args:
         file_path: The path the added line belongs to.
@@ -192,17 +241,21 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     """
     extension = _file_extension(file_path)
     if extension == MARKDOWN_FILE_EXTENSION:
-        return [INLINE_CODE_SPAN_PATTERN.sub(" ", line_text)]
+        return _split_into_prose_fragments(line_text)
     if extension not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
         return []
-    all_fragments: list[str] = []
+    all_raw_fragments: list[str] = []
     stripped_line = line_text.strip()
     if stripped_line.startswith(JSDOC_CONTINUATION_MARKER):
-        all_fragments.append(stripped_line)
-    all_fragments.extend(_comment_fragments(line_text))
+        all_raw_fragments.append(stripped_line)
+    all_raw_fragments.extend(_comment_fragments(line_text))
     if not _is_test_file(file_path):
-        all_fragments.extend(_string_literal_fragments(line_text))
-    return all_fragments
+        all_raw_fragments.extend(_string_literal_fragments(line_text))
+    return [
+        each_split_fragment
+        for each_raw_fragment in all_raw_fragments
+        for each_split_fragment in _split_into_prose_fragments(each_raw_fragment)
+    ]
 
 
 def _is_test_file(file_path: str) -> bool:
@@ -605,15 +658,23 @@ def repository_environment() -> dict[str, str]:
 def _identifier_names_on_added_code_lines(diff_text: str) -> frozenset[str]:
     """Return every multi-word identifier name on the diff's added code lines.
 
+    A name bound only inside a test module is left out, matching
+    :func:`_collect_introduced_identifiers`, since it is never treated as
+    introduced terminology and its presence in the base tree is not worth a
+    lookup.
+
     Args:
         diff_text: The unified-diff text to scan.
 
     Returns:
-        The distinct snake_case and camelCase names of two or more tokens.
+        The distinct snake_case and camelCase names of two or more tokens
+        on a non-test-module code line.
     """
     all_names: set[str] = set()
     for each_file_path, _, each_text in _parse_added_lines(diff_text):
-        if _file_extension(each_file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
+        if _file_extension(
+            each_file_path
+        ) not in ALL_SWEEP_CODE_FILE_EXTENSIONS or _is_test_file(each_file_path):
             continue
         all_found_names = SNAKE_CASE_IDENTIFIER_PATTERN.findall(each_text)
         all_found_names += CAMEL_CASE_IDENTIFIER_PATTERN.findall(each_text)

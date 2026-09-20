@@ -626,6 +626,72 @@ def test_does_not_flag_two_token_identifier_first_word_coincidence() -> None:
     assert sweep_diff(diff) == []
 
 
+def test_does_not_flag_window_crossing_a_sentence_boundary() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ a/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+pull_request_owner = 5\n"
+        "diff --git a/README.md b/README.md\n"
+        "--- a/README.md\n"
+        "+++ b/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+Merge the pull request. Trigger warnings surface elsewhere.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_does_not_flag_window_crossing_a_markdown_link_target() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ a/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+pull_request_owner = 5\n"
+        "diff --git a/README.md b/README.md\n"
+        "--- a/README.md\n"
+        "+++ b/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+See the pull request [`link`](docs/README.md) explains it.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_does_not_flag_identifier_bound_only_in_a_test_module() -> None:
+    diff = (
+        "diff --git a/tests/test_config.py b/tests/test_config.py\n"
+        "--- a/tests/test_config.py\n"
+        "+++ b/tests/test_config.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+jon_pc_json = load_fixture()\n"
+        "diff --git a/README.md b/README.md\n"
+        "--- a/README.md\n"
+        "+++ b/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+The jon pc export runs first.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_still_flags_identifier_bound_in_a_production_module() -> None:
+    diff = (
+        "diff --git a/api/config.py b/api/config.py\n"
+        "--- a/api/config.py\n"
+        "+++ b/api/config.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+jon_pc_json = load_config()\n"
+        "diff --git a/README.md b/README.md\n"
+        "--- a/README.md\n"
+        "+++ b/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+The jon pc export runs first.\n"
+    )
+    findings = sweep_diff(diff)
+    assert len(findings) == 1
+    assert "jon pc export" in findings[0]
+
+
 def test_flags_near_miss_when_second_leading_token_is_plural_variant() -> None:
     diff = (
         "diff --git a/api/store.py b/api/store.py\n"
