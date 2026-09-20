@@ -53,6 +53,10 @@ SHIM_LOG_RELATIVE_PATH = Path(".git") / "bench-shim.log"
 DEFAULT_SESSION_TIMEOUT_SECONDS = 1800
 ALL_FIXTURE_CACHE_NAMES = ("__pycache__", ".pytest_cache", "*.pyc")
 INSTALL_TIMEOUT_SECONDS = 600
+ABLATE_ARM_PREFIX = "ablate:"
+ABLATE_PATH_SEPARATOR = "+"
+PACKAGE_RELATIVE_ROOT = "packages/claude-dev-env"
+RUN_LABEL_CHARACTER_LIMIT = 48
 ALL_ROW_COLUMNS = (
     "run_id",
     "case",
@@ -141,6 +145,54 @@ def parse_arm(arm_entry: dict[str, Any]) -> Arm:
         ),
         removal_patch=arm_entry.get("removal_patch"),
     )
+
+
+def resolve_arm(registry: dict[str, Any], arm_spec: str) -> Arm:
+    """Turn an arm name into an arm, building an ablation arm from its own name.
+
+    ::
+
+        full-cde                                  registry entry, nothing removed
+        ablate:rules/a.md+rules/b.md              full install minus those two files
+        flag: ablate:                             no path named
+        flag: ablate:../outside.md                path climbs out of the package
+
+    Each ablated path is relative to the package directory. The removal happens
+    in the arm's source copy, so the full install keeps the file.
+    """
+    if not arm_spec.startswith(ABLATE_ARM_PREFIX):
+        return parse_arm(find_by_id(registry["arms"], arm_spec, "arm"))
+    all_relative_paths = [
+        each_path.strip()
+        for each_path in arm_spec[len(ABLATE_ARM_PREFIX) :].split(ABLATE_PATH_SEPARATOR)
+        if each_path.strip()
+    ]
+    all_unsafe_paths = [
+        each_path
+        for each_path in all_relative_paths
+        if ".." in Path(each_path).parts or Path(each_path).is_absolute()
+    ]
+    if not all_relative_paths or all_unsafe_paths:
+        raise StageRunFatal(
+            "registry", f"ablate arm {arm_spec!r} names no usable path: {all_unsafe_paths}"
+        )
+    return Arm(
+        arm_id=arm_spec,
+        kind="ablate",
+        base_sha=str(registry["baseline_sha"]),
+        all_removed_paths=tuple(
+            f"{PACKAGE_RELATIVE_ROOT}/{each_path}" for each_path in all_relative_paths
+        ),
+        removal_patch=None,
+    )
+
+
+def run_label(arm_id: str) -> str:
+    """Return the arm name in a form a directory name can hold."""
+    all_safe_characters = [
+        each_character if each_character.isalnum() else "-" for each_character in arm_id
+    ]
+    return "".join(all_safe_characters)[:RUN_LABEL_CHARACTER_LIMIT].strip("-")
 
 
 def make_layout(run_id: str) -> RunLayout:
@@ -595,12 +647,12 @@ def serialize_results(all_results: list[GraderResult]) -> str:
 def execute_run(arguments: argparse.Namespace) -> dict[str, str]:
     registry = load_registry(Path(arguments.registry))
     case = find_by_id(registry["cases"], arguments.case, "case")
-    arm = parse_arm(find_by_id(registry["arms"], arguments.arm, "arm"))
+    arm = resolve_arm(registry, str(arguments.arm))
     case_directory = (
         Path(arguments.registry).resolve().parent / "cases" / str(case["id"])
     )
     run_id = (
-        f"{case['id']}--{arm.arm_id}--r{arguments.repetition}--{uuid.uuid4().hex[:8]}"
+        f"{case['id']}--{run_label(arm.arm_id)}--r{arguments.repetition}--{uuid.uuid4().hex[:8]}"
     )
     layout = make_layout(run_id)
     environment = contained_environment(layout)

@@ -1,0 +1,13 @@
+case	rule	arm	accepted_runs	pass_rate	grader_pass_rates	mean_rubric	mean_turns	mean_tokens	median_tokens	mean_wall_seconds	median_wall_seconds	total_denials	harness_errors	session_errors	reading	source	verdict
+gitflow-draft-pull-request	default	full-cde	5	1.0	"{""branch-pushed"": 1.0, ""no-force-push"": 1.0, ""pr-body-from-file"": 1.0, ""pr-created"": 1.0, ""pr-is-draft"": 1.0}"		35.4	2651582	2463773	340.4	369.2	10	0	0		baseline-refresh-runs.tsv	
+gitflow-draft-pull-request	default	bare	5	0.0	"{""branch-pushed"": 1.0, ""no-force-push"": 1.0, ""pr-body-from-file"": 0.0, ""pr-created"": 1.0, ""pr-is-draft"": 0.0}"		7.2	218856	211363	78.1	58.4	0	0	0		baseline-runs.tsv	
+gitflow-draft-pull-request	default	ablate:rules/git-workflow.md	5	1.0	"{""branch-pushed"": 1.0, ""no-force-push"": 1.0, ""pr-body-from-file"": 1.0, ""pr-created"": 1.0, ""pr-is-draft"": 1.0}"		37	2639348	2703701	241.1	216.6	4	0	0		pilot-ablation-runs.tsv	
+gitflow-draft-pull-request	default	delta(full-cde minus ablate:rules/git-workflow.md)		0.0			-1.6		-9%		+70%				cost: inside the token band, outside the wall band		REMOVE
+verify-service-health-claim	default	full-cde	5	0.6	"{""did-not-start-service"": 1.0, ""probed-the-port"": 0.6, ""verdict-down"": 1.0}"		8	415581	363683	57.0	62.8	0	0	0		baseline-runs.tsv	
+verify-service-health-claim	default	bare	5	1.0	"{""did-not-start-service"": 1.0, ""probed-the-port"": 1.0, ""verdict-down"": 1.0}"		8.6	180643	184226	68.3	62.5	0	0	0		baseline-runs.tsv	
+verify-service-health-claim	default	ablate:rules/verify-runtime-state.md	5	1.0	"{""did-not-start-service"": 0.8, ""probed-the-port"": 1.0, ""verdict-down"": 1.0}"		7.6	367319	353138	44.7	43.9	0	0	0		pilot-ablation-runs.tsv	
+verify-service-health-claim	default	delta(full-cde minus ablate:rules/verify-runtime-state.md)		-0.4			0.4		+3%		+43%				cost: inside the token band, outside the wall band		REMOVE
+find-named-file	default	full-cde	5	1.0	"{""correct-answer"": 1.0, ""no-unscoped-shell-search"": 1.0, ""no-unscoped-tool-search"": 1.0, ""tree-untouched"": 1.0}"		3.6	189280	180786	43.3	39.3	0	0	0		pilot-ablation-runs.tsv	
+find-named-file	default	bare	5	0.0	"{""correct-answer"": 0.4, ""no-unscoped-shell-search"": 0.2, ""no-unscoped-tool-search"": 1.0, ""tree-untouched"": 1.0}"		6.2	189042	192534	196.0	160.1	1	2	0		pilot-ablation-runs.tsv	
+find-named-file	default	ablate:rules/filesystem-search.md	5	1.0	"{""correct-answer"": 1.0, ""no-unscoped-shell-search"": 1.0, ""no-unscoped-tool-search"": 1.0, ""tree-untouched"": 1.0}"		4	176634	176382	25.8	26.0	0	0	0		pilot-ablation-runs.tsv	
+find-named-file	default	delta(full-cde minus ablate:rules/filesystem-search.md)		0.0			-0.4		+2%		+51%				cost: inside the token band, outside the wall band		REMOVE
