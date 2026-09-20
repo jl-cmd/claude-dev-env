@@ -120,6 +120,21 @@ def _write_native_pstack(config_root: Path, plugin_root: Path) -> Path:
     return skill_path
 
 
+def _damage_native_plugin(config_root: Path, native_skill: Path, damage: str) -> None:
+    if damage == "missing":
+        native_skill.unlink()
+        return
+    if damage == "empty":
+        native_skill.write_text("", encoding=UTF8_ENCODING)
+        return
+    if damage == "encoding":
+        native_skill.write_bytes(b"\xff")
+        return
+    (config_root / "plugins" / "installed_plugins.json").write_text(
+        "{", encoding=UTF8_ENCODING
+    )
+
+
 def test_native_plugin_source_overrides_shared_skill(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -140,14 +155,7 @@ def test_broken_native_plugin_does_not_fall_back_to_shared_skill(
     _write_install_layout(config_root)
     native_skill = _write_native_pstack(config_root, tmp_path / "plugin-version")
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config_root))
-    if damage == "missing":
-        native_skill.unlink()
-    elif damage == "empty":
-        native_skill.write_text("", encoding=UTF8_ENCODING)
-    elif damage == "encoding":
-        native_skill.write_bytes(b"\xff")
-    else:
-        (config_root / "plugins" / "installed_plugins.json").write_text("{", encoding=UTF8_ENCODING)
+    _damage_native_plugin(config_root, native_skill, damage)
     with pytest.raises(OSError):
         preflight.poteto_mode_skill_path()
     assert not preflight._is_claude_dev_env_config_present(ROLE_BUGTEAM)

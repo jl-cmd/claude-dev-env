@@ -2023,6 +2023,25 @@ test('copyTree copies AGENTS.md with agent definitions', () => {
 });
 
 
+test('copyTree preserves an existing file named in the preserve set', () => {
+    const sourceRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-preserve-source-'));
+    const destinationRoot = mkdtempSync(join(tmpdir(), 'cdev-copy-preserve-destination-'));
+    try {
+        const sourceFilePath = join(sourceRoot, 'poteto-agent.md');
+        const destinationFilePath = join(destinationRoot, 'poteto-agent.md');
+        writeFileSync(sourceFilePath, 'package wrapper\n');
+        writeFileSync(destinationFilePath, 'user wrapper\n');
+
+        copyTree(sourceRoot, destinationRoot, { preserveExistingFileNames: ['poteto-agent.md'] });
+
+        assert.equal(readFileSync(destinationFilePath, 'utf8'), 'user wrapper\n');
+    } finally {
+        rmSync(sourceRoot, { recursive: true, force: true });
+        rmSync(destinationRoot, { recursive: true, force: true });
+    }
+});
+
+
 const SHIPPED_README_NAME = 'README.md';
 const INSTALLED_README_NAME = 'Readme.md';
 const RETIRED_HOOK_RELATIVE_PATH = 'blocking/retired_gate.py';
