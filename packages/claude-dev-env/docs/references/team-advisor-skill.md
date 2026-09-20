@@ -6,7 +6,7 @@
 
 | Doc | Holds |
 |---|---|
-| `skills/team-advisor/SKILL.md` | Sole-consumer bind wiring and constraints |
+| `.agents/skills/team-advisor/SKILL.md` | Sole-consumer bind wiring and constraints |
 | `advisor-tool.md` | Consult timing, hard rule, how to treat advice |
 | `~/.claude/_shared/advisor/advisor-protocol.md` | Session identity, host bind, floor, lifecycle |
 | `agents/session-advisor.md` | ENDORSE / CORRECTION / PLAN / STOP |

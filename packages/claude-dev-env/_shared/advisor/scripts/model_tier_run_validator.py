@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -52,7 +53,21 @@ if _config_directory not in sys.path:
 if _scripts_directory not in sys.path:
     sys.path.insert(0, _scripts_directory)
 
-from advisor_scripts_constants.model_tier_run_validator_constants import (  # noqa: E402
+from advisor_scripts_constants.advisor_route_constants import (
+    ADVISOR_FALLBACK_TIER,
+    ADVISOR_MODEL_TIER,
+    CLI_BIND_SUCCESS_TOKEN,
+    CODEX_BIND_SUCCESS_TOKEN,
+    SPAWN_OUTCOME_KEY,
+    SPAWN_SUCCESS_TOKEN,
+    TIER_KEY,
+)
+from advisor_scripts_constants.astra_advisor_constants import (
+    ASTRA_FALLBACK_KIND_BROKEN,
+    ASTRA_FALLBACK_KIND_DECLINED,
+)
+from advisor_scripts_constants.model_tier_run_validator_constants import (
+    ALL_ADVISOR_REPLY_PATHS,
     ATTEMPT_ORDER_MISMATCH_MESSAGE,
     ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE,
     CANDIDATE_TIERS_MISMATCH_MESSAGE,
@@ -73,16 +88,7 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (  # no
     UNKNOWN_HOST_PROFILE_ERROR,
     UNKNOWN_OWN_TIER_MESSAGE,
 )
-from advisor_scripts_constants.advisor_route_constants import (  # noqa: E402
-    ADVISOR_FALLBACK_TIER,
-    ADVISOR_MODEL_TIER,
-    CODEX_BIND_SUCCESS_TOKEN,
-    CLI_BIND_SUCCESS_TOKEN,
-    SPAWN_OUTCOME_KEY,
-    SPAWN_SUCCESS_TOKEN,
-    TIER_KEY,
-)
-from tier_model_ids import canonical_host_profile, canonical_tier_name  # noqa: E402
+from tier_model_ids import canonical_host_profile, canonical_tier_name
 
 
 @dataclass(frozen=True)
@@ -94,10 +100,155 @@ class ModelTierRun:
     fallback_reason: str | None = None
     is_astra_enabled: bool = False
     host_profile: str = HOST_PROFILE_CLAUDE
+    evidence: dict[str, object] | None = None
 
 
 class ModelTierRunError(ValueError):
     """Raised when a model-tier spawn-walk log violates an invariant."""
+
+
+def _required_evidence_text(
+    fields_by_name: Mapping[str, object], section_name: str, field_name: str
+) -> str:
+    raw_field_text = fields_by_name.get(field_name)
+    if not isinstance(raw_field_text, str) or not raw_field_text.strip():
+        raise ModelTierRunError(
+            f"evidence.{section_name}.{field_name} must be a non-empty string"
+        )
+    return raw_field_text.strip()
+
+
+def _required_evidence_list(
+    fields_by_name: Mapping[str, object], section_name: str, field_name: str
+) -> list[str]:
+    raw_field_entries = fields_by_name.get(field_name)
+    if not isinstance(raw_field_entries, list) or not raw_field_entries:
+        raise ModelTierRunError(
+            f"evidence.{section_name}.{field_name} must be a non-empty list"
+        )
+    if any(
+        not isinstance(each_entry, str) or not each_entry.strip()
+        for each_entry in raw_field_entries
+    ):
+        raise ModelTierRunError(
+            f"evidence.{section_name}.{field_name} must contain non-empty strings"
+        )
+    return [each_entry.strip() for each_entry in raw_field_entries]
+
+
+def _required_evidence_section(
+    sections_by_name: Mapping[str, object], section_name: str
+) -> Mapping[str, object]:
+    raw_section = sections_by_name.get(section_name)
+    if not isinstance(raw_section, Mapping):
+        raise ModelTierRunError(f"evidence.{section_name} must be an object")
+    return raw_section
+
+
+def _validate_reference_evidence(sections_by_name: Mapping[str, object]) -> None:
+    reference = _required_evidence_section(sections_by_name, "reference")
+    _required_evidence_text(reference, "reference", "path")
+    reference_status = _required_evidence_text(reference, "reference", "status")
+    if reference_status not in {"missing", "read"}:
+        raise ModelTierRunError("evidence.reference.status must be missing or read")
+    _required_evidence_text(reference, "reference", "repair_action")
+    _required_evidence_text(reference, "reference", "repair_result")
+
+
+def _validate_fallback_tier(
+    fallback_by_name: Mapping[str, object], run: ModelTierRun
+) -> str | None:
+    raw_selected_tier = fallback_by_name.get("selected_tier")
+    if raw_selected_tier is not None and not isinstance(raw_selected_tier, str):
+        raise ModelTierRunError("evidence.fallback.selected_tier must be a string or null")
+    maybe_selected_tier = (
+        canonical_tier_name(raw_selected_tier)
+        if isinstance(raw_selected_tier, str)
+        else None
+    )
+    maybe_run_selected_tier = (
+        canonical_tier_name(run.selected_tier)
+        if run.selected_tier is not None
+        else None
+    )
+    if maybe_selected_tier != maybe_run_selected_tier:
+        raise ModelTierRunError(
+            "evidence.fallback.selected_tier must match selected_tier"
+        )
+    return maybe_run_selected_tier
+
+
+def _validate_fallback_kind(fallback_by_name: Mapping[str, object]) -> None:
+    raw_fallback_kind = fallback_by_name.get("fallback_kind")
+    if raw_fallback_kind not in {
+        None,
+        ASTRA_FALLBACK_KIND_BROKEN,
+        ASTRA_FALLBACK_KIND_DECLINED,
+    }:
+        raise ModelTierRunError(
+            "evidence.fallback.fallback_kind must be declined, broken, or null"
+        )
+    raw_fallback_reason = fallback_by_name.get("fallback_reason")
+    if raw_fallback_reason is not None and (
+        not isinstance(raw_fallback_reason, str) or not raw_fallback_reason.strip()
+    ):
+        raise ModelTierRunError(
+            "evidence.fallback.fallback_reason must be a non-empty string or null"
+        )
+    if raw_fallback_kind is not None and raw_fallback_reason is None:
+        raise ModelTierRunError(
+            "evidence.fallback.fallback_reason is required for a fallback kind"
+        )
+
+
+def _validate_fallback_reply_path(
+    fallback_by_name: Mapping[str, object],
+    run: ModelTierRun,
+    maybe_run_selected_tier: str | None,
+) -> None:
+    reply_path = _required_evidence_text(fallback_by_name, "fallback", "reply_path")
+    if reply_path not in ALL_ADVISOR_REPLY_PATHS:
+        raise ModelTierRunError(
+            "evidence.fallback.reply_path is not a known advisor path"
+        )
+    if (
+        canonical_host_profile(run.host_profile) == HOST_PROFILE_CODEX
+        and maybe_run_selected_tier == ADVISOR_MODEL_TIER
+        and reply_path != "native"
+    ):
+        raise ModelTierRunError(
+            "Codex Astra success requires the native reply path"
+        )
+
+
+def _validate_fallback_evidence(
+    sections_by_name: Mapping[str, object], run: ModelTierRun
+) -> None:
+    fallback = _required_evidence_section(sections_by_name, "fallback")
+    maybe_run_selected_tier = _validate_fallback_tier(fallback, run)
+    _validate_fallback_kind(fallback)
+    _validate_fallback_reply_path(fallback, run, maybe_run_selected_tier)
+
+
+def _validate_consult_evidence(sections_by_name: Mapping[str, object]) -> None:
+    consult = _required_evidence_section(sections_by_name, "consult")
+    for each_field_name in ("changed_evidence", "validation", "unresolved_risks"):
+        _required_evidence_list(consult, "consult", each_field_name)
+    _required_evidence_text(consult, "consult", "report_back_status")
+
+
+def _validate_advisor_evidence(
+    evidence: object,
+    run: ModelTierRun,
+) -> None:
+    if not isinstance(evidence, Mapping):
+        raise ModelTierRunError("evidence must be an object")
+    raw_schema_version = evidence.get("schema_version")
+    if isinstance(raw_schema_version, bool) or raw_schema_version != 1:
+        raise ModelTierRunError("evidence.schema_version must be 1")
+    _validate_reference_evidence(evidence)
+    _validate_fallback_evidence(evidence, run)
+    _validate_consult_evidence(evidence)
 
 
 def _canonical_tier_list(all_tier_names: list[str]) -> list[str] | None:
@@ -149,9 +300,7 @@ def _is_successful_attempt_outcome(
         return False
     if outcome_token == SPAWN_SUCCESS_TOKEN:
         return True
-    if outcome_token == CLI_BIND_SUCCESS_TOKEN:
-        return True
-    return False
+    return outcome_token == CLI_BIND_SUCCESS_TOKEN
 
 
 def validate_model_tier_run(run: ModelTierRun) -> None:
@@ -205,6 +354,8 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
         all_attempted_tiers=all_attempted_tiers,
         all_expected_candidates=all_expected_candidates,
     )
+    if run.evidence is not None:
+        _validate_advisor_evidence(run.evidence, run)
 
 
 def _validate_selected_tier(
@@ -262,6 +413,9 @@ def load_model_tier_run_from_json_path(from_path: Path) -> ModelTierRun:
     raw_host_profile = parsed_payload.get(HOST_PROFILE_JSON_KEY, HOST_PROFILE_CLAUDE)
     if not isinstance(raw_host_profile, str):
         raise TypeError(HOST_PROFILE_MUST_BE_STRING_MESSAGE)
+    raw_evidence = parsed_payload.get("evidence")
+    if raw_evidence is not None and not isinstance(raw_evidence, dict):
+        raise TypeError("evidence must be an object")
     return ModelTierRun(
         own_tier=parsed_payload["own_tier"],
         candidate_tiers=list(parsed_payload["candidate_tiers"]),
@@ -270,6 +424,7 @@ def load_model_tier_run_from_json_path(from_path: Path) -> ModelTierRun:
         fallback_reason=parsed_payload.get("fallback_reason"),
         is_astra_enabled=raw_astra_enabled,
         host_profile=raw_host_profile,
+        evidence=raw_evidence,
     )
 
 

@@ -34,6 +34,7 @@ const PACKAGE_DIRECTORY = dirname(THIS_DIRECTORY);
 const SHIPPED_SKILL_NAME = 'privacy-hygiene';
 const ELI5_SKILL_NAME = 'eli5';
 const E_CODE_REVIEW_SKILL_NAME = 'e-code-review';
+const TEAM_ADVISOR_SKILL_NAME = 'team-advisor';
 const REFERENCE_DIRECTORY_NAME = 'reference';
 const SHIPPED_AGENT_FILE_NAME = 'AGENTS.md';
 const RETIRED_AGENT_FILE_NAMES = ['clean-coder.md', 'code-quality-agent.md', 'pr-description-writer.md'];
@@ -179,6 +180,15 @@ test('a full install writes skills and agents under .agents and points .claude a
         assert.equal(realpathSync(lookupSkillFile), realpathSync(canonicalSkillFile));
         assert.equal(realpathSync(lookupEli5SkillFile), realpathSync(canonicalEli5SkillFile));
         assertProposalContractInstallation({ skillsInstallDirectory });
+        const projectedAdvisorPaths = [
+            join(skillsInstallDirectory, TEAM_ADVISOR_SKILL_NAME, 'SKILL.md'),
+            join(claudeHome, 'docs', 'references', 'advisor-tool.md'),
+            join(claudeHome, '_shared', 'advisor', 'advisor-protocol.md'),
+            join(agentsInstallDirectory, 'poteto-agent.md'),
+        ];
+        for (const eachPath of projectedAdvisorPaths) {
+            assert.ok(existsSync(eachPath), eachPath);
+        }
         assert.equal(
             readFileSync(lookupAgentFile, 'utf8'),
             readFileSync(canonicalAgentFile, 'utf8'),

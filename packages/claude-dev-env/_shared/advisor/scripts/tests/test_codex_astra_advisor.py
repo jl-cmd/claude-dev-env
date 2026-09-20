@@ -220,6 +220,12 @@ def test_bind_runs_probe_then_codex() -> None:
         _two_step_runner(calls),
     )
     assert reply.successful
+    assert reply.selected_tier == "Astra"
+    assert reply.outcome == "codex"
+    assert reply.session_id == "thread-1"
+    assert reply.guidance == "PLAN\ninspect"
+    assert reply.signal == "PLAN"
+    assert reply.fallback_kind is None
     assert calls[1] == astra_advisor.build_codex_arguments("codex")
 
 
@@ -309,6 +315,20 @@ def test_active_docs_use_astra_names() -> None:
     for each_path in all_paths:
         content = each_path.read_text(encoding="utf-8")
         assert all(name not in content for name in legacy_names)
+
+
+def test_team_advisor_source_references_resolve_from_the_package_tree() -> None:
+    package_root = SCRIPTS_ROOT.parents[2]
+    skill_path = package_root / ".agents" / "skills" / "team-advisor" / "SKILL.md"
+    all_reference_targets = (
+        "../../../docs/references/advisor-tool.md",
+        "../../../_shared/advisor/advisor-protocol.md",
+        "../../../_shared/advisor/reference/third-party-bind.md",
+        "../../../_shared/advisor/reference/astra-rung.md",
+        "../../../_shared/advisor/reference/consult-format.md",
+    )
+    for each_target in all_reference_targets:
+        assert (skill_path.parent / each_target).is_file(), each_target
 
 
 def test_astra_docs_name_shared_effort_and_helper() -> None:

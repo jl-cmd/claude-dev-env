@@ -38,6 +38,38 @@ If your data points one way and the advisor points another: do not silently swit
 
 Work a disagreement in this order: keep the observed evidence in the record, name the conflict plainly, ask the advisor which constraint breaks the tie, then act on the reconciled plan.
 
+## Recovery record
+
+Keep one versioned `evidence` object in the session-controlled `model-tier-run.json` record. A missing optional reference belongs in `reference.status`; it keeps the bind result independent. `fallback_kind: "broken"` identifies a bind or reply failure. On a Codex host, a successful native route records `selected_tier: "Astra"` and `reply_path: "native"`.
+
+```json
+{
+  "evidence": {
+    "schema_version": 1,
+    "reference": {
+      "path": "~/.claude/docs/references/advisor-tool.md",
+      "status": "missing",
+      "repair_action": "use the projected docs root",
+      "repair_result": "read"
+    },
+    "fallback": {
+      "selected_tier": "Astra",
+      "fallback_kind": null,
+      "fallback_reason": null,
+      "reply_path": "native"
+    },
+    "consult": {
+      "changed_evidence": ["native bind returned a reply"],
+      "validation": ["signal and session id read back"],
+      "unresolved_risks": ["optional reference projection"],
+      "report_back_status": "recorded"
+    }
+  }
+}
+```
+
+The repair fields preserve the reference-path result. The fallback fields preserve route selection and bind or reply failures. The consult fields preserve first, recovery, and completion readback.
+
 ## Escalation shapes
 
 Four shapes cover how a harder task gets more strength behind it. Route to the one that matches the work, not by default to the advisor.

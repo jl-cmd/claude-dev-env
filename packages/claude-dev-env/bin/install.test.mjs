@@ -209,6 +209,20 @@ test('core includeDirectories ships _shared and scripts for advisor protocol and
 });
 
 
+test('team-advisor records fallback repair and consult evidence', () => {
+    const skillPath = new URL('../.agents/skills/team-advisor/SKILL.md', import.meta.url);
+    const skillSource = readFileSync(skillPath, 'utf8');
+    assert.match(skillSource, /Mark `fallback_kind: broken` only when the selected bind or reply path fails/);
+    assert.match(skillSource, /Record the selected tier, fallback reason, and reply path/);
+    assert.match(skillSource, /changed evidence, validation, unresolved risks, and report-back status/);
+    assert.match(skillSource, /reference gap.*bind status separate/);
+    assert.match(skillSource, /selected_tier: Astra.*reply_path: native/);
+    assert.match(skillSource, /model-tier-run\.json/);
+    const advisorReferenceDocumentUrl = new URL('../docs/references/advisor-tool.md', import.meta.url);
+    assert.match(readFileSync(advisorReferenceDocumentUrl, 'utf8'), /"schema_version": 1/);
+});
+
+
 test('CORE_SKILLS ships issue-tracker so the core group installs the skill the SessionStart injector needs', () => {
     assert.ok(
         CORE_SKILLS.includes('issue-tracker'),

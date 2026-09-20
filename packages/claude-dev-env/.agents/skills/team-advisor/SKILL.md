@@ -16,8 +16,8 @@ One warm advisor at the strongest tier this session can reach. This session is t
 
 | Doc | Holds |
 |---|---|
-| [`docs/references/advisor-tool.md`](../../docs/references/advisor-tool.md) | **Consult cadence and weight.** When to call, the hard rule before first write, and how to treat advice. Read this for every consult. |
-| [`~/.claude/_shared/advisor/advisor-protocol.md`](../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle.** Session identity, host detect, model floor, warm-up, CLI fallback. Its read map routes each moment to a `reference/` detail file. |
+| [`docs/references/advisor-tool.md`](../../../docs/references/advisor-tool.md) | **Consult cadence and weight.** When to call, the hard rule before first write, and how to treat advice. Read this for every consult. |
+| [`~/.claude/_shared/advisor/advisor-protocol.md`](../../../_shared/advisor/advisor-protocol.md) | **Bind and lifecycle.** Session identity, host detect, model floor, warm-up, CLI fallback. Its read map routes each moment to a `reference/` detail file. |
 | Installed `poteto-mode` skill | **Reply contract.** The advisor prompt carries ENDORSE / CORRECTION / PLAN / STOP. |
 | [`reference/advisor-docs-review.md`](reference/advisor-docs-review.md) | Anthropic advisor-tool source facts: measured effects, Sonnet steering, cost levers, failure modes. Background. Read it when tuning the bind, not on every consult. |
 
@@ -29,7 +29,7 @@ One warm advisor at the strongest tier this session can reach. This session is t
 4. Skip the multi-consumer "who you are" opener. This session is the sole consumer.
 5. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound advisor issues ENDORSE / CORRECTION / PLAN / STOP.
 
-**GOTCHA (Cursor / ThirdParty + Astra):** when the walk reaches Astra or the user asks for Astra, first tool call is `python ~/.claude/_shared/advisor/scripts/codex_astra_advisor.py --bind --enable-astra --cwd <repo-root>` with the charter on stdin. Do not use Agent or Task. Do not search for a probe path. Details: [`third-party-bind.md`](../../_shared/advisor/reference/third-party-bind.md) GOTCHA and [`astra-rung.md`](../../_shared/advisor/reference/astra-rung.md).
+**GOTCHA (Cursor / ThirdParty + Astra):** when the walk reaches Astra or the user asks for Astra, first tool call is `python ~/.claude/_shared/advisor/scripts/codex_astra_advisor.py --bind --enable-astra --cwd <repo-root>` with the charter on stdin. Do not use Agent or Task. Do not search for a probe path. Details: [`third-party-bind.md`](../../../_shared/advisor/reference/third-party-bind.md) GOTCHA and [`astra-rung.md`](../../../_shared/advisor/reference/astra-rung.md).
 
 Full walk, charter, consult packet, Astra routing, and drift re-bind live in the protocol read map and its `reference/` files.
 
@@ -37,7 +37,7 @@ Full walk, charter, consult packet, Astra routing, and drift re-bind live in the
 
 Follow **When to call**, **Hard rule**, and **How to treat advice** in `advisor-tool.md`.
 
-Build every first brief with [`_shared/advisor/reference/consult-format.md`](../../_shared/advisor/reference/consult-format.md). Later briefs carry only the delta and changed evidence.
+Build every first brief with [`_shared/advisor/reference/consult-format.md`](../../../_shared/advisor/reference/consult-format.md). Later briefs carry only the delta and changed evidence.
 
 With the built-in advisor tool, call `advisor()` with no brief. The tool forwards the whole transcript. Its reply is free text, not one of the four signal words, so weigh it per **How to treat advice** in `advisor-tool.md`.
 
@@ -48,3 +48,8 @@ Aim for two consults on a normal task: one after orientation and one after write
 - One bind per session; this session owns the built-in tool choice, spawn, in-session Astra spawn, or CLI bind, drift re-bind, and shutdown.
 - Bind at or above the protocol floor for this host.
 - The advisor only answers (messaging); the session runs tools and posts.
+- Keep an optional reference gap in the reference record: path, status, repair action, and repair result. A reference gap leaves bind status separate.
+- On Codex, select native Astra when its bind and reply validation pass. Record `selected_tier: Astra` and `reply_path: native`.
+- Mark `fallback_kind: broken` only when the selected bind or reply path fails. Record the selected tier, fallback reason, and reply path in the same evidence object.
+- Record first, recovery, and completion consults with changed evidence, validation, unresolved risks, and report-back status.
+- Write the evidence object to the session-controlled `model-tier-run.json` record described in `advisor-tool.md`.
