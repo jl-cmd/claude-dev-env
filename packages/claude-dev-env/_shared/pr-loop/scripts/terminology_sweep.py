@@ -481,8 +481,19 @@ def _near_miss_identifier(
     all_identifier_tuples: frozenset[IdentifierTuple],
     identifiers_by_first_token: dict[str, list[IdentifierTuple]],
     all_identifier_tokens: frozenset[str],
+    all_known_identifier_tuples: frozenset[IdentifierTuple],
 ) -> IdentifierTuple | None:
     """Return an identifier the candidate near-misses, or None when it does not.
+
+    ::
+
+        known identifier:  cde_lint            (scripts/cde_lint.py, the tool's own name)
+        introduced:        cde_lint_path        3-token, adds "path" to that name
+        candidate:         "cde lint standard"  shares "cde lint", then "standard"
+        candidate[:-1]:    ("cde", "lint")       == the known identifier cde_lint
+        ok:   candidate[:-1] names cde_lint verbatim -- agreement, not a near-miss
+        flag: "premium request budget" against premium_request_interactions
+              -- "premium request" names no identifier of its own
 
     Args:
         candidate_tuple: The prose term's lowercase token tuple.
@@ -490,6 +501,10 @@ def _near_miss_identifier(
         identifiers_by_first_token: Identifier tuples grouped by leading token.
         all_identifier_tokens: Every token of every identifier on added code
             lines, used to spare prose built from real code vocabulary.
+        all_known_identifier_tuples: Every identifier tuple the sweep knows
+            about, introduced or pre-existing, plus each added file's stem,
+            used to spare a candidate whose leading tokens name one of them
+            verbatim.
 
     Returns:
         The first identifier the candidate renames in only its final token. Such a
@@ -502,9 +517,12 @@ def _near_miss_identifier(
         common English compound tail word (``read-only``, ``data-driven``); it
         contains an English stopword (``to a``, ``each image``); it differs
         from the identifier only by a singular/plural form of one or more
-        tokens (``test files`` against ``test_file``); or every diverging word
+        tokens (``test files`` against ``test_file``); every diverging word
         is itself a token of some introduced identifier (``target width box``
-        when ``box_height`` is also in the diff).
+        when ``box_height`` is also in the diff); or its leading tokens, with
+        the final diverging word set aside, spell out a known identifier of
+        their own (``cde_lint standard`` against ``cde_lint_path``, when
+        ``cde_lint`` already names something in the tree).
     """
     if not candidate_tuple or candidate_tuple in all_identifier_tuples:
         return None
@@ -520,6 +538,8 @@ def _near_miss_identifier(
         if _tuples_match_ignoring_plural(each_identifier, candidate_tuple):
             continue
         if not _diverges_only_in_final_token(candidate_tuple, each_identifier):
+            continue
+        if candidate_tuple[:-1] in all_known_identifier_tuples:
             continue
         diverging_words = [
             each_word
@@ -542,6 +562,7 @@ def _findings_for_line(
     all_identifier_tuples: frozenset[IdentifierTuple],
     identifiers_by_first_token: dict[str, list[IdentifierTuple]],
     all_identifier_tokens: frozenset[str],
+    all_known_identifier_tuples: frozenset[IdentifierTuple],
 ) -> list[str]:
     """Return the near-miss findings for one added line.
 
@@ -553,6 +574,8 @@ def _findings_for_line(
         identifiers_by_first_token: Identifier tuples grouped by leading token.
         all_identifier_tokens: Every token of every identifier on added code
             lines, used to spare prose built from real code vocabulary.
+        all_known_identifier_tuples: Every identifier tuple the sweep knows
+            about, passed through to :func:`_near_miss_identifier`.
 
     Returns:
         One finding string per distinct near-miss term on the line.
@@ -568,6 +591,7 @@ def _findings_for_line(
                 all_identifier_tuples,
                 identifiers_by_first_token,
                 all_identifier_tokens,
+                all_known_identifier_tuples,
             )
             if matched_identifier is None or each_tuple in reported_tuples:
                 continue
@@ -583,12 +607,48 @@ def _findings_for_line(
     return all_findings
 
 
+def _file_stem_identifier_tuples(
+    all_added_lines: list[tuple[str, int, str]],
+) -> frozenset[IdentifierTuple]:
+    """Return the identifier tuple of each added, non-test code file's stem.
+
+    ::
+
+        touched file:  scripts/cde_lint_partition.py
+        stem tuple:     ("cde", "lint", "partition")
+
+    A file that exists in the tree names something whether or not that name
+    is ever spelled out as a code identifier, so a file's stem joins the
+    known-identifier vocabulary the same way a spelled-out name does.
+
+    Args:
+        all_added_lines: Added-line triples from :func:`_parse_added_lines`.
+
+    Returns:
+        One tuple per distinct, multi-word stem of an added, non-test code
+        file.
+    """
+    all_stem_tuples: set[IdentifierTuple] = set()
+    for each_file_path, _, _ in all_added_lines:
+        if _file_extension(each_file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS or _is_test_file(
+            each_file_path
+        ):
+            continue
+        stem_tuple = _identifier_token_tuple(Path(each_file_path).stem)
+        if len(stem_tuple) >= MINIMUM_IDENTIFIER_TOKEN_COUNT:
+            all_stem_tuples.add(stem_tuple)
+    return frozenset(all_stem_tuples)
+
+
 def _find_terminology_near_misses(
     diff_text: str, all_preexisting_identifier_tuples: frozenset[IdentifierTuple]) -> list[str]:
     all_added_lines = _parse_added_lines(diff_text)
     all_identifier_tuples = _collect_introduced_identifiers(all_added_lines)
     all_identifier_tokens = frozenset(
         each_token for each_tuple in all_identifier_tuples for each_token in each_tuple
+    )
+    all_known_identifier_tuples = all_identifier_tuples | _file_stem_identifier_tuples(
+        all_added_lines
     )
     introduced_tuples = frozenset(
         each_tuple
@@ -610,6 +670,7 @@ def _find_terminology_near_misses(
                 introduced_tuples,
                 introduced_by_first_token,
                 all_identifier_tokens,
+                all_known_identifier_tuples,
             )
         )
     return all_findings

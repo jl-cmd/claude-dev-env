@@ -692,6 +692,57 @@ def test_still_flags_identifier_bound_in_a_production_module() -> None:
     assert "jon pc export" in findings[0]
 
 
+def test_does_not_flag_window_whose_leading_tokens_are_a_known_identifier() -> None:
+    diff = (
+        "diff --git a/api/store.py b/api/store.py\n"
+        "--- a/api/store.py\n"
+        "+++ b/api/store.py\n"
+        "@@ -0,0 +1,2 @@\n"
+        "+cde_lint_path = Path(value)\n"
+        '+HELP_TEXT = "cde_lint standard output"\n'
+    )
+    assert sweep_diff(diff) == []
+
+
+def test_still_flags_window_whose_leading_tokens_name_nothing_known() -> None:
+    diff = (
+        "diff --git a/api/quota.py b/api/quota.py\n"
+        "--- a/api/quota.py\n"
+        "+++ b/api/quota.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+premium_request_interactions = 5\n"
+        "diff --git a/docs/README.md b/docs/README.md\n"
+        "--- a/docs/README.md\n"
+        "+++ b/docs/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+The premium request budget gates the run.\n"
+    )
+    findings = sweep_diff(diff)
+    assert len(findings) == 1
+    assert "premium request budget" in findings[0]
+
+
+def test_does_not_flag_window_whose_leading_tokens_are_an_added_files_stem() -> None:
+    diff = (
+        "diff --git a/scripts/cde_lint.py b/scripts/cde_lint.py\n"
+        "--- a/scripts/cde_lint.py\n"
+        "+++ b/scripts/cde_lint.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+VERSION = 1\n"
+        "diff --git a/scripts/cde_lint_partition.py b/scripts/cde_lint_partition.py\n"
+        "--- a/scripts/cde_lint_partition.py\n"
+        "+++ b/scripts/cde_lint_partition.py\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+cde_lint_owner = 5\n"
+        "diff --git a/docs/README.md b/docs/README.md\n"
+        "--- a/docs/README.md\n"
+        "+++ b/docs/README.md\n"
+        "@@ -0,0 +1,1 @@\n"
+        "+Run cde_lint standard checks first.\n"
+    )
+    assert sweep_diff(diff) == []
+
+
 def test_flags_near_miss_when_second_leading_token_is_plural_variant() -> None:
     diff = (
         "diff --git a/api/store.py b/api/store.py\n"
