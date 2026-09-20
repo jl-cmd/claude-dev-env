@@ -9,11 +9,28 @@ import ast
 import sys
 from pathlib import Path
 
-HARNESS_EXIT = 3
+from config.max_function_length_constants import EXPECTED_ARGUMENT_COUNT, HARNESS_EXIT
 
 
 def main(all_arguments: list[str]) -> int:
-    if len(all_arguments) != 2 or not Path(all_arguments[0]).is_file():
+    """Grade a Python file by the span of its longest function.
+
+    ::
+
+        arguments: reports/summary.py 25
+        longest function spans 18 lines   ->   exit 0
+        longest function spans 40 lines   ->   exit 1
+
+    Args:
+        all_arguments: The path of the Python file to read, then the line count
+            each function must stay within.
+
+    Returns:
+        0 when every function spans at most that line count, 1 when one spans
+        more, and the harness exit code when the arguments are wrong, the file
+        is missing, the file does not parse, or the file defines no function.
+    """
+    if len(all_arguments) != EXPECTED_ARGUMENT_COUNT or not Path(all_arguments[0]).is_file():
         return HARNESS_EXIT
     try:
         tree = ast.parse(Path(all_arguments[0]).read_text(encoding="utf-8"))

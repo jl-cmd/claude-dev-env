@@ -2,7 +2,7 @@
 
 ::
 
-    BENCH_ARM_HOME=<run>/home   ->   Path.home() == <run>/home
+    the arm home variable holds <run>/home   ->   Path.home() == <run>/home
 
 The model session keeps the live home so the CLI can sign in. Every Python
 the session starts loads this module first and swaps the home variables.
