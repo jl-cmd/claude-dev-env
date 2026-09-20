@@ -149,7 +149,6 @@ Consider for future iteration if multi-class files become common.
 
 All test files in `test_files/` directory:
 - `01-16_*.tsx` - Individual test cases
-- `VALIDATION_REPORT.md` - Detailed test results
 - `EXECUTIVE_SUMMARY.md` - This file
 
 Run all tests:

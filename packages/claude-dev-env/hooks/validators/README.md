@@ -37,7 +37,6 @@ The checks live in `python_style_checks.py`. Shared source-line splitting, funct
 | `type_safety_checks.py` | Missing type hints and Any usage checks |
 | `useless_test_checks.py` | Useless-test detection |
 | `validator_base.py` | Shared validator dataclasses, source read, and parse |
-| `validator_defaults.py` | Shared constants for the validators package |
 
 ## Checks Implemented
 
