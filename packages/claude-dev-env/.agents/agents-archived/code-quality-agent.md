@@ -189,7 +189,7 @@ The second pass produces either:
 - new Shape A findings citing file:line references absent from the first pass, or
 - explicit Shape B `adversarial_probes` entries for each re-examined category.
 
-A second pass that returns "first pass was complete, confidence high" is inadequate per the audit contract — confidence is replaced by either new findings or new adversarial evidence per category.
+A second pass that returns "first pass was complete, confidence high" is inadequate per the audit contract. Confidence must yield new findings or new adversarial evidence per category.
 
 ## Merging Primary and Adversarial Findings
 

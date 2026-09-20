@@ -29,7 +29,7 @@ Keep only items that **bit this run**:
 
 1. Show findings in chat; categorize as P0-P3.
 2. Then `AskUserQuestion`.
-3. On confirm only, file via `issue-tracker`.
+3. On confirm only, ask `pstack:poteto-agent` to load `issue-tracker` and file the issue.
 
 ### Cold-reader frame
 
@@ -126,7 +126,7 @@ Only after the chat block.
 
 Detail and ASCII stay in chat.
 
-**On confirm:** file via `issue-tracker`.
+**On confirm:** ask `pstack:poteto-agent` to load `issue-tracker` and file the issue.
 
 Cold-reader issue body.
 

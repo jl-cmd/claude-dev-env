@@ -19,7 +19,7 @@ Import ``run_headless_worker`` for the outcome object::
         working_directory=cwd,
         run_state_directory=run_dir,
         timeout_seconds=5400,
-        agent_name="code-quality-agent",
+        agent_name="poteto-agent",
     )
 """
 
@@ -72,6 +72,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     WORKER_SPEC_TIMEOUT_KEY,
 )
 from shared_tree_paths import resolve_shared_process_tree_scripts_directory
+from grok_worker_preflight import poteto_mode_skill_path
 
 _shared_process_tree_scripts_directory = resolve_shared_process_tree_scripts_directory(
     __file__,
@@ -420,6 +421,23 @@ def run_headless_worker(
         if leader_socket_path is not None
         else _mint_leader_socket_path(run_state_directory)
     )
+    if agent_name == "poteto-agent":
+        try:
+            skill_path = poteto_mode_skill_path().resolve()
+            skill_text = skill_path.read_text(encoding=UTF8_ENCODING)
+            task_text = prompt_file.read_text(encoding=UTF8_ENCODING)
+            run_state_directory.mkdir(parents=True, exist_ok=True)
+            prompt_file = run_state_directory / f"{resolved_leader_socket_path.stem}-poteto.txt"
+            prompt_file.write_text(
+                f"Poteto skill source: {skill_path}\n"
+                "Resolve companion skill paths against that source directory.\n"
+                "The task below defines your review, build, or translation duty. "
+                "Preserve its scope, write permissions, and report contract.\n\n"
+                f"{skill_text}\n\nTask:\n{task_text}",
+                encoding=UTF8_ENCODING,
+            )
+        except OSError as error:
+            return _launch_failure_outcome(error)
     all_arguments = _build_invocation(
         prompt_file=prompt_file,
         working_directory=working_directory,

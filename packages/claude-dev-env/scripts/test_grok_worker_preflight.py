@@ -80,12 +80,85 @@ class _Recorder:
 def _write_install_layout(claude_home: Path, *, role: str = ROLE_BUGTEAM) -> None:
     claude_home.mkdir(parents=True, exist_ok=True)
     (claude_home / MANIFEST_FILENAME).write_text("{}", encoding=UTF8_ENCODING)
+    skill_path = claude_home / "skills" / "poteto-mode" / "SKILL.md"
+    skill_path.parent.mkdir(parents=True, exist_ok=True)
+    skill_path.write_text("Poteto guidance\n", encoding=UTF8_ENCODING)
     agents_directory = claude_home / AGENTS_SUBDIRECTORY
     agents_directory.mkdir(parents=True, exist_ok=True)
     for each_filename in ALL_AGENT_FILENAMES_BY_ROLE[role]:
         (agents_directory / each_filename).write_text(
             f"# {each_filename}\n", encoding=UTF8_ENCODING
         )
+
+
+def test_missing_poteto_skill_rejects_installed_agent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _write_install_layout(tmp_path)
+    monkeypatch.setattr(preflight, "claude_config_home", lambda: tmp_path)
+    assert preflight._is_claude_dev_env_config_present(ROLE_BUGTEAM)
+    preflight.poteto_mode_skill_path().unlink()
+    assert not preflight._is_claude_dev_env_config_present(ROLE_BUGTEAM)
+
+
+def _write_native_pstack(config_root: Path, plugin_root: Path) -> Path:
+    registry_path = config_root / "plugins" / "installed_plugins.json"
+    registry_path.parent.mkdir(parents=True, exist_ok=True)
+    registry_path.write_text(
+        json.dumps({"plugins": {"pstack@pstack-claude": [
+            {"scope": "user", "installPath": str(plugin_root)},
+            {"scope": "project", "installPath": str(plugin_root / "other")},
+        ]}}),
+        encoding=UTF8_ENCODING,
+    )
+    skill_path = plugin_root / "skills" / "poteto-mode" / "SKILL.md"
+    skill_path.parent.mkdir(parents=True)
+    skill_path.write_text("Native poteto guidance\n", encoding=UTF8_ENCODING)
+    companion = skill_path.parent / "playbooks" / "bug-fix.md"
+    companion.parent.mkdir()
+    companion.write_text("Fix guidance\n", encoding=UTF8_ENCODING)
+    return skill_path
+
+
+def _damage_native_plugin(config_root: Path, native_skill: Path, damage: str) -> None:
+    if damage == "missing":
+        native_skill.unlink()
+        return
+    if damage == "empty":
+        native_skill.write_text("", encoding=UTF8_ENCODING)
+        return
+    if damage == "encoding":
+        native_skill.write_bytes(b"\xff")
+        return
+    (config_root / "plugins" / "installed_plugins.json").write_text(
+        "{", encoding=UTF8_ENCODING
+    )
+
+
+def test_native_plugin_source_overrides_shared_skill(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_root = tmp_path / "profile"
+    _write_install_layout(config_root)
+    native_skill = _write_native_pstack(config_root, tmp_path / "plugin-version")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config_root))
+    assert preflight.poteto_mode_skill_path() == native_skill
+    assert (native_skill.parent / "playbooks" / "bug-fix.md").read_text() == "Fix guidance\n"
+    assert preflight._is_claude_dev_env_config_present(ROLE_BUGTEAM)
+
+
+@pytest.mark.parametrize("damage", ["missing", "empty", "encoding", "registry"])
+def test_broken_native_plugin_does_not_fall_back_to_shared_skill(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, damage: str
+) -> None:
+    config_root = tmp_path / "profile"
+    _write_install_layout(config_root)
+    native_skill = _write_native_pstack(config_root, tmp_path / "plugin-version")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config_root))
+    _damage_native_plugin(config_root, native_skill, damage)
+    with pytest.raises(OSError):
+        preflight.poteto_mode_skill_path()
+    assert not preflight._is_claude_dev_env_config_present(ROLE_BUGTEAM)
 
 
 def _install_ok_static_seams(

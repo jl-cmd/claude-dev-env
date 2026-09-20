@@ -1135,6 +1135,7 @@ function renameCaseOnlyMatchToShippedName(destinationFilePath, entryNamesByDirec
 
 export function copyTree(sourceBase, destBase, options = {}) {
     const excludedFileNames = new Set(options.excludeFileNames ?? []);
+    const preservedFileNames = new Set(options.preserveExistingFileNames ?? []);
     const files = collectFiles(sourceBase).filter(
         sourceFile => !excludedFileNames.has(basename(sourceFile)),
     );
@@ -1144,6 +1145,10 @@ export function copyTree(sourceBase, destBase, options = {}) {
         const relativePath = relative(sourceBase, sourceFile);
         const destFile = join(destBase, relativePath);
         mkdirSync(dirname(destFile), { recursive: true });
+        if (preservedFileNames.has(basename(sourceFile)) && existsSync(destFile)) {
+            stats.paths.push(destFile);
+            continue;
+        }
         const existed = existsSync(destFile);
         renameCaseOnlyMatchToShippedName(destFile, entryNamesByDirectory, options);
         copyFileSync(sourceFile, destFile);
@@ -2328,29 +2333,6 @@ function pruneRetiredSkills(installedSkillNames, priorManifestSkills) {
     return movedDirectoryCount;
 }
 
-/**
- * Move every file a prior install wrote under a managed root that this run leaves
- * unwritten into the run's backup root, one call per root.
- *
- * `copyTree` adds and overwrites but never removes, so every managed root carries
- * the same drift the skills root does. One call per root hands the containment
- * guard and the emptied-parent walk the root that owns each file, and each root's
- * content lands under `<backupRoot>/<root-name>/<relative>`, so the recovery point
- * mirrors ~/.claude.
- *
- * Nothing moves unless a prior install recorded it. A user-authored file, a
- * runtime artifact, and a recorded path under no managed root — ~/.claude/CLAUDE.md,
- * settings.json, the manifest itself, and ~/.mypy.ini outside the home — all sit
- * outside every root's diff and stay where they are. ~/.claude/_shared and
- * ~/.claude/skills/_shared are distinct absolute paths, so the `_shared` root call
- * and the skills root call each see their own files and neither sees the other's.
- *
- * @param {string[]|null} priorInstalledFiles Files the prior manifest recorded, or null when unknown.
- * @param {string[]} currentInstalledFiles Every file this run copied.
- * @param {string} backupRoot The run's timestamped backup directory.
- * @returns {{prunedCount: number, skillsPrunedCount: number, failedPaths: string[]}}
- *   The summed count, the skills root's own count, and every path whose move failed.
- */
 function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalledFiles, backupRoot) {
     let prunedCount = 0;
     let skillsPrunedCount = 0;
@@ -2366,6 +2348,27 @@ function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalled
         failedPaths.push(...rootOutcome.failedPaths);
         if (rootName === MANAGED_SKILLS_DIRECTORY_NAME) {
             skillsPrunedCount = rootOutcome.prunedCount;
+        }
+    }
+    for (const rootName of [MANAGED_AGENTS_DIRECTORY_NAME, MANAGED_SKILLS_DIRECTORY_NAME]) {
+        const lookupRoot = join(CLAUDE_HOME, rootName);
+        const canonicalRoot = join(AGENTS_HOME, rootName);
+        const canonicalCurrentFiles = currentInstalledFiles.map(filePath =>
+            isInsideDirectory(filePath, lookupRoot)
+                ? join(canonicalRoot, relative(lookupRoot, filePath))
+                : filePath,
+        );
+        const rootOutcome = pruneStaleInstalledFiles(
+            priorInstalledFiles,
+            canonicalCurrentFiles,
+            canonicalRoot,
+            join(backupRoot, 'agents-home', rootName),
+            { managedHomeDirectory: AGENTS_HOME },
+        );
+        prunedCount += rootOutcome.prunedCount;
+        failedPaths.push(...rootOutcome.failedPaths);
+        if (rootName === MANAGED_SKILLS_DIRECTORY_NAME) {
+            skillsPrunedCount += rootOutcome.prunedCount;
         }
     }
     return { prunedCount, skillsPrunedCount, failedPaths };
@@ -2657,7 +2660,9 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
             );
             if (!existsSync(agentsSource)) continue;
             const agentsDestination = INSTALL_ROOT_RESOLUTION.agentsLookupDirectory;
-            const stats = copyTree(agentsSource, agentsDestination);
+            const stats = copyTree(agentsSource, agentsDestination, {
+                preserveExistingFileNames: ['poteto-agent.md'],
+            });
             if (!summary[MANAGED_AGENTS_DIRECTORY_NAME]) {
                 summary[MANAGED_AGENTS_DIRECTORY_NAME] = stats;
             } else {

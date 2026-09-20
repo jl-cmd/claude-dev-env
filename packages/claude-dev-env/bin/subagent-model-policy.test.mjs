@@ -25,7 +25,7 @@ function advisorRoute(request, options = {}) {
     return route(request, {
         trustedSessionMetadata: {
             authorized: true,
-            registeredAgentType: 'session-advisor',
+            registeredAgentType: 'team-advisor',
         },
         ...options,
     });
@@ -55,6 +55,13 @@ test('the shipped policy parses and names native model ids', () => {
     assert.deepEqual(policy.advisorDefault, { model: 'astra', effort: 'medium' });
 });
 
+test('poteto plugin aliases use worker routing without advisor privileges', () => {
+    for (const agent_type of ['poteto-agent', 'pstack:poteto-agent']) {
+        const result = route({ agent_type, model: 'Astra', reasoning_effort: 'high' });
+        assert.deepEqual(result.selected, { model: 'gpt-6-astra', effort: 'low' });
+    }
+});
+
 test('every approved pair returns its literal native pair', () => {
     const expected = [
         [['Luna', 'high'], ['gpt-5.6-luna', 'high']],
@@ -74,7 +81,7 @@ test('every approved pair returns its literal native pair', () => {
     const advisor = advisorRoute({
         model: 'Astra',
         reasoning_effort: 'high',
-        agent_type: 'session-advisor',
+        agent_type: 'team-advisor',
     });
     assert.equal(advisor.status, 'remapped');
     assert.deepEqual(advisor.selected, { model: 'gpt-6-astra', effort: 'high' });
@@ -105,7 +112,7 @@ test('every automatic replacement returns its literal destination', () => {
 
 test('advisor and worker Astra restrictions use role-specific replacements', () => {
     assert.deepEqual(
-        advisorRoute({ model: 'Astra', reasoning_effort: 'xhigh', agent_type: 'session-advisor' }).selected,
+        advisorRoute({ model: 'Astra', reasoning_effort: 'xhigh', agent_type: 'team-advisor' }).selected,
         { model: 'gpt-6-astra', effort: 'medium' },
     );
     assert.deepEqual(
@@ -113,7 +120,7 @@ test('advisor and worker Astra restrictions use role-specific replacements', () 
         { model: 'gpt-6-astra', effort: 'low' },
     );
     assert.deepEqual(
-        advisorRoute({ model: 'Astra', reasoning_effort: 'high', agent_type: 'session-advisor' }).selected,
+        advisorRoute({ model: 'Astra', reasoning_effort: 'high', agent_type: 'team-advisor' }).selected,
         { model: 'gpt-6-astra', effort: 'high' },
     );
 });
@@ -122,7 +129,7 @@ test('registered advisor roles satisfy advisory authorization', () => {
     const result = advisorRoute({
         model: 'Astra',
         reasoning_effort: 'high',
-        agent_type: 'session-advisor',
+        agent_type: 'team-advisor',
     });
 
     assert.deepEqual(result.selected, { model: 'gpt-6-astra', effort: 'high' });
@@ -135,7 +142,7 @@ test('a policy from the first stack revision remains routable', () => {
         {
             model: 'Astra',
             reasoning_effort: 'high',
-            agent_type: 'session-advisor',
+            agent_type: 'team-advisor',
         },
         { policy: legacyPolicy },
     );
@@ -146,7 +153,7 @@ test('an advisor role claim cannot grant advisory authorization', () => {
     const result = route({
         model: 'Astra',
         reasoning_effort: 'high',
-        agent_type: 'session-advisor',
+        agent_type: 'team-advisor',
     });
     assert.equal(result.status, 'blocked');
     assert.equal(result.diagnostic, 'advisor role is not trusted');
@@ -158,7 +165,7 @@ test('Astra Light resolves to Astra Low', () => {
 });
 
 test('missing advisor settings use the policy default', () => {
-    const result = advisorRoute({ agent_type: 'session-advisor' });
+    const result = advisorRoute({ agent_type: 'team-advisor' });
     assert.deepEqual(result.selected, { model: 'gpt-6-astra', effort: 'medium' });
 });
 

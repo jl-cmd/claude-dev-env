@@ -109,15 +109,19 @@ The batch launcher applies this; you do not sleep in the skill.
 When `agent_name` is set, the runner passes `--agent <name>`. Grok loads the
 named agent charter from the **user-level** Claude config home (`~/.claude/`):
 
-- `agents/` — agent definition files (for example `code-quality-agent.md`,
-  `clean-coder.md`)
+- `agents/` contains `poteto-agent.md`.
 - `skills/`, `rules/`, `hooks/` — the rest of the installed Claude config the
   grok CLI reads for that run
 
-Preflight role `bugteam` checks that `code-quality-agent.md` and
-`clean-coder.md` exist under `~/.claude/agents/` and that the
-`claude-dev-env` install manifest is present. Install or reinstall
-`claude-dev-env` before a fleet that relies on those agents.
+Preflight checks the installed `poteto-agent.md`, the poteto skill,
+and the `claude-dev-env` install manifest. `CLAUDE_CONFIG_DIR` selects the
+configuration root when set. The runner includes the complete skill content
+and its resolved source path in each `poteto-agent` prompt. The task brief
+states the worker's duty and write permissions. The user pstack entry in
+`plugins/installed_plugins.json` selects the skill source. Companion paths stay
+relative to that source. Without a user pstack entry, the shared
+`skills/poteto-mode/SKILL.md` path is supported. Invalid metadata or an unreadable
+selected source fails the gate, even when a shared copy exists.
 
 Pass `agent_name: null` (or omit the field) when the worker should run without
 a named agent charter.
@@ -130,5 +134,5 @@ a named agent charter.
 |---|---|---|---|
 | Map call sites in-repo only | `readonly` | `true` | `null` or an audit agent |
 | Research that may need the web | `readonly` | `false` | `null` |
-| Closed edit + tests | `build` | ignored | often `clean-coder` |
-| Audit-style read under a charter | `readonly` | as needed | `code-quality-agent` |
+| Closed edit + tests | `build` | ignored | often `poteto-agent` |
+| Audit-style read under a charter | `readonly` | as needed | `poteto-agent` |
