@@ -23,7 +23,7 @@ if _hooks_directory not in sys.path:
 
 from hooks_constants.followup_ledger_constants import (
     FILE_PATH_KEY,
-    FOLLOWUP_LEDGER_RELATIVE_PATH,
+    ALL_FOLLOWUP_LEDGER_PATH_SEGMENTS,
     LEDGER_APPEND_MODE,
     LEDGER_ENCODING,
     MESSAGE_KEY,
@@ -54,7 +54,7 @@ def followup_ledger_path(repository_root: Path) -> Path:
     Returns:
         The absolute path of that repository's follow-up ledger.
     """
-    return repository_root.joinpath(*FOLLOWUP_LEDGER_RELATIVE_PATH)
+    return repository_root.joinpath(*ALL_FOLLOWUP_LEDGER_PATH_SEGMENTS)
 
 
 def record_followup_finding(repository_root: Path, finding: FollowupFinding) -> None:

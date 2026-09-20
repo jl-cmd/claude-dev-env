@@ -28,7 +28,7 @@ pass over every file it names, so the same fix shape lands once.
 
 Read each named file before editing it. A recorded finding names the state of
 the file at the moment the gate ran, so confirm the finding still holds.
-Drop a finding the current file no longer carries.
+Keep a finding the current file still carries. Drop the rest.
 
 ## 3. Fix each group
 

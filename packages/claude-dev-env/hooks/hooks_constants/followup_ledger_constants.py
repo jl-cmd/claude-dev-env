@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 __all__ = [
-    "FOLLOWUP_LEDGER_RELATIVE_PATH",
+    "ALL_FOLLOWUP_LEDGER_PATH_SEGMENTS",
     "LEDGER_ENCODING",
     "LEDGER_APPEND_MODE",
     "RULE_ID_KEY",
@@ -14,7 +14,7 @@ __all__ = [
     "ALL_SEVERITY_NAMES",
 ]
 
-FOLLOWUP_LEDGER_RELATIVE_PATH: tuple[str, ...] = (".claude", "followups", "smells.jsonl")
+ALL_FOLLOWUP_LEDGER_PATH_SEGMENTS: tuple[str, ...] = (".claude", "followups", "smells.jsonl")
 LEDGER_ENCODING: str = "utf-8"
 LEDGER_APPEND_MODE: str = "a"
 

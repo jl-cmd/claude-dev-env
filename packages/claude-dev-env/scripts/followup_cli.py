@@ -2,10 +2,17 @@
 """Read and brief the follow-up ledger of non-breaking findings.
 
 A gate that finds a non-breaking smell records it rather than stopping the
-work. This command reads those records back. ``list`` names what is
-outstanding, ``ingest`` adds the diagnostics from a policy-lint JSON report,
-``brief`` writes the task an agent works from, and ``clear`` empties the
-ledger once the follow-up pull request carries the fixes.
+work. This command reads those records back.
+
+::
+
+    $ cde followup list
+    instruction-git-mode    CLAUDE.md    Commit the instruction file with Git mode 100644
+
+``list`` names what is outstanding, ``ingest`` adds the diagnostics from a
+policy-lint JSON report, ``brief`` writes the task an agent works from, and
+``clear`` empties the ledger once the follow-up pull request carries the
+fixes.
 """
 
 from __future__ import annotations
@@ -15,6 +22,29 @@ import json
 import sys
 from pathlib import Path
 from typing import TextIO
+
+from dev_env_scripts_constants.followup_constants import (
+    ABSENT_LOCATION_PATH,
+    ALL_COMMAND_NAMES,
+    BRIEF_COMMAND_NAME,
+    BRIEF_FINDING_TEMPLATE,
+    BRIEF_FOOTER_TEMPLATE,
+    BRIEF_HEADER,
+    DIAGNOSTIC_LOCATION_KEY,
+    DIAGNOSTIC_MESSAGE_KEY,
+    DIAGNOSTIC_RULE_ID_KEY,
+    DIAGNOSTICS_KEY,
+    EMPTY_LEDGER_MESSAGE,
+    INGEST_COMMAND_NAME,
+    INVALID_INPUT_EXIT_CODE,
+    LINE_SEPARATOR,
+    LIST_COMMAND_NAME,
+    LIST_FINDING_TEMPLATE,
+    LOCATION_PATH_KEY,
+    SUCCESS_EXIT_CODE,
+    UNREADABLE_REPORT_TEMPLATE,
+    USAGE_TEXT,
+)
 
 _hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
 if _hooks_directory not in sys.path:
@@ -26,49 +56,6 @@ from followup_ledger import (
     followup_ledger_path,
     record_followup_finding,
 )
-
-LIST_COMMAND_NAME = "list"
-INGEST_COMMAND_NAME = "ingest"
-BRIEF_COMMAND_NAME = "brief"
-CLEAR_COMMAND_NAME = "clear"
-ALL_COMMAND_NAMES = (
-    LIST_COMMAND_NAME,
-    INGEST_COMMAND_NAME,
-    BRIEF_COMMAND_NAME,
-    CLEAR_COMMAND_NAME,
-)
-
-SUCCESS_EXIT_CODE = 0
-INVALID_INPUT_EXIT_CODE = 2
-
-DIAGNOSTICS_KEY = "diagnostics"
-DIAGNOSTIC_RULE_ID_KEY = "rule_id"
-DIAGNOSTIC_MESSAGE_KEY = "message"
-DIAGNOSTIC_LOCATION_KEY = "location"
-LOCATION_PATH_KEY = "path"
-
-EMPTY_LEDGER_MESSAGE = "no follow-ups recorded"
-UNREADABLE_REPORT_TEMPLATE = "cannot read the lint report: {report_path}"
-USAGE_TEXT = (
-    "Usage: followup_cli.py <list|ingest|brief|clear> [--repository-root PATH]\n"
-    "  list              Name every recorded follow-up\n"
-    "  ingest REPORT     Record every diagnostic in a policy-lint JSON report\n"
-    "  brief             Write the task an agent works the follow-ups from\n"
-    "  clear             Empty the ledger"
-)
-
-BRIEF_HEADER = (
-    "Fix every finding below in one change, then open a draft pull request "
-    "for it. Each finding is non-breaking, so the change that raised it "
-    "already shipped. Keep the fixes mechanical, touch no behavior, and run "
-    "the repository's own checks before pushing."
-)
-BRIEF_FINDING_TEMPLATE = "- [{rule_id}] {file_path}: {message}"
-BRIEF_FOOTER_TEMPLATE = (
-    "Once the pull request is open, empty the ledger with "
-    "`python {command_path} clear`."
-)
-LIST_FINDING_TEMPLATE = "{rule_id}\t{file_path}\t{message}"
 
 
 def _parse_arguments(all_arguments: list[str]) -> argparse.Namespace | None:
@@ -101,18 +88,47 @@ def _run_list(repository_root: Path, stdout: TextIO) -> int:
     """
     all_findings = all_recorded_findings(repository_root)
     if not all_findings:
-        stdout.write(EMPTY_LEDGER_MESSAGE + "\n")
+        stdout.write(EMPTY_LEDGER_MESSAGE + LINE_SEPARATOR)
         return SUCCESS_EXIT_CODE
     for each_finding in all_findings:
-        stdout.write(
-            LIST_FINDING_TEMPLATE.format(
-                rule_id=each_finding.rule_id,
-                file_path=each_finding.file_path,
-                message=each_finding.message,
-            )
-            + "\n"
-        )
+        stdout.write(_formatted_finding(LIST_FINDING_TEMPLATE, each_finding) + LINE_SEPARATOR)
     return SUCCESS_EXIT_CODE
+
+
+def _formatted_finding(finding_template: str, finding: FollowupFinding) -> str:
+    """Fill one template with a finding's fields.
+
+    Args:
+        finding_template: A template naming rule_id, file_path, and message.
+        finding: The finding whose fields fill the template.
+
+    Returns:
+        The filled line.
+    """
+    return finding_template.format(
+        rule_id=finding.rule_id,
+        file_path=finding.file_path,
+        message=finding.message,
+    )
+
+
+def _parsed_lint_report(report_path: Path) -> dict[str, object] | None:
+    """Read one policy-lint JSON report into a mapping.
+
+    Args:
+        report_path: Path of the JSON report to read.
+
+    Returns:
+        The report mapping, or None when the file cannot be read as one.
+    """
+    try:
+        report_text = report_path.read_text(encoding="utf-8")
+        parsed_report = json.loads(report_text)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(parsed_report, dict):
+        return None
+    return parsed_report
 
 
 def _run_ingest(repository_root: Path, report_path: Path | None, stdout: TextIO) -> int:
@@ -128,16 +144,13 @@ def _run_ingest(repository_root: Path, report_path: Path | None, stdout: TextIO)
         INVALID_INPUT_EXIT_CODE when the report cannot be read.
     """
     if report_path is None:
-        stdout.write(USAGE_TEXT + "\n")
+        stdout.write(USAGE_TEXT + LINE_SEPARATOR)
         return INVALID_INPUT_EXIT_CODE
-    try:
-        report_text = report_path.read_text(encoding="utf-8")
-        parsed_report = json.loads(report_text)
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        stdout.write(UNREADABLE_REPORT_TEMPLATE.format(report_path=report_path) + "\n")
-        return INVALID_INPUT_EXIT_CODE
-    if not isinstance(parsed_report, dict):
-        stdout.write(UNREADABLE_REPORT_TEMPLATE.format(report_path=report_path) + "\n")
+    parsed_report = _parsed_lint_report(report_path)
+    if parsed_report is None:
+        stdout.write(
+            UNREADABLE_REPORT_TEMPLATE.format(report_path=report_path) + LINE_SEPARATOR
+        )
         return INVALID_INPUT_EXIT_CODE
 
     all_diagnostics = parsed_report.get(DIAGNOSTICS_KEY, [])
@@ -150,40 +163,40 @@ def _run_ingest(repository_root: Path, report_path: Path | None, stdout: TextIO)
     return SUCCESS_EXIT_CODE
 
 
-def _finding_from_diagnostic(diagnostic: object) -> FollowupFinding | None:
+def _finding_from_diagnostic(diagnostic_by_key: object) -> FollowupFinding | None:
     """Convert one lint diagnostic into a ledger finding.
 
     Args:
-        diagnostic: One entry of the report's diagnostics list.
+        diagnostic_by_key: One entry of the report's diagnostics list.
 
     Returns:
         The finding, or None when the entry carries no rule identifier and
         message.
     """
-    if not isinstance(diagnostic, dict):
+    if not isinstance(diagnostic_by_key, dict):
         return None
-    rule_id = diagnostic.get(DIAGNOSTIC_RULE_ID_KEY)
-    message = diagnostic.get(DIAGNOSTIC_MESSAGE_KEY)
+    rule_id = diagnostic_by_key.get(DIAGNOSTIC_RULE_ID_KEY)
+    message = diagnostic_by_key.get(DIAGNOSTIC_MESSAGE_KEY)
     if not isinstance(rule_id, str) or not isinstance(message, str):
         return None
-    return FollowupFinding(rule_id, _diagnostic_file_path(diagnostic), message)
+    return FollowupFinding(rule_id, _diagnostic_file_path(diagnostic_by_key), message)
 
 
-def _diagnostic_file_path(diagnostic: dict[str, object]) -> str:
+def _diagnostic_file_path(diagnostic_by_key: dict[str, object]) -> str:
     """Return the path a diagnostic names, or an empty string.
 
     Args:
-        diagnostic: One entry of the report's diagnostics list.
+        diagnostic_by_key: One entry of the report's diagnostics list.
 
     Returns:
-        The diagnostic's path, or an empty string when it names none.
+        The diagnostic's path, or ABSENT_LOCATION_PATH when it names none.
     """
-    location = diagnostic.get(DIAGNOSTIC_LOCATION_KEY)
-    if not isinstance(location, dict):
-        return ""
-    location_path = location.get(LOCATION_PATH_KEY)
+    location_by_key = diagnostic_by_key.get(DIAGNOSTIC_LOCATION_KEY)
+    if not isinstance(location_by_key, dict):
+        return ABSENT_LOCATION_PATH
+    location_path = location_by_key.get(LOCATION_PATH_KEY)
     if not isinstance(location_path, str):
-        return ""
+        return ABSENT_LOCATION_PATH
     return location_path
 
 
@@ -199,23 +212,17 @@ def _run_brief(repository_root: Path, stdout: TextIO) -> int:
     """
     all_findings = all_recorded_findings(repository_root)
     if not all_findings:
-        stdout.write(EMPTY_LEDGER_MESSAGE + "\n")
+        stdout.write(EMPTY_LEDGER_MESSAGE + LINE_SEPARATOR)
         return SUCCESS_EXIT_CODE
 
     all_lines = [BRIEF_HEADER, ""]
-    for each_finding in all_findings:
-        all_lines.append(
-            BRIEF_FINDING_TEMPLATE.format(
-                rule_id=each_finding.rule_id,
-                file_path=each_finding.file_path,
-                message=each_finding.message,
-            )
-        )
-    all_lines.append("")
-    all_lines.append(
-        BRIEF_FOOTER_TEMPLATE.format(command_path=Path(__file__).resolve())
+    all_lines.extend(
+        _formatted_finding(BRIEF_FINDING_TEMPLATE, each_finding)
+        for each_finding in all_findings
     )
-    stdout.write("\n".join(all_lines) + "\n")
+    all_lines.append("")
+    all_lines.append(BRIEF_FOOTER_TEMPLATE.format(command_path=Path(__file__).resolve()))
+    stdout.write(LINE_SEPARATOR.join(all_lines) + LINE_SEPARATOR)
     return SUCCESS_EXIT_CODE
 
 
@@ -247,18 +254,15 @@ def main(all_arguments: list[str], stdout: TextIO = sys.stdout) -> int:
     """
     parsed_arguments = _parse_arguments(all_arguments)
     if parsed_arguments is None:
-        stdout.write(USAGE_TEXT + "\n")
+        stdout.write(USAGE_TEXT + LINE_SEPARATOR)
         return INVALID_INPUT_EXIT_CODE
 
     repository_root = parsed_arguments.repository_root.resolve()
     if parsed_arguments.command == LIST_COMMAND_NAME:
         return _run_list(repository_root, stdout)
     if parsed_arguments.command == INGEST_COMMAND_NAME:
-        report_path = (
-            None
-            if parsed_arguments.report_path is None
-            else Path(parsed_arguments.report_path)
-        )
+        raw_report_path = parsed_arguments.report_path
+        report_path = None if raw_report_path is None else Path(raw_report_path)
         return _run_ingest(repository_root, report_path, stdout)
     if parsed_arguments.command == BRIEF_COMMAND_NAME:
         return _run_brief(repository_root, stdout)

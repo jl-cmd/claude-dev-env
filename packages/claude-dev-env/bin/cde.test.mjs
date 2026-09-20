@@ -6,7 +6,6 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-    buildFollowupCommand,
     buildLintCommand,
     buildVerifyCommand,
     createHelpText,
@@ -268,40 +267,4 @@ test("reports a synchronous child start failure as invalid input", async () => {
     );
     assert.equal(exitCode, 2);
     assert.deepEqual(messages, ["Unable to start the policy linter.\n"]);
-});
-
-
-test("followup command targets the follow-up script", () => {
-    const command = buildFollowupCommand("python3", ["list"]);
-    assert.equal(command.executable, "python3");
-    assert.deepEqual(command.arguments, [
-        path.join(packageRoot, "scripts", "followup_cli.py"),
-        "list",
-    ]);
-});
-
-
-test("help describes the follow-up ledger commands", () => {
-    const helpText = createHelpText();
-    assert.match(helpText, /cde followup/);
-    assert.match(helpText, /ingest REPORT/);
-    assert.match(helpText, /brief/);
-    assert.match(helpText, /clear/);
-});
-
-
-test("main routes followup to the follow-up script", async () => {
-    let receivedCommand;
-    const exitCode = await main(["followup", "list"], {
-        findPython: () => "python3",
-        runCommand: (command) => {
-            receivedCommand = command;
-            return 0;
-        },
-    });
-    assert.equal(exitCode, 0);
-    assert.equal(
-        receivedCommand.arguments[0],
-        path.join(packageRoot, "scripts", "followup_cli.py"),
-    );
 });

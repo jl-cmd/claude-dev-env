@@ -9,8 +9,8 @@ does when it finds something.
 A gate blocks on a breaking finding and records a non-breaking one.
 
 A **breaking** finding means the change is wrong: a bug, a secret in the
-tree, a broken test, a syntax error, an instruction file that no longer
-loads. The gate fails and the work stops there.
+tree, a broken test, a syntax error, an instruction file that fails to
+load. The gate fails and the work stops there.
 
 A **smell** finding means the change reads poorly: a length limit, a naming
 convention, a prose term, a comment rule, a structural preference. The gate
