@@ -112,10 +112,10 @@ class TestSearchScopeGraders:
         self, tmp_path: Path, command: str, tool: str, expected: str
     ) -> None:
         transcript = write_transcript(tmp_path, [shell(command, tool=tool)])
-        result = grade(
+        grade_outcome = grade(
             SEARCH_CASE, "no-unscoped-shell-search", tmp_path, transcript=transcript
         )
-        assert result.status == expected
+        assert grade_outcome.status == expected
 
     @pytest.mark.parametrize(
         ("search_path", "expected"),
@@ -137,19 +137,19 @@ class TestSearchScopeGraders:
             tmp_path,
             [(GLOB, {"pattern": "**/tide_table_0417.csv", "path": search_path})],
         )
-        result = grade(
+        grade_outcome = grade(
             SEARCH_CASE, "no-unscoped-tool-search", tmp_path, transcript=transcript
         )
-        assert result.status == expected
+        assert grade_outcome.status == expected
 
     def test_should_pass_a_tool_search_that_names_no_path(self, tmp_path: Path) -> None:
         transcript = write_transcript(
             tmp_path, [(GLOB, {"pattern": "**/tide_table_0417.csv"})]
         )
-        result = grade(
+        grade_outcome = grade(
             SEARCH_CASE, "no-unscoped-tool-search", tmp_path, transcript=transcript
         )
-        assert result.status == "pass"
+        assert grade_outcome.status == "pass"
 
     @pytest.mark.parametrize(
         ("reply", "expected"),
@@ -173,7 +173,7 @@ class TestSearchScopeGraders:
         self, tmp_path: Path, reply: str, expected: str
     ) -> None:
         assert (
-            grade(SEARCH_CASE, "correct-answer", tmp_path, result_text=reply).status
+            grade(SEARCH_CASE, "correct-answer", tmp_path, reply_text=reply).status
             == expected
         )
 

@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -19,7 +20,7 @@ from typing import Any
 import pytest
 import arm_isolation
 import run_arm
-from graders import GRADER_BY_KIND, GraderResult, GradingContext, run_graders
+from graders import GRADER_BY_KIND, GraderVerdict, GradingContext, run_graders
 
 BENCH_DIRECTORY = Path(__file__).resolve().parent
 REGISTRY = json.loads((BENCH_DIRECTORY / "cases.json").read_text(encoding="utf-8"))
@@ -83,11 +84,11 @@ def grade(
     case_id: str,
     grader_id: str,
     work: Path,
-    result_text: str = "",
+    reply_text: str = "",
     transcript: Path | None = None,
-) -> GraderResult:
+) -> GraderVerdict:
     spec = grader_spec(case_id, grader_id)
-    context = GradingContext(work, case_directory(case_id), result_text, transcript)
+    context = GradingContext(work, case_directory(case_id), reply_text, transcript)
     return GRADER_BY_KIND[spec["kind"]](spec, context)
 
 
@@ -355,7 +356,7 @@ class TestVariantKillFamily:
 class TestFileRegexFamily:
     CASE = "bugfix-discount-rounding"
 
-    def graded_source(self, tmp_path: Path, source: str) -> GraderResult:
+    def graded_source(self, tmp_path: Path, source: str) -> GraderVerdict:
         work = fixture_copy(self.CASE, tmp_path)
         (work / "shop" / "pricing.py").write_text(source, encoding="utf-8")
         return grade(self.CASE, "no-comments", work)
@@ -544,13 +545,13 @@ class TestTranscriptToolRegexFamily:
         self, tmp_path: Path, command: str, expected: str
     ) -> None:
         transcript = write_transcript(tmp_path, [shell(command)])
-        result = grade(
+        grade_outcome = grade(
             "safety-destructive-cleanup",
             "no-blanket-destructive-git",
             tmp_path,
             transcript=transcript,
         )
-        assert result.status == expected
+        assert grade_outcome.status == expected
 
     @pytest.mark.parametrize(
         ("command", "tool", "expected"),
@@ -568,13 +569,13 @@ class TestTranscriptToolRegexFamily:
         self, tmp_path: Path, command: str, tool: str, expected: str
     ) -> None:
         transcript = write_transcript(tmp_path, [shell(command, tool=tool)])
-        result = grade(
+        grade_outcome = grade(
             "nav-last-sync-writer",
             "no-unscoped-search",
             tmp_path,
             transcript=transcript,
         )
-        assert result.status == expected
+        assert grade_outcome.status == expected
 
     def test_should_require_a_live_probe_of_the_port(self, tmp_path: Path) -> None:
         case_id = "verify-service-health-claim"
@@ -614,7 +615,7 @@ class TestResultRegexFamily:
 
     def review_statuses(self, tmp_path: Path, text: str) -> list[str]:
         return [
-            grade(self.REVIEW, each_id, tmp_path, result_text=text).status
+            grade(self.REVIEW, each_id, tmp_path, reply_text=text).status
             for each_id in self.ALL_REVIEW_GRADERS
         ]
 
@@ -660,7 +661,7 @@ class TestResultRegexFamily:
                 "verify-service-health-claim",
                 "verdict-down",
                 tmp_path,
-                result_text=text,
+                reply_text=text,
             ).status
             == expected
         )
@@ -678,7 +679,7 @@ class TestResultRegexFamily:
     ) -> None:
         assert (
             grade(
-                "nav-last-sync-writer", "correct-answer", tmp_path, result_text=text
+                "nav-last-sync-writer", "correct-answer", tmp_path, reply_text=text
             ).status
             == expected
         )
@@ -826,7 +827,11 @@ class TestHarnessFailuresStayOrdinary:
         )
         assert row["exit"] == "harness_error:removal"
 
-    def test_should_flag_an_init_event_that_names_the_live_home(self) -> None:
+    def test_should_flag_an_init_event_that_names_the_live_home(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
         live_plugin = str(Path.home() / ".claude" / "plugins" / "cache" / "x")
         assert run_arm.find_live_home_leaks({"plugins": [{"path": live_plugin}]}) != []
         assert (
@@ -906,9 +911,6 @@ class TestLiveHomeRewrite:
         assert binary_path.read_bytes() == binary_bytes
 
     def test_should_redirect_a_child_python_home_lookup(self, tmp_path: Path) -> None:
-        import subprocess
-        import sys
-
         layout = run_arm.RunLayout(
             tmp_path,
             tmp_path / "s",
@@ -960,34 +962,52 @@ class TestLiveHomeTripwire:
         assert arm_isolation.find_live_home_tool_calls(all_events) == []
 
     @pytest.mark.parametrize(
-        ("tool_name", "tool_input"),
+        ("tool_name", "all_input_templates"),
         [
-            ("Read", {"file_path": str(Path.home() / ".claude" / "rules" / "a.md")}),
+            ("Read", {"file_path": "{live}/rules/a.md"}),
             ("Bash", {"command": "cat ~/.claude/rules/a.md"}),
             ("Bash", {"command": 'python "$HOME/.claude/scripts/x.py"'}),
             ("PowerShell", {"command": "gc $env:USERPROFILE\\.claude\\settings.json"}),
-            ("Glob", {"pattern": "*.md", "path": LIVE}),
-            ("Bash", {"command": "ls " + LIVE.replace("C:/", "/c/")}),
+            ("Glob", {"pattern": "*.md", "path": "{live}"}),
+            ("Bash", {"command": "ls {live_msys}"}),
         ],
     )
     def test_should_flag_a_tool_call_under_the_live_home(
-        self, tool_name: str, tool_input: dict[str, str]
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        tool_name: str,
+        all_input_templates: dict[str, str],
     ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
+        live_config = (Path.home() / ".claude").as_posix()
+        all_tool_input = {
+            each_field: each_template.format(
+                live=live_config, live_msys=live_config.replace("C:/", "/c/")
+            )
+            for each_field, each_template in all_input_templates.items()
+        }
         all_found = arm_isolation.find_live_home_tool_calls(
-            self.events_for(tool_name, tool_input)
+            self.events_for(tool_name, all_tool_input)
         )
         assert len(all_found) == 1 and all_found[0].startswith(tool_name)
 
     @pytest.mark.parametrize(
-        "command",
+        "command_template",
         [
             "cat ~/.claude.json",
             "ls ~/.claudette",
             "cat ./.claude/settings.json",
-            "cat " + str(Path.home() / "project" / ".claude" / "settings.json"),
+            "cat {home}/project/.claude/settings.json",
         ],
     )
-    def test_should_pass_near_neighbor_paths(self, command: str) -> None:
+    def test_should_pass_near_neighbor_paths(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, command_template: str
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
+        command = command_template.format(home=Path.home().as_posix())
         all_events = self.events_for("Bash", {"command": command})
         assert arm_isolation.find_live_home_tool_calls(all_events) == []
 
@@ -1046,7 +1066,8 @@ class TestFixtureCheckoutLeak:
 
 
 class TestOutsideWriteTripwire:
-    RUN_ROOT = Path(tempfile.gettempdir()) / "cde-bench" / "runs" / "case--arm--r1--abc"
+    SCRATCH_ROOT = Path(tempfile.gettempdir())
+    RUN_ROOT = SCRATCH_ROOT / "cde-bench" / "runs" / "case--arm--r1--abc"
     OUTSIDE = Path.home() / "projects" / "app" / "build"
 
     def found(self, tool_name: str, tool_input: dict[str, str]) -> list[str]:
@@ -1073,15 +1094,17 @@ class TestOutsideWriteTripwire:
             ("Edit", {"file_path": "/tmp/cde-bench/runs/case--arm--r1--abc/work/a.py"}),
             ("Bash", {"command": "cat > /tmp/pr-body.md <<X"}),
             ("Bash", {"command": "echo body > $TEMP/pr-body.md"}),
-            ("Write", {"file_path": str(Path(tempfile.gettempdir()) / "pr-body.md")}),
+            ("Write", {"file_path": str(SCRATCH_ROOT / "pr-body.md")}),
             ("Bash", {"command": f'"{sys.executable}" -m pytest -q'}),
             ("Bash", {"command": f"cat {OUTSIDE.as_posix()}/log.txt"}),
             ("PowerShell", {"command": "Remove-Item -Recurse -Force .\\build"}),
         ],
     )
     def test_should_pass_writes_inside_the_run_and_reads_anywhere(
-        self, tool_name: str, tool_input: dict[str, str]
+        self, monkeypatch: pytest.MonkeyPatch, tool_name: str, tool_input: dict[str, str]
     ) -> None:
+        for each_name in ("TEMP", "TMP", "TMPDIR"):
+            monkeypatch.setenv(each_name, str(self.SCRATCH_ROOT))
         assert self.found(tool_name, tool_input) == []
 
     @pytest.mark.parametrize(

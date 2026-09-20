@@ -1,13 +1,13 @@
-"""Keep an arm's sessions on the arm's own install instead of the live home.
+"""Keep an arm's sessions on the arm's own install.
 
 ::
 
-    before:  python ~/.claude/scripts/gate.py          -> the owner's live copy
-    after:   python <run>/work/.claude/scripts/gate.py -> the arm's copy, or nothing
+    python <run>/work/.claude/scripts/gate.py   ->   the arm's own copy
+    python ~/.claude/scripts/gate.py            ->   the tripwire names it
 
 Three parts work together. The rewrite edits installed text. The home link
 gives child Pythons an arm home to find. The tripwire reads the transcript and
-names every tool call that still reached for the live home.
+names every tool call that reached for the live home.
 """
 
 from __future__ import annotations
@@ -17,17 +17,43 @@ import re
 import shutil
 import sys
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-HOME_FORM_PATTERN = r"(?:~|\$\{HOME\}|\$HOME|%USERPROFILE%|\$env:USERPROFILE)"
-NAME_END_PATTERN = r"(?![\w\-]|\.\w)"
-REWRITE_EXPRESSION = re.compile(
-    HOME_FORM_PATTERN + r"[/\\]\.(claude|agents)" + NAME_END_PATTERN, re.IGNORECASE
+from config.arm_isolation_constants import (
+    AGENTS_DIRECTORY_NAME,
+    ALL_FILE_WRITING_TOOLS,
+    ALL_HARMLESS_TARGETS,
+    ALL_LINKED_HOME_NAMES,
+    ALL_RUN_SCRATCH_VARIABLE_FORMS,
+    ALL_SHELL_TOOLS,
+    ALTERNATION_SEPARATOR,
+    ARM_HOME_VARIABLE,
+    BENCH_SCRATCH_DIRECTORY_NAME,
+    CLAUDE_CONFIG_DIRECTORY_NAME,
+    CONFIG_HOME_VARIABLE,
+    DETAIL_CHARACTER_LIMIT,
+    DRIVE_PREFIX_LENGTH,
+    EXECUTABLE_SUFFIX,
+    HOME_FORM_PATTERN,
+    LIVE_CONFIG_HOME_PATTERN,
+    MOUNT_PREFIX,
+    MUTATING_VERB_EXPRESSION,
+    NAME_END_PATTERN,
+    PATH_SEGMENT_EXPRESSION,
+    POSIX_SCRATCH_ROOT,
+    PYTHON_PATH_VARIABLE,
+    REDIRECT_DIRECTORY_NAME,
+    REDIRECT_MODULE_NAME,
+    REDIRECT_TARGET_EXPRESSION,
+    REWRITE_EXPRESSION,
 )
-PYTHON_REDIRECT_DIRECTORY = Path(__file__).resolve().parent / "pyredirect"
-ALL_LINKED_HOME_NAMES = (".claude", ".agents")
+
+if sys.platform == "win32":
+    import _winapi
+
+TranscriptEvent = Mapping[str, object]
 
 
 @dataclass(frozen=True)
@@ -45,6 +71,35 @@ def _walk_files(root: Path) -> list[Path]:
     ]
 
 
+def _rewrite_one_file(text_path: Path, replacement_by_name: Mapping[str, str]) -> int | None:
+    """Rewrite one file's live-home paths and say how many it carried.
+
+    ::
+
+        a.md holding '~/.claude/rules/a.md'   ->   1, and the file is written
+        a.md holding no live-home path        ->   0, and the file is left
+        an image that fails to decode         ->   None
+
+    Args:
+        text_path: The file to read, rewrite, and write back.
+        replacement_by_name: The replacement path for each config name.
+
+    Returns:
+        The number of replacements, or None when the bytes are not UTF-8.
+    """
+    try:
+        original = text_path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    rewritten, hit_count = REWRITE_EXPRESSION.subn(
+        lambda each_match: replacement_by_name[each_match.group(1).lower()],
+        original,
+    )
+    if hit_count:
+        text_path.write_bytes(rewritten.encode("utf-8"))
+    return hit_count
+
+
 def rewrite_live_home_references(
     all_roots: list[Path], config_directory: Path
 ) -> RewriteReport:
@@ -58,43 +113,56 @@ def rewrite_live_home_references(
         ok:   ~/.claude.json, ~/.claudette, ./.claude/settings.json stay as written
 
     Files that do not decode as UTF-8 are left byte for byte.
+
+    Args:
+        all_roots: The installed trees to walk.
+        config_directory: The arm's own config directory.
+
+    Returns:
+        A RewriteReport counting replacements, changed files, and scanned files.
     """
     replacement_by_name = {
         "claude": config_directory.as_posix(),
-        "agents": (config_directory.parent / ".agents").as_posix(),
+        "agents": (config_directory.parent / AGENTS_DIRECTORY_NAME).as_posix(),
     }
+    all_paths = [
+        each_path for each_root in all_roots for each_path in _walk_files(each_root)
+    ]
     replacement_count = 0
     changed_file_count = 0
     scanned_file_count = 0
-    for each_root in all_roots:
-        for each_path in _walk_files(each_root):
-            try:
-                original = each_path.read_bytes().decode("utf-8")
-            except UnicodeDecodeError:
-                continue
-            scanned_file_count += 1
-            rewritten, hit_count = REWRITE_EXPRESSION.subn(
-                lambda each_match: replacement_by_name[each_match.group(1).lower()],
-                original,
-            )
-            if hit_count:
-                each_path.write_bytes(rewritten.encode("utf-8"))
-                replacement_count += hit_count
-                changed_file_count += 1
+    for each_path in all_paths:
+        hit_count = _rewrite_one_file(each_path, replacement_by_name)
+        if hit_count is None:
+            continue
+        scanned_file_count += 1
+        replacement_count += hit_count
+        changed_file_count += 1 if hit_count else 0
     return RewriteReport(replacement_count, changed_file_count, scanned_file_count)
 
 
 def _make_directory_link(link_path: Path, target: Path) -> None:
     if sys.platform == "win32":
-        import _winapi
-
         _winapi.CreateJunction(str(target), str(link_path))
     else:
         link_path.symlink_to(target, target_is_directory=True)
 
 
 def link_arm_home(home_directory: Path, work_directory: Path) -> list[str]:
-    """Make ``<home>/.claude`` and ``<home>/.agents`` open the arm's install."""
+    """Make ``<home>/.claude`` and ``<home>/.agents`` open the arm's install.
+
+    ::
+
+        work holds .claude, home holds neither   ->   ['.claude']
+        home already holds .claude               ->   []
+
+    Args:
+        home_directory: The arm's home directory, where the links are made.
+        work_directory: The arm's install, where the links point.
+
+    Returns:
+        The names that gained a link on this call.
+    """
     all_linked: list[str] = []
     for each_name in ALL_LINKED_HOME_NAMES:
         target = work_directory / each_name
@@ -112,47 +180,89 @@ def redirect_environment(
 
     The redirect module is copied into the run directory first, so the path a
     session sees never points into the repository checkout.
+
+    Args:
+        home_directory: The arm's home directory.
+        config_directory: The arm's own config directory.
+
+    Returns:
+        The environment variables a child process inherits.
     """
-    inherited = os.environ.get("PYTHONPATH", "")
-    run_redirect_directory = home_directory.parent / "pyredirect"
+    inherited = os.environ.get(PYTHON_PATH_VARIABLE, "")
+    run_redirect_directory = home_directory.parent / REDIRECT_DIRECTORY_NAME
     run_redirect_directory.mkdir(parents=True, exist_ok=True)
+    source_directory = Path(__file__).resolve().parent / REDIRECT_DIRECTORY_NAME
     shutil.copyfile(
-        PYTHON_REDIRECT_DIRECTORY / "sitecustomize.py",
-        run_redirect_directory / "sitecustomize.py",
+        source_directory / REDIRECT_MODULE_NAME,
+        run_redirect_directory / REDIRECT_MODULE_NAME,
     )
     return {
-        "BENCH_ARM_HOME": str(home_directory),
-        "CLAUDE_HOME": str(config_directory),
-        "PYTHONPATH": str(run_redirect_directory)
+        ARM_HOME_VARIABLE: str(home_directory),
+        CONFIG_HOME_VARIABLE: str(config_directory),
+        PYTHON_PATH_VARIABLE: str(run_redirect_directory)
         + (os.pathsep + inherited if inherited else ""),
     }
 
 
+def _drive_letter_forms(posix_path: str) -> list[str]:
+    all_forms = [posix_path[0] + posix_path[DRIVE_PREFIX_LENGTH:]]
+    return [f"/{all_forms[0]}", MOUNT_PREFIX + all_forms[0]]
+
+
 def _live_home_expression() -> re.Pattern[str]:
-    live_config = (Path.home() / ".claude").as_posix().lower()
-    drive, tail = live_config[0], live_config[2:]
+    live_config = (Path.home() / CLAUDE_CONFIG_DIRECTORY_NAME).as_posix().lower()
     all_forms = [
         re.escape(live_config),
-        re.escape(f"/{drive}{tail}"),
-        re.escape(f"/mnt/{drive}{tail}"),
-        HOME_FORM_PATTERN.lower() + r"/\.claude",
+        *[re.escape(each_form) for each_form in _drive_letter_forms(live_config)],
+        HOME_FORM_PATTERN.lower() + LIVE_CONFIG_HOME_PATTERN,
     ]
-    return re.compile("(?:" + "|".join(all_forms) + ")" + NAME_END_PATTERN)
+    joined = ALTERNATION_SEPARATOR.join(all_forms)
+    return re.compile("(?:" + joined + ")" + NAME_END_PATTERN)
 
 
-def _all_strings(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, dict):
+def _all_strings(payload: object) -> list[str]:
+    if isinstance(payload, str):
+        return [payload]
+    if isinstance(payload, dict):
         return [
-            each for each_item in value.values() for each in _all_strings(each_item)
+            each_string
+            for each_member in payload.values()
+            for each_string in _all_strings(each_member)
         ]
-    if isinstance(value, list):
-        return [each for each_item in value for each in _all_strings(each_item)]
+    if isinstance(payload, list):
+        return [
+            each_string
+            for each_member in payload
+            for each_string in _all_strings(each_member)
+        ]
     return []
 
 
-def find_live_home_tool_calls(all_events: list[dict[str, Any]]) -> list[str]:
+def _all_tool_use_blocks(all_events: list[TranscriptEvent]) -> list[TranscriptEvent]:
+    all_blocks: list[TranscriptEvent] = []
+    for each_event in all_events:
+        if each_event.get("type") != "assistant":
+            continue
+        message = each_event.get("message")
+        content = message.get("content", []) if isinstance(message, dict) else []
+        all_blocks.extend(
+            each_block
+            for each_block in content
+            if isinstance(each_block, dict) and each_block.get("type") == "tool_use"
+        )
+    return all_blocks
+
+
+def _live_home_finding(
+    block: TranscriptEvent, expression: re.Pattern[str]
+) -> str | None:
+    for each_text in _all_strings(block.get("input")):
+        if expression.search(each_text.replace("\\", "/").lower()):
+            return f"{block.get('name')}: {each_text[:DETAIL_CHARACTER_LIMIT]}"
+    return None
+
+
+def find_live_home_tool_calls(all_events: list[TranscriptEvent]) -> list[str]:
     """Name each tool call whose input points under the live config home.
 
     ::
@@ -163,71 +273,59 @@ def find_live_home_tool_calls(all_events: list[dict[str, Any]]) -> list[str]:
         ok:   Bash  cat ~/.claude.json
 
     Only the model's own tool inputs are read. Text inside tool results is not.
+
+    Args:
+        all_events: The transcript events a session wrote.
+
+    Returns:
+        One line per flagged call, naming the tool and the input text.
     """
     expression = _live_home_expression()
     all_found: list[str] = []
-    for each_event in all_events:
-        if each_event.get("type") != "assistant":
-            continue
-        message = each_event.get("message")
-        all_blocks = message.get("content", []) if isinstance(message, dict) else []
-        for each_block in all_blocks:
-            if not isinstance(each_block, dict) or each_block.get("type") != "tool_use":
-                continue
-            for each_text in _all_strings(each_block.get("input")):
-                normalized = each_text.replace("\\", "/").lower()
-                if expression.search(normalized):
-                    all_found.append(f"{each_block.get('name')}: {each_text[:200]}")
-                    break
+    for each_block in _all_tool_use_blocks(all_events):
+        finding = _live_home_finding(each_block, expression)
+        if finding is not None:
+            all_found.append(finding)
     return all_found
 
 
-ALL_FILE_WRITING_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit")
-ALL_SHELL_TOOLS = ("Bash", "PowerShell")
-MUTATING_VERB_EXPRESSION = re.compile(
-    r"(?<![\w./-])(?:rm|rmdir|mv|cp|del|erase|rd|move|copy|touch|mkdir|tee|truncate|dd|ln"
-    r"|chmod|unlink|remove-item|move-item|copy-item|rename-item|set-content|add-content"
-    r"|out-file|new-item|clear-content|ri|mi|ni|shutil\.\w+|os\.remove|git\s+clean|sed\s+-i)"
-    r"(?![\w.-])"
-)
-PATH_TOKEN_PATTERN = (
-    r"(?:[a-z]:/|/[a-z0-9_.-]+/|~/|\$\{?home\}?/|\$env:\w+/|%\w+%/|\$\{?temp\}?/|(?:\.\./){2,})"
-    r"[^\s\"'|;&<>)]*"
-)
-PATH_TOKEN_EXPRESSION = re.compile(r"(?<![\w.:/$-])" + PATH_TOKEN_PATTERN)
-REDIRECT_TARGET_EXPRESSION = re.compile(r">>?\s*[\"']?(" + PATH_TOKEN_PATTERN + ")")
-ALL_HARMLESS_TARGETS = ("/dev/null", "/dev/stdout", "/dev/stderr")
-ALL_RUN_TEMP_VARIABLE_FORMS = (
-    "$temp/",
-    "${temp}/",
-    "$tmp/",
-    "$tmpdir/",
-    "$env:temp/",
-    "$env:tmp/",
-    "%temp%/",
-    "%tmp%/",
-)
-
-
-def _is_outside(token: str, run_root: Path) -> bool:
+def _all_inside_forms(run_root: Path) -> list[str]:
     inside = run_root.as_posix().lower()
-    all_inside_forms = [inside, f"/{inside[0]}{inside[2:]}", f"/mnt/{inside[0]}{inside[2:]}"]
-    temp_root = Path(tempfile.gettempdir()).as_posix().lower()
-    if inside.startswith(temp_root + "/"):
-        all_inside_forms.append("/tmp" + inside[len(temp_root) :])
-    if token.startswith(ALL_HARMLESS_TARGETS) or token.endswith(".exe"):
+    all_forms = [inside, *_drive_letter_forms(inside)]
+    scratch_root = Path(tempfile.gettempdir()).as_posix().lower()
+    if inside.startswith(scratch_root + "/"):
+        all_forms.append(POSIX_SCRATCH_ROOT + inside[len(scratch_root) :])
+    return all_forms
+
+
+def _is_shared_scratch(candidate_path: str) -> bool:
+    scratch_root = Path(tempfile.gettempdir()).as_posix().lower()
+    all_scratch_forms = (
+        POSIX_SCRATCH_ROOT,
+        scratch_root,
+        _drive_letter_forms(scratch_root)[0],
+    )
+    return any(
+        candidate_path.startswith(each_form + "/")
+        and not candidate_path.startswith(
+            each_form + "/" + BENCH_SCRATCH_DIRECTORY_NAME
+        )
+        for each_form in all_scratch_forms
+    )
+
+
+def _is_outside(candidate_path: str, run_root: Path) -> bool:
+    if candidate_path.startswith(ALL_HARMLESS_TARGETS) or candidate_path.endswith(
+        EXECUTABLE_SUFFIX
+    ):
         return False
-    all_scratch_forms = ("/tmp", temp_root, f"/{temp_root[0]}{temp_root[2:]}")
-    if token.startswith(ALL_RUN_TEMP_VARIABLE_FORMS):
+    if candidate_path.startswith(ALL_RUN_SCRATCH_VARIABLE_FORMS):
         return False
-    for each_form in all_scratch_forms:
-        if token.startswith(each_form + "/") and not token.startswith(
-            each_form + "/cde-bench"
-        ):
-            return False
+    if _is_shared_scratch(candidate_path):
+        return False
     return not any(
-        token == each_form or token.startswith(each_form + "/")
-        for each_form in all_inside_forms
+        candidate_path == each_form or candidate_path.startswith(each_form + "/")
+        for each_form in _all_inside_forms(run_root)
     )
 
 
@@ -235,18 +333,40 @@ def _outside_shell_target(command: str, run_root: Path) -> str | None:
     normalized = command.replace("\\", "/").lower()
     all_redirect_targets = REDIRECT_TARGET_EXPRESSION.findall(normalized)
     all_candidates = (
-        PATH_TOKEN_EXPRESSION.findall(normalized)
+        PATH_SEGMENT_EXPRESSION.findall(normalized)
         if MUTATING_VERB_EXPRESSION.search(normalized)
         else all_redirect_targets
     )
-    for each_token in all_candidates:
-        if _is_outside(each_token, run_root):
-            return each_token
+    for each_candidate in all_candidates:
+        if _is_outside(each_candidate, run_root):
+            return each_candidate
+    return None
+
+
+def _outside_file_target(all_tool_input: Mapping[str, object], run_root: Path) -> str | None:
+    file_path = str(
+        all_tool_input.get("file_path") or all_tool_input.get("notebook_path") or ""
+    )
+    normalized = file_path.replace("\\", "/").lower()
+    if PATH_SEGMENT_EXPRESSION.match(normalized) and _is_outside(normalized, run_root):
+        return file_path
+    return None
+
+
+def _outside_write_target(block: TranscriptEvent, run_root: Path) -> str | None:
+    tool_name = str(block.get("name"))
+    all_tool_input = block.get("input")
+    if not isinstance(all_tool_input, dict):
+        return None
+    if tool_name in ALL_FILE_WRITING_TOOLS:
+        return _outside_file_target(all_tool_input, run_root)
+    if tool_name in ALL_SHELL_TOOLS:
+        return _outside_shell_target(str(all_tool_input.get("command", "")), run_root)
     return None
 
 
 def find_outside_writes(
-    all_events: list[dict[str, Any]],
+    all_events: list[TranscriptEvent],
     run_root: Path,
     all_denied_tool_use_ids: frozenset[str] = frozenset(),
 ) -> list[str]:
@@ -267,34 +387,22 @@ def find_outside_writes(
     scratch, except its ``cde-bench`` tree that holds other runs. A path through
     a temp variable is inside, because the session's temp variables point into
     the run directory.
+
+    Args:
+        all_events: The transcript events a session wrote.
+        run_root: The run directory every write is measured against.
+        all_denied_tool_use_ids: The call ids the CLI refused.
+
+    Returns:
+        One line per flagged call, naming the tool and the target path.
     """
     all_found: list[str] = []
-    for each_event in all_events:
-        if each_event.get("type") != "assistant":
+    for each_block in _all_tool_use_blocks(all_events):
+        if each_block.get("id") in all_denied_tool_use_ids:
             continue
-        message = each_event.get("message")
-        all_blocks = message.get("content", []) if isinstance(message, dict) else []
-        for each_block in all_blocks:
-            if not isinstance(each_block, dict) or each_block.get("type") != "tool_use":
-                continue
-            tool_name = str(each_block.get("name"))
-            tool_input = each_block.get("input")
-            if each_block.get("id") in all_denied_tool_use_ids:
-                continue
-            if not isinstance(tool_input, dict):
-                continue
-            target: str | None = None
-            if tool_name in ALL_FILE_WRITING_TOOLS:
-                file_path = str(
-                    tool_input.get("file_path") or tool_input.get("notebook_path") or ""
-                )
-                normalized = file_path.replace("\\", "/").lower()
-                if PATH_TOKEN_EXPRESSION.match(normalized) and _is_outside(
-                    normalized, run_root
-                ):
-                    target = file_path
-            elif tool_name in ALL_SHELL_TOOLS:
-                target = _outside_shell_target(str(tool_input.get("command", "")), run_root)
-            if target is not None:
-                all_found.append(f"{tool_name}: {target[:200]}")
+        target = _outside_write_target(each_block, run_root)
+        if target is not None:
+            all_found.append(
+                f"{each_block.get('name')}: {target[:DETAIL_CHARACTER_LIMIT]}"
+            )
     return all_found

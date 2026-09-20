@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 import pytest
-from hook_cases import CaseResult, first_verdict, run_case
+from hook_cases import CaseRun, first_verdict, run_case
 from hook_harness import (
     HookRegistration,
     Sandbox,
@@ -37,7 +37,7 @@ def _registration(script_name: str) -> HookRegistration:
     )
 
 
-def _run_all(script_name: str, tmp_path: Path) -> list[CaseResult]:
+def _run_all(script_name: str, tmp_path: Path) -> list[CaseRun]:
     return [
         run_case(
             _registration(script_name),
@@ -53,9 +53,9 @@ def _run_all(script_name: str, tmp_path: Path) -> list[CaseResult]:
 def test_should_pass_a_control_that_blocks_and_lets_the_neighbor_through(
     script_name: str, tmp_path: Path
 ) -> None:
-    all_results = _run_all(script_name, tmp_path)
-    verdict, all_reasons = first_verdict(all_results)
-    assert [each_result.run.outcome for each_result in all_results] == [
+    all_case_runs = _run_all(script_name, tmp_path)
+    verdict, all_reasons = first_verdict(all_case_runs)
+    assert [each_case_run.run.outcome for each_case_run in all_case_runs] == [
         "block",
         "silent",
         "silent",
@@ -79,13 +79,13 @@ def test_should_flag_a_hook_that_blocks_the_valid_near_neighbor(tmp_path: Path) 
 def test_should_report_a_crashing_hook_as_a_harness_visible_failure(
     tmp_path: Path,
 ) -> None:
-    all_results = _run_all("crashing.py", tmp_path)
-    verdict, all_reasons = first_verdict(all_results)
-    assert {each_result.run.outcome for each_result in all_results} == {
+    all_case_runs = _run_all("crashing.py", tmp_path)
+    verdict, all_reasons = first_verdict(all_case_runs)
+    assert {each_case_run.run.outcome for each_case_run in all_case_runs} == {
         "harness_failure"
     }
-    assert all_results[0].run.exit_code == 1
-    assert "calibration crash" in all_results[0].run.stderr
+    assert all_case_runs[0].run.exit_code == 1
+    assert "calibration crash" in all_case_runs[0].run.stderr
     assert verdict == "inactive/broken"
     assert all_reasons[0] == "prohibited: harness-visible failure exit=1"
 
@@ -94,11 +94,11 @@ def test_should_report_a_timeout_as_a_harness_visible_failure(tmp_path: Path) ->
     slow_registration = HookRegistration(
         event="PreToolUse", matcher="Bash", command="sleep 5", timeout_seconds=0.5
     )
-    result = run_case(
+    case_run = run_case(
         slow_registration, ALL_CALIBRATION_CASES[0], FIXTURE_ROOT, tmp_path
     )
-    assert result.run.is_timed_out
-    assert result.run.outcome == "harness_failure"
+    assert case_run.run.is_timed_out
+    assert case_run.run.outcome == "harness_failure"
 
 
 def test_should_flag_a_matcher_that_never_selects_the_claimed_input(
