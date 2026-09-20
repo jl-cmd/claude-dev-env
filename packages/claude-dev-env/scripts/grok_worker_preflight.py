@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -61,6 +62,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
     CLAUDE_HOME_SUBDIRECTORY,
     CLI_PING_FLAG,
     CLI_ROLE_FLAG,
+    CLAUDE_CONFIG_DIR_ENV_VAR,
     CLI_RUN_STATE_DIR_FLAG,
     DEFAULT_AUTH_TIMEOUT_SECONDS,
     DEFAULT_PING_TIMEOUT_SECONDS,
@@ -111,7 +113,67 @@ class PreflightOutcome:
 
 def claude_config_home() -> Path:
     """Return the per-user Claude configuration directory."""
-    return Path.home() / CLAUDE_HOME_SUBDIRECTORY
+    configured_root = os.environ.get(CLAUDE_CONFIG_DIR_ENV_VAR)
+    return Path(configured_root) if configured_root else Path.home() / CLAUDE_HOME_SUBDIRECTORY
+
+
+def _read_pstack_registry(registry_path: Path) -> dict[str, object]:
+    try:
+        registry = json.loads(registry_path.read_text(encoding=UTF8_ENCODING))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise OSError(f"Invalid pstack installation registry {registry_path}: {error}") from error
+    if not isinstance(registry, dict):
+        raise OSError(f"Invalid pstack installation registry {registry_path}: root must be an object")
+    return registry
+
+
+def _user_pstack_entries(all_registry: dict[str, object], registry_path: Path) -> list[dict[str, object]]:
+    plugins = all_registry.get("plugins")
+    if not isinstance(plugins, dict):
+        raise OSError(f"Invalid pstack installation registry {registry_path}: plugins must be an object")
+    entries = plugins.get("pstack@pstack-claude", [])
+    if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+        raise OSError(f"Invalid pstack installation registry {registry_path}: pstack entries must be objects")
+    user_entries = [entry for entry in entries if entry.get("scope") == "user"]
+    if len(user_entries) > 1:
+        raise OSError(f"Invalid pstack installation registry {registry_path}: multiple user pstack installations")
+    return user_entries
+
+
+def _native_pstack_skill_path(registry_path: Path, fallback_path: Path) -> Path:
+    if not registry_path.exists():
+        return fallback_path
+    user_entries = _user_pstack_entries(_read_pstack_registry(registry_path), registry_path)
+    if not user_entries:
+        return fallback_path
+    install_path = user_entries[0].get("installPath")
+    if not isinstance(install_path, str) or not Path(install_path).is_absolute():
+        raise OSError(f"Invalid pstack installation registry {registry_path}: pstack installPath must be absolute")
+    return Path(install_path) / "skills" / "poteto-mode" / "SKILL.md"
+
+
+def poteto_mode_skill_path() -> Path:
+    """Return the selected installed pstack poteto-mode skill path.
+
+    Returns:
+        The validated poteto-mode skill path.
+
+    Raises:
+        OSError: If the registry or selected skill is invalid.
+    """
+    config_root = claude_config_home()
+    fallback_path = config_root / "skills" / "poteto-mode" / "SKILL.md"
+    skill_path = _native_pstack_skill_path(
+        config_root / "plugins" / "installed_plugins.json",
+        fallback_path,
+    )
+    try:
+        skill_text = skill_path.read_text(encoding=UTF8_ENCODING)
+    except UnicodeError as error:
+        raise OSError(f"Invalid UTF-8 poteto skill {skill_path}") from error
+    if not skill_text.strip():
+        raise OSError(f"Empty poteto skill {skill_path}")
+    return skill_path
 
 
 def _install_manifest_path() -> Path:
@@ -217,6 +279,10 @@ def _is_grok_binary_resolvable() -> bool:
 
 def _is_claude_dev_env_config_present(role: str) -> bool:
     if not _install_manifest_path().is_file():
+        return False
+    try:
+        poteto_mode_skill_path()
+    except OSError:
         return False
     all_agent_filenames = ALL_AGENT_FILENAMES_BY_ROLE.get(role)
     if all_agent_filenames is None:

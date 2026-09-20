@@ -85,14 +85,14 @@ ROLE_BUGTEAM: str = "bugteam"
 """Role name whose agent definition set the preflight validates by default."""
 
 ROLE_CLEAN_CODER: str = "clean-coder"
-"""Role name that maps to the clean-coder agent for FIX and standards-fix."""
+"""Compatibility role for FIX and standards-fix using poteto-agent."""
 
 DEFAULT_ROLE: str = ROLE_BUGTEAM
 """Role applied when the caller does not pass ``--role``."""
 
 ALL_AGENT_FILENAMES_BY_ROLE: dict[str, tuple[str, ...]] = {
-    ROLE_BUGTEAM: ("code-quality-agent.md", "clean-coder.md"),
-    ROLE_CLEAN_CODER: ("clean-coder.md",),
+    ROLE_BUGTEAM: ("poteto-agent.md",),
+    ROLE_CLEAN_CODER: ("poteto-agent.md",),
 }
 """Agent definition filenames required under ``agents/`` for each known role."""
 

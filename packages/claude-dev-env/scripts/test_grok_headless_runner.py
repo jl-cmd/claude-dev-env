@@ -7,6 +7,7 @@ include the signature substrings the constants module lists.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import time
@@ -336,7 +337,11 @@ def test_argv_includes_agent_when_named(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     fake_process = _FakeProcess(returncode=0, stdout='{"ok":true}')
-    agent_name = "code-quality-agent"
+    agent_name = "poteto-agent"
+    skill_path = tmp_path / "poteto-mode" / "SKILL.md"
+    skill_path.parent.mkdir()
+    skill_path.write_text("Keep the requested duty.\n", encoding="utf-8")
+    monkeypatch.setattr(runner, "poteto_mode_skill_path", lambda: skill_path)
     outcome, recorder, _, _, _ = _run_once(
         monkeypatch, tmp_path, fake_process, agent_name=agent_name
     )
@@ -345,6 +350,35 @@ def test_argv_includes_agent_when_named(
     invocation = recorder.invocations[0]
     assert AGENT_FLAG in invocation
     assert agent_name in invocation
+    generated_prompt = Path(invocation[invocation.index(PROMPT_FILE_FLAG) + 1])
+    assert "Keep the requested duty." in generated_prompt.read_text(encoding="utf-8")
+    assert str(skill_path) in generated_prompt.read_text(encoding="utf-8")
+
+
+def test_native_plugin_skill_is_included_in_worker_prompt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_root = tmp_path / "profile"
+    registry_path = config_root / "plugins" / "installed_plugins.json"
+    registry_path.parent.mkdir(parents=True)
+    plugin_root = tmp_path / "plugin" / "version"
+    registry_path.write_text(json.dumps({"plugins": {"pstack@pstack-claude": [
+        {"scope": "user", "installPath": str(plugin_root)},
+    ]}}), encoding="utf-8")
+    skill_path = plugin_root / "skills" / "poteto-mode" / "SKILL.md"
+    skill_path.parent.mkdir(parents=True)
+    skill_path.write_text("Use the native workflow.\n", encoding="utf-8")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config_root))
+    outcome, recorder, _, _, _ = _run_once(
+        monkeypatch, tmp_path, _FakeProcess(returncode=0, stdout="done"),
+        agent_name="poteto-agent",
+    )
+    assert outcome.is_ok
+    invocation = recorder.invocations[0]
+    prompt = Path(invocation[invocation.index(PROMPT_FILE_FLAG) + 1]).read_text(encoding="utf-8")
+    assert str(skill_path.resolve()) in prompt
+    assert "Use the native workflow." in prompt
+    assert "Resolve companion skill paths against that source directory." in prompt
 
 
 def test_unique_leader_socket_path_per_call(

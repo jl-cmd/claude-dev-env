@@ -81,7 +81,7 @@ import yaml
 ACCEPTED_FRONTMATTER_KEYS = frozenset({"name", "description", "tools", "color"})
 CODE_QUALITY_AGENT_FILENAME = "code-quality-agent.md"
 CODE_QUALITY_READ_ONLY_TOOLS = ("Read", "Grep", "Glob")
-INSTRUCTION_ALIAS_FILENAMES = frozenset({"AGENTS.md", "CLAUDE.md"})
+INSTRUCTION_ALIAS_FILENAMES = frozenset({"AGENTS.md", "CLAUDE.md", "ARCHIVE-MANIFEST.md"})
 FRONTMATTER_FENCE_LINE = "---"
 MATERIALIZER_MODULE_NAME = "codex_compat_materializer"
 MATERIALIZER_MODULE_PATH = (
@@ -124,7 +124,7 @@ def _agent_definition_candidate_paths() -> tuple[Path, ...]:
     Returns:
         Every agent-definition `*.md` path in this directory, sorted.
     """
-    agents_directory = Path(__file__).parent
+    agents_directory = Path(__file__).parent.parent / "agents-archived"
     return tuple(
         each_markdown_file
         for each_markdown_file in sorted(agents_directory.glob("*.md"))
@@ -298,7 +298,7 @@ def test_agent_frontmatter_loads_as_a_yaml_mapping(
 )
 def named_agents_yaml_safe_load_as_mapping(agent_file_name: str) -> None:
     """P-107 regression: named agents remain real YAML mappings under safe_load."""
-    agent_definition_path = Path(__file__).parent / agent_file_name
+    agent_definition_path = Path(__file__).parent.parent / "agents-archived" / agent_file_name
     assert agent_definition_path.is_file(), (
         f"{agent_file_name} missing from agents/ — P-107 surface gone"
     )
@@ -419,7 +419,7 @@ def test_agent_frontmatter_carries_no_model_key(
 
 
 def _clean_coder_body() -> str:
-    return (Path(__file__).parent / "clean-coder.md").read_text(encoding="utf-8")
+    return (Path(__file__).parent.parent / "agents-archived" / "clean-coder.md").read_text(encoding="utf-8")
 
 
 SOURCE_LINK_PATTERN = re.compile(
@@ -602,7 +602,7 @@ EXPECTED_SOURCE_LINK_PAIRS = {
 
 
 def _assert_source_link_contract(agent_file_name: str, agent_text: str) -> None:
-    agents_directory = Path(__file__).parent
+    agents_directory = Path(__file__).parent.parent / "agents-archived"
     repository_root = agents_directory.parents[3]
     actual_source_links = frozenset(SOURCE_LINK_PATTERN.findall(agent_text))
     expected_source_links = EXPECTED_SOURCE_LINK_PAIRS[agent_file_name]
@@ -624,7 +624,7 @@ def _assert_source_link_contract(agent_file_name: str, agent_text: str) -> None:
 
 
 def test_named_agents_document_installed_paths_and_source_fallbacks() -> None:
-    agents_directory = Path(__file__).parent
+    agents_directory = Path(__file__).parent.parent / "agents-archived"
     for each_agent_file_name in (
         "clean-coder.md",
         "code-quality-agent.md",
@@ -687,7 +687,7 @@ def test_source_link_contract_rejects_directory_fallback() -> None:
 
 
 def test_named_agents_resolve_active_managed_root_and_agents_home() -> None:
-    agents_directory = Path(__file__).parent
+    agents_directory = Path(__file__).parent.parent / "agents-archived"
     for each_agent_file_name in (
         "clean-coder.md",
         "code-quality-agent.md",
@@ -906,14 +906,14 @@ def test_clean_coder_policy_targets_exist_in_source_package() -> None:
 
 
 def test_code_quality_agent_allows_only_read_and_search_tools() -> None:
-    agent_definition_path = Path(__file__).parent / CODE_QUALITY_AGENT_FILENAME
+    agent_definition_path = Path(__file__).parent.parent / "agents-archived" / CODE_QUALITY_AGENT_FILENAME
     parsed_frontmatter = yaml.safe_load(_frontmatter_block(agent_definition_path))
 
     assert parsed_frontmatter["tools"] == list(CODE_QUALITY_READ_ONLY_TOOLS)
 
 
 def test_code_quality_agent_contract_forbids_mutating_commands() -> None:
-    agent_definition_path = Path(__file__).parent / CODE_QUALITY_AGENT_FILENAME
+    agent_definition_path = Path(__file__).parent.parent / "agents-archived" / CODE_QUALITY_AGENT_FILENAME
     body = agent_definition_path.read_text(encoding="utf-8")
     assert "Use only `Read`, `Grep`, and `Glob`." in body
     assert "Author zero edits." in body

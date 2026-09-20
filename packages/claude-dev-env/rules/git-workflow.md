@@ -25,12 +25,12 @@ the next run. The merge stays in the repository. No tag is cut and the package n
 
 Spot one by its head branch, which starts `release-please--branches--`, or by a body that
 opens with the bot's own marker line. The description rules in this file, the
-`pr-description-writer` agent, and the house wording style all step aside for it. The
+`pstack:poteto-agent` writing brief, and the house wording style all step aside for it. The
 failure signature in the release job log reads
 `could not parse pull request body as a release PR`.
 
-The `pr-description-writer` agent writes a title and body from the diff when
-you want one. Publish the title and body file through
+`pstack:poteto-agent` writes a title and body from the diff when you want one.
+Publish the title and body file through
 `~/.agents/skills/pull-request/scripts/pull_request.py`. That path is under the
 agents home, not the repository. A worktree holds no `.agents/` copy.
 

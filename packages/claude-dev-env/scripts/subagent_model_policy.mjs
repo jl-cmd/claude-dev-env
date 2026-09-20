@@ -298,7 +298,10 @@ function validateRoles(roles) {
         const aliases = validateStringList(roles[role], `roles.${role}`).map(normalizeToken);
         const allAliases = [role, ...aliases];
         for (const alias of allAliases) {
-            if (!isIdentifier(alias)) throw new SubagentModelPolicyError(`invalid role name: ${alias}`);
+            const roleParts = alias.split(':');
+            if (roleParts.length > 2 || !roleParts.every(isIdentifier)) {
+                throw new SubagentModelPolicyError(`invalid role name: ${alias}`);
+            }
             const previousRole = roleByAlias.get(alias);
             if (previousRole && previousRole !== role) {
                 throw new SubagentModelPolicyError(`role alias is ambiguous: ${alias}`);

@@ -26,7 +26,7 @@ import { resolvePackageManagedDirectory } from './resolve-package-managed-direct
 
 const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const CANONICAL_SKILL_NAME = 'privacy-hygiene';
-const CANONICAL_AGENT_FILE_NAME = 'clean-coder.md';
+const CANONICAL_AGENT_FILE_NAME = 'AGENTS.md';
 
 test('prefers the .agents tree when both layouts exist', () => {
     const sourceRoot = mkdtempSync(join(tmpdir(), 'cdev-src-agents-'));
