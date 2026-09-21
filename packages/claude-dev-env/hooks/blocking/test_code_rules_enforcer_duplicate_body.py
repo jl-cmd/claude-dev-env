@@ -24,6 +24,8 @@ from collections.abc import Iterator
 
 import pytest
 
+from code_rules_enforcer_test_support import STRIP_CODE_AND_QUOTES_SOURCE as SHARED_HELPER_SOURCE
+
 _HOOK_DIRECTORY = pathlib.Path(__file__).parent
 if str(_HOOK_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_HOOK_DIRECTORY))
@@ -37,17 +39,6 @@ assert _hook_spec.loader is not None
 _hook_module = importlib.util.module_from_spec(_hook_spec)
 _hook_spec.loader.exec_module(_hook_module)
 check_duplicate_function_body_across_files = _hook_module.check_duplicate_function_body_across_files
-
-
-SHARED_HELPER_SOURCE = (
-    "import re\n"
-    "\n"
-    "def strip_code_and_quotes(text: str) -> str:\n"
-    "    without_fences = re.sub(r'```.*?```', '', text, flags=re.DOTALL)\n"
-    "    without_inline = re.sub(r'`[^`]*`', '', without_fences)\n"
-    "    without_quotes = re.sub(r'(?m)^>.*$', '', without_inline)\n"
-    "    return without_quotes.strip()\n"
-)
 
 
 @pytest.fixture
