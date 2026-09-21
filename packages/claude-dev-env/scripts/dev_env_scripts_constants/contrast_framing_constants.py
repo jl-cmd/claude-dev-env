@@ -30,14 +30,14 @@ class ContrastFramingForm:
 ALL_CONTRAST_FRAMING_FORMS: tuple[ContrastFramingForm, ...] = (
     ContrastFramingForm(
         "trailing-comma-not",
-        re.compile(r",\s+not\s+(?![aeiou]?\s*$)[\w\"'`(]", re.IGNORECASE),
+        re.compile(r",\s+not\s+[\w\"'`(]", re.IGNORECASE),
         "Drop the clause after the comma and state what is true.",
     ),
     ContrastFramingForm(
         "corrective-it-is-not",
         re.compile(
-            r"\b(?:it|that|this)\s*(?:'s|s|\s+is|\s+was)\s+not\b[^.!?]*?,\s*"
-            r"(?:it|that|this)\s*(?:'s|s|\s+is|\s+was)\b",
+            r"\b(?:it|that|this)(?:'s|\s+is|\s+was)\s+not\b[^.!?]*?,\s*"
+            r"(?:it|that|this)(?:'s|\s+is|\s+was)\b",
             re.IGNORECASE,
         ),
         "State what it is and leave the rejected reading out.",
@@ -55,7 +55,8 @@ ALL_CONTRAST_FRAMING_FORMS: tuple[ContrastFramingForm, ...] = (
     ContrastFramingForm(
         "comparative-ranking",
         re.compile(
-            r"\b(?:matters?|counts?|helps?|weighs?|reads?)\s+more\s+than\b"
+            r"\b(?:matters?|counts?|helps?|weighs?)\s+more\s+than\b"
+            r"|\bless\s+(?:important|useful|valuable)\s+than\b"
             r"|\bmore\s+(?:important|useful|valuable)\s+than\b"
             r"|\bmore\s+than\s+(?:trying|attempting|hoping)\b",
             re.IGNORECASE,

@@ -492,3 +492,17 @@ def test_a_body_stating_what_is_stays_clean() -> None:
     )
 
     assert all_findings == ()
+
+
+def test_a_release_body_carrying_a_contrast_stays_accepted() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-edit",
+        title=None,
+        body_text=RELEASE_BODY.replace(
+            "This PR was generated with",
+            "Bumped rather than pinned. This PR was generated with",
+        ),
+        head_branch=RELEASE_BRANCH,
+    )
+
+    assert all_findings == ()

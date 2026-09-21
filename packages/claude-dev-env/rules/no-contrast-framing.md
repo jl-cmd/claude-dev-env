@@ -27,6 +27,14 @@ A comparison of quantities stays. "The function runs more than 30 lines" counts
 lines. The ban covers the comparison that ranks one course of action over
 another the writer is turning down.
 
+Three shapes stay quiet by design. A backticked span or a fenced block carries
+an example, so the check blanks it first. A line opening with `>` quotes
+someone else, whose words are theirs to write. A sentence already carrying a
+bare `not` before the comma is listing items, as in "not in chat, not in a
+commit message", so only a first `, not` reports. A release automation body
+passes the post linter untouched, since the bot builds it from commit subjects
+and reads it back as machine input.
+
 When the sentence thins after the contrast comes out, the missing piece is
 evidence. Name it: the failing check, the log line, the measured number, the
 file and the line.

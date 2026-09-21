@@ -854,6 +854,26 @@ def test_codex_instruction_projection_carries_every_listed_rule(tmp_path: Path) 
     assert manifest_record["source"] == "rules/failure-blast-radius.md, rules/correction-lens.md"
 
 
+def test_codex_instruction_projection_skips_an_absent_listed_rule(
+    tmp_path: Path,
+) -> None:
+    rules_root = Path(__file__).parents[2] / "rules"
+    source = tmp_path / "source"
+    (source / "rules").mkdir(parents=True)
+    (source / "rules" / "correction-lens.md").write_text(
+        (rules_root / "correction-lens.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    config = MaterializerConfig(source, tmp_path / "target", should_apply=False)
+
+    projection = materializer._build_codex_instruction_projection(config)
+
+    assert projection is not None
+    assert projection.source_identity == "rules/correction-lens.md"
+    assert "Correction handling for this run" in projection.content
+    assert "Failure handling for this run" not in projection.content
+
+
 def test_build_plan_publishes_owned_agents_projection_and_tracks_drift(
     tmp_path: Path,
 ) -> None:

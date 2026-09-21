@@ -193,9 +193,10 @@ def _body_findings(
         )
     if _is_release_automation_branch(head_branch):
         all_findings.extend(_release_body_findings(body_text))
-    elif action in ALL_PR_DESCRIPTION_ACTIONS:
-        all_findings.extend(_description_heading_findings(body_text))
-    all_findings.extend(_contrast_framing_findings(body_text))
+    else:
+        if action in ALL_PR_DESCRIPTION_ACTIONS:
+            all_findings.extend(_description_heading_findings(body_text))
+        all_findings.extend(_contrast_framing_findings(body_text))
     if find_volatile_path_marker(body_text) is not None:
         all_findings.append(
             DurablePostFinding(

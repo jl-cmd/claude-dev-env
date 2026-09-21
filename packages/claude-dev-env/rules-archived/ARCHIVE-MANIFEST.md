@@ -25,5 +25,5 @@ rewrite that would move it here stops instead, and says which rule stopped it.
 |---|---|
 | `rules/correction-lens.md` | The rule that turns a correction into a control. Archiving it removes the mechanism by which every other rule in this package gets written, so the loss covers the whole feedback path. Its own permanence section states the same exemption. |
 
-Sharpening the text of an exempt file is ordinary work. Moving it out of service
-is not available.
+Sharpening the text of an exempt file is ordinary work. The file stays in
+service.

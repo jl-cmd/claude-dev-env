@@ -91,3 +91,12 @@ def test_every_form_carries_a_row_in_the_rule_document() -> None:
     )
     for each_form in ALL_CONTRAST_FRAMING_FORMS:
         assert f"`{each_form.name}`" in rule_text
+
+
+def test_a_list_of_not_items_stays_quiet() -> None:
+    document_text = "Not in chat, not in a commit message, not in a body.\n"
+    assert _form_names(document_text) == []
+
+
+def test_a_quoted_line_stays_quiet() -> None:
+    assert _form_names("> a bug, not a flake\n") == []

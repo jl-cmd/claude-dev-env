@@ -6,7 +6,7 @@ This document carries the model behind [`rules/correction-lens.md`](../rules/cor
 
 ## The central idea
 
-Lauren's 2,000 pull requests did not come from asking agents to work faster. The number came after she built a system that let agents do useful work while she was away.
+Lauren's 2,000 pull requests came after she built a system that let agents do useful work while she was away.
 
 The system had several parts. The codebase showed agents the preferred patterns. Tools let agents run the product and gather evidence. Continuous integration, or CI, checked every proposed change. Rules and review bots caught repeated mistakes. Skills taught agents how to perform work in the team's preferred way. Automations connected incoming problems to agents that could investigate them.
 
@@ -22,7 +22,7 @@ A large group of agents multiplies whatever the repository already permits. If t
 
 The answer is to build trust before adding more agents. Start with a small workflow that an agent can repeat. Watch the failures. Turn each repeated correction into a stronger control. Increase the number of agents after the controls catch the common mistakes.
 
-The high pull request count is the result of this work. It is not the first target. The first target is a system that can check changes without waiting for one person.
+The high pull request count is the result of this work. The first target is a system that can check changes without waiting for one person.
 
 ## Verification gives the agent evidence
 
@@ -54,7 +54,7 @@ Start with the code structure. Change the design so that a bad pattern cannot be
 
 Make each feature easy to locate. Define where its code lives. Define how it connects to other parts of the product. Define which parts may import each other. A clear layout gives the agent a smaller search space and fewer decisions.
 
-The framework Lauren describes follows this idea. It sets conventions for code location and dependency boundaries. A performance problem caused by code crossing into the wrong process can become impossible through import rules. The specific framework is less important than the method. Put team knowledge into code structure so agents find it while they work.
+The framework Lauren describes follows this idea. It sets conventions for code location and dependency boundaries. A performance problem caused by code crossing into the wrong process can become impossible through import rules. The method carries. Put team knowledge into code structure so agents find it while they work.
 
 Strict conventions may feel inconvenient to people who already know the system. They help agents and new contributors because the repository answers more questions by itself. A designer, product manager, or busy engineer can ask an agent to make a change and still benefit from the same safe paths.
 
@@ -99,7 +99,7 @@ The inner loop is the path from a task to a pull request. A dependable repositor
 7. The agent opens or updates the pull request with the evidence.
 8. The repository grants merge permission after the required checks pass and the remaining judgment calls are settled.
 
-The agent earns freedom through this loop. The system does not depend on the agent saying that the change works. It depends on the agent producing evidence that the repository can inspect.
+The agent earns freedom through this loop. The system depends on the agent producing evidence that the repository can inspect.
 
 ## The outer delivery loop
 
@@ -109,7 +109,7 @@ Connect an agent to the tools that hold this information. The talk mentions Slac
 
 A routine can watch a message or an alert and start an agent. The agent can reproduce the problem, make a change, run the checks, and open a pull request. Other bots can call the same verification tools, repository rules, and skills for more complex work.
 
-This does not require one large central system. A set of small connections can start useful work. The repository supplies the controls. The agent calls the tools. CI and review inspect the result.
+A set of small connections can start useful work. The repository supplies the controls. The agent calls the tools. CI and review inspect the result.
 
 ## How the pieces compound
 

@@ -23,7 +23,7 @@ correction.
 | 5 | Style guide | Word choice and prose shape | A row in a `rules/*.md` file or a style document |
 
 Layer 1 is the goal every time. A lesson encoded there needs no reader, no run,
-and no agent to remember it: the wrong call has nowhere to live.
+and no agent to remember it. The wrong call has nowhere to live.
 
 ## Choosing the layer
 
@@ -53,7 +53,7 @@ check at layer 2 cost one run together and each covers what the other misses.
 
 ## A repeated correction moves up a layer
 
-The same correction arriving a second time is the measurement: the layer chosen
+The same correction arriving a second time is the measurement. The layer chosen
 the first time was too low. Move the lesson one layer up and say so in the same
 run.
 
@@ -70,7 +70,7 @@ chat reply reaches that conversation alone.
 
 Memory holds the decision. The control holds the behavior. A correction that
 produced a memory file and nothing else has been recorded and never encoded, so
-the rule still binds: open the control.
+the rule still binds. Open the control.
 
 ## Trust grows as the controls catch the common mistakes
 
@@ -91,7 +91,7 @@ names it, and
 [`archiving-agent-config.md`](archiving-agent-config.md) names the same
 exemption from the archiving procedure's side.
 
-An edit that sharpens this rule is welcome. A removal is not available.
+An edit that sharpens this rule is welcome. The file stays.
 
 ## Excerpt for repository-instruction sessions
 
@@ -99,7 +99,7 @@ Codex reads its repository `AGENTS.md`; this excerpt supplies the standalone
 contract.
 
 ```
-Correction handling for this run - from rules/correction-lens.md.
+Correction handling for this run, from rules/correction-lens.md.
 
 Every correction the user gives becomes a control. Run it through five layers
 and land it at the highest one that can hold it:

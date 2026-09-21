@@ -10,12 +10,16 @@ carries two readings where one would do.
     flag: find_contrast_framing("The function runs more than 30 lines.") == []
 
 Code spans, fenced blocks, paths, and link targets are blanked before the
-patterns run, so an example quoted in backticks stays quiet. The pattern list
-lives in the constants module beside this one, and the durable post linter
-reads the same list.
+patterns run, so an example quoted in backticks stays quiet. A blockquote line
+is skipped, since it carries someone else's words. A second ``, not`` in one
+clause reads as a list, so only the first one reports. The pattern list lives
+in the constants module beside this one, and the durable post linter reads the
+same list.
 """
 
 from __future__ import annotations
+
+import re
 
 from banned_prose_words import prose_lines
 from dev_env_scripts_constants.contrast_framing_constants import (
@@ -26,11 +30,24 @@ from dev_env_scripts_constants.contrast_framing_constants import (
 )
 
 
+_BARE_NOT = re.compile(r"\bnot\b", re.IGNORECASE)
+_QUOTED_LINE = re.compile(r"^\s*>")
+
+
+def _reports(form: ContrastFramingForm, prose_line: str, match_start: int) -> bool:
+    if form.name != "trailing-comma-not":
+        return True
+    return _BARE_NOT.search(prose_line[:match_start]) is None
+
+
 def _line_hits(line_number: int, prose_line: str) -> list[tuple[int, int, str]]:
+    if _QUOTED_LINE.match(prose_line):
+        return []
     return [
         (line_number, each_match.start() + 1, each_form.name)
         for each_form in ALL_CONTRAST_FRAMING_FORMS
         for each_match in each_form.pattern.finditer(prose_line)
+        if _reports(each_form, prose_line, each_match.start())
     ]
 
 

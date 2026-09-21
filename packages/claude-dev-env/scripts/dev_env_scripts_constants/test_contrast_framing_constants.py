@@ -17,6 +17,7 @@ def test_every_form_carries_a_distinct_name() -> None:
 def test_no_form_matches_prose_that_states_what_is() -> None:
     all_clean_lines = (
         "The function runs more than 30 lines.",
+        "The reader reads more than 30 lines a minute.",
         "The check names the failing line and the fix.",
         "Push the branch and read the verdict.",
         "Three attempts, then park the member.",
