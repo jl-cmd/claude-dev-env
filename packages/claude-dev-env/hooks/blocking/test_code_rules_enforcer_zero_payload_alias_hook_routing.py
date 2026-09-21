@@ -16,10 +16,7 @@ from __future__ import annotations
 
 import json
 import pathlib
-import shutil
 import sys
-import tempfile
-from collections.abc import Iterator
 
 import pytest
 
@@ -45,19 +42,6 @@ PASS_THROUGH_ALIAS_SOURCE = (
     "def find_bare_index_segments(content: str) -> set[str]:\n"
     "    return find_bare_path_segments(content)\n"
 )
-
-_HOOK_INFRASTRUCTURE_TAIL = pathlib.Path("packages") / "claude-dev-env" / "hooks" / "blocking"
-
-
-@pytest.fixture
-def hook_blocking_dir() -> Iterator[pathlib.Path]:
-    base_directory = pathlib.Path(tempfile.mkdtemp())
-    blocking_directory = base_directory / _HOOK_INFRASTRUCTURE_TAIL
-    blocking_directory.mkdir(parents=True)
-    try:
-        yield blocking_directory
-    finally:
-        shutil.rmtree(base_directory, ignore_errors=False)
 
 
 def test_write_of_pass_through_alias_into_hook_directory_denies(
