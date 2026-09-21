@@ -47,20 +47,7 @@ LOCAL_SHA_FIELD_INDEX: int = 1
 NO_PARSEABLE_STDIN_LINES_MESSAGE: str = (
     "claude-dev-env pre-push: no parseable stdin lines; aborting"
 )
-NO_PARSEABLE_STDIN_LINES_SENTINEL: str = "__no_parseable_stdin_lines__"
-UNRESOLVABLE_MERGE_BASE_SENTINEL: str = "__unresolvable_merge_base__"
-UNRESOLVABLE_MERGE_BASE_MESSAGE: str = (
-    "claude-dev-env pre-push: CODE_RULES validation is pending because the pushed "
-    "object and default branch have no shared merge base. Restore shared history "
-    "or provide a reachable default branch, then run the push again."
-)
 LOCAL_BRANCH_REFERENCE_PREFIX: str = "refs/heads/"
-ORIGIN_HEAD_SYMBOLIC_REFERENCE: str = "refs/remotes/origin/HEAD"
-ORIGIN_REMOTE_TRACKING_REFERENCE_PREFIX: str = "refs/remotes/origin/"
-ALL_DEFAULT_BRANCH_FALLBACK_REFERENCES: tuple[str, ...] = (
-    "refs/remotes/origin/main",
-    "refs/remotes/origin/master",
-)
 REMOTE_BRANCH_REFERENCE_TEMPLATE: str = "refs/remotes/{remote}/{branch}"
 ALL_GIT_SYMBOLIC_REFERENCE_COMMAND_PREFIX: tuple[str, ...] = (
     "git",
@@ -99,7 +86,7 @@ GIT_SYMBOLIC_REFERENCE_SUBCOMMAND: str = "symbolic-ref"
 GIT_COMMAND_TIMEOUT_SECONDS: int = 30
 GH_EXECUTABLE_NAME: str = "gh"
 GH_PR_VIEW_TIMEOUT_SECONDS: int = 5
-GH_PR_VIEW_ARGUMENTS: tuple[str, ...] = ("pr", "view", "--json", "url", "--jq", ".url")
+ALL_GH_PR_VIEW_ARGUMENTS: tuple[str, ...] = ("pr", "view", "--json", "url", "--jq", ".url")
 GIT_FOR_EACH_REF_SUBCOMMAND: str = "for-each-ref"
 GIT_REFERENCE_SHORT_NAME_FORMAT_ARGUMENT: str = "--format=%(refname:short)"
 COMMIT_OBJECT_NAME_SUFFIX: str = "^{commit}"
