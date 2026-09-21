@@ -1,20 +1,21 @@
-"""Entry-point tests proving the duplicate-body check guards hook-infrastructure files.
+"""Entry-point tests proving the duplicate-body check's lane assignment for hook files.
 
 The cross-file duplicate-body check exists to catch a helper copied across sibling
 modules in the ``blocking/`` hook directory itself — the exact directory the rest of
-the code-rules suite exempts. These tests drive the real entry points (the ``main()``
-stdin path and the pre-check CLI) with a hook-infrastructure target so the deny fires
-on the same path a live Write would take, rather than calling the check function
-directly.
+the code-rules suite exempts. CODE_RULES.md §11.6 assigns it by scope: it reads a
+sibling file, so it runs on the full gate only, and a hook-infrastructure target's
+live PreToolUse Write stays on the edit lane. These tests drive the shipped entry
+points (the ``main()`` stdin path and the pre-check CLI) with a hook-infrastructure
+target, so each lane's behavior is proven on the same path a live Write or a
+pre-check run would take, rather than by calling the check function directly.
 
 Each test builds a temporary tree whose tail mirrors a production hook directory
 (``packages/claude-dev-env/hooks/blocking``) so ``is_hook_infrastructure`` matches the
-target path the same way it would for the real directory.
+target path the same way it would for the production directory.
 """
 
 from __future__ import annotations
 
-import json
 import pathlib
 import shutil
 import sys
@@ -75,27 +76,22 @@ def _run_main_with_write_payload(
     return captured_stdout
 
 
-def test_write_of_copied_helper_into_hook_directory_denies(
+def test_write_of_copied_helper_into_hook_directory_does_not_deny(
     hook_blocking_dir: pathlib.Path,
 ) -> None:
-    """A Write that copies a sibling helper into a second hook file is denied.
+    """A live Write that copies a sibling helper into a second hook file is not denied.
 
-    The target lives under a hook-infrastructure path the rest of the code-rules
-    suite exempts, so this proves the duplicate-body check still guards the exact
-    directory its module docstring names as the primary target."""
+    Enforces CODE_RULES.md §11.6: "A check that reads a file other than the
+    target runs on the full gate." The cross-file duplicate-body check reads a
+    sibling module, so it is full-gate only; the live PreToolUse Write that
+    ``main()`` handles runs the edit lane, so it must not deny here even though
+    the copied helper is present."""
     (hook_blocking_dir / "existing_blocker.py").write_text(SHARED_HELPER_SOURCE, encoding="utf-8")
     new_file = hook_blocking_dir / "new_blocker.py"
     stdout = _run_main_with_write_payload(str(new_file), SHARED_HELPER_SOURCE)
-    assert stdout != "", (
-        "A copied helper written into a second hook-infrastructure file must "
-        "produce a deny payload, got empty stdout"
-    )
-    deny_payload = json.loads(stdout)
-    decision = deny_payload["hookSpecificOutput"]["permissionDecision"]
-    reason = deny_payload["hookSpecificOutput"]["permissionDecisionReason"]
-    assert decision == "deny", f"expected deny, got: {decision!r}"
-    assert "strip_code_and_quotes" in reason, (
-        f"the deny reason must name the duplicated helper, got: {reason!r}"
+    assert stdout == "", (
+        "the edit lane must not run the cross-file duplicate-body check, "
+        f"got stdout: {stdout!r}"
     )
 
 
@@ -124,9 +120,11 @@ def test_precheck_of_copied_helper_at_hook_target_exits_nonzero(
 ) -> None:
     """The pre-check CLI flags a copied helper judged at a hook-infrastructure target.
 
-    Driving the real ``--check`` argv path proves the gate's pre-check mode also
-    routes a hook ``.py`` target through the duplicate-body check rather than
-    exiting clean on the blanket hook-infrastructure exemption."""
+    Enforces CODE_RULES.md §11.6: hook-infrastructure targets "run ... the
+    whole roster on the full gate." The pre-check CLI runs the full gate, so
+    driving the shipped ``--check`` argv path proves it still routes a hook
+    ``.py`` target through the duplicate-body check rather than exiting clean
+    on the blanket hook-infrastructure exemption."""
     (hook_blocking_dir / "existing_blocker.py").write_text(SHARED_HELPER_SOURCE, encoding="utf-8")
     staging_directory = tmp_path
     candidate_file = staging_directory / "candidate.py"
