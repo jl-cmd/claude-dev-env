@@ -26,6 +26,7 @@ if _HOOKS_ROOT not in sys.path:
 from pre_tool_use_dispatcher import NativeHook, run_native_hook  # noqa: E402
 from state_description_blocker import (  # noqa: E402
     build_deny_payload,
+    find_violations_with_lines,
 )
 from state_description_blocker import evaluate as _evaluate_without_opt_in  # noqa: E402
 
@@ -952,3 +953,45 @@ def test_native_dispatch_path_logs_the_block(tmp_path: Path) -> None:
     logged_record = json.loads(all_records[0])
     assert logged_record["hook"] == "state_description_blocker.py"
     assert logged_record["event"] == "PreToolUse"
+
+
+def test_find_violations_with_lines_names_the_docstring_line_not_the_fixture_line() -> None:
+    module_source = (
+        'fixture_text = "the field was previously required"\n'
+        "\n"
+        "\n"
+        "def read_field():\n"
+        '    """Read the field.\n'
+        "\n"
+        "    The field was previously required.\n"
+        '    """\n'
+        "    return 1\n"
+    )
+
+    all_violations = find_violations_with_lines(module_source, "src/module.py")
+
+    assert all_violations == [("previously", 7), ("was previously", 7)]
+
+
+def test_find_violations_with_lines_reports_first_matching_comment_line() -> None:
+    module_source = "x = 1\n# no longer needed\ny = 2\n# no longer used\n"
+
+    all_violations = find_violations_with_lines(module_source, "src/module.py")
+
+    assert all_violations == [("no longer", 2)]
+
+
+def test_find_violations_with_lines_reports_markdown_line_past_a_code_fence() -> None:
+    markdown_source = (
+        "# Title\n"
+        "\n"
+        "```\n"
+        "used to fail\n"
+        "```\n"
+        "\n"
+        "The API was previously public.\n"
+    )
+
+    all_violations = find_violations_with_lines(markdown_source, "docs/api.md")
+
+    assert all_violations == [("previously", 7), ("was previously", 7)]

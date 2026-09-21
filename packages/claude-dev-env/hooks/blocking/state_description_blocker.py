@@ -13,6 +13,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from re import Pattern
 from typing import TextIO
 
 try:
@@ -33,10 +34,13 @@ try:
         ALL_HASH_AND_SLASH_EXTENSIONS,
         ALL_HASH_ONLY_EXTENSIONS,
         ALL_MARKDOWN_EXTENSIONS,
-        CODE_FENCE_PATTERN,
+        BLOCK_COMMENT_CLOSE_MARKER,
+        BLOCK_COMMENT_OPEN_MARKER,
+        DOUBLE_QUOTE_BODY_GROUP,
         DOUBLE_QUOTED_SPAN_PATTERN,
         INLINE_CODE_PATTERN,
         PYTHON_EXTENSION,
+        SINGLE_QUOTE_BODY_GROUP,
         TRIPLE_QUOTED_BLOCK_PATTERN,
     )
 except ImportError as import_error:
@@ -77,15 +81,56 @@ def _get_inline_markers(extension: str) -> tuple[str, ...]:
     return ("//",)
 
 
-def _extract_comment_lines(text: str, extension: str = "") -> list[str]:
-    """Extract comment lines from source code — Python (#), JS/TS/C/Rust/Go (//), and block comments."""
-    all_comment_lines: list[str] = []
-    all_lines = text.splitlines()
+def _consume_block_comment_open(
+    each_line_number: int, stripped: str
+) -> tuple[list[tuple[int, str]], str | None, bool]:
+    """Extract the comment span a ``/*``-opening line carries.
+
+    Returns the extracted entries, the leftover code text to keep scanning
+    on this same line (``None`` when the whole line was consumed), and
+    whether the comment is still open past this line.
+    """
+    slash_star_index = stripped.find(BLOCK_COMMENT_OPEN_MARKER)
+    close_star_index = stripped.find(
+        BLOCK_COMMENT_CLOSE_MARKER, slash_star_index + len(BLOCK_COMMENT_OPEN_MARKER)
+    )
+    if close_star_index < 0:
+        return [(each_line_number, stripped[slash_star_index:])], None, True
+    close_end = close_star_index + len(BLOCK_COMMENT_CLOSE_MARKER)
+    entry = (each_line_number, stripped[slash_star_index:close_end])
+    after_close = stripped[close_end:].lstrip()
+    return [entry], (after_close or None), False
+
+
+def _consume_block_comment_continuation(
+    each_line_number: int, stripped: str
+) -> tuple[list[tuple[int, str]], bool, bool]:
+    """Extract the comment span a line inside an already-open block carries.
+
+    Returns the extracted entries, whether the comment is still open past
+    this line, and whether the caller should move to the next source line.
+    """
+    close_index = stripped.find(BLOCK_COMMENT_CLOSE_MARKER)
+    if close_index < 0:
+        return [(each_line_number, stripped)], True, True
+    close_end = close_index + len(BLOCK_COMMENT_CLOSE_MARKER)
+    return [(each_line_number, stripped[:close_end])], False, False
+
+
+def _extract_comment_lines(text: str, extension: str = "") -> list[tuple[int, str]]:
+    """Return each comment line as ``(source_line_number, comment_text)``.
+
+    Covers Python (``#``), JS/TS/C/Rust/Go (``//``), and block comments, and
+    tags every extracted line with the source line it came from so a
+    matching pattern can be pinned to that line rather than searched for
+    again.
+    """
+    all_comment_lines: list[tuple[int, str]] = []
 
     is_in_block_comment = False
     has_block_comments = extension in ALL_BLOCK_COMMENT_EXTENSIONS
     all_inline_markers = _get_inline_markers(extension)
-    for each_line in all_lines:
+    for each_line_number, each_line in enumerate(text.splitlines(), 1):
         stripped = each_line.strip()
 
         if has_block_comments:
@@ -93,42 +138,33 @@ def _extract_comment_lines(text: str, extension: str = "") -> list[str]:
                 stripped.startswith(each_marker)
                 for each_marker in all_inline_markers
             ):
-                all_comment_lines.append(stripped)
+                all_comment_lines.append((each_line_number, stripped))
                 continue
-            if "/*" in stripped and not is_in_block_comment:
-                is_in_block_comment = True
-                slash_star_index = stripped.find("/*")
-                close_star_index = stripped.find("*/", slash_star_index + len("/*"))
-                if close_star_index >= 0:
-                    all_comment_lines.append(
-                        stripped[slash_star_index : close_star_index + 2]
-                    )
-                    is_in_block_comment = False
-                    after_close = stripped[close_star_index + 2:].lstrip()
-                    if not after_close:
-                        continue
-                    stripped = after_close
-                else:
-                    all_comment_lines.append(stripped[slash_star_index:])
+            if BLOCK_COMMENT_OPEN_MARKER in stripped and not is_in_block_comment:
+                entries, leftover, is_in_block_comment = _consume_block_comment_open(
+                    each_line_number, stripped
+                )
+                all_comment_lines.extend(entries)
+                if leftover is None:
                     continue
+                stripped = leftover
             if is_in_block_comment:
-                close_index = stripped.find("*/")
-                if close_index >= 0:
-                    all_comment_lines.append(stripped[: close_index + 2])
-                    is_in_block_comment = False
-                else:
-                    all_comment_lines.append(stripped)
+                entries, is_in_block_comment, should_continue = (
+                    _consume_block_comment_continuation(each_line_number, stripped)
+                )
+                all_comment_lines.extend(entries)
+                if should_continue:
                     continue
 
         if any(
             stripped.startswith(each_marker) for each_marker in all_inline_markers
         ):
-            all_comment_lines.append(stripped)
+            all_comment_lines.append((each_line_number, stripped))
             continue
 
         inline_index = _find_inline_comment_start(stripped, all_inline_markers)
         if inline_index is not None and inline_index > 0:
-            all_comment_lines.append(stripped[inline_index:])
+            all_comment_lines.append((each_line_number, stripped[inline_index:]))
             continue
 
     return all_comment_lines
@@ -154,16 +190,18 @@ def _find_inline_comment_start(stripped: str, all_markers: tuple[str, ...]) -> i
     return best_position
 
 
-def _extract_parsed_docstrings(tree: ast.Module) -> list[str]:
-    """Collect the module, class, and function docstrings from a parsed tree.
+def _extract_parsed_docstrings(tree: ast.Module) -> list[tuple[int, str]]:
+    """Return each docstring as ``(start_line, docstring_text)``.
 
     Args:
         tree: The parsed module tree to walk.
 
     Returns:
-        Every docstring found on the module and its class/function definitions.
+        One entry per docstring found on the module and its class/function
+        definitions, tagged with the source line the docstring's opening
+        quotes start on.
     """
-    all_found_docstrings: list[str] = []
+    all_found_docstrings: list[tuple[int, str]] = []
     for each_node in ast.walk(tree):
         if not isinstance(
             each_node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
@@ -171,67 +209,191 @@ def _extract_parsed_docstrings(tree: ast.Module) -> list[str]:
             continue
         maybe_docstring = ast.get_docstring(each_node, clean=False)
         if maybe_docstring:
-            all_found_docstrings.append(maybe_docstring)
+            docstring_statement = each_node.body[0]
+            all_found_docstrings.append((docstring_statement.lineno, maybe_docstring))
     return all_found_docstrings
 
 
-def _extract_fragment_docstrings(text: str) -> list[str]:
-    """Collect docstring-positioned triple-quoted blocks from an unparseable fragment.
+def _is_docstring_position(leading_text: str) -> bool:
+    """Decide whether the text before a triple-quoted block marks a docstring slot.
 
     A triple-quoted block counts as a docstring when it opens the fragment
-    (only whitespace before it) or when the nearest preceding non-blank line is
-    a def/class header ending in a colon. A block assigned to a name or sitting
-    elsewhere in the fragment is data and is skipped.
+    (only whitespace before it) or when the nearest preceding non-blank line
+    is a def/class header ending in a colon. A block assigned to a name or
+    sitting elsewhere in the fragment is data.
+    """
+    if not leading_text.strip():
+        return True
+    if leading_text.rpartition("\n")[2].strip():
+        return False
+    all_preceding_lines = [
+        each_line for each_line in leading_text.splitlines() if each_line.strip()
+    ]
+    if not all_preceding_lines:
+        return False
+    last_preceding_line = all_preceding_lines[-1].strip()
+    return last_preceding_line.startswith(
+        ALL_DEFINITION_HEADER_PREFIXES
+    ) and last_preceding_line.endswith(":")
+
+
+def _extract_fragment_docstrings(text: str) -> list[tuple[int, str]]:
+    """Return docstring-positioned triple-quoted blocks from an unparseable fragment.
 
     Args:
         text: The Python source fragment that failed to parse.
 
     Returns:
-        The body text of each docstring-positioned triple-quoted block.
+        One ``(start_line, body_text)`` pair per docstring-positioned
+        triple-quoted block, tagged with the source line its opening quotes
+        start on.
     """
-    all_found_docstrings: list[str] = []
+    all_found_docstrings: list[tuple[int, str]] = []
     for each_match in TRIPLE_QUOTED_BLOCK_PATTERN.finditer(text):
-        body = each_match.group(1) if each_match.group(1) is not None else each_match.group(2)
+        body = (
+            each_match.group(DOUBLE_QUOTE_BODY_GROUP)
+            if each_match.group(DOUBLE_QUOTE_BODY_GROUP) is not None
+            else each_match.group(SINGLE_QUOTE_BODY_GROUP)
+        )
+        start_line = text.count("\n", 0, each_match.start()) + 1
         leading_text = text[: each_match.start()]
-        if not leading_text.strip():
-            all_found_docstrings.append(body)
-            continue
-        if leading_text.rpartition("\n")[2].strip():
-            continue
-        all_preceding_lines = [
-            each_line for each_line in leading_text.splitlines() if each_line.strip()
-        ]
-        last_preceding_line = all_preceding_lines[-1].strip()
-        if last_preceding_line.startswith(
-            ALL_DEFINITION_HEADER_PREFIXES
-        ) and last_preceding_line.endswith(":"):
-            all_found_docstrings.append(body)
+        if _is_docstring_position(leading_text):
+            all_found_docstrings.append((start_line, body))
     return all_found_docstrings
 
 
-def _extract_python_docstring_text(text: str) -> str:
-    """Return the scannable docstring prose from Python source.
+def _docstring_scan_lines(text: str) -> list[tuple[int, str]]:
+    """Return each docstring's prose as ``(source_line_number, line_text)`` pairs.
 
     Parses the source when valid, or falls back to the docstring-positioned
     triple-quoted blocks of a mid-edit fragment. Double-quoted and backticked
     spans inside each docstring are mentions rather than uses, so both are
-    stripped from the returned prose.
+    stripped before the docstring is split back into its own source lines.
 
     Args:
         text: The Python source or fragment under scan.
 
     Returns:
-        The docstring prose joined into one scannable string.
+        One entry per physical line of docstring prose, numbered against the
+        source file so a pattern match on that line carries the line the
+        rule matched rather than an unrelated occurrence elsewhere in the
+        file.
     """
     try:
         all_found_docstrings = _extract_parsed_docstrings(ast.parse(text))
     except (SyntaxError, ValueError):
         all_found_docstrings = _extract_fragment_docstrings(text)
-    all_docstring_prose = [
-        DOUBLE_QUOTED_SPAN_PATTERN.sub("", INLINE_CODE_PATTERN.sub("", each_docstring))
-        for each_docstring in all_found_docstrings
-    ]
-    return "\n".join(all_docstring_prose)
+    all_scan_lines: list[tuple[int, str]] = []
+    for each_start_line, each_docstring in all_found_docstrings:
+        prose = DOUBLE_QUOTED_SPAN_PATTERN.sub(
+            "", INLINE_CODE_PATTERN.sub("", each_docstring)
+        )
+        for each_offset, each_prose_line in enumerate(prose.split("\n")):
+            all_scan_lines.append((each_start_line + each_offset, each_prose_line))
+    return all_scan_lines
+
+
+def _markdown_scan_lines(text: str) -> list[tuple[int, str]]:
+    """Return each Markdown source line as ``(line_number, scannable_text)``.
+
+    A fenced code block's content is data rather than prose, so a line
+    between a pair of ``` fence markers is skipped. An inline code span is a
+    mention rather than a use, so it is blanked out of the line it appears
+    on, the same way it is blanked from Python docstring prose.
+
+    Args:
+        text: The Markdown source to scan.
+
+    Returns:
+        One entry per source line outside a fenced code block, with its
+        inline code spans removed.
+    """
+    all_scan_lines: list[tuple[int, str]] = []
+    is_inside_fence = False
+    for each_line_number, each_line in enumerate(text.splitlines(), 1):
+        if each_line.strip().startswith("```"):
+            is_inside_fence = not is_inside_fence
+            continue
+        if is_inside_fence:
+            continue
+        all_scan_lines.append(
+            (each_line_number, INLINE_CODE_PATTERN.sub("", each_line))
+        )
+    return all_scan_lines
+
+
+def _first_pattern_match(
+    pattern: Pattern[str], all_scan_lines: list[tuple[int, str]]
+) -> tuple[str, int] | None:
+    """Return the first line a pattern matches, or None when it matches none."""
+    for each_line_number, each_line_text in all_scan_lines:
+        each_match = pattern.search(each_line_text)
+        if each_match is not None:
+            return (each_match.group(0).strip().lower(), each_line_number)
+    return None
+
+
+def _scan_lines_for_file(
+    text: str, extension: str, file_path: str
+) -> list[tuple[int, str]] | None:
+    """Return the file's scannable lines, or ``None`` when its kind carries no prose.
+
+    A ``.md`` file scans every source line outside a fenced code block. A
+    code file scans its comment lines, and a Python file also scans its
+    module, class, and function docstrings.
+    """
+    if is_markdown_file(file_path):
+        return _markdown_scan_lines(text)
+    if not is_comment_bearing_file(file_path):
+        return None
+    all_scan_lines = _extract_comment_lines(text, extension)
+    if extension == PYTHON_EXTENSION:
+        return all_scan_lines + _docstring_scan_lines(text)
+    return all_scan_lines
+
+
+def _matched_transition_patterns(
+    all_scan_lines: list[tuple[int, str]],
+) -> list[tuple[str, int]]:
+    """Return each transition pattern the scan lines match, with its line."""
+    all_detected: list[tuple[str, int]] = []
+    for each_pattern in ALL_COMMENT_TRANSITION_PATTERNS:
+        matched_entry = _first_pattern_match(each_pattern, all_scan_lines)
+        if matched_entry is not None:
+            all_detected.append(matched_entry)
+    return all_detected
+
+
+def find_violations_with_lines(text: str, file_path: str) -> list[tuple[str, int]]:
+    """Return each violated pattern with the source line the rule matched.
+
+    ::
+
+        # config.py
+        1  fixture_text = "the field was `previously` required"
+        4  def read_field():
+        5      \"\"\"Read the field.
+        7      `The field was previously required.`
+        8      \"\"\"
+        flag: ("previously", 7) and ("was previously", 7)  -- one per pattern
+        ok:   line 1 never reported  -- a plain string literal is fixture data, not prose
+
+    Each match is paired with the line it matched on, not an earlier mention
+    of the same words.
+
+    Args:
+        text: The file content to scan.
+        file_path: The path that selects the scan strategy for the file.
+
+    Returns:
+        One ``(matched_phrase, source_line_number)`` pair per matched
+        pattern, in pattern-declaration order, at most one match each.
+    """
+    extension = _get_file_extension(file_path)
+    all_scan_lines = _scan_lines_for_file(text, extension, file_path)
+    if all_scan_lines is None:
+        return []
+    return _matched_transition_patterns(all_scan_lines)
 
 
 def find_violations(text: str, file_path: str) -> list[str]:
@@ -241,32 +403,10 @@ def find_violations(text: str, file_path: str) -> list[str]:
     and for Python files also scans module/class/function docstrings.
     Returns a list of matched pattern source strings.
     """
-    extension = _get_file_extension(file_path)
-    if is_markdown_file(file_path):
-        scan_text = text
-    elif is_comment_bearing_file(file_path):
-        all_comment_lines = _extract_comment_lines(text, extension)
-        scan_text = "\n".join(all_comment_lines)
-        if extension == PYTHON_EXTENSION:
-            scan_text = "\n".join([scan_text, _extract_python_docstring_text(text)])
-    else:
-        return []
-
-    if is_markdown_file(file_path):
-        scan_text = CODE_FENCE_PATTERN.sub("", scan_text)
-        scan_text = INLINE_CODE_PATTERN.sub("", scan_text)
-
-    if not scan_text.strip():
-        return []
-
-    all_detected: list[str] = []
-    all_transition_patterns = ALL_COMMENT_TRANSITION_PATTERNS
-    for each_pattern in all_transition_patterns:
-        all_matches = each_pattern.findall(scan_text)
-        if all_matches:
-            all_detected.append(all_matches[0].strip().lower())
-
-    return all_detected
+    return [
+        each_phrase
+        for each_phrase, _each_line_number in find_violations_with_lines(text, file_path)
+    ]
 
 
 def _build_deny_reason(file_path: str, all_detected_patterns: list[str]) -> str:

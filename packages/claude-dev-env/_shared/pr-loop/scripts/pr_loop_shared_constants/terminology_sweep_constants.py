@@ -10,6 +10,10 @@ MARKDOWN_FILE_EXTENSION: str = ".md"
 
 INLINE_CODE_SPAN_PATTERN: re.Pattern[str] = re.compile(r"`[^`]*`")
 
+MARKDOWN_LINK_TARGET_PATTERN: re.Pattern[str] = re.compile(r"\]\([^)]*\)")
+
+SENTENCE_BOUNDARY_PATTERN: re.Pattern[str] = re.compile(r"(?<=[.!?])\s+")
+
 SNAKE_CASE_IDENTIFIER_PATTERN: re.Pattern[str] = re.compile(
     r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b"
 )

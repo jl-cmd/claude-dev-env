@@ -62,10 +62,12 @@ from pr_loop_shared_constants.terminology_sweep_constants import (
     JAVASCRIPT_LINE_COMMENT_MARKER,
     JSDOC_CONTINUATION_MARKER,
     MARKDOWN_FILE_EXTENSION,
+    MARKDOWN_LINK_TARGET_PATTERN,
     MINIMUM_IDENTIFIER_TOKEN_COUNT,
     PROSE_WINDOW_WORD_SEPARATOR,
     PROSE_WORD_PATTERN,
     PYTHON_COMMENT_MARKER,
+    SENTENCE_BOUNDARY_PATTERN,
     SNAKE_CASE_IDENTIFIER_PATTERN,
     STRING_LITERAL_CONTENT_PATTERN,
     TERMINOLOGY_FINDING_TEMPLATE,
@@ -74,7 +76,6 @@ from pr_loop_shared_constants.terminology_sweep_constants import (
     TEST_FILE_PREFIX,
     TEST_FILE_SUFFIX,
 )
-
 from subprocess_window_access import hidden_window_creation_flags
 
 IdentifierTuple = tuple[str, ...]
@@ -161,27 +162,78 @@ def _collect_introduced_identifiers(
 ) -> frozenset[IdentifierTuple]:
     """Return the identifier tuples introduced on added code lines.
 
+    A name bound only inside a test module is a fixture's own local variable,
+    not a term the rest of the repository is expected to agree with, so a
+    test file's identifiers are left out.
+
     Args:
         all_added_lines: Added-line triples from :func:`_parse_added_lines`.
 
     Returns:
-        Every multi-word identifier tuple appearing on an added code line.
+        Every multi-word identifier tuple appearing on an added,
+        non-test-module code line.
     """
     all_identifier_tuples: set[IdentifierTuple] = set()
     for each_file_path, _, each_text in all_added_lines:
-        if _file_extension(each_file_path) in ALL_SWEEP_CODE_FILE_EXTENSIONS:
+        if _file_extension(
+            each_file_path
+        ) in ALL_SWEEP_CODE_FILE_EXTENSIONS and not _is_test_file(each_file_path):
             all_identifier_tuples.update(_identifier_tuples_in_text(each_text))
     return frozenset(all_identifier_tuples)
+
+
+def _fragments_split_at_breaks(all_fragments: list[str]) -> list[str]:
+    """Split each fragment at every sentence, link, and code-span break in turn."""
+    for each_break_pattern in (
+        INLINE_CODE_SPAN_PATTERN,
+        MARKDOWN_LINK_TARGET_PATTERN,
+        SENTENCE_BOUNDARY_PATTERN,
+    ):
+        all_fragments = [
+            each_piece
+            for each_fragment in all_fragments
+            for each_piece in each_break_pattern.split(each_fragment)
+        ]
+    return all_fragments
+
+
+def _split_into_prose_fragments(raw_fragment: str) -> list[str]:
+    """Split a raw prose fragment at every sentence, link, and code-span break.
+
+    ::
+
+        raw:  "…gates the pull request. [`link`](docs/README.md) explains it."
+        split -> ["…gates the pull request", "explains it."]
+        flag: a window built from the joined text -- "pull request docs"
+        ok:   "pull request" and "docs" now sit in different fragments
+
+    A sentence-ending period, a Markdown link's target, and a backticked code
+    span each end whatever the reader was reading and start something new.
+    Splitting there keeps a word window scoped to one sentence, clear of a
+    stripped span's unrelated text on its far side.
+
+    Args:
+        raw_fragment: One prose fragment collected from an added line.
+
+    Returns:
+        The fragment's pieces with every break removed, in order, dropping
+        any piece left blank.
+    """
+    all_fragments = _fragments_split_at_breaks([raw_fragment])
+    return [
+        each_fragment.strip() for each_fragment in all_fragments if each_fragment.strip()
+    ]
 
 
 def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     """Return the prose fragments of an added line worth scanning for terms.
 
-    A Markdown line is prose with its inline-code spans removed, since a
-    backticked span names code verbatim. A code line contributes its comment
-    tail, its JSDoc continuation text, and the contents of its string
-    literals. A test module contributes its comment tail and JSDoc text only.
-    Its string literals hold fixture data, not prose.
+    A Markdown line is prose split at its sentence, link, and code-span
+    breaks, since a backticked span names code verbatim and a link target is
+    a path, not a word. A code line contributes its comment tail, its JSDoc
+    continuation text, and the contents of its string literals, each split
+    the same way. A test module contributes its comment tail and JSDoc text
+    only. Its string literals hold fixture data, not prose.
 
     Args:
         file_path: The path the added line belongs to.
@@ -192,17 +244,21 @@ def _prose_fragments(file_path: str, line_text: str) -> list[str]:
     """
     extension = _file_extension(file_path)
     if extension == MARKDOWN_FILE_EXTENSION:
-        return [INLINE_CODE_SPAN_PATTERN.sub(" ", line_text)]
+        return _split_into_prose_fragments(line_text)
     if extension not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
         return []
-    all_fragments: list[str] = []
+    all_raw_fragments: list[str] = []
     stripped_line = line_text.strip()
     if stripped_line.startswith(JSDOC_CONTINUATION_MARKER):
-        all_fragments.append(stripped_line)
-    all_fragments.extend(_comment_fragments(line_text))
+        all_raw_fragments.append(stripped_line)
+    all_raw_fragments.extend(_comment_fragments(line_text))
     if not _is_test_file(file_path):
-        all_fragments.extend(_string_literal_fragments(line_text))
-    return all_fragments
+        all_raw_fragments.extend(_string_literal_fragments(line_text))
+    return [
+        each_split_fragment
+        for each_raw_fragment in all_raw_fragments
+        for each_split_fragment in _split_into_prose_fragments(each_raw_fragment)
+    ]
 
 
 def _is_test_file(file_path: str) -> bool:
@@ -428,8 +484,19 @@ def _near_miss_identifier(
     all_identifier_tuples: frozenset[IdentifierTuple],
     identifiers_by_first_token: dict[str, list[IdentifierTuple]],
     all_identifier_tokens: frozenset[str],
+    all_known_identifier_tuples: frozenset[IdentifierTuple],
 ) -> IdentifierTuple | None:
     """Return an identifier the candidate near-misses, or None when it does not.
+
+    ::
+
+        known identifier:  cde_lint            (scripts/cde_lint.py, the tool's own name)
+        introduced:        cde_lint_path        3-token, adds "path" to that name
+        candidate:         "cde lint standard"  shares "cde lint", then "standard"
+        candidate[:-1]:    ("cde", "lint")       == the known identifier cde_lint
+        ok:   candidate[:-1] names cde_lint verbatim -- agreement, not a near-miss
+        flag: "premium request budget" against premium_request_interactions
+              -- "premium request" names no identifier of its own
 
     Args:
         candidate_tuple: The prose term's lowercase token tuple.
@@ -437,6 +504,10 @@ def _near_miss_identifier(
         identifiers_by_first_token: Identifier tuples grouped by leading token.
         all_identifier_tokens: Every token of every identifier on added code
             lines, used to spare prose built from real code vocabulary.
+        all_known_identifier_tuples: Every identifier tuple the sweep knows
+            about, introduced or pre-existing, plus each added file's stem,
+            used to spare a candidate whose leading tokens name one of them
+            verbatim.
 
     Returns:
         The first identifier the candidate renames in only its final token. Such a
@@ -449,9 +520,12 @@ def _near_miss_identifier(
         common English compound tail word (``read-only``, ``data-driven``); it
         contains an English stopword (``to a``, ``each image``); it differs
         from the identifier only by a singular/plural form of one or more
-        tokens (``test files`` against ``test_file``); or every diverging word
+        tokens (``test files`` against ``test_file``); every diverging word
         is itself a token of some introduced identifier (``target width box``
-        when ``box_height`` is also in the diff).
+        when ``box_height`` is also in the diff); or its leading tokens, with
+        the final diverging word set aside, spell out a known identifier of
+        their own (``cde_lint standard`` against ``cde_lint_path``, when
+        ``cde_lint`` already names something in the tree).
     """
     if not candidate_tuple or candidate_tuple in all_identifier_tuples:
         return None
@@ -467,6 +541,8 @@ def _near_miss_identifier(
         if _tuples_match_ignoring_plural(each_identifier, candidate_tuple):
             continue
         if not _diverges_only_in_final_token(candidate_tuple, each_identifier):
+            continue
+        if candidate_tuple[:-1] in all_known_identifier_tuples:
             continue
         diverging_words = [
             each_word
@@ -489,6 +565,7 @@ def _findings_for_line(
     all_identifier_tuples: frozenset[IdentifierTuple],
     identifiers_by_first_token: dict[str, list[IdentifierTuple]],
     all_identifier_tokens: frozenset[str],
+    all_known_identifier_tuples: frozenset[IdentifierTuple],
 ) -> list[str]:
     """Return the near-miss findings for one added line.
 
@@ -500,6 +577,8 @@ def _findings_for_line(
         identifiers_by_first_token: Identifier tuples grouped by leading token.
         all_identifier_tokens: Every token of every identifier on added code
             lines, used to spare prose built from real code vocabulary.
+        all_known_identifier_tuples: Every identifier tuple the sweep knows
+            about, passed through to :func:`_near_miss_identifier`.
 
     Returns:
         One finding string per distinct near-miss term on the line.
@@ -515,6 +594,7 @@ def _findings_for_line(
                 all_identifier_tuples,
                 identifiers_by_first_token,
                 all_identifier_tokens,
+                all_known_identifier_tuples,
             )
             if matched_identifier is None or each_tuple in reported_tuples:
                 continue
@@ -530,12 +610,59 @@ def _findings_for_line(
     return all_findings
 
 
+def _stem_identifier_tuple_for_code_file(each_file_path: str) -> IdentifierTuple | None:
+    """Return a non-test code file's stem as a multi-word identifier tuple.
+
+    ``None`` when the path is not a swept code file, is a test file, or its
+    stem carries fewer than the minimum identifier token count.
+    """
+    if _file_extension(each_file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS or _is_test_file(
+        each_file_path
+    ):
+        return None
+    stem_tuple = _identifier_token_tuple(Path(each_file_path).stem)
+    if len(stem_tuple) < MINIMUM_IDENTIFIER_TOKEN_COUNT:
+        return None
+    return stem_tuple
+
+
+def _file_stem_identifier_tuples(
+    all_added_lines: list[tuple[str, int, str]],
+) -> frozenset[IdentifierTuple]:
+    """Return the identifier tuple of each added, non-test code file's stem.
+
+    ::
+
+        touched file:  scripts/cde_lint_partition.py
+        stem tuple:     ("cde", "lint", "partition")
+
+    A file that exists in the tree names something whether or not that name
+    is ever spelled out as a code identifier, so a file's stem joins the
+    known-identifier vocabulary the same way a spelled-out name does.
+
+    Args:
+        all_added_lines: Added-line triples from :func:`_parse_added_lines`.
+
+    Returns:
+        One tuple per distinct, multi-word stem of an added, non-test code
+        file.
+    """
+    return frozenset(
+        stem_tuple
+        for each_file_path, _, _ in all_added_lines
+        if (stem_tuple := _stem_identifier_tuple_for_code_file(each_file_path)) is not None
+    )
+
+
 def _find_terminology_near_misses(
     diff_text: str, all_preexisting_identifier_tuples: frozenset[IdentifierTuple]) -> list[str]:
     all_added_lines = _parse_added_lines(diff_text)
     all_identifier_tuples = _collect_introduced_identifiers(all_added_lines)
     all_identifier_tokens = frozenset(
         each_token for each_tuple in all_identifier_tuples for each_token in each_tuple
+    )
+    all_known_identifier_tuples = all_identifier_tuples | _file_stem_identifier_tuples(
+        all_added_lines
     )
     introduced_tuples = frozenset(
         each_tuple
@@ -557,6 +684,7 @@ def _find_terminology_near_misses(
                 introduced_tuples,
                 introduced_by_first_token,
                 all_identifier_tokens,
+                all_known_identifier_tuples,
             )
         )
     return all_findings
@@ -605,15 +733,23 @@ def repository_environment() -> dict[str, str]:
 def _identifier_names_on_added_code_lines(diff_text: str) -> frozenset[str]:
     """Return every multi-word identifier name on the diff's added code lines.
 
+    A name bound only inside a test module is left out, matching
+    :func:`_collect_introduced_identifiers`, since it is never treated as
+    introduced terminology and its presence in the base tree is not worth a
+    lookup.
+
     Args:
         diff_text: The unified-diff text to scan.
 
     Returns:
-        The distinct snake_case and camelCase names of two or more tokens.
+        The distinct snake_case and camelCase names of two or more tokens
+        on a non-test-module code line.
     """
     all_names: set[str] = set()
     for each_file_path, _, each_text in _parse_added_lines(diff_text):
-        if _file_extension(each_file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS:
+        if _file_extension(
+            each_file_path
+        ) not in ALL_SWEEP_CODE_FILE_EXTENSIONS or _is_test_file(each_file_path):
             continue
         all_found_names = SNAKE_CASE_IDENTIFIER_PATTERN.findall(each_text)
         all_found_names += CAMEL_CASE_IDENTIFIER_PATTERN.findall(each_text)
