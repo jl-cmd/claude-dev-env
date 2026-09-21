@@ -25,6 +25,7 @@ class ContrastFramingForm:
     name: str
     pattern: re.Pattern[str]
     guidance: str
+    repeats_as_a_list: bool = False
 
 
 ALL_CONTRAST_FRAMING_FORMS: tuple[ContrastFramingForm, ...] = (
@@ -32,6 +33,7 @@ ALL_CONTRAST_FRAMING_FORMS: tuple[ContrastFramingForm, ...] = (
         "trailing-comma-not",
         re.compile(r",\s+not\s+[\w\"'`(]", re.IGNORECASE),
         "Drop the clause after the comma and state what is true.",
+        repeats_as_a_list=True,
     ),
     ContrastFramingForm(
         "corrective-it-is-not",
@@ -56,8 +58,7 @@ ALL_CONTRAST_FRAMING_FORMS: tuple[ContrastFramingForm, ...] = (
         "comparative-ranking",
         re.compile(
             r"\b(?:matters?|counts?|helps?|weighs?)\s+more\s+than\b"
-            r"|\bless\s+(?:important|useful|valuable)\s+than\b"
-            r"|\bmore\s+(?:important|useful|valuable)\s+than\b"
+            r"|\b(?:more|less)\s+(?:important|useful|valuable)\s+than\b"
             r"|\bmore\s+than\s+(?:trying|attempting|hoping)\b",
             re.IGNORECASE,
         ),

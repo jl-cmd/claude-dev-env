@@ -8,20 +8,12 @@ same list the durable post linter reads.
 
 from __future__ import annotations
 
-import importlib
-import sys
 from pathlib import Path
-from types import ModuleType
+
+from contrast_framing import describe_contrast_framing, find_contrast_framing
 
 from .config import constants
 from .model import Diagnostic, Document, Location, Severity
-
-
-def _scripts_module(module_name: str) -> ModuleType:
-    scripts_directory = str(Path(__file__).resolve().parents[1])
-    if scripts_directory not in sys.path:
-        sys.path.insert(0, scripts_directory)
-    return importlib.import_module(module_name)
 
 
 def accepts_authored_markdown(document: Document) -> bool:
@@ -51,16 +43,17 @@ def contrast_framing_diagnostics(
         Contrast-framing diagnostics in document order.
     """
     del repository_root
-    detector = _scripts_module("contrast_framing")
-    all_hits = detector.find_contrast_framing(document.text)
+    all_lines = document.text.splitlines()
     return tuple(
         Diagnostic(
             constants.CONTRAST_FRAMING_RULE_ID,
             Severity.ERROR,
-            detector.describe_contrast_framing(
-                document.text, each_line_number, each_form_name
+            describe_contrast_framing(
+                all_lines[each_line_number - 1], each_form_name
             ),
             Location(document.path, each_line_number, each_column),
         )
-        for each_line_number, each_column, each_form_name in all_hits
+        for each_line_number, each_column, each_form_name in find_contrast_framing(
+            document.text
+        )
     )

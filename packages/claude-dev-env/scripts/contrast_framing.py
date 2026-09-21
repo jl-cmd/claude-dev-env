@@ -29,19 +29,17 @@ from dev_env_scripts_constants.contrast_framing_constants import (
     ContrastFramingForm,
 )
 
-
 _BARE_NOT = re.compile(r"\bnot\b", re.IGNORECASE)
-_QUOTED_LINE = re.compile(r"^\s*>")
 
 
 def _reports(form: ContrastFramingForm, prose_line: str, match_start: int) -> bool:
-    if form.name != "trailing-comma-not":
+    if not form.repeats_as_a_list:
         return True
     return _BARE_NOT.search(prose_line[:match_start]) is None
 
 
 def _line_hits(line_number: int, prose_line: str) -> list[tuple[int, int, str]]:
-    if _QUOTED_LINE.match(prose_line):
+    if prose_line.lstrip().startswith(">"):
         return []
     return [
         (line_number, each_match.start() + 1, each_form.name)
@@ -84,23 +82,19 @@ def form_named(form_name: str) -> ContrastFramingForm:
     raise KeyError(form_name)
 
 
-def describe_contrast_framing(
-    document_text: str, line_number: int, form_name: str
-) -> str:
+def describe_contrast_framing(source_line: str, form_name: str) -> str:
     """Return the reader-facing message for one occurrence.
 
     Args:
-        document_text: Full document source.
-        line_number: 1-based line the occurrence sits on.
+        source_line: The document line the occurrence sits on.
         form_name: Name of the form that matched.
 
     Returns:
         The message naming the form, the line it sits on, and the fix.
     """
     matched_form = form_named(form_name)
-    source_line = document_text.splitlines()[line_number - 1].strip()
     return CONTRAST_FRAMING_MESSAGE_TEMPLATE.format(
         name=form_name,
-        text=source_line[:CONTRAST_FRAMING_QUOTED_LINE_LIMIT],
+        text=source_line.strip()[:CONTRAST_FRAMING_QUOTED_LINE_LIMIT],
         guidance=matched_form.guidance,
     )

@@ -139,10 +139,13 @@ def _description_heading_findings(body_text: str) -> list[DurablePostFinding]:
 
 
 def _contrast_framing_findings(text: str) -> list[DurablePostFinding]:
+    all_lines = text.splitlines()
     return [
         DurablePostFinding(
             code=CONTRAST_FRAMING_FINDING_CODE,
-            message=describe_contrast_framing(text, each_line_number, each_form_name),
+            message=describe_contrast_framing(
+                all_lines[each_line_number - 1], each_form_name
+            ),
         )
         for each_line_number, _each_column, each_form_name in find_contrast_framing(
             text

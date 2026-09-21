@@ -75,7 +75,8 @@ def test_reported_line_and_column_locate_the_match() -> None:
 def test_message_names_the_form_the_text_and_the_fix() -> None:
     document_text = "One answer, not two.\n"
     line_number, _column, form_name = find_contrast_framing(document_text)[0]
-    message = describe_contrast_framing(document_text, line_number, form_name)
+    source_line = document_text.splitlines()[line_number - 1]
+    message = describe_contrast_framing(source_line, form_name)
     assert "trailing-comma-not" in message
     assert "state what is true" in message.lower()
 

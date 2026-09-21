@@ -535,21 +535,25 @@ def render_codex_instruction_excerpt(rule_content: str, rule_relative_path: str)
 
 def _build_codex_instruction_projection(config: MaterializerConfig) -> PlannedFile | None:
     """Build the managed AGENTS.md projection from every projected rule present."""
-    all_present_paths: list[str] = []
-    all_excerpts: list[str] = []
+    all_present_rules: list[tuple[str, str]] = []
     for each_relative_path in codex_instruction_rule_relative_paths:
         candidate_path = config.source_root / each_relative_path
         if not candidate_path.exists() and not _is_reparse_point(candidate_path):
             continue
         source_path = _validated_source_file(config, each_relative_path, each_relative_path)
         rule_content = source_path.read_text(encoding="utf-8")
-        all_present_paths.append(each_relative_path)
-        all_excerpts.append(render_codex_instruction_excerpt(rule_content, each_relative_path))
-    if not all_excerpts:
+        all_present_rules.append(
+            (each_relative_path, render_codex_instruction_excerpt(rule_content, each_relative_path))
+        )
+    if not all_present_rules:
         return None
-    projected_content = line_separator.join(all_excerpts)
+    projected_content = line_separator.join(
+        each_excerpt for _, each_excerpt in all_present_rules
+    )
     return PlannedFile(
-        codex_instruction_source_separator.join(all_present_paths),
+        codex_instruction_source_separator.join(
+            each_path for each_path, _ in all_present_rules
+        ),
         codex_instruction_target_path,
         projected_content,
         hash_content(projected_content),
