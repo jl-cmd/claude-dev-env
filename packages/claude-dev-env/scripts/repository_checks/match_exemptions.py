@@ -24,7 +24,6 @@ def load_match_exemptions(
 
         the email family over a document owning one address
         ok:   {("contacts.py", "email", "<digest of the address>")}
-        flag: the private-IP list read through the email family
 
     Args:
         repository_root: Repository containing the optional policy configuration.
