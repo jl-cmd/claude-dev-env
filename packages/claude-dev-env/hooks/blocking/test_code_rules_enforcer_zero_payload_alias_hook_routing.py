@@ -7,9 +7,9 @@ through ``validate_content_for_edit_lane``, which hook files never reach at PreT
 tests drive the real ``main()`` stdin entry point and the pre-check CLI with a
 hook-infrastructure target.
 
-Each test builds a temporary tree whose tail mirrors a production hook directory
-(``packages/claude-dev-env/hooks/blocking``) so ``is_hook_infrastructure`` matches
-the target path the same way it would for the real directory.
+Each test takes the ``hook_blocking_dir`` fixture from ``conftest.py``, which builds
+a temporary tree matching the production hook directory so ``is_hook_infrastructure``
+routes a target inside it the same way it would for the real directory.
 """
 
 from __future__ import annotations

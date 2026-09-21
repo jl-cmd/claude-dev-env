@@ -9,9 +9,9 @@ points (the ``main()`` stdin path and the pre-check CLI) with a hook-infrastruct
 target, so each lane's behavior is proven on the same path a live Write or a
 pre-check run would take, rather than by calling the check function directly.
 
-Each test builds a temporary tree whose tail mirrors a production hook directory
-(``packages/claude-dev-env/hooks/blocking``) so ``is_hook_infrastructure`` matches the
-target path the same way it would for the production directory.
+Each test takes the ``hook_blocking_dir`` fixture from ``conftest.py``, which builds
+a temporary tree matching the production hook directory so ``is_hook_infrastructure``
+routes a target inside it the same way it would for the production directory.
 """
 
 from __future__ import annotations
