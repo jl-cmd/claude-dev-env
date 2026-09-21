@@ -113,6 +113,7 @@ Behavioral rules loaded into every session.
 | `bdd` | Discovery, illustration, and should-style specifications around the TDD loop |
 | `cleanup-temp-files` | Remove scratch files after tasks complete |
 | `code-standards` | Point at CODE_RULES.md for review and code generation |
+| `correction-lens` | Every correction becomes a control at the highest layer that can hold it |
 | `destructive-commands` | Allowed removal forms, and destructive literals kept out of command strings |
 | `doc-inventory-integrity` | A doc that inventories code stays in step with the directory |
 | `docstring-prose-matches-implementation` | A docstring's enumeration covers every behavior the body applies |
@@ -164,6 +165,7 @@ Reference documents that rules and agents point to for detailed standards.
 | `BDD_TEST_LAYOUT.md` | Describe, when, and should layout for readable suites |
 | `agent-spawn-protocol.md` | Full protocol for briefing a subagent |
 | `codex-compatibility.md` | The bridge from this source tree to Codex-compatible output |
+| `high-trust-agent-delivery.md` | The layered-controls model behind the correction lens |
 | `host-pool-health-monitor.md` | Kernel pool counters and handle pressure on a Windows host |
 | `nas-ssh-invocation.md` | Full detail behind the NAS ssh rule |
 | `worker-completion-gate.md` | Full detail behind the worker completion rule |

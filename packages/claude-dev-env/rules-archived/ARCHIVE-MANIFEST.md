@@ -15,3 +15,15 @@ restore is one `git mv` back, plus the referrers named in its row.
 | `agent-spawn-protocol.md` | House guidance on how to brief a subagent. Its substance is covered by `explore-thoroughly.md` for context sufficiency and by `docs/agent-spawn-protocol.md`, which stays. | `git mv packages/claude-dev-env/rules-archived/agent-spawn-protocol.md packages/claude-dev-env/rules/` and restore its rows in `.agents/agents/clean-coder.md`, `.agents/agents/test_agent_frontmatter.py`, and `.agents/skills/orchestrator/SKILL.md`. |
 | `vault-context.md` | Names one person's Obsidian vault layout, so it is preference by definition. Archiving it costs a capability rather than removing noise: it is how an agent learns to search prior decisions before starting work. Restore it if agents stop finding earlier decisions. | `git mv packages/claude-dev-env/rules-archived/vault-context.md packages/claude-dev-env/rules/` and restore its assertion in `bin/install.test.mjs`. |
 | `file-global-constants.md` | "A module-level constant used by one caller belongs in that caller's scope" sets a reference-count threshold no style guide states. It was the one archived rule with a live check behind it, so `check_file_global_constants_use_count` and its tests went with the document rather than leaving code enforcing an unwritten rule. | `git mv packages/claude-dev-env/rules-archived/file-global-constants.md packages/claude-dev-env/rules/` and restore the check in `hooks/blocking/code_rules_constants_config.py`, its call in `code_rules_enforcer.py`, `hooks/blocking/test_code_rules_enforcer_file_global_constants.py`, and the rows in `clean-coder.md`, `docs/CODE_RULES.md` and `bin/install.agents-home.test.mjs`. |
+
+## Never archived
+
+One file is exempt from this procedure. A prune pass, a consolidation, or a
+rewrite that would move it here stops instead, and says which rule stopped it.
+
+| File | Why it stays |
+|---|---|
+| `rules/correction-lens.md` | The rule that turns a correction into a control. Archiving it removes the mechanism by which every other rule in this package gets written, so the loss is the whole feedback path rather than one document. Its own permanence section states the same exemption. |
+
+Sharpening the text of an exempt file is ordinary work. Moving it out of service
+is not available.
