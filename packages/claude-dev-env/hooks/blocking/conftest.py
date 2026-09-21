@@ -1,8 +1,11 @@
 """Add hooks/blocking and hooks/ to sys.path for every test collected under this directory."""
 
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Callable
 
@@ -13,6 +16,25 @@ _HOOKS_DIRECTORY = str(Path(_BLOCKING_DIRECTORY).parent)
 for each_directory in (_BLOCKING_DIRECTORY, _HOOKS_DIRECTORY):
     if each_directory not in sys.path:
         sys.path.insert(0, each_directory)
+
+_HOOK_INFRASTRUCTURE_TAIL = Path("packages") / "claude-dev-env" / "hooks" / "blocking"
+
+
+@pytest.fixture
+def hook_blocking_dir() -> Iterator[Path]:
+    """Build a temporary tree whose tail mirrors a production hook directory.
+
+    ``is_hook_infrastructure`` matches on the path tail, so a target inside
+    the yielded directory routes the way a real
+    ``packages/claude-dev-env/hooks/blocking`` target would.
+    """
+    base_directory = Path(tempfile.mkdtemp())
+    blocking_directory = base_directory / _HOOK_INFRASTRUCTURE_TAIL
+    blocking_directory.mkdir(parents=True)
+    try:
+        yield blocking_directory
+    finally:
+        shutil.rmtree(base_directory, ignore_errors=False)
 
 
 @pytest.fixture
