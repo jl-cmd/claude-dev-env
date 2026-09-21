@@ -101,3 +101,12 @@ def test_a_list_of_not_items_stays_quiet() -> None:
 
 def test_a_quoted_line_stays_quiet() -> None:
     assert _form_names("> a bug, not a flake\n") == []
+
+
+def test_message_truncates_a_quoted_line_past_the_limit() -> None:
+    document_text = ("x" * 200) + ", not the shorter reading.\n"
+    line_number, _column, form_name = find_contrast_framing(document_text)[0]
+    source_line = document_text.splitlines()[line_number - 1]
+    message = describe_contrast_framing(source_line, form_name)
+    assert '"' + ("x" * 120) + '"' in message
+    assert "x" * 121 not in message
