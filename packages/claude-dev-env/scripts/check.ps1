@@ -30,13 +30,16 @@
 .PARAMETER SkipRepositoryPolicy
     Skip the committed-tree repository_policy.py run.
 
+.PARAMETER SkipPester
+    Skip the Pester run over the PowerShell suites in scripts/tests.
+
 .PARAMETER CommentPolicyBase
     Optional git reference used as the comment-policy baseline.
 
 .OUTPUTS
     Per-tool status lines on stdout. Final summary line:
         CHECK: OK
-        CHECK: FAILED tools=ruff,repository-policy,mypy,mypy-pr-loop,mypy-process-tree,pytest
+        CHECK: FAILED tools=ruff,repository-policy,mypy,mypy-pr-loop,mypy-process-tree,pytest,pester
 #>
 [CmdletBinding()]
 param(
@@ -44,6 +47,7 @@ param(
     [switch]$SkipMypy,
     [switch]$SkipRuff,
     [switch]$SkipRepositoryPolicy,
+    [switch]$SkipPester,
     [string]$CommentPolicyBase
 )
 
@@ -54,6 +58,7 @@ $repositoryRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '..' '..')
 $blockingRoot = Join-Path $hooksRoot 'blocking'
 $prLoopScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '_shared' 'pr-loop' 'scripts')
 $processTreeScriptsRoot = Resolve-Path (Join-Path $PSScriptRoot '..' '_shared' 'process-tree' 'scripts')
+$pesterTestsRoot = Resolve-Path (Join-Path $PSScriptRoot 'tests')
 
 $failedTools = @()
 $firstNonZeroExitCode = 0
@@ -185,6 +190,12 @@ if (-not $SkipTests) {
         } finally {
             Pop-Location
         }
+    }
+}
+
+if (-not $SkipPester) {
+    Invoke-Tool -Label 'pester' -Action {
+        pwsh -NoProfile -File (Join-Path $PSScriptRoot 'Invoke-PesterSuites.ps1') -TestsRoot $pesterTestsRoot
     }
 }
 
