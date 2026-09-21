@@ -8,8 +8,11 @@ from pathlib import Path
 
 import pytest
 from repository_checks.config.policy_document import (
+    ALL_DOCUMENT_FIELDS,
     ALL_EXEMPTION_FIELDS,
     ALL_MATCH_EXEMPTION_FAMILIES,
+    PATH_EXEMPTIONS_FIELD,
+    VERSION_FIELD,
 )
 from repository_checks.policy_document import (
     entry_path_and_digest,
@@ -126,3 +129,14 @@ def test_each_match_family_names_its_own_field_category_and_subject() -> None:
     assert len(all_fields) == len(ALL_MATCH_EXEMPTION_FAMILIES)
     assert len(all_categories) == len(ALL_MATCH_EXEMPTION_FAMILIES)
     assert len(all_subjects) == len(ALL_MATCH_EXEMPTION_FAMILIES)
+
+
+def test_all_exemption_fields_is_derived_from_the_match_families_and_path_field() -> (
+    None
+):
+    expected_exemption_fields = {
+        each_family.field_name for each_family in ALL_MATCH_EXEMPTION_FAMILIES
+    } | {PATH_EXEMPTIONS_FIELD}
+
+    assert ALL_EXEMPTION_FIELDS == expected_exemption_fields
+    assert ALL_DOCUMENT_FIELDS == expected_exemption_fields | {VERSION_FIELD}
