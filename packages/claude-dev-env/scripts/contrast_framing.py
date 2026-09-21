@@ -11,10 +11,11 @@ carries two readings where one would do.
 
 Code spans, fenced blocks, paths, and link targets are blanked before the
 patterns run, so an example quoted in backticks stays quiet. A blockquote line
-is skipped, since it carries someone else's words. A second ``, not`` in one
-clause reads as a list, so only the first one reports. The pattern list lives
-in the constants module beside this one, and the durable post linter reads the
-same list.
+is skipped, since it carries someone else's words. A comma-``not`` match
+reports only when no bare ``not`` already sits earlier in the line, so a
+second one in a list stays quiet, and a list that opens with ``not`` keeps
+even its first comma quiet. The pattern list lives in the constants module
+beside this one, and the durable post linter reads the same list.
 """
 
 from __future__ import annotations

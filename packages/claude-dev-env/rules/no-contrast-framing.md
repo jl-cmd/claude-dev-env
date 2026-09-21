@@ -29,11 +29,14 @@ another the writer is turning down.
 
 Three shapes stay quiet by design. A backticked span or a fenced block carries
 an example, so the check blanks it first. A line opening with `>` quotes
-someone else, whose words are theirs to write. A sentence already carrying a
-bare `not` before the comma is listing items, as in "not in chat, not in a
-commit message", so only a first `, not` reports. A release automation body
-passes the post linter untouched, since the bot builds it from commit subjects
-and reads it back as machine input.
+someone else, whose words are theirs to write. A `, not` clause reports only
+when no bare `not` already sits earlier in the line, so a list of clauses
+reports its first `, not` and stays quiet on the rest, as in
+`a diff regression, not shared code, not a workaround`. A list whose own
+opening word is a bare `not`, as in "not in chat, not in a commit message, not
+in a body", keeps even its first `, not` quiet. A release automation body
+passes the post linter untouched, since the bot builds it from commit
+subjects and reads it back as machine input.
 
 When the sentence thins after the contrast comes out, the missing piece is
 evidence. Name it: the failing check, the log line, the measured number, the
