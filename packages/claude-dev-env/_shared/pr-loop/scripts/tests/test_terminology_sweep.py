@@ -759,3 +759,16 @@ def test_flags_near_miss_when_second_leading_token_is_plural_variant() -> None:
     findings = sweep_diff(diff)
     assert len(findings) == 1
     assert "retry policies limit" in findings[0]
+
+
+def test_a_swept_code_file_outside_the_test_modules_reads_as_swept() -> None:
+    assert sweep_module._is_swept_non_test_code_file("api/store.py") is True
+
+
+def test_a_test_module_does_not_read_as_a_swept_code_file() -> None:
+    assert sweep_module._is_swept_non_test_code_file("api/test_store.py") is False
+    assert sweep_module._is_swept_non_test_code_file("api/tests/store.py") is False
+
+
+def test_a_markdown_document_does_not_read_as_a_swept_code_file() -> None:
+    assert sweep_module._is_swept_non_test_code_file("docs/README.md") is False
