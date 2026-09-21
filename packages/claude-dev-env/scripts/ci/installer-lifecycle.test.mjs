@@ -24,3 +24,11 @@ test('the Windows adapter invokes the CI-owned lifecycle driver', () => {
     assert.match(adapterSource, /\$driverPath = Join-Path \$PSScriptRoot 'installer-lifecycle\.mjs'/);
     assert.doesNotMatch(adapterSource, /skills\\run-claude-dev-env/);
 });
+
+test('the lifecycle driver builds its sandbox through the shared scratch-home helper', () => {
+    const driverSource = readFileSync(DRIVER_PATH, 'utf8');
+    assert.match(driverSource, /from '\.\/scratch-home-install\.mjs'/);
+    assert.match(driverSource, /createScratchHome\(\)/);
+    assert.match(driverSource, /removeScratchHome\(sandboxHome\)/);
+    assert.doesNotMatch(driverSource, /spawnSync/);
+});
