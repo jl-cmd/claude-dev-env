@@ -264,3 +264,36 @@ def should_name_the_closed_state_in_the_verdict_line() -> None:
     )
 
     assert line.startswith("CLOSED jl-cmd/claude-dev-env#1442 ab845eb ::")
+
+
+def should_join_a_session_route_thread_with_its_comments() -> None:
+    parsed = model.parse_thread(
+        {"path": "scripts/example.py", "resolved": False, "comment_ids": [11, 12]},
+        {
+            11: {"body": "A finding.", "user": {"login": REVIEW_BOT}},
+            12: {"body": "Answered.", "user": {"login": "claude[bot]"}},
+        },
+    )
+
+    assert [each.author_login for each in parsed.all_comments] == [
+        REVIEW_BOT,
+        "claude[bot]",
+    ]
+    assert model.thread_finding(parsed, DRIVING_AGENT) is None
+
+
+def should_skip_a_comment_identifier_the_listing_does_not_carry() -> None:
+    parsed = model.parse_thread(
+        {"path": "scripts/example.py", "comment_ids": [11, 99]},
+        {11: {"body": "A finding.", "user": {"login": REVIEW_BOT}}},
+    )
+
+    assert len(parsed.all_comments) == 1
+
+
+def should_key_the_review_comments_by_identifier() -> None:
+    all_comment_records = model.comment_records_by_id(
+        [{"id": 11, "body": "A finding."}, {"body": "no identifier"}, "not a record"]
+    )
+
+    assert all_comment_records == {11: {"id": 11, "body": "A finding."}}

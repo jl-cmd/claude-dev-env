@@ -33,6 +33,7 @@ from dev_env_scripts_constants.review_closure_constants import (
     GET_METHOD,
     GITHUB_API_ROOT,
     GITHUB_GRAPHQL_ENDPOINT,
+    MAX_REVIEW_COMMENT_PAGES,
     NAME_VARIABLE,
     NO_SIGN_IN_MESSAGE,
     NUMBER_VARIABLE,
@@ -43,6 +44,8 @@ from dev_env_scripts_constants.review_closure_constants import (
     QUERY_KEY,
     REQUEST_FAILED_TEMPLATE,
     REQUEST_TIMEOUT_SECONDS,
+    REVIEW_COMMENT_PAGE_SIZE,
+    REVIEW_COMMENTS_ENDPOINT_TEMPLATE,
     REVIEW_THREAD_PAGE_SIZE,
     REVIEW_THREAD_QUERY,
     REVIEW_THREADS_ENDPOINT_TEMPLATE,
@@ -62,7 +65,12 @@ from pr_verification.config.constants import (
     UTF8_ENCODING,
 )
 from pr_verification.github_parsing import GitHubError
-from review_closure_model import ReviewThread, approvals_conclusion, parse_thread
+from review_closure_model import (
+    ReviewThread,
+    approvals_conclusion,
+    comment_records_by_id,
+    parse_thread,
+)
 
 
 def github_token() -> str:
@@ -155,13 +163,59 @@ def read_review_threads(slug: str, number: int, token: str) -> tuple[ReviewThrea
             review threads.
     """
     all_records = _thread_records_over_rest(slug, number, token)
+    all_comment_records_by_id: Mapping[object, Mapping[str, object]] = {}
     if all_records is None:
         all_records = _thread_records_over_graphql(slug, number, token)
+    else:
+        all_comment_records_by_id = read_review_comments_by_id(slug, number, token)
     return tuple(
-        parse_thread(each_record)
+        parse_thread(each_record, all_comment_records_by_id)
         for each_record in all_records
         if isinstance(each_record, Mapping)
     )
+
+
+def read_review_comments_by_id(
+    slug: str, number: int, token: str
+) -> dict[object, Mapping[str, object]]:
+    """Read every review comment on a pull request, keyed by identifier.
+
+    Args:
+        slug: The repository as ``owner/name``.
+        number: The pull request number.
+        token: The GitHub token the request authenticates with.
+
+    Returns:
+        Each review comment under its identifier.
+
+    Raises:
+        GitHubError: A page answered with something other than a list.
+    """
+    all_records: list[object] = []
+    for each_page in range(1, MAX_REVIEW_COMMENT_PAGES + 1):
+        page = _review_comment_page(slug, number, token, each_page)
+        all_records.extend(page)
+        if len(page) < REVIEW_COMMENT_PAGE_SIZE:
+            break
+    return comment_records_by_id(all_records)
+
+
+def _review_comment_page(slug: str, number: int, token: str, page: int) -> list[object]:
+    document = request_json(
+        GET_METHOD,
+        REVIEW_COMMENTS_ENDPOINT_TEMPLATE.format(
+            api_root=GITHUB_API_ROOT,
+            slug=slug,
+            number=number,
+            page_size=REVIEW_COMMENT_PAGE_SIZE,
+            page=page,
+        ),
+        token,
+        None,
+    )
+    if not isinstance(document, list):
+        raise GitHubError(str(document))
+    return document
 
 
 def read_approvals_conclusion(slug: str, sha: str, token: str) -> str | None:

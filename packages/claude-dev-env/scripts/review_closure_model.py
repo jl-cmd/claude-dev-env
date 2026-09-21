@@ -34,6 +34,8 @@ from dev_env_scripts_constants.review_closure_constants import (
     CLOSED_DETAIL,
     CLOSED_VERDICT_LABEL,
     COMMENT_BODY_KEY,
+    COMMENT_IDENTIFIER_KEY,
+    COMMENT_IDS_KEY,
     COMMENT_NODES_KEY,
     HEAD_KEY,
     NUMBER_KEY,
@@ -249,12 +251,21 @@ def driver_logins(
     return frozenset(all_logins)
 
 
-def parse_thread(all_thread_fields: Mapping[str, object]) -> ReviewThread:
+def parse_thread(
+    all_thread_fields: Mapping[str, object],
+    all_comment_records_by_id: Mapping[object, Mapping[str, object]] | None = None,
+) -> ReviewThread:
     """Read one review thread from either route's answer.
+
+    The GraphQL answer nests each thread's comments. The session route names
+    them by identifier instead, so that route's caller passes the comments it
+    read for the pull request and this joins the two.
 
     Args:
         all_thread_fields: The thread as the REST route or the GraphQL query
-            reports it. The two name the same facts differently.
+            reports it.
+        all_comment_records_by_id: The pull request's review comments, keyed
+            by identifier, for a thread that names its comments by identifier.
 
     Returns:
         The thread in the shape the closure decision reads.
@@ -265,9 +276,29 @@ def parse_thread(all_thread_fields: Mapping[str, object]) -> ReviewThread:
         is_outdated=_any_flag(all_thread_fields, ALL_OUTDATED_KEYS),
         all_comments=tuple(
             _parse_comment(each_record)
-            for each_record in _comment_records(all_thread_fields)
+            for each_record in _comment_records(
+                all_thread_fields, all_comment_records_by_id or {}
+            )
         ),
     )
+
+
+def comment_records_by_id(
+    all_comment_records: Iterable[object],
+) -> dict[object, Mapping[str, object]]:
+    """Key a pull request's review comments by their identifiers.
+
+    Args:
+        all_comment_records: The review comments GitHub reports.
+
+    Returns:
+        Each comment under its identifier.
+    """
+    return {
+        each_record[COMMENT_IDENTIFIER_KEY]: each_record
+        for each_record in all_comment_records
+        if isinstance(each_record, Mapping) and COMMENT_IDENTIFIER_KEY in each_record
+    }
 
 
 def approvals_conclusion(all_check_runs: Iterable[object]) -> str | None:
@@ -292,7 +323,15 @@ def approvals_conclusion(all_check_runs: Iterable[object]) -> str | None:
 
 def _comment_records(
     all_thread_fields: Mapping[str, object],
+    all_comment_records_by_id: Mapping[object, Mapping[str, object]],
 ) -> list[Mapping[str, object]]:
+    all_identifiers = all_thread_fields.get(COMMENT_IDS_KEY)
+    if isinstance(all_identifiers, list):
+        return [
+            all_comment_records_by_id[each_identifier]
+            for each_identifier in all_identifiers
+            if each_identifier in all_comment_records_by_id
+        ]
     for each_key in ALL_COMMENT_LIST_KEYS:
         found = all_thread_fields.get(each_key)
         if isinstance(found, Mapping):

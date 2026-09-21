@@ -114,12 +114,14 @@ def should_read_review_threads_over_the_session_route(
                     {
                         "path": "scripts/example.py",
                         "resolved": False,
-                        "comments": [
-                            {"body": "A finding.", "user": {"login": "a-bot"}}
-                        ],
+                        "comment_ids": [11],
                     }
                 ],
-            )
+            ),
+            "/comments": (
+                200,
+                [{"id": 11, "body": "A finding.", "user": {"login": "a-bot"}}],
+            ),
         },
     )
 
@@ -128,6 +130,31 @@ def should_read_review_threads_over_the_session_route(
     assert len(all_threads) == 1
     assert all_threads[0].subject == "scripts/example.py"
     assert all_threads[0].all_comments[0].author_login == "a-bot"
+    assert all_threads[0].all_comments[0].body == "A finding."
+
+
+def should_read_the_review_comments_keyed_by_identifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answer_with(
+        monkeypatch,
+        {"/comments": (200, [{"id": 11, "body": "A finding."}])},
+    )
+
+    all_comment_records = reader.read_review_comments_by_id(
+        "jl-cmd/claude-dev-env", 7, TOKEN
+    )
+
+    assert all_comment_records == {11: {"id": 11, "body": "A finding."}}
+
+
+def should_report_a_comment_page_of_the_wrong_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answer_with(monkeypatch, {"/comments": (200, {"message": "not a list"})})
+
+    with pytest.raises(GitHubError):
+        reader.read_review_comments_by_id("jl-cmd/claude-dev-env", 7, TOKEN)
 
 
 def should_fall_back_to_the_graphql_query(monkeypatch: pytest.MonkeyPatch) -> None:

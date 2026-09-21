@@ -222,3 +222,20 @@ GET_METHOD: str = "GET"
 
 POST_METHOD: str = "POST"
 """HTTP method the GraphQL query uses."""
+
+COMMENT_IDS_KEY: str = "comment_ids"
+"""Field the session route uses for a thread's comment identifiers."""
+
+COMMENT_IDENTIFIER_KEY: str = "id"
+"""Field carrying a review comment's identifier."""
+
+REVIEW_COMMENTS_ENDPOINT_TEMPLATE: str = (
+    "{api_root}/repos/{slug}/pulls/{number}/comments?per_page={page_size}&page={page}"
+)
+"""REST route carrying one page of a pull request's review comments."""
+
+REVIEW_COMMENT_PAGE_SIZE: int = 100
+"""How many review comments one page carries."""
+
+MAX_REVIEW_COMMENT_PAGES: int = 20
+"""How many comment pages one run reads before it stops."""
