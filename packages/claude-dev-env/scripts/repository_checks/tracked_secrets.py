@@ -10,7 +10,7 @@ from types import ModuleType
 from policy_lint.config import constants as policy_constants
 
 from repository_checks.config import constants as repository_constants
-from repository_checks.email_exemptions import load_email_exemptions
+from repository_checks.exact_value_exemptions import load_all_exact_value_exemptions
 from repository_checks.hook_modules import load_hooks_module
 from repository_checks.models import RepositoryFinding
 from repository_checks.path_exemptions import load_path_exemptions
@@ -31,7 +31,7 @@ def collect_tracked_secret_findings(
     scanner = load_hooks_module(repository_constants.PII_SCANNER_MODULE_NAME)
     exemption = load_hooks_module(repository_constants.REPOSITORY_EXEMPTION_MODULE_NAME)
     all_allowlisted_literals = exemption.repository_allowlisted_values(repository_root)
-    all_exact_exemptions = load_email_exemptions(repository_root)
+    all_exact_exemptions = load_all_exact_value_exemptions(repository_root)
     all_exact_exemptions |= repository_constants.ALL_TRACKED_SECRET_EXACT_EXEMPTIONS
     all_path_exemptions = load_path_exemptions(repository_root)
     all_findings: list[RepositoryFinding] = []
