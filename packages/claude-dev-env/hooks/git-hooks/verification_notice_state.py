@@ -6,8 +6,10 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Protocol
 
+from git_hooks_constants import COMMIT_OBJECT_NAME_SUFFIX
 from git_hooks_constants.verification_notice_constants import (
     ALL_GIT_BASE_QUERY_PREFIX,
+    BASE_REFERENCE,
     GIT_COMMAND_SUCCESS_EXIT_CODE,
     HEX_DIGITS,
     NOTICE_FAILED_LINE,
@@ -180,7 +182,7 @@ def _base_matches_current(
 ) -> bool:
     current_base_revision = run_git_query(
         repository_root,
-        (*ALL_GIT_BASE_QUERY_PREFIX, "origin/main^{commit}"),
+        (*ALL_GIT_BASE_QUERY_PREFIX, BASE_REFERENCE + COMMIT_OBJECT_NAME_SUFFIX),
         False,
     )
     return current_base_revision == base_revision
