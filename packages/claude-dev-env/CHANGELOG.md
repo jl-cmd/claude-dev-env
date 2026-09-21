@@ -1,5 +1,39 @@
 # Changelog
 
+## [8.6.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.6.0...claude-dev-env-v8.6.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **hooks:** route hook-infra live Write through the full-gate duplicate check ([695cad1](https://github.com/jl-cmd/claude-dev-env/commit/695cad1c2d07574e56f7a3eb560b0f19476598f9))
+* **policy-lint:** pin state-description findings to the line the rule matched ([392b7e6](https://github.com/jl-cmd/claude-dev-env/commit/392b7e6d7460b8e1de86c1761487bd8add0de369))
+* **policy-lint:** stop the terminology sweep flagging correct prose, and pin state-description lines ([59af282](https://github.com/jl-cmd/claude-dev-env/commit/59af282770ca73482bd00e01c242b63afe3707ca))
+* **state-description-blocker:** name the block-comment and quote-group magic values ([43561f8](https://github.com/jl-cmd/claude-dev-env/commit/43561f862112e4e2718cb209fcc414689cf6145f))
+* **terminology-sweep:** spare prose whose leading tokens name a known identifier ([9bcd90c](https://github.com/jl-cmd/claude-dev-env/commit/9bcd90c0f24b99a4a46b64bde78cf1275b50997f))
+* **terminology-sweep:** stop matching prose across a boundary or a test fixture name ([12347b1](https://github.com/jl-cmd/claude-dev-env/commit/12347b15ca22df03fd34e3581573d476bc362bcd))
+* **tests:** assign the duplicate-body hook-routing test to the lane CODE_RULES 11.6 states ([bc55a95](https://github.com/jl-cmd/claude-dev-env/commit/bc55a957f5983d71eaca9db3131373c1364ccdbf))
+
+
+### Documentation
+
+* **state-description-blocker:** make the worked example match what the rule detects ([2de0650](https://github.com/jl-cmd/claude-dev-env/commit/2de06506e113739528a011275fe6d131a21a9086))
+
+
+### Refactoring
+
+* **state-description-blocker:** split long functions and cut nesting ([8564459](https://github.com/jl-cmd/claude-dev-env/commit/856445966a68f5d2b15c03913a1121bfda99d395))
+* **terminology-sweep:** split two over-length helpers, drop "instead of" ([2403d97](https://github.com/jl-cmd/claude-dev-env/commit/2403d97b0e3d0d16cb06401e13b7c21604ed84d2))
+
+
+### Style
+
+* **terminology-sweep:** sort the import block ([adaf190](https://github.com/jl-cmd/claude-dev-env/commit/adaf190b2c3b12e0655ab21ca93e85fc16eb8326))
+
+
+### Reverts
+
+* **hooks:** keep hook-infra live Write on the edit lane; fix the test instead ([335035a](https://github.com/jl-cmd/claude-dev-env/commit/335035afc19a85f884237ca8318917634012b363))
+
 ## [8.6.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.5.0...claude-dev-env-v8.6.0) (2026-09-20)
 
 
