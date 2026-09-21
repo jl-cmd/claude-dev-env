@@ -32,3 +32,9 @@ test('the lifecycle driver builds its sandbox through the shared scratch-home he
     assert.match(driverSource, /removeScratchHome\(sandboxHome\)/);
     assert.doesNotMatch(driverSource, /spawnSync/);
 });
+
+test('the lifecycle driver reads the sandbox git-config name from the shared constant', () => {
+    const driverSource = readFileSync(DRIVER_PATH, 'utf8');
+    assert.match(driverSource, /SANDBOX_GIT_CONFIG_NAME/);
+    assert.doesNotMatch(driverSource, /'\.gitconfig-sandbox'/);
+});
