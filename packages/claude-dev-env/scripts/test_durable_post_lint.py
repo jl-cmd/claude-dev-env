@@ -460,3 +460,49 @@ def should_report_a_rewritten_release_body_through_the_command_line(
     )
     assert completed_process.returncode == 1
     assert "keep the generated text whole" in completed_process.stderr
+
+
+def test_contrast_framing_in_a_body_reports() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-comment",
+        title=None,
+        body_text="The queue ejected the entry, not the runner.\n",
+    )
+
+    assert [each_finding.code for each_finding in all_findings] == ["contrast-framing"]
+    assert "trailing-comma-not" in all_findings[0].message
+
+
+def test_contrast_framing_in_a_title_reports() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-create",
+        title="fix(lint): read the base rather than the worktree",
+        body_text=VALID_PR_BODY,
+    )
+
+    assert [each_finding.code for each_finding in all_findings] == ["contrast-framing"]
+    assert "substitution-rather-than" in all_findings[0].message
+
+
+def test_a_body_stating_what_is_stays_clean() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-comment",
+        title=None,
+        body_text="The queue ejected the entry. The runner stayed up.\n",
+    )
+
+    assert all_findings == ()
+
+
+def test_a_release_body_carrying_a_contrast_stays_accepted() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-edit",
+        title=None,
+        body_text=RELEASE_BODY.replace(
+            "This PR was generated with",
+            "Bumped rather than pinned. This PR was generated with",
+        ),
+        head_branch=RELEASE_BRANCH,
+    )
+
+    assert all_findings == ()

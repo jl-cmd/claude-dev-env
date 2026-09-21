@@ -10,6 +10,7 @@ from shared_tree_paths import resolve_shared_scripts_directory
 
 from . import (
     adapter_configuration,
+    adapter_contrast_framing,
     adapter_detectors,
     adapter_pairing,
     adapter_retired_hook_prose,
@@ -436,6 +437,35 @@ def accepts_instruction_markdown(document: Document) -> bool:
         True for Markdown on an instruction surface.
     """
     return adapter_retired_hook_prose.accepts_instruction_markdown(document)
+
+
+def accepts_authored_markdown(document: Document) -> bool:
+    """Return whether the document is Markdown an author wrote.
+
+    Args:
+        document: Candidate document.
+
+    Returns:
+        True for Markdown outside the generated documents.
+    """
+    return adapter_contrast_framing.accepts_authored_markdown(document)
+
+
+def contrast_framing_diagnostics(
+    document: Document, repository_root: Path
+) -> tuple[Diagnostic, ...]:
+    """Report prose that defines its subject against a rejected reading.
+
+    Args:
+        document: Current Markdown text and path.
+        repository_root: Request repository root.
+
+    Returns:
+        Contrast-framing diagnostics.
+    """
+    return adapter_contrast_framing.contrast_framing_diagnostics(
+        document, repository_root
+    )
 
 
 def retired_hook_prose_diagnostics(

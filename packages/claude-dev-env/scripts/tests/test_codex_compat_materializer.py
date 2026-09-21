@@ -173,9 +173,9 @@ def test_public_legacy_call_forms_validate_collection_entries(tmp_path: Path) ->
         publish_plan(config, all_planned_files=[object()])
 
 
-def test_render_codex_failure_blast_radius_requires_the_excerpt_heading() -> None:
-    with pytest.raises(MaterializerError, match="requires a Codex excerpt"):
-        materializer.render_codex_failure_blast_radius("# No excerpt\n")
+def test_render_codex_instruction_excerpt_requires_the_excerpt_heading() -> None:
+    with pytest.raises(MaterializerError, match="rules/correction-lens.md requires a Codex excerpt"):
+        materializer.render_codex_instruction_excerpt("# No excerpt\n", "rules/correction-lens.md")
 
 
 def test_validation_rejects_reparse_point_from_portable_attribute_seam(
@@ -823,11 +823,55 @@ def test_failure_blast_radius_projection_uses_the_canonical_excerpt() -> None:
     canonical_rule_path = Path(__file__).parents[2] / "rules" / "failure-blast-radius.md"
     canonical_rule = canonical_rule_path.read_text(encoding="utf-8")
 
-    projected_instruction = materializer.render_codex_failure_blast_radius(canonical_rule)
+    projected_instruction = materializer.render_codex_instruction_excerpt(
+        canonical_rule, "rules/failure-blast-radius.md"
+    )
 
     assert projected_instruction.startswith("Failure handling for this run")
     assert "Three attempts, then park." in projected_instruction
     assert "Report as: N of M complete" in projected_instruction
+
+
+def test_codex_instruction_projection_carries_every_listed_rule(tmp_path: Path) -> None:
+    rules_root = Path(__file__).parents[2] / "rules"
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    (source / "rules").mkdir(parents=True)
+    for each_relative_path in materializer.codex_instruction_rule_relative_paths:
+        canonical_path = rules_root / Path(each_relative_path).name
+        (source / each_relative_path).write_text(
+            canonical_path.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+    config = MaterializerConfig(source, target, should_apply=True)
+
+    planned, report = build_plan(config, all_agents=[])
+    publish_plan(config, planned, report)
+
+    projected_instruction = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Failure handling for this run" in projected_instruction
+    assert "Correction handling for this run" in projected_instruction
+    manifest_record = _manifest_files(_required_manifest_path(config))["AGENTS.md"]
+    assert manifest_record["source"] == "rules/failure-blast-radius.md, rules/correction-lens.md"
+
+
+def test_codex_instruction_projection_skips_an_absent_listed_rule(
+    tmp_path: Path,
+) -> None:
+    rules_root = Path(__file__).parents[2] / "rules"
+    source = tmp_path / "source"
+    (source / "rules").mkdir(parents=True)
+    (source / "rules" / "correction-lens.md").write_text(
+        (rules_root / "correction-lens.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    config = MaterializerConfig(source, tmp_path / "target", should_apply=False)
+
+    projection = materializer._build_codex_instruction_projection(config)
+
+    assert projection is not None
+    assert projection.source_identity == "rules/correction-lens.md"
+    assert "Correction handling for this run" in projection.content
+    assert "Failure handling for this run" not in projection.content
 
 
 def test_build_plan_publishes_owned_agents_projection_and_tracks_drift(
