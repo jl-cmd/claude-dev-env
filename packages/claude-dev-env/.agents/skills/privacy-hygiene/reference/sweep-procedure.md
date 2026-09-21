@@ -49,7 +49,7 @@ Review each hit. Ignore:
 
 - Stage only clean files
 - Prefer `--body-file` for `gh` posts (also required by the gh-cli-conventions rule)
-- Let `pii_prevention_blocker` re-run on the next Write / commit / post
+- No hook re-scans the next Write, commit, or post; `pii_prevention_blocker` was retired. Re-run this sweep before the next commit or post.
 
 ## Accepted residual (do not over-scrub)
 
