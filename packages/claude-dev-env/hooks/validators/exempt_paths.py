@@ -48,27 +48,21 @@ TEST_PATH_PATTERNS: frozenset[str] = frozenset(
 HOOK_INFRASTRUCTURE_PATTERNS: frozenset[str] = frozenset(
     {
         "/.claude/hooks/",
-        "\\.claude\\hooks\\",
-        "\\.claude/hooks/",
     }
 )
 
 WORKFLOW_REGISTRY_PATTERNS: frozenset[str] = frozenset(
     {
         "/workflow/",
-        "\\workflow\\",
         "_tab.py",
         "/states.py",
-        "\\states.py",
         "/modules.py",
-        "\\modules.py",
     }
 )
 
 MIGRATION_PATH_PATTERNS: frozenset[str] = frozenset(
     {
         "/migrations/",
-        "\\migrations\\",
     }
 )
 
@@ -80,23 +74,14 @@ def is_test_file(file_path: str) -> bool:
 
 def is_hook_infrastructure(file_path: str) -> bool:
     path_normalized = file_path.lower().replace("\\", "/")
-    return any(
-        pattern.replace("\\", "/") in path_normalized
-        for pattern in HOOK_INFRASTRUCTURE_PATTERNS
-    )
+    return any(pattern in path_normalized for pattern in HOOK_INFRASTRUCTURE_PATTERNS)
 
 
 def is_workflow_registry_file(file_path: str) -> bool:
     path_normalized = file_path.lower().replace("\\", "/")
-    return any(
-        pattern.replace("\\", "/") in path_normalized
-        for pattern in WORKFLOW_REGISTRY_PATTERNS
-    )
+    return any(pattern in path_normalized for pattern in WORKFLOW_REGISTRY_PATTERNS)
 
 
 def is_migration_file(file_path: str) -> bool:
     path_normalized = file_path.lower().replace("\\", "/")
-    return any(
-        pattern.replace("\\", "/") in path_normalized
-        for pattern in MIGRATION_PATH_PATTERNS
-    )
+    return any(pattern in path_normalized for pattern in MIGRATION_PATH_PATTERNS)
