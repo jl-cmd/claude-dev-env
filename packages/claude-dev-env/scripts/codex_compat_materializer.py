@@ -27,7 +27,8 @@ publish_plan_max_positional_arguments = 3
 publish_plan_failure_injector_position = 2
 frontmatter_unsupported_fields = ("tools", "model", "color", "disable-model-invocation")
 instruction_alias_filenames = frozenset({"AGENTS.md", "CLAUDE.md"})
-failure_blast_radius_rule_relative_path = "rules/failure-blast-radius.md"
+codex_instruction_rule_relative_paths = ("rules/failure-blast-radius.md", "rules/correction-lens.md")
+codex_instruction_source_separator = ", "
 codex_instruction_target_path = "AGENTS.md"
 codex_instruction_section_heading = "## Excerpt for repository-instruction sessions"
 codex_hook_manifest_source_path = "hooks/hooks.json"
@@ -502,41 +503,57 @@ def convert_agent(agent: ClaudeAgent) -> str:
     return content
 
 
-def render_codex_failure_blast_radius(rule_content: str) -> str:
-    """Extract the repository-instruction contract from the canonical rule.
+def render_codex_instruction_excerpt(rule_content: str, rule_relative_path: str) -> str:
+    """Extract one rule's repository-instruction contract.
+
+    A rule reaches a Codex session through the fenced block under its
+    "Excerpt for repository-instruction sessions" heading, and this returns
+    that block's own text.
 
     Args:
-        rule_content: Canonical failure blast-radius rule text.
+        rule_content: Canonical rule text.
+        rule_relative_path: Repository-relative path of that rule, named in errors.
 
     Returns:
         The fenced repository-instruction excerpt with a trailing newline.
 
     Raises:
-        MaterializerError: If the canonical rule lacks the required excerpt.
+        MaterializerError: If the rule lacks a complete excerpt.
     """
     heading_start = rule_content.find(codex_instruction_section_heading)
     if heading_start < 0:
-        raise MaterializerError("failure blast-radius rule requires a Codex excerpt")
+        raise MaterializerError(f"{rule_relative_path} requires a Codex excerpt")
     fence_start = rule_content.find("```", heading_start)
     if fence_start < 0:
-        raise MaterializerError("failure blast-radius rule requires a Codex excerpt")
+        raise MaterializerError(f"{rule_relative_path} requires a Codex excerpt")
     content_start = rule_content.find(line_separator, fence_start)
     fence_end = rule_content.find(line_separator + "```", content_start + 1)
     if content_start < 0 or fence_end < 0:
-        raise MaterializerError("failure blast-radius rule requires a complete Codex excerpt")
+        raise MaterializerError(f"{rule_relative_path} requires a complete Codex excerpt")
     return rule_content[content_start + len(line_separator) : fence_end].rstrip() + line_separator
 
 
 def _build_codex_instruction_projection(config: MaterializerConfig) -> PlannedFile | None:
-    """Build the managed AGENTS.md projection when the canonical rule is present."""
-    source_path = config.source_root / failure_blast_radius_rule_relative_path
-    if not source_path.exists() and not _is_reparse_point(source_path):
+    """Build the managed AGENTS.md projection from every projected rule present."""
+    all_present_rules: list[tuple[str, str]] = []
+    for each_relative_path in codex_instruction_rule_relative_paths:
+        candidate_path = config.source_root / each_relative_path
+        if not candidate_path.exists() and not _is_reparse_point(candidate_path):
+            continue
+        source_path = _validated_source_file(config, each_relative_path, each_relative_path)
+        rule_content = source_path.read_text(encoding="utf-8")
+        all_present_rules.append(
+            (each_relative_path, render_codex_instruction_excerpt(rule_content, each_relative_path))
+        )
+    if not all_present_rules:
         return None
-    source_path = _validated_source_file(config, failure_blast_radius_rule_relative_path, "failure blast-radius rule")
-    rule_content = source_path.read_text(encoding="utf-8")
-    projected_content = render_codex_failure_blast_radius(rule_content)
+    projected_content = line_separator.join(
+        each_excerpt for _, each_excerpt in all_present_rules
+    )
     return PlannedFile(
-        failure_blast_radius_rule_relative_path,
+        codex_instruction_source_separator.join(
+            each_path for each_path, _ in all_present_rules
+        ),
         codex_instruction_target_path,
         projected_content,
         hash_content(projected_content),
@@ -987,7 +1004,7 @@ def discover_agents(config: MaterializerConfig) -> list[ClaudeAgent]:
         if _is_reparse_point(each_path):
             raise MaterializerError(f"source reparse point is not allowed: {each_path}")
         relative_source = each_path.relative_to(config.source_root).as_posix()
-        if relative_source == failure_blast_radius_rule_relative_path:
+        if relative_source in codex_instruction_rule_relative_paths:
             _validate_containment(config.source_root, each_path)
             continue
         _validate_containment(config.source_root, each_path)

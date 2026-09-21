@@ -43,6 +43,16 @@ Record a row in the archive manifest for each file: why it went, the `git mv`
 that restores it, and every other edit a restore has to undo. A restore that has
 to be reconstructed from the diff is not recoverable in any useful sense.
 
+## Exempt files
+
+The "Never archived" section of `rules-archived/ARCHIVE-MANIFEST.md` names the
+files this procedure leaves alone. Read that section before a prune moves
+anything. A pass that reaches an exempt file stops there and reports which file
+it was, so the prune's other moves still land.
+
+`rules/correction-lens.md` is on that list today. Editing an exempt file to
+sharpen it is ordinary work.
+
 ## Make the archive stick
 
 Two things do not follow the file on their own.
