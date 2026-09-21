@@ -49,9 +49,6 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
             PurePosixPath(
                 "packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_cap_meta.py"
             ),
-            PurePosixPath(
-                "packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_duplicate_body_hook_routing.py"
-            ),
         }
     ),
     PurePosixPath(

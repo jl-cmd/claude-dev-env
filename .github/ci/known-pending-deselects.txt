@@ -6,7 +6,6 @@ packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_ephemeral.py::te
 
 # #20 pending - env-independent / venue residual (if still failing after gate restore)
 packages/claude-dev-env/hooks/blocking/test_code_rules_js_sibling_return_object_key_drift.py::test_shipped_converge_mjs_passes_its_own_check
-packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_duplicate_body_hook_routing.py::test_write_of_copied_helper_into_hook_directory_denies
 packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_duplicate_body_hook_routing.py::test_precheck_of_copied_helper_at_hook_target_exits_nonzero
 packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_zero_payload_alias_hook_routing.py::test_write_of_pass_through_alias_into_hook_directory_denies
 packages/claude-dev-env/hooks/blocking/test_code_rules_enforcer_zero_payload_alias_hook_routing.py::test_precheck_of_pass_through_alias_at_hook_target_exits_nonzero

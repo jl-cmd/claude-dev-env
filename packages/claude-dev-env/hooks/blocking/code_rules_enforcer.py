@@ -1344,9 +1344,8 @@ def _report_hook_blocking_issues(
     """Write a deny payload when a hook target trips a check that still guards it.
 
     The full code-rules verdict stays off hook-infrastructure files; this runs
-    the full-gate hook-infrastructure checks, so a copied helper denies at this
-    live PreToolUse Write the same way it denies at the pre-check CLI, and
-    emits the deny payload when one fires.
+    the edit-lane hook-infrastructure checks and emits the deny payload when
+    one fires.
 
     Args:
         content: The fragment or whole-file body under validation.
@@ -1361,7 +1360,7 @@ def _report_hook_blocking_issues(
         file_path,
         full_file_content_after_edit,
         prior_full_file_content,
-        phase=FULL_GATE_PHASE,
+        phase=EDIT_LANE_PHASE,
     )
     if not all_blocking_issues:
         return
