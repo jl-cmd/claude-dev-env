@@ -30,6 +30,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createScratchHome, removeScratchHome, runInstaller, scratchHomeEnvironment } from './scratch-home-install.mjs';
 
 export const EVIDENCE_PREFIX = 'cde-playtest-';
@@ -278,6 +279,6 @@ export function runPlaytest(argv) {
     return 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
     process.exit(runPlaytest(process.argv.slice(2)));
 }
