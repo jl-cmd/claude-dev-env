@@ -5,7 +5,7 @@ from pathlib import Path
 
 from git_hooks_constants import (
     GH_EXECUTABLE_NAME,
-    GH_PR_VIEW_ARGUMENTS,
+    ALL_GH_PR_VIEW_ARGUMENTS,
     GH_PR_VIEW_TIMEOUT_SECONDS,
 )
 
@@ -15,7 +15,7 @@ from subprocess_window_access import hidden_window_creation_flags
 def get_pull_request_url(repo_dir: Path) -> str | None:
     try:
         result = subprocess.run(
-            [GH_EXECUTABLE_NAME, *GH_PR_VIEW_ARGUMENTS],
+            [GH_EXECUTABLE_NAME, *ALL_GH_PR_VIEW_ARGUMENTS],
             cwd=repo_dir,
             check=False,
             capture_output=True,
