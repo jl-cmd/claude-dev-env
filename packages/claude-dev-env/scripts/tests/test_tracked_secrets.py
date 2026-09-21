@@ -45,6 +45,9 @@ _PII_PREVENTION_CONSTANTS = load_hooks_module(
 )
 _PII_CATEGORY_EMAIL = _PII_PREVENTION_CONSTANTS.CATEGORY_EMAIL
 _PII_CATEGORY_HOME_PATH = _PII_PREVENTION_CONSTANTS.CATEGORY_HOME_PATH
+_PII_CATEGORY_PRIVATE_IP = _PII_PREVENTION_CONSTANTS.CATEGORY_PRIVATE_IP
+_OWNED_ADDRESS = "10.83.21.14"
+_OWNED_ADDRESS_RELATIVE_PATH = "src/runner.py"
 
 
 def test_should_flag_a_tracked_secret(tmp_path: Path) -> None:
@@ -265,3 +268,42 @@ def _install_exact_email_exemption(monkeypatch: pytest.MonkeyPatch) -> None:
             }
         ),
     )
+
+
+def test_should_clear_a_private_address_a_committed_entry_owns(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    initialize_repository(repository_root)
+    write_text(
+        repository_root / _OWNED_ADDRESS_RELATIVE_PATH, f"host = '{_OWNED_ADDRESS}'\n"
+    )
+    write_text(
+        repository_root / _OTHER_NOTES_RELATIVE_PATH, f"host = '{_OWNED_ADDRESS}'\n"
+    )
+    write_text(
+        repository_root / "config" / "repository-policy.json",
+        json.dumps(
+            {
+                "version": 1,
+                "private_ip_exemptions": [
+                    {
+                        "path": _OWNED_ADDRESS_RELATIVE_PATH,
+                        "sha256": hashlib.sha256(
+                            _OWNED_ADDRESS.encode(_UTF8_ENCODING)
+                        ).hexdigest(),
+                        "reason": "Documented address of the shared build runner",
+                    }
+                ],
+            }
+        ),
+    )
+    commit_tracked_files(repository_root)
+
+    exit_code, stdout_text, _stderr_text = run_policy(repository_root)
+
+    assert _PII_CATEGORY_PRIVATE_IP not in _pii_categories_for_path(
+        stdout_text, _OWNED_ADDRESS_RELATIVE_PATH
+    )
+    assert _PII_CATEGORY_PRIVATE_IP in _pii_categories_for_path(
+        stdout_text, _OTHER_NOTES_RELATIVE_PATH
+    )
+    assert exit_code == FINDINGS_EXIT_CODE

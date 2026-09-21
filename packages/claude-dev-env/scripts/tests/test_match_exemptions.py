@@ -1,4 +1,4 @@
-"""Exact-value exceptions preserve all other scanner findings."""
+"""An owned match clears while every other scanner finding stays reported."""
 
 from __future__ import annotations
 
@@ -7,11 +7,14 @@ import json
 from pathlib import Path
 
 import pytest
-from repository_checks.exact_value_exemptions import (
+from repository_checks.config.policy_document import (
     EMAIL_EXEMPTION_FAMILY,
     PRIVATE_IP_EXEMPTION_FAMILY,
-    ExactValueExemptionFamily,
-    load_exact_value_exemptions,
+    MatchExemptionFamily,
+)
+from repository_checks.match_exemptions import (
+    load_all_match_exemptions,
+    load_match_exemptions,
 )
 from repository_checks.tracked_secrets import collect_tracked_secret_findings
 
@@ -58,7 +61,7 @@ def _runner_entry(**changes: object) -> dict[str, object]:
 
 
 def _load_email_exemptions(root: Path) -> frozenset[tuple[str, str, str]]:
-    return load_exact_value_exemptions(root, EMAIL_EXEMPTION_FAMILY)
+    return load_match_exemptions(root, EMAIL_EXEMPTION_FAMILY)
 
 
 def test_only_matching_email_and_path_are_exempt(tmp_path: Path) -> None:
@@ -189,7 +192,7 @@ def test_rejects_duplicate_private_ip_entries(tmp_path: Path) -> None:
         tmp_path, [_runner_entry(), _runner_entry(reason="Another explanation")]
     )
     with pytest.raises(ValueError):
-        load_exact_value_exemptions(tmp_path, PRIVATE_IP_EXEMPTION_FAMILY)
+        load_match_exemptions(tmp_path, PRIVATE_IP_EXEMPTION_FAMILY)
 
 
 @pytest.mark.parametrize(
@@ -237,11 +240,11 @@ def test_missing_config_has_no_exemptions(tmp_path: Path) -> None:
     ],
 )
 def test_document_without_a_family_list_loads_no_exemptions(
-    tmp_path: Path, document: dict[str, object], family: ExactValueExemptionFamily
+    tmp_path: Path, document: dict[str, object], family: MatchExemptionFamily
 ) -> None:
     """A document may carry another family, or no exception list at all."""
     _write_document(tmp_path, document)
-    assert load_exact_value_exemptions(tmp_path, family) == frozenset()
+    assert load_match_exemptions(tmp_path, family) == frozenset()
 
 
 def test_reason_rejection_names_the_ownership_requirement(tmp_path: Path) -> None:
@@ -257,8 +260,32 @@ def test_reason_rejection_names_the_ownership_requirement(tmp_path: Path) -> Non
 def test_private_ip_reason_rejection_names_its_own_family(tmp_path: Path) -> None:
     _write_private_ip_config(tmp_path, [_runner_entry(reason=" ")])
     with pytest.raises(ValueError) as rejection:
-        load_exact_value_exemptions(tmp_path, PRIVATE_IP_EXEMPTION_FAMILY)
+        load_match_exemptions(tmp_path, PRIVATE_IP_EXEMPTION_FAMILY)
     assert (
         str(rejection.value)
         == "Private IP exemption reason must explain why the exception is owned"
     )
+
+
+def test_loading_every_family_returns_both_owned_matches(tmp_path: Path) -> None:
+    _write_document(
+        tmp_path,
+        {
+            "version": 1,
+            "email_exemptions": [_entry()],
+            "private_ip_exemptions": [_runner_entry()],
+        },
+    )
+
+    assert load_all_match_exemptions(tmp_path) == frozenset(
+        {
+            ("contacts.py", "email", DIGEST),
+            ("runner.py", "private-ip", RUNNER_ADDRESS_DIGEST),
+        }
+    )
+
+
+def test_loading_every_family_returns_nothing_without_a_policy_document(
+    tmp_path: Path,
+) -> None:
+    assert load_all_match_exemptions(tmp_path) == frozenset()

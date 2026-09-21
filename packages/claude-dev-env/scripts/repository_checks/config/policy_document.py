@@ -1,6 +1,7 @@
 """Repository policy document and exception-entry schema."""
 
 import re
+from typing import NamedTuple
 
 CONFIG_RELATIVE_PATH = "config/repository-policy.json"
 DIGEST_PATTERN = re.compile(r"[0-9a-f]{64}")
@@ -22,3 +23,23 @@ PRIVATE_IP_EXEMPTION_SUBJECT = "Private IP exemption"
 PATH_EXEMPTION_SUBJECT = "Path exemption"
 EMAIL_CATEGORY = "email"
 PRIVATE_IP_CATEGORY = "private-ip"
+
+
+class MatchExemptionFamily(NamedTuple):
+    """One scanner category cleared by a committed path and match digest."""
+
+    field_name: str
+    category: str
+    subject: str
+
+
+EMAIL_EXEMPTION_FAMILY = MatchExemptionFamily(
+    EMAIL_EXEMPTIONS_FIELD, EMAIL_CATEGORY, EMAIL_EXEMPTION_SUBJECT
+)
+PRIVATE_IP_EXEMPTION_FAMILY = MatchExemptionFamily(
+    PRIVATE_IP_EXEMPTIONS_FIELD, PRIVATE_IP_CATEGORY, PRIVATE_IP_EXEMPTION_SUBJECT
+)
+ALL_MATCH_EXEMPTION_FAMILIES = (
+    EMAIL_EXEMPTION_FAMILY,
+    PRIVATE_IP_EXEMPTION_FAMILY,
+)

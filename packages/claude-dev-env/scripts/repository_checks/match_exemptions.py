@@ -1,17 +1,12 @@
-"""Load exact-value scanner exceptions owned by a repository."""
+"""Load the scanner matches a repository owns through its policy document."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import NamedTuple
 
 from repository_checks.config.policy_document import (
-    EMAIL_CATEGORY,
-    EMAIL_EXEMPTION_SUBJECT,
-    EMAIL_EXEMPTIONS_FIELD,
-    PRIVATE_IP_CATEGORY,
-    PRIVATE_IP_EXEMPTION_SUBJECT,
-    PRIVATE_IP_EXEMPTIONS_FIELD,
+    ALL_MATCH_EXEMPTION_FAMILIES,
+    MatchExemptionFamily,
 )
 from repository_checks.policy_document import (
     PolicyConfigurationRunFatal,
@@ -20,36 +15,16 @@ from repository_checks.policy_document import (
 )
 
 
-class ExactValueExemptionFamily(NamedTuple):
-    """One scanner category cleared by a committed path and value digest."""
-
-    field_name: str
-    category: str
-    subject: str
-
-
-EMAIL_EXEMPTION_FAMILY = ExactValueExemptionFamily(
-    EMAIL_EXEMPTIONS_FIELD, EMAIL_CATEGORY, EMAIL_EXEMPTION_SUBJECT
-)
-PRIVATE_IP_EXEMPTION_FAMILY = ExactValueExemptionFamily(
-    PRIVATE_IP_EXEMPTIONS_FIELD, PRIVATE_IP_CATEGORY, PRIVATE_IP_EXEMPTION_SUBJECT
-)
-ALL_EXACT_VALUE_EXEMPTION_FAMILIES = (
-    EMAIL_EXEMPTION_FAMILY,
-    PRIVATE_IP_EXEMPTION_FAMILY,
-)
-
-
-def load_exact_value_exemptions(
-    repository_root: Path, family: ExactValueExemptionFamily
+def load_match_exemptions(
+    repository_root: Path, family: MatchExemptionFamily
 ) -> frozenset[tuple[str, str, str]]:
-    """Read one family of validated exact-value exceptions.
+    """Read one family of matches the repository owns.
 
     ::
 
-        load_exact_value_exemptions(root, EMAIL_EXEMPTION_FAMILY)
+        the email family over a document owning one address
         ok:   {("contacts.py", "email", "<digest of the address>")}
-        flag: reading the private-IP list through the email family
+        flag: the private-IP list read through the email family
 
     Args:
         repository_root: Repository containing the optional policy configuration.
@@ -72,10 +47,10 @@ def load_exact_value_exemptions(
     return frozenset(exemptions)
 
 
-def load_all_exact_value_exemptions(
+def load_all_match_exemptions(
     repository_root: Path,
 ) -> frozenset[tuple[str, str, str]]:
-    """Read every family of validated exact-value exceptions.
+    """Read every family of matches the repository owns.
 
     Args:
         repository_root: Repository containing the optional policy configuration.
@@ -87,7 +62,7 @@ def load_all_exact_value_exemptions(
     """
     return frozenset().union(
         *(
-            load_exact_value_exemptions(repository_root, each_family)
-            for each_family in ALL_EXACT_VALUE_EXEMPTION_FAMILIES
+            load_match_exemptions(repository_root, each_family)
+            for each_family in ALL_MATCH_EXEMPTION_FAMILIES
         )
     )
