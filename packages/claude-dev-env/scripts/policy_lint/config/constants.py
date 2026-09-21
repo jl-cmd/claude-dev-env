@@ -168,3 +168,5 @@ RETIRED_HOOK_PROSE_MESSAGE = (
     "reaches no tool call. Say what the reader faces now, or drop the "
     "present-tense action."
 )
+
+CONTRAST_FRAMING_RULE_ID = "contrast-framing"

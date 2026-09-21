@@ -105,6 +105,11 @@ def _text_document_rules() -> tuple[model.Rule, ...]:
             adapters.workflow_substitution_diagnostics,
         ),
         build_document_rule(
+            "contrast-framing",
+            adapters.accepts_authored_markdown,
+            adapters.contrast_framing_diagnostics,
+        ),
+        build_document_rule(
             "retired-hook-prose",
             adapters.accepts_instruction_markdown,
             adapters.retired_hook_prose_diagnostics,

@@ -8,6 +8,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from contrast_framing import describe_contrast_framing, find_contrast_framing
+from dev_env_scripts_constants.contrast_framing_constants import (
+    CONTRAST_FRAMING_FINDING_CODE,
+)
 from durable_post_lint_config.config.constants import (
     ACTION_PR_CREATE,
     ACTION_PR_EDIT,
@@ -134,10 +138,27 @@ def _description_heading_findings(body_text: str) -> list[DurablePostFinding]:
     ]
 
 
+def _contrast_framing_findings(text: str) -> list[DurablePostFinding]:
+    return [
+        DurablePostFinding(
+            code=CONTRAST_FRAMING_FINDING_CODE,
+            message=describe_contrast_framing(text, each_line_number, each_form_name),
+        )
+        for each_line_number, _each_column, each_form_name in find_contrast_framing(
+            text
+        )
+    ]
+
+
 def _title_findings(title: str | None) -> list[DurablePostFinding]:
-    if title is None or CONVENTIONAL_TITLE_PATTERN.fullmatch(title) is not None:
+    if title is None:
         return []
-    return [DurablePostFinding(code=INVALID_TITLE_CODE, message=INVALID_TITLE_MESSAGE)]
+    all_findings = _contrast_framing_findings(title)
+    if CONVENTIONAL_TITLE_PATTERN.fullmatch(title) is None:
+        all_findings.append(
+            DurablePostFinding(code=INVALID_TITLE_CODE, message=INVALID_TITLE_MESSAGE)
+        )
+    return all_findings
 
 
 def _is_release_automation_branch(head_branch: str | None) -> bool:
@@ -174,6 +195,7 @@ def _body_findings(
         all_findings.extend(_release_body_findings(body_text))
     elif action in ALL_PR_DESCRIPTION_ACTIONS:
         all_findings.extend(_description_heading_findings(body_text))
+    all_findings.extend(_contrast_framing_findings(body_text))
     if find_volatile_path_marker(body_text) is not None:
         all_findings.append(
             DurablePostFinding(

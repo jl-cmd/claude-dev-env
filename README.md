@@ -126,6 +126,7 @@ Behavioral rules loaded into every session.
 | `git-workflow` | Draft PRs, stacked PR patterns, review-response protocol |
 | `long-horizon-autonomy` | Carry a long or unwatched run to completion |
 | `nas-ssh-invocation` | Reach the NAS through its runner script |
+| `no-contrast-framing` | State what is true; the rejected reading stays out |
 | `no-cross-skill-duplicate-helpers` | A helper copied between two skill folders is a deliberate choice |
 | `orphan-css-class` | Every class name in generated markup has a matching selector |
 | `paired-test-coverage` | Every public function in an established suite carries a behavioral test |

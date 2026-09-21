@@ -59,7 +59,7 @@ run.
 
 A review comment that repeats across pull requests reads the same way. Each
 repetition names the layer below the reviewer as the one that needs the control.
-Count the repetition rather than the apology.
+Count the repetitions.
 
 ## Where the control lands
 
