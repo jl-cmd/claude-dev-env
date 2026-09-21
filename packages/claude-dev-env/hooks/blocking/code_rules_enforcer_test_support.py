@@ -13,6 +13,16 @@ from pathlib import Path
 
 _ENFORCER_SCRIPT_PATH = Path(__file__).with_name("code_rules_enforcer.py")
 
+STRIP_CODE_AND_QUOTES_SOURCE = (
+    "import re\n"
+    "\n"
+    "def strip_code_and_quotes(text: str) -> str:\n"
+    "    without_fences = re.sub(r'```.*?```', '', text, flags=re.DOTALL)\n"
+    "    without_inline = re.sub(r'`[^`]*`', '', without_fences)\n"
+    "    without_quotes = re.sub(r'(?m)^>.*$', '', without_inline)\n"
+    "    return without_quotes.strip()\n"
+)
+
 
 def repository_root() -> Path:
     """Return the root of the checkout these tests run inside.
