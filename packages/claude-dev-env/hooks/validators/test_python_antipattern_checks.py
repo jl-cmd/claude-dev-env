@@ -150,6 +150,18 @@ class TestPrintInCliEntryPoint:
         tree = ast.parse(CLI_ENTRY_POINT_WITH_PRINTS)
         assert check_print_in_production(tree, "packages/foo/scripts/run_job.py") == []
 
+    def test_diagnostics_path_allows_print(self) -> None:
+        tree = ast.parse(CLI_ENTRY_POINT_WITH_PRINTS)
+        assert check_print_in_production(tree, "theme_exports/tools/diagnostics/probe.py") == []
+
+    def test_windows_diagnostics_path_allows_print(self) -> None:
+        tree = ast.parse(CLI_ENTRY_POINT_WITH_PRINTS)
+        assert check_print_in_production(tree, "theme_exports\\tools\\diagnostics\\probe.py") == []
+
+    def test_near_miss_diagnostics_name_still_flagged(self) -> None:
+        tree = ast.parse(NEAR_MISS_WITH_PRINT)
+        assert len(check_print_in_production(tree, "run_diagnostics.py")) == 1
+
     def test_near_miss_name_still_flagged(self) -> None:
         tree = ast.parse(NEAR_MISS_WITH_PRINT)
         assert len(check_print_in_production(tree, "publicli.py")) == 1
@@ -180,6 +192,8 @@ class TestCrossSurfaceConsistency:
             "stp_preview/renderer.py",
             "publicli.py",
             "packages/foo/scripts/run_job.py",
+            "theme_exports/tools/diagnostics/probe.py",
+            "run_diagnostics.py",
         ):
             production_allows = check_print_in_production(tree, path) == []
             library_allows = check_library_print(source, path) == []
