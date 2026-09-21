@@ -3,7 +3,7 @@ name: parallel-debug
 description: Runs the pr-converge loop for jl-cmd/claude-dev-env using AHK auto-continue pacing. Activate when the user says "parallel-debug" or asks to run the pr-converge convergence loop in Cursor.
 ---
 
-Run the bugbot + bugteam convergence loop across all open PRs in `jl-cmd/claude-dev-env`, paced by an AHK auto-typer instead of `ScheduleWakeup` (which is unavailable in Cursor sessions). End every response with `Awaiting next "continue" tick.`
+Run the bugbot + bugteam convergence loop across all open PRs in `jl-cmd/claude-dev-env`, paced by an AHK auto-typer, since `ScheduleWakeup` is unavailable in Cursor sessions. End every response with `Awaiting next "continue" tick.`
 
 ## Objective
 
