@@ -108,6 +108,7 @@ Behavioral rules loaded into every session.
 
 | Rule | What it does |
 |------|-------------|
+| `agent-merges-its-own-green-pull-request` | The agent that drives a pull request merges it once its gate passes |
 | `anti-corollary-tests` | Each test carries information; skip corollary matrices |
 | `asd-ste100-language` | Plain word choice, sentence style, and tone for user-facing text |
 | `bdd` | Discovery, illustration, and should-style specifications around the TDD loop |
