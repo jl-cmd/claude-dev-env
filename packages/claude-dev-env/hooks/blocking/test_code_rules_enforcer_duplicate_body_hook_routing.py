@@ -4,14 +4,14 @@ The cross-file duplicate-body check exists to catch a helper copied across sibli
 modules in the ``blocking/`` hook directory itself — the exact directory the rest of
 the code-rules suite exempts. CODE_RULES.md §11.6 assigns it by scope: it reads a
 sibling file, so it runs on the full gate only, and a hook-infrastructure target's
-live PreToolUse Write stays on the edit lane. These tests drive the real entry
+live PreToolUse Write stays on the edit lane. These tests drive the shipped entry
 points (the ``main()`` stdin path and the pre-check CLI) with a hook-infrastructure
 target, so each lane's behavior is proven on the same path a live Write or a
 pre-check run would take, rather than by calling the check function directly.
 
 Each test builds a temporary tree whose tail mirrors a production hook directory
 (``packages/claude-dev-env/hooks/blocking``) so ``is_hook_infrastructure`` matches the
-target path the same way it would for the real directory.
+target path the same way it would for the production directory.
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def test_precheck_of_copied_helper_at_hook_target_exits_nonzero(
 
     Enforces CODE_RULES.md §11.6: hook-infrastructure targets "run ... the
     whole roster on the full gate." The pre-check CLI runs the full gate, so
-    driving the real ``--check`` argv path proves it still routes a hook
+    driving the shipped ``--check`` argv path proves it still routes a hook
     ``.py`` target through the duplicate-body check rather than exiting clean
     on the blanket hook-infrastructure exemption."""
     (hook_blocking_dir / "existing_blocker.py").write_text(SHARED_HELPER_SOURCE, encoding="utf-8")
