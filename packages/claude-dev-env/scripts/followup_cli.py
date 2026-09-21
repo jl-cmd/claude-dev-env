@@ -281,21 +281,17 @@ def _run_count(repository_root: Path, stdout: TextIO) -> int:
         and BACKLOG_EXCEEDED_EXIT_CODE once it passes it.
     """
     finding_count = len(all_recorded_findings(repository_root))
-    if finding_count <= FOLLOWUP_BACKLOG_THRESHOLD:
-        stdout.write(
-            BACKLOG_WITHIN_TEMPLATE.format(
-                finding_count=finding_count, threshold=FOLLOWUP_BACKLOG_THRESHOLD
-            )
-            + LINE_SEPARATOR
-        )
-        return SUCCESS_EXIT_CODE
+    within_threshold = finding_count <= FOLLOWUP_BACKLOG_THRESHOLD
+    finding_template = (
+        BACKLOG_WITHIN_TEMPLATE if within_threshold else BACKLOG_EXCEEDED_TEMPLATE
+    )
     stdout.write(
-        BACKLOG_EXCEEDED_TEMPLATE.format(
+        finding_template.format(
             finding_count=finding_count, threshold=FOLLOWUP_BACKLOG_THRESHOLD
         )
         + LINE_SEPARATOR
     )
-    return BACKLOG_EXCEEDED_EXIT_CODE
+    return SUCCESS_EXIT_CODE if within_threshold else BACKLOG_EXCEEDED_EXIT_CODE
 
 
 def _run_clear(repository_root: Path) -> int:
