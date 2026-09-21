@@ -172,20 +172,17 @@ Reference documents that rules and agents point to for detailed standards.
 | `worker-completion-gate.md` | Full detail behind the worker completion rule |
 | `wsl-docker-cowork-starter-matrix.md` | Host memory attribution under WSL2 and Docker Desktop |
 
-### Agents (8)
+### Agents (1)
 
 Specialized agent prompts for common development tasks. Claude Code automatically discovers these and makes them available for delegation.
 
 | Agent | Role |
 |---------|------|
-| `clean-coder` | Primary code-writing agent |
-| `code-quality-agent` | Multi-file code quality review |
-| `git-commit-crafter` | Conventional commit messages |
-| `issue-tracker` | GitHub issue create, update, and close |
-| `plan-packet-validator` | Fresh-context plan-packet validator |
-| `pr-description-writer` | PR descriptions from the current diff |
-| `session-advisor` | Standing reviewer; endorse/correction/plan/stop |
-| `skill-writer-agent` | SKILL.md authoring specialist |
+| `poteto-agent` | Delegates to the installed pstack poteto-mode skill for the task in each call |
+
+The 8 personal agents this package shipped before `poteto-agent` are archived
+under `.agents/agents-archived/`, each with a restore command in
+[`ARCHIVE-MANIFEST.md`](packages/claude-dev-env/.agents/agents-archived/ARCHIVE-MANIFEST.md).
 
 ### Commands (1)
 
