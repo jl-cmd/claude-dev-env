@@ -318,7 +318,7 @@ def state_description_diagnostics(
     """
     absolute_path = adapter_support._document_path(repository_root, document)
     detector_module = load_module("blocking.state_description_blocker")
-    all_messages = detector_module.find_violations(
+    all_messages = detector_module.find_violations_with_lines(
         document.text, absolute_path.as_posix()
     )
     return adapter_support._diagnostics_for_state_messages(document, all_messages)

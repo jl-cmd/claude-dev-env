@@ -21,7 +21,6 @@ from .model import Diagnostic, Document, DocumentSet
 _document_path = adapter_support._document_path
 _line_number = adapter_support._line_number
 _diagnostics_for_messages = adapter_support._diagnostics_for_messages
-_source_line_for_phrase = adapter_support._source_line_for_phrase
 _diagnostics_for_state_messages = adapter_support._diagnostics_for_state_messages
 
 
