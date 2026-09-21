@@ -42,12 +42,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install the constants package
-        run: pip install -e packages/claude-dev-env/
-
       - name: Read the review findings on this head
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONPATH: packages/claude-dev-env/scripts
         run: |
           python packages/claude-dev-env/scripts/review_closure.py \
             "${{ github.repository }}" \
