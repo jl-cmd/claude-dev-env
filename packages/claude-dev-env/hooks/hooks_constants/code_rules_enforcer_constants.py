@@ -194,12 +194,9 @@ ALL_SUBSCRIPT_ONLY_COLLECTION_TYPE_NAMES: frozenset[str] = frozenset({"dict"})
 COLLECTION_BY_NAME_PATTERN: re.Pattern[str] = re.compile(r"^[a-z][a-z0-9]*_by_[a-z][a-z0-9_]*$")
 ALL_CLI_FILE_PATH_MARKERS: tuple[str, ...] = (
     "/scripts/",
-    "\\scripts\\",
     "/diagnostics/",
-    "\\diagnostics\\",
     "_cli.py",
     "/cli.py",
-    "\\cli.py",
 )
 
 LOGGING_FSTRING_PATTERN = re.compile(

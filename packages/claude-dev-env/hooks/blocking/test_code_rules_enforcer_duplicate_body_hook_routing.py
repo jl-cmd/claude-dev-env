@@ -17,10 +17,7 @@ target path the same way it would for the production directory.
 from __future__ import annotations
 
 import pathlib
-import shutil
 import sys
-import tempfile
-from collections.abc import Iterator
 
 import pytest
 
@@ -33,34 +30,12 @@ if str(_HOOKS_PARENT) not in sys.path:
 
 from code_rules_enforcer import main  # noqa: E402
 from code_rules_enforcer_test_support import (  # noqa: E402
+    STRIP_CODE_AND_QUOTES_SOURCE as SHARED_HELPER_SOURCE,
     run_precheck,
     run_write_entrypoint,
 )
 
 pytestmark = pytest.mark.usefixtures("ephemeral_exempt_off")
-
-SHARED_HELPER_SOURCE = (
-    "import re\n"
-    "\n"
-    "def strip_code_and_quotes(text: str) -> str:\n"
-    "    without_fences = re.sub(r'```.*?```', '', text, flags=re.DOTALL)\n"
-    "    without_inline = re.sub(r'`[^`]*`', '', without_fences)\n"
-    "    without_quotes = re.sub(r'(?m)^>.*$', '', without_inline)\n"
-    "    return without_quotes.strip()\n"
-)
-
-_HOOK_INFRASTRUCTURE_TAIL = pathlib.Path("packages") / "claude-dev-env" / "hooks" / "blocking"
-
-
-@pytest.fixture
-def hook_blocking_dir() -> Iterator[pathlib.Path]:
-    base_directory = pathlib.Path(tempfile.mkdtemp())
-    blocking_directory = base_directory / _HOOK_INFRASTRUCTURE_TAIL
-    blocking_directory.mkdir(parents=True)
-    try:
-        yield blocking_directory
-    finally:
-        shutil.rmtree(base_directory, ignore_errors=False)
 
 
 def _run_main_with_write_payload(
