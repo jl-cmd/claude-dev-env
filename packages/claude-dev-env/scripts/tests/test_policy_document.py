@@ -7,6 +7,10 @@ import json
 from pathlib import Path
 
 import pytest
+from repository_checks.config.policy_document import (
+    ALL_EXEMPTION_FIELDS,
+    ALL_MATCH_EXEMPTION_FAMILIES,
+)
 from repository_checks.policy_document import (
     entry_path_and_digest,
     read_policy_entries,
@@ -102,3 +106,23 @@ def test_entry_validator_uses_the_subject_it_is_given() -> None:
     with pytest.raises(ValueError) as rejection:
         entry_path_and_digest({}, "Email exemption")
     assert str(rejection.value) == "Email exemptions require path, sha256, and reason"
+
+
+def test_every_match_family_reads_a_field_the_document_schema_accepts(
+    tmp_path: Path,
+) -> None:
+    for each_family in ALL_MATCH_EXEMPTION_FAMILIES:
+        _write_config(tmp_path, {"version": 1, each_family.field_name: []})
+
+        assert each_family.field_name in ALL_EXEMPTION_FIELDS
+        assert read_policy_entries(tmp_path, each_family.field_name) == []
+
+
+def test_each_match_family_names_its_own_field_category_and_subject() -> None:
+    all_fields = {each.field_name for each in ALL_MATCH_EXEMPTION_FAMILIES}
+    all_categories = {each.category for each in ALL_MATCH_EXEMPTION_FAMILIES}
+    all_subjects = {each.subject for each in ALL_MATCH_EXEMPTION_FAMILIES}
+
+    assert len(all_fields) == len(ALL_MATCH_EXEMPTION_FAMILIES)
+    assert len(all_categories) == len(ALL_MATCH_EXEMPTION_FAMILIES)
+    assert len(all_subjects) == len(ALL_MATCH_EXEMPTION_FAMILIES)
