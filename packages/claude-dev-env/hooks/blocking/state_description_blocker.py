@@ -22,6 +22,10 @@ try:
         sys.path.insert(0, _hooks_dir)
 
     from blocking.code_rules_shared import is_ephemeral_path
+    from hooks_constants.code_rules_enforcer_constants import (
+        JAVASCRIPT_BLOCK_COMMENT_CLOSER,
+        JAVASCRIPT_BLOCK_COMMENT_OPENER,
+    )
     from hooks_constants.hook_block_logger import log_hook_block
     from hooks_constants.multi_edit_reconstruction import joined_new_strings
     from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
@@ -34,8 +38,6 @@ try:
         ALL_HASH_AND_SLASH_EXTENSIONS,
         ALL_HASH_ONLY_EXTENSIONS,
         ALL_MARKDOWN_EXTENSIONS,
-        BLOCK_COMMENT_CLOSE_MARKER,
-        BLOCK_COMMENT_OPEN_MARKER,
         DOUBLE_QUOTE_BODY_GROUP,
         DOUBLE_QUOTED_SPAN_PATTERN,
         INLINE_CODE_PATTERN,
@@ -90,13 +92,13 @@ def _consume_block_comment_open(
     on this same line (``None`` when the whole line was consumed), and
     whether the comment is still open past this line.
     """
-    slash_star_index = stripped.find(BLOCK_COMMENT_OPEN_MARKER)
+    slash_star_index = stripped.find(JAVASCRIPT_BLOCK_COMMENT_OPENER)
     close_star_index = stripped.find(
-        BLOCK_COMMENT_CLOSE_MARKER, slash_star_index + len(BLOCK_COMMENT_OPEN_MARKER)
+        JAVASCRIPT_BLOCK_COMMENT_CLOSER, slash_star_index + len(JAVASCRIPT_BLOCK_COMMENT_OPENER)
     )
     if close_star_index < 0:
         return [(each_line_number, stripped[slash_star_index:])], None, True
-    close_end = close_star_index + len(BLOCK_COMMENT_CLOSE_MARKER)
+    close_end = close_star_index + len(JAVASCRIPT_BLOCK_COMMENT_CLOSER)
     entry = (each_line_number, stripped[slash_star_index:close_end])
     after_close = stripped[close_end:].lstrip()
     return [entry], (after_close or None), False
@@ -110,10 +112,10 @@ def _consume_block_comment_continuation(
     Returns the extracted entries, whether the comment is still open past
     this line, and whether the caller should move to the next source line.
     """
-    close_index = stripped.find(BLOCK_COMMENT_CLOSE_MARKER)
+    close_index = stripped.find(JAVASCRIPT_BLOCK_COMMENT_CLOSER)
     if close_index < 0:
         return [(each_line_number, stripped)], True, True
-    close_end = close_index + len(BLOCK_COMMENT_CLOSE_MARKER)
+    close_end = close_index + len(JAVASCRIPT_BLOCK_COMMENT_CLOSER)
     return [(each_line_number, stripped[:close_end])], False, False
 
 
@@ -140,7 +142,7 @@ def _extract_comment_lines(text: str, extension: str = "") -> list[tuple[int, st
             ):
                 all_comment_lines.append((each_line_number, stripped))
                 continue
-            if BLOCK_COMMENT_OPEN_MARKER in stripped and not is_in_block_comment:
+            if JAVASCRIPT_BLOCK_COMMENT_OPENER in stripped and not is_in_block_comment:
                 entries, leftover, is_in_block_comment = _consume_block_comment_open(
                     each_line_number, stripped
                 )
