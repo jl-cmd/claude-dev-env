@@ -175,9 +175,7 @@ def _collect_introduced_identifiers(
     """
     all_identifier_tuples: set[IdentifierTuple] = set()
     for each_file_path, _, each_text in all_added_lines:
-        if _file_extension(
-            each_file_path
-        ) in ALL_SWEEP_CODE_FILE_EXTENSIONS and not _is_test_file(each_file_path):
+        if _is_swept_non_test_code_file(each_file_path):
             all_identifier_tuples.update(_identifier_tuples_in_text(each_text))
     return frozenset(all_identifier_tuples)
 
@@ -299,6 +297,13 @@ def _is_test_file(file_path: str) -> bool:
     return any(
         each_marker in basename for each_marker in ALL_TEST_FILE_NAME_INFIX_MARKERS
     )
+
+
+def _is_swept_non_test_code_file(file_path: str) -> bool:
+    """Return whether a diff path names a swept code file outside a test module."""
+    return _file_extension(
+        file_path
+    ) in ALL_SWEEP_CODE_FILE_EXTENSIONS and not _is_test_file(file_path)
 
 
 def _comment_fragments(line_text: str) -> list[str]:
@@ -616,9 +621,7 @@ def _stem_identifier_tuple_for_code_file(each_file_path: str) -> IdentifierTuple
     ``None`` when the path is not a swept code file, is a test file, or its
     stem carries fewer than the minimum identifier token count.
     """
-    if _file_extension(each_file_path) not in ALL_SWEEP_CODE_FILE_EXTENSIONS or _is_test_file(
-        each_file_path
-    ):
+    if not _is_swept_non_test_code_file(each_file_path):
         return None
     stem_tuple = _identifier_token_tuple(Path(each_file_path).stem)
     if len(stem_tuple) < MINIMUM_IDENTIFIER_TOKEN_COUNT:
@@ -747,9 +750,7 @@ def _identifier_names_on_added_code_lines(diff_text: str) -> frozenset[str]:
     """
     all_names: set[str] = set()
     for each_file_path, _, each_text in _parse_added_lines(diff_text):
-        if _file_extension(
-            each_file_path
-        ) not in ALL_SWEEP_CODE_FILE_EXTENSIONS or _is_test_file(each_file_path):
+        if not _is_swept_non_test_code_file(each_file_path):
             continue
         all_found_names = SNAKE_CASE_IDENTIFIER_PATTERN.findall(each_text)
         all_found_names += CAMEL_CASE_IDENTIFIER_PATTERN.findall(each_text)
