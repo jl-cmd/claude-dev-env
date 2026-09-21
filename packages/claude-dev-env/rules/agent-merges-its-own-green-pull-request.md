@@ -37,6 +37,10 @@ Each hold reason names its own repair, and each repair belongs to the agent:
 | A review thread is open | Answer it, push the fix, resolve the thread |
 | The pull request is a draft | Mark it ready once the checks pass |
 
+## When a gate elsewhere holds the merge command
+
+A session working inside another repository can sit behind that repository's own pre-merge gate, which reads the checkout the session works in and refuses a merge command whatever repository the pull request belongs to. That session hands the merge to the session that owns this repository's pull requests, by message, naming the pull request. The receiving session reads the verdict above and merges. The hand-off carries the work; it never lands on the owner.
+
 ## After the merge
 
 Delete nothing by hand. The repository deletes the head branch on merge.
