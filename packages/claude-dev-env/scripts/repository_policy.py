@@ -16,6 +16,7 @@ from repository_checks.config.constants import (
     REPOSITORY_ROOT_FLAG,
     USAGE_EXIT_CODE,
 )
+from repository_checks.followups import record_smell_findings
 from repository_checks.reporting import render_report
 from repository_checks.runner import run_repository_checks
 
@@ -90,8 +91,8 @@ def main(
         stderr: Error stream.
 
     Returns:
-        Zero when the tree is clean, one for findings, two for usage errors,
-        and three when a check fails closed.
+        Zero when the tree carries no breaking finding, one for a breaking
+        finding, two for usage errors, and three when a check fails closed.
     """
     try:
         namespace = _build_parser().parse_args(list(all_arguments))
@@ -102,6 +103,7 @@ def main(
     if namespace.repository_root is not None:
         selected_root = Path(namespace.repository_root).resolve()
     report = run_repository_checks(selected_root)
+    record_smell_findings(selected_root, report)
     stdout.write(render_report(report))
     return report.exit_code
 

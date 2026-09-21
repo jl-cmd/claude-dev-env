@@ -20,8 +20,17 @@ from repository_checks.config.constants import (
     CHECK_ID_PACKAGE_INVENTORY,
     CHECK_ID_PYTEST_TESTPATHS,
     CHECK_ID_TRACKED_PERSONAL_DATA,
+    FOLLOWUP_LEDGER_MODULE_NAME,
+    SUCCESS_EXIT_CODE,
 )
-from repository_policy_test_support import run_policy, seed_clean_repository
+from repository_checks.hook_modules import load_hooks_module
+from repository_policy_test_support import (
+    commit_tracked_files,
+    initialize_repository,
+    run_policy,
+    seed_clean_repository,
+    write_text,
+)
 
 _POLICY_SCRIPT_PATH = _SCRIPTS_DIRECTORY / "repository_policy.py"
 _CHECK_SCRIPT_PATH = _SCRIPTS_DIRECTORY / "check.ps1"
@@ -69,3 +78,36 @@ def test_should_run_the_checker_as_a_subprocess(tmp_path: Path) -> None:
     )
     assert completed.returncode == 0
     assert completed.stdout == ""
+
+
+def test_should_record_a_stale_inventory_and_leave_the_tree_passing(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    initialize_repository(repository_root)
+    package_directory = repository_root / "pipeline"
+    write_text(
+        package_directory / "README.md",
+        "# Pipeline\n\n"
+        "| Path | Role |\n"
+        "|---|---|\n"
+        "| `dialer_compose.py` | Composes a dialer strip. |\n"
+        "| `compose_dialer_cli.py` | CLI for the dialer strip. |\n",
+    )
+    write_text(package_directory / "dialer_compose.py", "x = 1\n")
+    write_text(package_directory / "compose_dialer_cli.py", "x = 1\n")
+    write_text(package_directory / "check_dialer_seam_cli.py", "x = 1\n")
+    commit_tracked_files(repository_root)
+
+    exit_code, stdout_text, _stderr_text = run_policy(repository_root)
+
+    assert exit_code == SUCCESS_EXIT_CODE
+    assert stdout_text == (
+        "advisory: package-inventory: pipeline/check_dialer_seam_cli.py: "
+        "production file is absent from package inventory\n"
+    )
+    ledger = load_hooks_module(FOLLOWUP_LEDGER_MODULE_NAME)
+    all_recorded = ledger.all_recorded_findings(repository_root)
+    assert [each_finding.message for each_finding in all_recorded] == [
+        "production file is absent from package inventory"
+    ]

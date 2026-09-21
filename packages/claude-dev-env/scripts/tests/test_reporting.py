@@ -12,6 +12,7 @@ if str(_SCRIPTS_DIRECTORY) not in sys.path:
 if str(_TESTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIRECTORY))
 
+from repository_checks.config.constants import CHECK_ID_PACKAGE_INVENTORY
 from repository_checks.models import RepositoryCheckReport, RepositoryFinding
 from repository_checks.reporting import render_report
 from repository_policy_test_support import (
@@ -52,3 +53,20 @@ def test_should_print_repository_relative_paths_only(tmp_path: Path) -> None:
     assert absolute_root_text not in stdout_text
     assert absolute_root_text not in stderr_text
     assert "notes/CLAUDE.md" in stdout_text
+
+
+def test_should_prefix_an_advisory_finding_line() -> None:
+    report = RepositoryCheckReport(
+        (
+            RepositoryFinding(
+                CHECK_ID_PACKAGE_INVENTORY,
+                "pipeline/check_dialer_seam_cli.py",
+                "production file is absent from package inventory",
+            ),
+        ),
+        (),
+    )
+    assert render_report(report) == (
+        "advisory: package-inventory: pipeline/check_dialer_seam_cli.py: "
+        "production file is absent from package inventory\n"
+    )

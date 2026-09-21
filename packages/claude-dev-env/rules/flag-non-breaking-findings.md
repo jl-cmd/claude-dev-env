@@ -97,6 +97,17 @@ loading, so the gate fails. A non-canonical filename and a Git mode other than
 `SEVERITY_BY_RULE_ID` in that module is the whole declaration. Add a check,
 add its row.
 
+`scripts/repository_policy.py` splits the committed-tree checks the same way.
+`SEVERITY_BY_CHECK_ID` in `repository_checks/config/constants.py` carries one
+row per check id, and a check id with no row reads as breaking. The
+`package-inventory` check is the one smell there. A production file whose
+package inventory omits its row still imports and still runs, so the check
+prints its finding with an `advisory:` prefix, records it in the ledger, and
+leaves the tree passing. Every other committed-tree check blocks: a `CLAUDE.md`
+naming a file that does not exist, an env-var row naming a file that never
+reads the variable, a test outside the testpaths allowlist, and a tracked
+secret.
+
 ## Sibling rules
 
 | Rule | Role |
