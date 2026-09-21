@@ -23,9 +23,10 @@ import functools
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from dev_env_scripts_constants.agent_merge_check_constants import (
     ACCEPT_HEADER,
@@ -52,6 +53,7 @@ from dev_env_scripts_constants.agent_merge_check_constants import (
     MERGE_VERDICT_LABEL,
     MERGEABLE_STATE_CLEAN,
     MERGEABLE_STATE_KEY,
+    MERGEABLE_STATE_UNKNOWN,
     NAME_VARIABLE,
     NO_SIGN_IN_MESSAGE,
     NUMBER_ARGUMENT_HELP,
@@ -65,6 +67,8 @@ from dev_env_scripts_constants.agent_merge_check_constants import (
     REQUEST_TIMEOUT_SECONDS,
     REVIEW_THREAD_PAGE_SIZE,
     REVIEW_THREADS_ENDPOINT_TEMPLATE,
+    SETTLE_ATTEMPT_COUNT,
+    SETTLE_WAIT_SECONDS,
     SHA_KEY,
     SHORT_SHA_LENGTH,
     SLUG_ARGUMENT_HELP,
@@ -311,6 +315,38 @@ def _field_at(document: object, all_fields: object, key: str) -> object:
     return all_fields.get(key)
 
 
+def read_settled_pull_request(
+    slug: str,
+    number: int,
+    token: str,
+    sleep: Callable[[float], None],
+) -> Mapping[str, object]:
+    """Read a pull request whose merge state GitHub has worked out.
+
+    GitHub reports ``unknown`` while it computes mergeability after a push,
+    so this reads again until the state settles.
+
+    Args:
+        slug: The repository as ``owner/name``.
+        number: The pull request number.
+        token: The GitHub token the request authenticates with.
+        sleep: How the caller waits between reads.
+
+    Returns:
+        The fields the last read reported.
+
+    Raises:
+        MergeCheckError: A read failed.
+    """
+    for each_attempt in range(SETTLE_ATTEMPT_COUNT):
+        all_pull_request_fields = read_pull_request(slug, number, token)
+        if all_pull_request_fields.get(MERGEABLE_STATE_KEY) != MERGEABLE_STATE_UNKNOWN:
+            return all_pull_request_fields
+        if each_attempt + 1 < SETTLE_ATTEMPT_COUNT:
+            sleep(SETTLE_WAIT_SECONDS)
+    return all_pull_request_fields
+
+
 def main(all_arguments: Sequence[str]) -> int:
     """Print the merge verdict for one pull request.
 
@@ -327,7 +363,9 @@ def main(all_arguments: Sequence[str]) -> int:
     parsed = parser.parse_args(all_arguments)
     try:
         token = _github_token()
-        all_pull_request_fields = read_pull_request(parsed.slug, parsed.number, token)
+        all_pull_request_fields = read_settled_pull_request(
+            parsed.slug, parsed.number, token, time.sleep
+        )
         unresolved_thread_count = read_unresolved_thread_count(
             parsed.slug, parsed.number, token
         )

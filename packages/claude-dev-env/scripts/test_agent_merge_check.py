@@ -19,6 +19,7 @@ from dev_env_scripts_constants.agent_merge_check_constants import (
     DRAFT_HOLD_REASON,
     HOLD_VERDICT_LABEL,
     MERGE_VERDICT_LABEL,
+    SETTLE_ATTEMPT_COUNT,
     UNSTABLE_HOLD_REASON,
 )
 
@@ -210,6 +211,62 @@ def test_read_unresolved_thread_count_rejects_a_query_answer_of_another_shape(
         )
 
 
+def test_read_settled_pull_request_reads_again_while_the_state_is_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_answers = [
+        _pull_request(mergeable_state="unknown"),
+        _pull_request(mergeable_state="unknown"),
+        CLEAN_PULL_REQUEST,
+    ]
+    all_waits: list[float] = []
+    monkeypatch.setattr(
+        agent_merge_check,
+        "read_pull_request",
+        lambda slug, number, token: all_answers.pop(0),
+    )
+    settled = agent_merge_check.read_settled_pull_request(
+        "jl-cmd/claude-dev-env", 1442, "token", all_waits.append
+    )
+    assert settled == CLEAN_PULL_REQUEST
+    assert len(all_waits) == 2
+
+
+def test_read_settled_pull_request_stops_after_its_last_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_waits: list[float] = []
+    read_count = 0
+
+    def _unknown(slug: str, number: int, token: str) -> dict[str, object]:
+        nonlocal read_count
+        read_count += 1
+        return _pull_request(mergeable_state="unknown")
+
+    monkeypatch.setattr(agent_merge_check, "read_pull_request", _unknown)
+    settled = agent_merge_check.read_settled_pull_request(
+        "jl-cmd/claude-dev-env", 1442, "token", all_waits.append
+    )
+    assert settled["mergeable_state"] == "unknown"
+    assert read_count == SETTLE_ATTEMPT_COUNT
+    assert len(all_waits) == SETTLE_ATTEMPT_COUNT - 1
+
+
+def test_read_settled_pull_request_waits_for_no_settled_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_waits: list[float] = []
+    monkeypatch.setattr(
+        agent_merge_check,
+        "read_pull_request",
+        lambda slug, number, token: CLEAN_PULL_REQUEST,
+    )
+    agent_merge_check.read_settled_pull_request(
+        "jl-cmd/claude-dev-env", 1442, "token", all_waits.append
+    )
+    assert all_waits == []
+
+
 def test_a_missing_token_reports_the_error_exit_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -225,6 +282,7 @@ def test_a_ready_pull_request_exits_zero(monkeypatch: pytest.MonkeyPatch) -> Non
         "read_pull_request",
         lambda slug, number, token: CLEAN_PULL_REQUEST,
     )
+    monkeypatch.setattr(agent_merge_check.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(
         agent_merge_check,
         "read_unresolved_thread_count",

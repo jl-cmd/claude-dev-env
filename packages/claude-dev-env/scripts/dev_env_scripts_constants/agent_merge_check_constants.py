@@ -31,6 +31,9 @@ MERGEABLE_STATE_BEHIND = "behind"
 MERGEABLE_STATE_DIRTY = "dirty"
 MERGEABLE_STATE_BLOCKED = "blocked"
 MERGEABLE_STATE_UNSTABLE = "unstable"
+MERGEABLE_STATE_UNKNOWN = "unknown"
+SETTLE_ATTEMPT_COUNT = 5
+SETTLE_WAIT_SECONDS = 3
 
 DRAFT_HOLD_REASON = (
     "The pull request is a draft, so it carries no verdict to merge on. "
