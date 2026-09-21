@@ -9,7 +9,7 @@ hook-infrastructure target.
 
 Each test takes the ``hook_blocking_dir`` fixture from ``conftest.py``, which builds
 a temporary tree matching the production hook directory so ``is_hook_infrastructure``
-routes a target inside it the same way it would for the real directory.
+routes a target inside it the same way it would for the production directory.
 """
 
 from __future__ import annotations
