@@ -14,7 +14,7 @@ if str(_TESTS_DIRECTORY) not in sys.path:
 from repository_checks.config.constants import (
     CHECK_ID_PACKAGE_INVENTORY,
     FAILED_CHECK_EXIT_CODE,
-    FINDINGS_EXIT_CODE,
+    SUCCESS_EXIT_CODE,
 )
 from repository_policy_test_support import (
     commit_tracked_files,
@@ -33,14 +33,16 @@ _SKILL_INVENTORY_MARKDOWN = (
 )
 
 
-def test_should_flag_a_stale_package_inventory(tmp_path: Path) -> None:
+def test_should_report_a_stale_package_inventory_without_failing(
+    tmp_path: Path,
+) -> None:
     repository_root = tmp_path / "repo"
     initialize_repository(repository_root)
     package_directory = repository_root / "pipeline"
     _write_package_inventory(package_directory)
     commit_tracked_files(repository_root)
     exit_code, stdout_text, _stderr_text = run_policy(repository_root)
-    assert exit_code == FINDINGS_EXIT_CODE
+    assert exit_code == SUCCESS_EXIT_CODE
     assert CHECK_ID_PACKAGE_INVENTORY in stdout_text
     assert "pipeline/check_dialer_seam_cli.py" in stdout_text
 
@@ -52,7 +54,7 @@ def test_should_check_active_skills_and_exclude_archived_skills(tmp_path: Path) 
     _seed_skill_package(repository_root / ".agents" / "skills-archived" / "old-skill")
     commit_tracked_files(repository_root)
     exit_code, stdout_text, _stderr_text = run_policy(repository_root)
-    assert exit_code == FINDINGS_EXIT_CODE
+    assert exit_code == SUCCESS_EXIT_CODE
     assert CHECK_ID_PACKAGE_INVENTORY in stdout_text
     assert ".agents/skills/live-skill/scripts/unlisted_gamma.py" in stdout_text
     assert (
