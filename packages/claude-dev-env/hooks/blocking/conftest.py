@@ -25,8 +25,8 @@ def hook_blocking_dir() -> Iterator[Path]:
     """Build a temporary tree whose tail mirrors a production hook directory.
 
     ``is_hook_infrastructure`` matches on the path tail, so a target inside
-    the yielded directory routes the way a real
-    ``packages/claude-dev-env/hooks/blocking`` target would.
+    the yielded directory routes the way a
+    ``packages/claude-dev-env/hooks/blocking`` target does.
     """
     base_directory = Path(tempfile.mkdtemp())
     blocking_directory = base_directory / _HOOK_INFRASTRUCTURE_TAIL
