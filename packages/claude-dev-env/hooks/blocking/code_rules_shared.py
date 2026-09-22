@@ -48,7 +48,7 @@ def get_file_extension(file_path: str) -> str:
 def is_hook_infrastructure(file_path: str) -> bool:
     """Check if file is a Claude Code hook (standalone infrastructure, not project code)."""
     path_lower = "/" + file_path.lower().replace("\\", "/").lstrip("/")
-    return any(pattern.replace("\\", "/") in path_lower for pattern in ALL_HOOK_INFRASTRUCTURE_PATTERNS)
+    return any(pattern in path_lower for pattern in ALL_HOOK_INFRASTRUCTURE_PATTERNS)
 
 
 def is_agent_home_tooling(file_path: str) -> bool:
@@ -66,10 +66,7 @@ def is_agent_home_tooling(file_path: str) -> bool:
         True when the path sits under a recognized agent home directory.
     """
     path_lower = "/" + file_path.lower().replace("\\", "/").lstrip("/")
-    return any(
-        each_pattern.replace("\\", "/") in path_lower
-        for each_pattern in ALL_AGENT_HOME_TOOLING_PATTERNS
-    )
+    return any(each_pattern in path_lower for each_pattern in ALL_AGENT_HOME_TOOLING_PATTERNS)
 
 
 def is_test_file(file_path: str) -> bool:
@@ -106,7 +103,7 @@ def is_workflow_registry_file(file_path: str) -> bool:
     These are module-level singletons, not misplaced literal constants.
     """
     path_lower = file_path.lower().replace("\\", "/")
-    return any(pattern.replace("\\", "/") in path_lower for pattern in ALL_WORKFLOW_REGISTRY_PATTERNS)
+    return any(pattern in path_lower for pattern in ALL_WORKFLOW_REGISTRY_PATTERNS)
 
 
 def is_spec_file(file_path: str) -> bool:
@@ -523,7 +520,7 @@ def _is_dedicated_constants_module(file_path: str) -> bool:
 def is_migration_file(file_path: str) -> bool:
     """Check if file is a Django migration (must be self-contained)."""
     path_lower = file_path.lower().replace("\\", "/")
-    return any(pattern.replace("\\", "/") in path_lower for pattern in ALL_MIGRATION_PATH_PATTERNS)
+    return any(pattern in path_lower for pattern in ALL_MIGRATION_PATH_PATTERNS)
 
 
 def docstring_line_numbers(content: str) -> set[int]:

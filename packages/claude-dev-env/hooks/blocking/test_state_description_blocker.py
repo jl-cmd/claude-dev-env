@@ -34,6 +34,11 @@ from code_rules_enforcer_test_support import (
     repository_file_path,
     repository_root,
 )
+from hooks_constants.code_rules_enforcer_constants import (
+    JAVASCRIPT_BLOCK_COMMENT_CLOSER,
+    JAVASCRIPT_BLOCK_COMMENT_OPENER,
+)
+import state_description_blocker as _state_description_blocker_module
 
 HOOK_SCRIPT_PATH = os.path.join(
     os.path.dirname(__file__), "state_description_blocker.py"
@@ -995,3 +1000,14 @@ def test_find_violations_with_lines_reports_markdown_line_past_a_code_fence() ->
     all_violations = find_violations_with_lines(markdown_source, "docs/api.md")
 
     assert all_violations == [("previously", 7), ("was previously", 7)]
+
+
+def test_block_comment_markers_are_the_javascript_constants() -> None:
+    assert (
+        _state_description_blocker_module.JAVASCRIPT_BLOCK_COMMENT_OPENER
+        is JAVASCRIPT_BLOCK_COMMENT_OPENER
+    )
+    assert (
+        _state_description_blocker_module.JAVASCRIPT_BLOCK_COMMENT_CLOSER
+        is JAVASCRIPT_BLOCK_COMMENT_CLOSER
+    )

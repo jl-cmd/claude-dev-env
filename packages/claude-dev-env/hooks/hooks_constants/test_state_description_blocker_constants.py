@@ -10,13 +10,15 @@ if str(_HOOKS_ROOT) not in sys.path:
     sys.path.insert(0, str(_HOOKS_ROOT))
 
 from blocking.state_description_blocker import _extract_comment_lines
+from hooks_constants.code_rules_enforcer_constants import (
+    JAVASCRIPT_BLOCK_COMMENT_CLOSER,
+    JAVASCRIPT_BLOCK_COMMENT_OPENER,
+)
 from hooks_constants.state_description_blocker_constants import (
     ALL_BLOCK_COMMENT_EXTENSIONS,
     ALL_COMMENT_TRANSITION_PATTERNS,
     ALL_HASH_ONLY_EXTENSIONS,
     ALL_MARKDOWN_EXTENSIONS,
-    BLOCK_COMMENT_CLOSE_MARKER,
-    BLOCK_COMMENT_OPEN_MARKER,
     DOUBLE_QUOTE_BODY_GROUP,
     SINGLE_QUOTE_BODY_GROUP,
     TRIPLE_QUOTED_BLOCK_PATTERN,
@@ -47,19 +49,19 @@ def test_transition_patterns_do_not_match_unrelated_prose() -> None:
 
 
 def test_block_comment_markers_close_a_single_line_block_comment() -> None:
-    text = f"{BLOCK_COMMENT_OPEN_MARKER} note {BLOCK_COMMENT_CLOSE_MARKER}\ncode();"
+    text = f"{JAVASCRIPT_BLOCK_COMMENT_OPENER} note {JAVASCRIPT_BLOCK_COMMENT_CLOSER}\ncode();"
     all_comment_lines = _extract_comment_lines(text, ".js")
     assert all_comment_lines == [
-        (1, f"{BLOCK_COMMENT_OPEN_MARKER} note {BLOCK_COMMENT_CLOSE_MARKER}")
+        (1, f"{JAVASCRIPT_BLOCK_COMMENT_OPENER} note {JAVASCRIPT_BLOCK_COMMENT_CLOSER}")
     ]
 
 
 def test_block_comment_markers_carry_an_unclosed_comment_to_the_next_line() -> None:
-    text = f"{BLOCK_COMMENT_OPEN_MARKER} still open\nclosed here {BLOCK_COMMENT_CLOSE_MARKER}"
+    text = f"{JAVASCRIPT_BLOCK_COMMENT_OPENER} still open\nclosed here {JAVASCRIPT_BLOCK_COMMENT_CLOSER}"
     all_comment_lines = _extract_comment_lines(text, ".js")
     assert all_comment_lines == [
-        (1, f"{BLOCK_COMMENT_OPEN_MARKER} still open"),
-        (2, f"closed here {BLOCK_COMMENT_CLOSE_MARKER}"),
+        (1, f"{JAVASCRIPT_BLOCK_COMMENT_OPENER} still open"),
+        (2, f"closed here {JAVASCRIPT_BLOCK_COMMENT_CLOSER}"),
     ]
 
 
