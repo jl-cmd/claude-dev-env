@@ -14,6 +14,9 @@ _BLOCKING_DIR = str(Path(__file__).resolve().parent.parent / "blocking")
 if _BLOCKING_DIR not in sys.path:
     sys.path.insert(0, _BLOCKING_DIR)
 
+import pytest  # noqa: E402
+
+from validators import exempt_paths  # noqa: E402
 from validators.exempt_paths import is_config_file  # noqa: E402
 from code_rules_path_utils import is_config_file as path_utils_is_config_file  # noqa: E402
 
@@ -63,3 +66,20 @@ def test_is_config_file_is_identical_function_object_from_path_utils() -> None:
     assert is_config_file is path_utils_is_config_file, (
         "exempt_paths.is_config_file must be imported from code_rules_path_utils, not re-defined"
     )
+
+
+@pytest.mark.parametrize(
+    "normalized_pattern_set_name",
+    [
+        "HOOK_INFRASTRUCTURE_PATTERNS",
+        "WORKFLOW_REGISTRY_PATTERNS",
+        "MIGRATION_PATH_PATTERNS",
+    ],
+)
+def test_normalized_pattern_set_carries_no_backslash_entry(
+    normalized_pattern_set_name: str,
+) -> None:
+    """Each set's consumer normalizes the path with .replace("\\\\", "/") but
+    not the pattern, so a backslash entry can never match."""
+    pattern_set = getattr(exempt_paths, normalized_pattern_set_name)
+    assert all("\\" not in each_pattern for each_pattern in pattern_set)

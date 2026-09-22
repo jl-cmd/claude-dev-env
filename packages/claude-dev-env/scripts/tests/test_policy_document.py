@@ -99,7 +99,7 @@ def test_entry_validator_returns_the_path_and_digest_without_the_reason() -> Non
 def test_entry_validator_names_the_subject_in_every_rejection(
     entry: object, expected_message: str
 ) -> None:
-    """One validator serves both families, so each message names its subject."""
+    """One validator serves every exemption subject, so each message names its own."""
     with pytest.raises(ValueError) as rejection:
         entry_path_and_digest(entry, "Path exemption")
     assert str(rejection.value) == expected_message
