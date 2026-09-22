@@ -30,17 +30,7 @@ _INVENTORY_MESSAGE = "production file is absent from package inventory"
 def test_should_record_an_advisory_finding_with_its_message(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     initialize_repository(repository_root)
-    record_smell_findings(
-        repository_root,
-        RepositoryCheckReport(
-            (
-                RepositoryFinding(
-                    CHECK_ID_PACKAGE_INVENTORY, _INVENTORY_PATH, _INVENTORY_MESSAGE
-                ),
-            ),
-            (),
-        ),
-    )
+    record_smell_findings(repository_root, _inventory_report())
     assert _recorded_rows(repository_root) == [
         (CHECK_ID_PACKAGE_INVENTORY, _INVENTORY_PATH, _INVENTORY_MESSAGE, SEVERITY_SMELL)
     ]
@@ -49,14 +39,7 @@ def test_should_record_an_advisory_finding_with_its_message(tmp_path: Path) -> N
 def test_should_record_one_row_for_a_finding_seen_twice(tmp_path: Path) -> None:
     repository_root = tmp_path / "repo"
     initialize_repository(repository_root)
-    report = RepositoryCheckReport(
-        (
-            RepositoryFinding(
-                CHECK_ID_PACKAGE_INVENTORY, _INVENTORY_PATH, _INVENTORY_MESSAGE
-            ),
-        ),
-        (),
-    )
+    report = _inventory_report()
     record_smell_findings(repository_root, report)
     record_smell_findings(repository_root, report)
     assert len(_recorded_rows(repository_root)) == 1
@@ -79,6 +62,17 @@ def test_should_leave_a_breaking_finding_out_of_the_ledger(tmp_path: Path) -> No
         ),
     )
     assert _recorded_rows(repository_root) == []
+
+
+def _inventory_report() -> RepositoryCheckReport:
+    return RepositoryCheckReport(
+        (
+            RepositoryFinding(
+                CHECK_ID_PACKAGE_INVENTORY, _INVENTORY_PATH, _INVENTORY_MESSAGE
+            ),
+        ),
+        (),
+    )
 
 
 def _recorded_rows(repository_root: Path) -> list[tuple[str, str, str, str]]:

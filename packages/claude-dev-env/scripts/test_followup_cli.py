@@ -9,6 +9,8 @@ from pathlib import Path
 
 from dev_env_scripts_constants.followup_constants import (
     BACKLOG_EXCEEDED_EXIT_CODE,
+    BACKLOG_EXCEEDED_TEMPLATE,
+    BACKLOG_WITHIN_TEMPLATE,
     FOLLOWUP_BACKLOG_THRESHOLD,
 )
 from followup_cli import main
@@ -249,6 +251,44 @@ def test_count_escalates_once_the_backlog_passes_the_threshold(
 
     assert exit_code == BACKLOG_EXCEEDED_EXIT_CODE
     assert str(FOLLOWUP_BACKLOG_THRESHOLD) in output_text
+
+
+def test_count_writes_the_within_threshold_template_verbatim(
+    tmp_path: Path,
+) -> None:
+    exit_code, output_text = run_command(["count", "--repository-root", str(tmp_path)])
+
+    assert exit_code == 0
+    assert output_text == (
+        BACKLOG_WITHIN_TEMPLATE.format(
+            finding_count=0, threshold=FOLLOWUP_BACKLOG_THRESHOLD
+        )
+        + "\n"
+    )
+
+
+def test_count_writes_the_exceeded_template_verbatim(tmp_path: Path) -> None:
+    for each_index in range(FOLLOWUP_BACKLOG_THRESHOLD + 1):
+        record_followup_finding(
+            tmp_path,
+            FollowupFinding(
+                "code-rules",
+                f"run{each_index}.py",
+                "one smell",
+                f"code-rules/x{each_index}",
+            ),
+        )
+
+    exit_code, output_text = run_command(["count", "--repository-root", str(tmp_path)])
+
+    assert exit_code == BACKLOG_EXCEEDED_EXIT_CODE
+    assert output_text == (
+        BACKLOG_EXCEEDED_TEMPLATE.format(
+            finding_count=FOLLOWUP_BACKLOG_THRESHOLD + 1,
+            threshold=FOLLOWUP_BACKLOG_THRESHOLD,
+        )
+        + "\n"
+    )
 
 
 def test_list_names_the_check_behind_each_finding(tmp_path: Path) -> None:

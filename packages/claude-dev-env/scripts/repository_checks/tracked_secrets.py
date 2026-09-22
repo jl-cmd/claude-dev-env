@@ -10,8 +10,8 @@ from types import ModuleType
 from policy_lint.config import constants as policy_constants
 
 from repository_checks.config import constants as repository_constants
-from repository_checks.match_exemptions import load_all_match_exemptions
 from repository_checks.hook_modules import load_hooks_module
+from repository_checks.match_exemptions import load_all_match_exemptions
 from repository_checks.models import RepositoryFinding
 from repository_checks.path_exemptions import load_path_exemptions
 

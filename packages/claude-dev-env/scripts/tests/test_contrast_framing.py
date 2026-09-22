@@ -22,6 +22,12 @@ def _form_names(document_text: str) -> list[str]:
     return [each_hit[2] for each_hit in find_contrast_framing(document_text)]
 
 
+def _message_for(document_text: str) -> str:
+    line_number, _column, form_name = find_contrast_framing(document_text)[0]
+    source_line = document_text.splitlines()[line_number - 1]
+    return describe_contrast_framing(source_line, form_name)
+
+
 def test_trailing_comma_not_reports() -> None:
     assert _form_names("A diff regression, not shared infrastructure.\n") == [
         "trailing-comma-not"
@@ -73,10 +79,7 @@ def test_reported_line_and_column_locate_the_match() -> None:
 
 
 def test_message_names_the_form_the_text_and_the_fix() -> None:
-    document_text = "One answer, not two.\n"
-    line_number, _column, form_name = find_contrast_framing(document_text)[0]
-    source_line = document_text.splitlines()[line_number - 1]
-    message = describe_contrast_framing(source_line, form_name)
+    message = _message_for("One answer, not two.\n")
     assert "trailing-comma-not" in message
     assert "state what is true" in message.lower()
 
@@ -99,14 +102,16 @@ def test_a_list_of_not_items_stays_quiet() -> None:
     assert _form_names(document_text) == []
 
 
+def test_first_of_several_trailing_not_clauses_reports() -> None:
+    document_text = "A diff regression, not shared code, not a workaround.\n"
+    assert _form_names(document_text) == ["trailing-comma-not"]
+
+
 def test_a_quoted_line_stays_quiet() -> None:
     assert _form_names("> a bug, not a flake\n") == []
 
 
 def test_message_truncates_a_quoted_line_past_the_limit() -> None:
-    document_text = ("x" * 200) + ", not the shorter reading.\n"
-    line_number, _column, form_name = find_contrast_framing(document_text)[0]
-    source_line = document_text.splitlines()[line_number - 1]
-    message = describe_contrast_framing(source_line, form_name)
+    message = _message_for(("x" * 200) + ", not the shorter reading.\n")
     assert '"' + ("x" * 120) + '"' in message
     assert "x" * 121 not in message
