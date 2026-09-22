@@ -1265,8 +1265,20 @@ class TestCommittedTreeContinuousIntegration:
         assert "github.event.pull_request.base.sha" in str(committed_tree_job)
         assert 'git merge-base HEAD "${event_base_revision}"' in committed_tree_run_text
         assert (
-            'cde_lint.py --base "${comparison_revision}"'
+            'cde_lint.py --base "${COMPARISON_REVISION}"'
             in committed_tree_run_text
+        )
+
+    def should_scan_the_added_commits_with_a_checksum_verified_gitleaks(
+        self,
+    ) -> None:
+        _workflow_text, parsed_workflow = _load_workflow("ci-tests.yml")
+        committed_tree_job = _workflow_job(parsed_workflow, "committed-tree")
+        committed_tree_run_text = _job_run_text(committed_tree_job)
+        assert "sha256sum --check --strict" in committed_tree_run_text
+        assert (
+            '--config .gitleaks.toml' in committed_tree_run_text
+            and '--log-opts="${COMPARISON_REVISION}..HEAD"' in committed_tree_run_text
         )
 
     def should_run_cde_lint_against_the_push_parent_on_main(self) -> None:
