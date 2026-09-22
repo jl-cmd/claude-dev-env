@@ -1,23 +1,20 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'node:child_process';
 import {
-    mkdtempSync,
     existsSync,
     lstatSync,
     readFileSync,
     realpathSync,
-    writeFileSync,
     readdirSync,
-    rmSync,
 } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
-
-const DRIVER_DIRECTORY = dirname(fileURLToPath(import.meta.url));
-const PACKAGE_ROOT = resolve(DRIVER_DIRECTORY, '..', '..');
-const INSTALL_ENTRY = join(PACKAGE_ROOT, 'bin', 'install.mjs');
+import { join } from 'node:path';
+import {
+    INSTALL_ENTRY,
+    SANDBOX_GIT_CONFIG_NAME,
+    createScratchHome,
+    removeScratchHome,
+    runInstaller,
+} from './scratch-home-install.mjs';
 
 const checks = [];
 
@@ -41,25 +38,9 @@ function collectFilesRecursive(directory) {
     return collected;
 }
 
-function runInstaller(sandboxHome, installerArguments) {
-    const gitConfigGlobal = join(sandboxHome, '.gitconfig-sandbox');
-    const installerProcess = spawnSync(process.execPath, [INSTALL_ENTRY, ...installerArguments], {
-        cwd: PACKAGE_ROOT,
-        encoding: 'utf8',
-        env: {
-            ...process.env,
-            HOME: sandboxHome,
-            USERPROFILE: sandboxHome,
-            GIT_CONFIG_GLOBAL: gitConfigGlobal,
-        },
-    });
-    return installerProcess;
-}
-
 function main() {
-    const sandboxHome = mkdtempSync(join(tmpdir(), 'cde-driver-'));
+    const sandboxHome = createScratchHome();
     const claudeHome = join(sandboxHome, '.claude');
-    writeFileSync(join(sandboxHome, '.gitconfig-sandbox'), '[safe]\n\tdirectory = *\n');
     console.log(`Sandbox HOME: ${sandboxHome}`);
     console.log(`Install entry: ${INSTALL_ENTRY}\n`);
 
@@ -169,7 +150,7 @@ function main() {
         }
         record('settings.json carries managed hooks', managedHookCount > 0, `${managedHookCount} hook commands`);
 
-        const gitConfigGlobalPath = join(sandboxHome, '.gitconfig-sandbox');
+        const gitConfigGlobalPath = join(sandboxHome, SANDBOX_GIT_CONFIG_NAME);
         const gitHooksPathRedirectedIntoSandbox =
             existsSync(gitConfigGlobalPath) &&
             readFileSync(gitConfigGlobalPath, 'utf8').replace(/\\/g, '/').includes('/.claude/hooks/git-hooks');
@@ -195,7 +176,7 @@ function main() {
             sampleInstalledFile ? sampleInstalledFile : 'no sample file captured',
         );
     } finally {
-        rmSync(sandboxHome, { recursive: true, force: true });
+        removeScratchHome(sandboxHome);
         console.log(`\nSandbox removed: ${sandboxHome}`);
     }
 
