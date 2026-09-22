@@ -1,5 +1,107 @@
 # Changelog
 
+## [8.7.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.6.1...claude-dev-env-v8.7.0) (2026-09-22)
+
+
+### Features
+
+* add an install playtest that runs the shipped package from a scratch home ([e36a77a](https://github.com/jl-cmd/claude-dev-env/commit/e36a77ad0b39cb82df30c5b26cf545534024ace1))
+* let a repository own its private-address exceptions ([9682d5c](https://github.com/jl-cmd/claude-dev-env/commit/9682d5caef5941435ca031698b92bd213fefcd33))
+* **lint:** stop contrast framing at the check that reads the text ([16a8ef8](https://github.com/jl-cmd/claude-dev-env/commit/16a8ef8b9a691549b61493d042c8adfcd8bad8ea))
+* make the package-inventory finding advisory ([b5a5b24](https://github.com/jl-cmd/claude-dev-env/commit/b5a5b249e952a05c452cd9bc527e2be437bc749d))
+* **repository-policy:** let a repository commit its own private-IP exemptions ([d9f95dc](https://github.com/jl-cmd/claude-dev-env/commit/d9f95dca574d36b4509ef4d0c99761a5bf12416f))
+* **repository-policy:** make the package-inventory finding advisory ([1a10b34](https://github.com/jl-cmd/claude-dev-env/commit/1a10b348e226225ea02ecf6517f39a354860af2a))
+* **rules:** turn every correction into a control at the highest layer ([5ac7dea](https://github.com/jl-cmd/claude-dev-env/commit/5ac7dea4b46cf1d9eef63e0a066fbaf7d38629a9))
+* **rules:** turn every correction into a control at the highest layer ([014e326](https://github.com/jl-cmd/claude-dev-env/commit/014e326973dd2611dc6f8e7256cb512519e5fa5e))
+* **scripts:** add a child-process runner for the Pester suites ([6bfd8f9](https://github.com/jl-cmd/claude-dev-env/commit/6bfd8f9486b53ebf56b413a4c6b3688312f8bf1e))
+* **scripts:** fail a pull request while a review finding waits on its agent ([c2f17ca](https://github.com/jl-cmd/claude-dev-env/commit/c2f17cae3bdfe80a1674af3ed54a7908729d4cbd))
+* **scripts:** fail a pull request while a review finding waits on its agent ([ffdb74a](https://github.com/jl-cmd/claude-dev-env/commit/ffdb74adb1a0ad93431d4b0cd5b2fa2939f95473))
+* **scripts:** report whether an agent may merge a pull request now ([254ed5e](https://github.com/jl-cmd/claude-dev-env/commit/254ed5e7c01351716ff54eb5ea151c77b8beeb9a))
+* **scripts:** report whether an agent may merge a pull request now ([62a78fb](https://github.com/jl-cmd/claude-dev-env/commit/62a78fbfe8e4f40d3ee82beaf1ffb5586ae505ee))
+* **scripts:** run the PowerShell suites from the quality gate ([8333f7c](https://github.com/jl-cmd/claude-dev-env/commit/8333f7c4a2bdec7ea7fdf8925ee88deeac4f9f9b))
+* **scripts:** run the PowerShell suites from the quality gate ([3110700](https://github.com/jl-cmd/claude-dev-env/commit/31107005318d338a147c9e63c6a3f56d998a4b2a))
+
+
+### Bug Fixes
+
+* **hooks:** build the notice base reference from named constants ([514ba58](https://github.com/jl-cmd/claude-dev-env/commit/514ba587d215281c5292cc294679d988c847c67f))
+* let a diagnostics folder print, the way a scripts folder already can ([8f40e2e](https://github.com/jl-cmd/claude-dev-env/commit/8f40e2ebe0768e76673b4a9e6e7aef9b2075e865))
+* **lint:** narrow the contrast forms to the shape they name ([a32ab0b](https://github.com/jl-cmd/claude-dev-env/commit/a32ab0b4324a84ed4b43403c76779c20c8dd1992))
+* restore alphabetical import order in tracked_secrets.py ([02b9a90](https://github.com/jl-cmd/claude-dev-env/commit/02b9a90f95e92ad4e94ab0a8c98f80c1507c0ca2))
+* **rules:** correct the contrast-framing list example ([137ba50](https://github.com/jl-cmd/claude-dev-env/commit/137ba5039a2a9da71097b8a1b3ecfd6985bb239c))
+* **scripts:** read again while GitHub works out the merge state ([234f74b](https://github.com/jl-cmd/claude-dev-env/commit/234f74b01e9f1c1d843ebb01e1684081b36fa539))
+* **scripts:** read the comment bodies the session thread route names by id ([e6a0fea](https://github.com/jl-cmd/claude-dev-env/commit/e6a0fea2c5148d85b9268ad2c1acfa703b259367))
+* **scripts:** restore the alphabetical import order the exemption rename broke ([05cc99c](https://github.com/jl-cmd/claude-dev-env/commit/05cc99cd8988acdc2232e053529adeb7ec6e3c6e))
+
+
+### Documentation
+
+* carry the high trust delivery write-up as given ([ac35927](https://github.com/jl-cmd/claude-dev-env/commit/ac35927c90d0a5d69d1f4c0f80c5c0002fbb5ff8))
+* **hooks-tests:** let the shared fixture carry its own explanation ([379f7fa](https://github.com/jl-cmd/claude-dev-env/commit/379f7fa8e76517b45402095f0a74c1cb2578eb7b))
+* **hooks-tests:** name the production directory in the routing docstring ([0eb1b67](https://github.com/jl-cmd/claude-dev-env/commit/0eb1b6741a786b2362456a60ee52a91ca9e53c5f))
+* **hooks-tests:** state what the shared fixture tail mirrors ([2cfc590](https://github.com/jl-cmd/claude-dev-env/commit/2cfc59030d99e59dd4d952fe0b004a6656d1285c))
+* **privacy-hygiene:** correct the sweep procedure's retired-hook line ([9a9d03f](https://github.com/jl-cmd/claude-dev-env/commit/9a9d03ff8287fafaaf662153e628ba44f84eab4a))
+* **readme:** sync agents inventory with the poteto-agent retirement ([8f4142c](https://github.com/jl-cmd/claude-dev-env/commit/8f4142c6a3e9ede6111f765f1069f4881dd4bde5))
+* **readme:** sync the agents inventory with the poteto-agent retirement ([284aacb](https://github.com/jl-cmd/claude-dev-env/commit/284aacb16cc774ea03b80894828ce2ab179b5ad3))
+* **rules:** correct the worked example the contrast-framing rule ships ([126880c](https://github.com/jl-cmd/claude-dev-env/commit/126880c5d6193a7b2b0e311b17f5c4d162239a02))
+* **rules:** say how a session behind another repository's gate hands off ([943dc6e](https://github.com/jl-cmd/claude-dev-env/commit/943dc6e59f3fbe465ec63da963ade15084651d05))
+* **rules:** say that every check on the head reports before a merge ([89b1b05](https://github.com/jl-cmd/claude-dev-env/commit/89b1b05638a33e037392aba0be0d5f26415099f5))
+* state the merge policy and hold it to the branch ruleset ([1d2ae2d](https://github.com/jl-cmd/claude-dev-env/commit/1d2ae2dff022937a91d8c2c06aee8130e1615793))
+* state the merge policy and hold it to the branch ruleset ([38cece4](https://github.com/jl-cmd/claude-dev-env/commit/38cece45e1637d2635ea51c18278bc179cd66e1b))
+* **tests:** name every subject the entry validator serves ([70f586d](https://github.com/jl-cmd/claude-dev-env/commit/70f586d06dfac2d7e37e868e17a64d580036d703))
+* **tests:** name every subject the entry validator serves ([9462143](https://github.com/jl-cmd/claude-dev-env/commit/9462143523a3a0ebba666c1ee0f109f816236641))
+
+
+### Maintenance
+
+* derive the exemption field sets from the match-exemption families ([e5bdd6e](https://github.com/jl-cmd/claude-dev-env/commit/e5bdd6ed3a6ac363016de763fb3c341f79f96f10))
+* **hooks:** build the gh pr view arguments and the notice base reference from named constants ([7448e63](https://github.com/jl-cmd/claude-dev-env/commit/7448e6336d2e000265a667c26f1667b2f33bc129))
+* **hooks:** name the gh pr view argument tuple with the ALL_ prefix ([10cb5fe](https://github.com/jl-cmd/claude-dev-env/commit/10cb5fef8653dd204b6d4abde5b5276b37b3e096))
+* **hooks:** remove pre_push.py-cut constants with no consumer ([fd5f652](https://github.com/jl-cmd/claude-dev-env/commit/fd5f65274e37d7c7af2346751dc2740aea162e0f))
+
+
+### Refactoring
+
+* **advisor:** name the evidence-shape message once ([87579d6](https://github.com/jl-cmd/claude-dev-env/commit/87579d6999de7f617a908b8e7b4fb8b549b7db90))
+* **ci:** read the sandbox git-config from one shared constant ([f361619](https://github.com/jl-cmd/claude-dev-env/commit/f3616197c4a719d4bcd583edf41cdbc011e03ae8))
+* **ci:** read the sandbox git-config from one shared constant ([feb0a46](https://github.com/jl-cmd/claude-dev-env/commit/feb0a466efd5cedab1859c23f7c1ee71b3295b87))
+* drop redundant backslash markers from ALL_CLI_FILE_PATH_MARKERS ([73025a9](https://github.com/jl-cmd/claude-dev-env/commit/73025a9c0f87004bc5303005b56179a664354d82))
+* **hooks-tests:** drop the duplicated fixture and helper source ([e22db13](https://github.com/jl-cmd/claude-dev-env/commit/e22db136b604d0ebc39683d17ed1c6f13efe037c))
+* **hooks-tests:** drop the duplicated hook-blocking-dir fixture ([7efd957](https://github.com/jl-cmd/claude-dev-env/commit/7efd9570a9bfde214db3de50ff31e6da71265d9c))
+* **hooks-tests:** drop the duplicated strip-code-and-quotes source ([a35403b](https://github.com/jl-cmd/claude-dev-env/commit/a35403b92dff3c9ced92c4733f75969f02f64375))
+* **hooks-tests:** share the duplicated fixture and helper source ([9b87e70](https://github.com/jl-cmd/claude-dev-env/commit/9b87e70e7951cfb982185d0b4e663471e4c51b6e))
+* **hooks-tests:** share the hook-blocking-dir fixture in conftest ([c2381ce](https://github.com/jl-cmd/claude-dev-env/commit/c2381ce7e48e49969393c8101eb34d18f990e4de))
+* **hooks-tests:** share the strip-code-and-quotes fixture source ([03fbd9e](https://github.com/jl-cmd/claude-dev-env/commit/03fbd9e2de0cbf4477a4487407b1f64e4a2a50df))
+* **hooks:** drop the unreachable backslash spellings from four path-marker tables ([efd3614](https://github.com/jl-cmd/claude-dev-env/commit/efd3614364bb9d0008c03cda65f1ea962393d635))
+* **hooks:** let the refactor advisory own the git constants it calls with ([531f8d4](https://github.com/jl-cmd/claude-dev-env/commit/531f8d4483c02a8f3f90375f3266fa82c164c5ed))
+* **hooks:** let the refactor advisory own the git constants it calls with ([fd0e2a4](https://github.com/jl-cmd/claude-dev-env/commit/fd0e2a4c318d10698ec7605f0031202f014adaa4))
+* **hooks:** read the JS block-comment markers from one shared constant ([8c06ce1](https://github.com/jl-cmd/claude-dev-env/commit/8c06ce10f3577bb32f32a39f25ab49627da07a48))
+* **hooks:** read the JS block-comment markers from one shared constant ([bf39248](https://github.com/jl-cmd/claude-dev-env/commit/bf392485e273c64cbd81e4973e940e7df40a8a37))
+* **lint:** read the form's own field and split each document once ([cc322c6](https://github.com/jl-cmd/claude-dev-env/commit/cc322c647897e3302c1b48ed5fe915099b9e0631))
+* name the swept-non-test-code-file predicate in the terminology sweep ([d209fe5](https://github.com/jl-cmd/claude-dev-env/commit/d209fe53d14f26633d053566255a26403f30013d))
+* name the swept-non-test-code-file predicate in the terminology sweep ([afaaa0f](https://github.com/jl-cmd/claude-dev-env/commit/afaaa0fc7fde04b0e3da9a1df708a8f9d6970ef9))
+* **repository-policy:** name the exemption family for the match it clears ([cfcf08a](https://github.com/jl-cmd/claude-dev-env/commit/cfcf08a2ee0cb624dde83e169c29b519aa9ac228))
+* share the template-and-format call in cde followup count ([e8efd0a](https://github.com/jl-cmd/claude-dev-env/commit/e8efd0ad6245adb734d4814a84992689125be3cb))
+* share the template-and-format call in cde followup count ([d70eab0](https://github.com/jl-cmd/claude-dev-env/commit/d70eab0e103dedb8c10d68d1c02a02e9534ad038))
+
+
+### Tests
+
+* cover the contrast-framing quoted-line truncation ([752a593](https://github.com/jl-cmd/claude-dev-env/commit/752a593b4d2ef7774f6713f58fb40fe6061386b0))
+* cover the contrast-framing quoted-line truncation ([3d9884f](https://github.com/jl-cmd/claude-dev-env/commit/3d9884fc06b4333aeab7fcdfae1d10a7401967df))
+* **hooks-tests:** cover the shared hook-blocking-dir fixture ([0d15957](https://github.com/jl-cmd/claude-dev-env/commit/0d15957c179abc2c6a4722a4fda42d9cff9b22ed))
+* **hooks-tests:** cover the shared strip-code-and-quotes source ([5cf4225](https://github.com/jl-cmd/claude-dev-env/commit/5cf422586f27443c4d947beda2b24727e10cb72f))
+* pin exact cde followup count output per threshold branch ([c776159](https://github.com/jl-cmd/claude-dev-env/commit/c776159fb2abc39d3160aeda9aa8aef36ed51430))
+* pin the quality gate to the PowerShell suites ([b59ca21](https://github.com/jl-cmd/claude-dev-env/commit/b59ca211537246a15d57ef8263a7d97069176d1d))
+* **scripts:** build the inventory report once in the follow-up ledger tests ([e379b4c](https://github.com/jl-cmd/claude-dev-env/commit/e379b4cdc3446337f431e1dd012e561bffcaeb52))
+* **scripts:** restore the code-review constants coverage ([06f13a8](https://github.com/jl-cmd/claude-dev-env/commit/06f13a82201491d40a6e2cbcdc36ddd71720e91c))
+* **scripts:** restore the effort-token coverage a prior PR dropped ([1390640](https://github.com/jl-cmd/claude-dev-env/commit/13906403361aaa9bfbb93e59e6818a120ba305f1))
+* **scripts:** restore the root-permission-mode coverage a prior PR dropped ([9da9d88](https://github.com/jl-cmd/claude-dev-env/commit/9da9d88fa2f61f7ca78debf64faa14506893216d))
+* **scripts:** share the message-rendering steps the contrast-framing tests repeat ([1550cea](https://github.com/jl-cmd/claude-dev-env/commit/1550cea5d40f3ae4bbdd38ec273f6249f41573fe))
+* share a helper between the two message-shape tests ([17c9824](https://github.com/jl-cmd/claude-dev-env/commit/17c9824b48281860dd47bd8cb60f9e95ac9c8169))
+* **windows:** pin the pstack shim's argument, bootstrap and exit contract ([e3f73a9](https://github.com/jl-cmd/claude-dev-env/commit/e3f73a9967d1dacd34ddfd6ec1de47db3ba2881a))
+* **windows:** pin the pstack shim's argument, bootstrap and exit contract ([00cae68](https://github.com/jl-cmd/claude-dev-env/commit/00cae688ef29cbb00306f19af1a02ae04cfcf8d7))
+
 ## [8.6.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.6.0...claude-dev-env-v8.6.1) (2026-09-21)
 
 
