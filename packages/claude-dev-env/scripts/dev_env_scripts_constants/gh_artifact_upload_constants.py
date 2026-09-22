@@ -41,3 +41,27 @@ NOTES_FILE_SUFFIX: str = ".md"
 
 UTF8_ENCODING: str = "utf-8"
 """Text encoding for subprocess output and temp files."""
+
+PNG_SUFFIX: str = ".png"
+"""Suffix of a file the upload shrinks with oxipng before it sends."""
+
+OXIPNG_BINARY_NAME: str = "oxipng"
+"""The oxipng executable name, looked up on PATH."""
+
+ALL_OXIPNG_LOSSLESS_ARGUMENTS: tuple[str, ...] = (
+    "--opt",
+    "4",
+    "--strip",
+    "none",
+    "--quiet",
+)
+"""Oxipng options: a slow lossless search that keeps every PNG chunk."""
+
+OXIPNG_MISSING_MESSAGE: str = (
+    "oxipng is not on PATH. Install the release binary from "
+    "https://github.com/oxipng/oxipng/releases, then upload again."
+)
+"""Failure text when a PNG upload finds no oxipng to shrink it first."""
+
+SIZE_REPORT_TEMPLATE: str = "{name}: {original_size} -> {optimized_size} bytes"
+"""Line naming an upload and its size before and after oxipng."""

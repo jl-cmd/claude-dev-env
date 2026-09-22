@@ -5,8 +5,8 @@ A durable GitHub post (issue, PR, comment, review) must not link a file under a
 job scratch directory or worktree, because that scratch is cleaned soon after
 the run while the post lives forever. Binary artifacts belong in a permanent
 place instead. This tool ensures the repo has a prerelease tagged ``artifacts``,
-uploads the given file under a timestamped asset name, and prints the permanent
-download URL a post can safely link. The timestamped name keeps each upload a
+shrinks a PNG losslessly with oxipng, uploads the file under a timestamped asset
+name, and prints the permanent download URL a post can safely link. The timestamped name keeps each upload a
 distinct asset. An upload never overwrites an earlier one. A same-name collision
 fails loudly instead of replacing the bytes an existing URL already serves.
 
@@ -28,6 +28,7 @@ import tempfile
 from pathlib import Path
 
 from dev_env_scripts_constants.gh_artifact_upload_constants import (
+    ALL_OXIPNG_LOSSLESS_ARGUMENTS,
     ARTIFACTS_RELEASE_NOTES,
     ARTIFACTS_RELEASE_TAG,
     ARTIFACTS_RELEASE_TITLE,
@@ -37,7 +38,11 @@ from dev_env_scripts_constants.gh_artifact_upload_constants import (
     ASSET_URL_JSON_KEY,
     GH_BINARY_NAME,
     NOTES_FILE_SUFFIX,
+    OXIPNG_BINARY_NAME,
+    OXIPNG_MISSING_MESSAGE,
+    PNG_SUFFIX,
     RELEASE_ASSETS_JSON_KEY,
+    SIZE_REPORT_TEMPLATE,
     UTF8_ENCODING,
 )
 
@@ -132,6 +137,49 @@ def timestamped_asset_name(file_path: str) -> str:
     )
 
 
+def _run_oxipng(oxipng_path: str, staged_path: Path) -> None:
+    completion = subprocess.run(
+        [oxipng_path, *ALL_OXIPNG_LOSSLESS_ARGUMENTS, str(staged_path)],
+        capture_output=True,
+        text=True,
+        encoding=UTF8_ENCODING,
+        check=False,
+        creationflags=hidden_window_creation_flags(),
+    )
+    if completion.returncode != 0:
+        raise ArtifactUploadError(completion.stderr.strip())
+
+
+def optimize_png_losslessly(staged_path: Path) -> None:
+    """Shrink a staged PNG in place with oxipng and report both sizes.
+
+    ::
+
+        contact_sheet.png: 361105 -> 308782 bytes
+
+    Oxipng keeps every pixel and every chunk. Other suffixes stay as they are.
+
+    Args:
+        staged_path: The staged copy that the upload sends.
+
+    Raises:
+        ArtifactUploadError: When oxipng is missing or fails.
+    """
+    if staged_path.suffix.lower() != PNG_SUFFIX:
+        return
+    oxipng_path = shutil.which(OXIPNG_BINARY_NAME)
+    if oxipng_path is None:
+        raise ArtifactUploadError(OXIPNG_MISSING_MESSAGE)
+    original_size = staged_path.stat().st_size
+    _run_oxipng(oxipng_path, staged_path)
+    size_report = SIZE_REPORT_TEMPLATE.format(
+        name=staged_path.name,
+        original_size=original_size,
+        optimized_size=staged_path.stat().st_size,
+    )
+    print(size_report, file=sys.stderr)
+
+
 def _uploaded_asset_download_url(repository: str) -> str:
     """Read the just-uploaded asset's real download URL back from GitHub.
 
@@ -197,6 +245,9 @@ def _uploaded_asset_download_url(repository: str) -> str:
 def upload_artifact(file_path: str, repository: str) -> str:
     """Upload a file to the artifacts release and return its permanent URL.
 
+    A PNG passes through oxipng on a staged copy first, so the source file
+    stays unchanged.
+
     Args:
         file_path: The source file to upload.
         repository: The ``owner/repo`` slug.
@@ -205,7 +256,8 @@ def upload_artifact(file_path: str, repository: str) -> str:
         The permanent download URL for the uploaded asset.
 
     Raises:
-        ArtifactUploadError: When the file is missing or the upload fails.
+        ArtifactUploadError: When the file is missing, oxipng cannot shrink
+            a PNG, or the upload fails.
     """
     source_path = Path(file_path)
     if not source_path.is_file():
@@ -215,6 +267,7 @@ def upload_artifact(file_path: str, repository: str) -> str:
     with tempfile.TemporaryDirectory() as staging_directory:
         staged_asset_path = Path(staging_directory) / asset_name
         shutil.copyfile(source_path, staged_asset_path)
+        optimize_png_losslessly(staged_asset_path)
         completion = _run_gh(
             [
                 "release",

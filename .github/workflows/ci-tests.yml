@@ -99,6 +99,9 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      - name: Set up oxipng
+        uses: ./.github/actions/setup-oxipng
+
       - name: Install Python test dependencies
         run: |
           pip install -e packages/claude-dev-env/ \
