@@ -231,6 +231,40 @@ jobs:
           npm install
           npm test
 
+  install-playtest:
+    name: Install playtest (ubuntu)
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.javascript == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Python for the installed hooks
+        run: pip install -e packages/claude-dev-env/
+
+      - name: Install the package into a scratch home and start its hooks
+        working-directory: packages/claude-dev-env
+        run: |
+          npm install
+          node scripts/ci/install-playtest.mjs --evidence "$RUNNER_TEMP/install-playtest"
+
+      - name: Upload install playtest evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-playtest-evidence
+          path: ${{ runner.temp }}/install-playtest/**
+          if-no-files-found: ignore
+
   quality-gate:
     name: Quality gate (check.ps1)
     needs: changes

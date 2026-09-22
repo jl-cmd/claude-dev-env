@@ -2928,6 +2928,31 @@ test('retired skills leave install groups and stay in the cleanup registry', () 
     }
 });
 
+test('the README agents section names the shipped agent, not archived personal agents', () => {
+    const readme = readFileSync(new URL('../../../README.md', import.meta.url), 'utf8');
+    const agentsSection = readme.slice(
+        readme.indexOf('### Agents'),
+        readme.indexOf('### Commands'),
+    );
+    assert.match(agentsSection, /`poteto-agent`/);
+    for (const archivedAgentName of [
+        'clean-coder',
+        'code-quality-agent',
+        'git-commit-crafter',
+        'issue-tracker',
+        'plan-packet-validator',
+        'pr-description-writer',
+        'session-advisor',
+        'skill-writer-agent',
+    ]) {
+        assert.equal(
+            agentsSection.includes(`\`${archivedAgentName}\``),
+            false,
+            `${archivedAgentName} is archived and should not appear as a shipped agent`,
+        );
+    }
+});
+
 test('the README names current session tools', () => {
     const readme = readFileSync(new URL('../../../README.md', import.meta.url), 'utf8');
     assert.doesNotMatch(readme, /--only journal|session-log|session-tidy/);
