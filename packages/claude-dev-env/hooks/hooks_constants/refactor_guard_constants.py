@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+GIT_EXECUTABLE_TOKEN: str = "git"
+GIT_COMMAND_TIMEOUT_SECONDS: int = 5
 MAXIMUM_REFACTOR_LINE_DELTA: int = 3
 REFACTOR_LINE_DELTA_DIVISOR: int = 2
 CHANGED_SURFACE_MATCH_RATIO: float = 0.5

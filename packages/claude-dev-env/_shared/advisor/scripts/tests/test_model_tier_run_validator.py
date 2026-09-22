@@ -35,6 +35,9 @@ load_model_tier_run_from_json_path = (
 )
 ADVISOR_MODEL_TIER = model_tier_run_validator.ADVISOR_MODEL_TIER
 CODEX_BIND_SUCCESS_TOKEN = model_tier_run_validator.CODEX_BIND_SUCCESS_TOKEN
+EVIDENCE_MUST_BE_OBJECT_MESSAGE = (
+    model_tier_run_validator.EVIDENCE_MUST_BE_OBJECT_MESSAGE
+)
 
 
 def _native_codex_evidence(
@@ -134,6 +137,38 @@ def test_cli_reads_versioned_advisor_evidence(tmp_path: Path) -> None:
     loaded_run = load_model_tier_run_from_json_path(from_path=log_path)
     assert loaded_run.evidence is not None
     assert loaded_run.evidence["consult"]["report_back_status"] == "recorded"
+
+
+def test_non_object_evidence_reports_the_same_message_at_validate_and_load(
+    tmp_path: Path,
+) -> None:
+    run = ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=[ADVISOR_MODEL_TIER],
+        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
+        selected_tier=ADVISOR_MODEL_TIER,
+        host_profile="Codex",
+        evidence=["not", "an", "object"],
+    )
+    with pytest.raises(ModelTierRunError, match=EVIDENCE_MUST_BE_OBJECT_MESSAGE):
+        validate_model_tier_run(run)
+
+    log_path = tmp_path / "model-tier-run.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                "own_tier": "Opus",
+                "candidate_tiers": [ADVISOR_MODEL_TIER],
+                "attempts": [{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
+                "selected_tier": ADVISOR_MODEL_TIER,
+                "host_profile": "Codex",
+                "evidence": "not an object",
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(TypeError, match=EVIDENCE_MUST_BE_OBJECT_MESSAGE):
+        load_model_tier_run_from_json_path(from_path=log_path)
 
 
 def test_clean_single_spawn_at_top_of_slice_passes() -> None:
