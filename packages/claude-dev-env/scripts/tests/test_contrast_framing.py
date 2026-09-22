@@ -102,6 +102,11 @@ def test_a_list_of_not_items_stays_quiet() -> None:
     assert _form_names(document_text) == []
 
 
+def test_first_of_several_trailing_not_clauses_reports() -> None:
+    document_text = "A diff regression, not shared code, not a workaround.\n"
+    assert _form_names(document_text) == ["trailing-comma-not"]
+
+
 def test_a_quoted_line_stays_quiet() -> None:
     assert _form_names("> a bug, not a flake\n") == []
 
