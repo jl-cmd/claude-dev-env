@@ -158,6 +158,32 @@ class TestDecisionPayload:
         }
 
 
+class TestMetersPayload:
+    def should_name_no_meters_for_an_unread_account(self) -> None:
+        assert choice.meters_payload(None) is None
+
+    def should_carry_each_used_percent_and_reset_time(self) -> None:
+        read_meters = meters(
+            session_used=12.0,
+            weekly_used=34.0,
+            weekly_resets_in=timedelta(days=3),
+            session_resets_in=timedelta(hours=1),
+        )
+        assert choice.meters_payload(read_meters) == {
+            "session_used_percent": 12.0,
+            "session_resets_at": "2026-09-22T22:00:00+00:00",
+            "weekly_used_percent": 34.0,
+            "weekly_resets_at": "2026-09-25T21:00:00+00:00",
+        }
+
+    def should_name_no_reset_time_the_meter_left_out(self) -> None:
+        read_meters = meters(session_used=1.0, weekly_used=None, weekly_resets_in=None)
+        payload = choice.meters_payload(read_meters)
+        assert payload is not None
+        assert payload["weekly_used_percent"] is None
+        assert payload["weekly_resets_at"] is None
+
+
 class TestMain:
     def should_print_the_choice_and_the_config_directory_of_the_chosen_account(
         self,
@@ -190,6 +216,8 @@ class TestMain:
         assert exit_code == 0
         assert printed["account"] == choice.CHOICE_SECOND
         assert printed["config_dir"] == str(second_home)
+        assert printed["meters"]["main"] is None
+        assert printed["meters"]["second"]["weekly_used_percent"] == 10.0
 
     def should_print_no_config_directory_when_the_job_waits(
         self,

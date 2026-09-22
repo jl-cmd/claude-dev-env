@@ -41,7 +41,12 @@ from dev_env_scripts_constants.claude_account_constants import (
     FULL_PERCENT,
     JSON_ACCOUNT_KEY,
     JSON_CONFIG_DIRECTORY_KEY,
+    JSON_METERS_KEY,
     JSON_REASON_KEY,
+    JSON_SESSION_RESETS_AT_KEY,
+    JSON_SESSION_USED_PERCENT_KEY,
+    JSON_WEEKLY_RESETS_AT_KEY,
+    JSON_WEEKLY_USED_PERCENT_KEY,
     MAIN_CLAUDE_HOME_DIRECTORY_NAME,
     MAIN_SESSION_USED_CEILING_PERCENT,
     MAIN_SPEND_WINDOW,
@@ -216,8 +221,39 @@ def decision_payload(
     }
 
 
+def _iso_or_none(moment: datetime | None) -> str | None:
+    return moment.isoformat() if moment else None
+
+
+def meters_payload(
+    account_meters: AccountUsageMeters | None,
+) -> dict[str, float | str | None] | None:
+    """Shape one account's meters as the JSON object a usage report reads.
+
+    ::
+
+        AccountUsageMeters(12.0, <reset>, 34.0, <reset>)
+        -> {"session_used_percent": 12.0, "session_resets_at": "2026-09-22T22:00:00+00:00",
+            "weekly_used_percent": 34.0, "weekly_resets_at": "2026-09-25T21:00:00+00:00"}
+
+    Args:
+        account_meters: The account's meters, or None when unread.
+
+    Returns:
+        Each used percent and reset time, or None for an unread account.
+    """
+    if account_meters is None:
+        return None
+    return {
+        JSON_SESSION_USED_PERCENT_KEY: account_meters.session_utilization,
+        JSON_SESSION_RESETS_AT_KEY: _iso_or_none(account_meters.session_resets_at),
+        JSON_WEEKLY_USED_PERCENT_KEY: account_meters.weekly_utilization,
+        JSON_WEEKLY_RESETS_AT_KEY: _iso_or_none(account_meters.weekly_resets_at),
+    }
+
+
 def main(all_command_arguments: list[str]) -> int:
-    """Print the chosen account as JSON.
+    """Print the chosen account and both accounts' meters as JSON.
 
     Args:
         all_command_arguments: Command-line arguments after the program name.
@@ -230,15 +266,24 @@ def main(all_command_arguments: list[str]) -> int:
         CHOICE_MAIN: arguments.main_config_dir,
         CHOICE_SECOND: arguments.second_config_dir,
     }
+    main_meters = read_account_meters(arguments.main_config_dir / CREDENTIALS_FILE_NAME)
+    second_meters = read_account_meters(
+        arguments.second_config_dir / CREDENTIALS_FILE_NAME
+    )
     decision = choose_account(
-        main_meters=read_account_meters(arguments.main_config_dir / CREDENTIALS_FILE_NAME),
-        second_meters=read_account_meters(
-            arguments.second_config_dir / CREDENTIALS_FILE_NAME
-        ),
+        main_meters=main_meters,
+        second_meters=second_meters,
         now=datetime.now().astimezone(),
     )
     config_directory = config_directory_by_account.get(decision.account)
-    print(json.dumps(decision_payload(decision, config_directory=config_directory)))
+    report = {
+        **decision_payload(decision, config_directory=config_directory),
+        JSON_METERS_KEY: {
+            CHOICE_MAIN: meters_payload(main_meters),
+            CHOICE_SECOND: meters_payload(second_meters),
+        },
+    }
+    print(json.dumps(report))
     return 0
 
 

@@ -153,6 +153,21 @@ JSON_CONFIG_DIRECTORY_KEY: str = "config_dir"
 JSON_REASON_KEY: str = "reason"
 """Picker JSON key carrying the plain-words reason for the choice."""
 
+JSON_METERS_KEY: str = "meters"
+"""Picker JSON key carrying both accounts' meters, each None when unread."""
+
+JSON_SESSION_USED_PERCENT_KEY: str = "session_used_percent"
+"""Meters JSON key for the percent of the 5-hour window used."""
+
+JSON_SESSION_RESETS_AT_KEY: str = "session_resets_at"
+"""Meters JSON key for when the 5-hour window resets."""
+
+JSON_WEEKLY_USED_PERCENT_KEY: str = "weekly_used_percent"
+"""Meters JSON key for the percent of the week used."""
+
+JSON_WEEKLY_RESETS_AT_KEY: str = "weekly_resets_at"
+"""Meters JSON key for when the week resets."""
+
 JSON_LINKED_KEY: str = "linked"
 """Sync JSON key listing entries the run linked."""
 

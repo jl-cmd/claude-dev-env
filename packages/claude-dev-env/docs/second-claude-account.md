@@ -46,5 +46,12 @@ An unreadable main meter never picks main.
 
 ```
 python packages/claude-dev-env/scripts/claude_account_choice.py
-{"account": "second", "config_dir": "C:\\Users\\me\\.claude-profiles\\ev", "reason": "..."}
+{"account": "second", "config_dir": "C:\\Users\\me\\.claude-profiles\\ev", "reason": "...",
+ "meters": {"main": {"session_used_percent": 12.0, "session_resets_at": "...",
+                     "weekly_used_percent": 34.0, "weekly_resets_at": "..."},
+            "second": null}}
 ```
+
+The `meters` object carries each account's used percent and reset time for the
+5-hour window and the week. An account whose meter could not be read shows `null`.
+A usage report reads both accounts from this one call.
