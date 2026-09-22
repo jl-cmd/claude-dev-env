@@ -291,3 +291,21 @@ def test_is_dedicated_constants_module_true_for_config_directory() -> None:
 
 def test_is_dedicated_constants_module_false_for_ordinary_module() -> None:
     assert _SHARED_MODULE._is_dedicated_constants_module("app/services/orders.py") is False
+
+
+@pytest.mark.parametrize(
+    "normalized_marker_table_name",
+    [
+        "ALL_AGENT_HOME_TOOLING_PATTERNS",
+        "ALL_HOOK_INFRASTRUCTURE_PATTERNS",
+        "ALL_WORKFLOW_REGISTRY_PATTERNS",
+        "ALL_MIGRATION_PATH_PATTERNS",
+    ],
+)
+def test_normalized_path_marker_table_carries_no_backslash_entry(
+    normalized_marker_table_name: str,
+) -> None:
+    """Each table's consumer normalizes the path with .replace("\\\\", "/") but
+    not the marker, so a backslash entry can never match."""
+    marker_table = getattr(_SHARED_MODULE, normalized_marker_table_name)
+    assert all("\\" not in each_marker for each_marker in marker_table)
