@@ -71,7 +71,7 @@ ALL_ACCOUNT_LOCAL_NAMES: frozenset[str] = frozenset(
 )
 """Top-level Claude home entries that belong to one account and are never linked."""
 
-ALL_ACCOUNT_LOCAL_NAME_PREFIXES: tuple[str, ...] = (".claude.json",)
+ALL_ACCOUNT_LOCAL_NAME_PREFIXES: tuple[str, ...] = (".claude.json", ".credentials.json")
 """Name prefixes of per-account state files, covering the global config and its backups."""
 
 REPLACED_DIRECTORY_NAME: str = ".replaced"

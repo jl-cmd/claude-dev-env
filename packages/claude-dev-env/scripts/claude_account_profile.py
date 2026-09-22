@@ -12,7 +12,8 @@ everything else the main home holds: skills, rules, plugins, settings, docs::
 
 Each run converges the profile on that picture. A stale copy moves into
 ``.replaced/<time>/`` with its content kept, a link whose main entry is gone
-is removed, and a second run changes nothing. The run also writes the
+is removed, a main link under an account-local name such as a credentials
+backup is removed, and a second run changes nothing. The run also writes the
 ``claude-ev.cmd`` launcher that starts Claude on this profile.
 
 ::
@@ -89,6 +90,7 @@ def is_account_local(entry_name: str) -> bool:
     ::
 
         ".credentials.json", "projects", ".claude.json.backup" -> True
+        ".credentials.json.bak"                                 -> True
         "skills", "CLAUDE.md", "settings.json"                  -> False
 
     Args:
@@ -211,6 +213,20 @@ def _unlink_orphaned_links(main_home: Path, profile_home: Path) -> tuple[str, ..
     return tuple(all_unlinked)
 
 
+def _unlink_local_names_linked_to_main(
+    main_home: Path, profile_home: Path
+) -> tuple[str, ...]:
+    all_unlinked: list[str] = []
+    for each_entry in sorted(profile_home.iterdir()):
+        if not is_account_local(each_entry.name):
+            continue
+        if not links_to(each_entry, main_home / each_entry.name):
+            continue
+        _remove_link(each_entry)
+        all_unlinked.append(each_entry.name)
+    return tuple(all_unlinked)
+
+
 def _clear_entry(entry_path: Path, source_path: Path, replaced_directory: Path) -> bool:
     if _is_same_content_copy(entry_path, source_path):
         entry_path.unlink()
@@ -252,7 +268,12 @@ def sync_profile(
         The entries the run linked, moved aside, and unlinked.
     """
     profile_home.mkdir(parents=True, exist_ok=True)
-    all_unlinked = _unlink_orphaned_links(main_home, profile_home)
+    all_unlinked = tuple(
+        sorted(
+            _unlink_orphaned_links(main_home, profile_home)
+            + _unlink_local_names_linked_to_main(main_home, profile_home)
+        )
+    )
     all_linked, all_moved_aside = _link_shared_entries(
         main_home, profile_home, profile_home / REPLACED_DIRECTORY_NAME / _stamp(now)
     )

@@ -16,8 +16,8 @@ The launcher sets `CLAUDE_CONFIG_DIR` to the profile and passes every argument t
 `claude`, so `claude-ev -p "..."` runs like `claude -p "..."` on the second
 account.
 
-These entries stay per account and are never linked: `.credentials.json`,
-`.claude.json` and its backups, `projects`, `sessions`, `todos`, `history.jsonl`,
+These entries stay per account and are never linked: `.credentials.json` and
+`.claude.json` with their backups, `projects`, `sessions`, `todos`, `history.jsonl`,
 and the other state folders named in the constants file.
 
 ## Sign in once

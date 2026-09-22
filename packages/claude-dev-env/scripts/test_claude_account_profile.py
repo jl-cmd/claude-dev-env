@@ -48,7 +48,13 @@ class TestDefaultProfileHome:
 
 class TestIsAccountLocal:
     def should_keep_sign_in_state_and_history_local(self) -> None:
-        for each_name in (".credentials.json", ".claude.json", ".claude.json.backup", "projects"):
+        for each_name in (
+            ".credentials.json",
+            ".credentials.json.bak-session-dashboard",
+            ".claude.json",
+            ".claude.json.backup",
+            "projects",
+        ):
             assert profile.is_account_local(each_name)
 
     def should_share_skills_rules_and_settings(self) -> None:
@@ -148,6 +154,22 @@ class TestSyncProfile:
         report = sync(main_home, profile_home)
         assert not os.path.lexists(profile_home / "rules")
         assert report.all_unlinked == ("rules",)
+
+
+    def should_remove_a_main_link_left_under_an_account_local_name(
+        self, tmp_path: Path
+    ) -> None:
+        main_home = build_main_home(tmp_path)
+        (main_home / ".credentials.json.bak").write_text("main backup", encoding="utf-8")
+        profile_home = tmp_path / "ev"
+        profile_home.mkdir()
+        os.link(main_home / ".credentials.json.bak", profile_home / ".credentials.json.bak")
+        report = sync(main_home, profile_home)
+        assert not os.path.lexists(profile_home / ".credentials.json.bak")
+        assert (main_home / ".credentials.json.bak").read_text(
+            encoding="utf-8"
+        ) == "main backup"
+        assert report.all_unlinked == (".credentials.json.bak",)
 
 
 class TestWriteLauncher:
