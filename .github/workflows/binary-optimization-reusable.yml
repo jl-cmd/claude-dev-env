@@ -57,12 +57,12 @@ jobs:
             echo "No changed PNG file needs a check."
             exit 0
           fi
-          if ! oxipng --opt 4 --strip none -- "${all_checked_images[@]}"; then
+          if ! oxipng --opt 4 --strip none --nb --nc -- "${all_checked_images[@]}"; then
             echo "::warning::oxipng could not read every changed PNG file. The files it read are still checked."
           fi
           if ! git diff --quiet; then
             git diff --stat
-            echo "::error::These PNG files shrink under a lossless oxipng pass. Run: oxipng --opt 4 --strip none <files>, then commit the result. A fixture whose exact bytes a test pins takes binary-optimizer=keep in .gitattributes."
+            echo "::error::These PNG files shrink under a lossless oxipng pass. Run: oxipng --opt 4 --strip none --nb --nc <files>, then commit the result. A fixture whose exact bytes a test pins takes binary-optimizer=keep in .gitattributes."
             exit 1
           fi
           echo "Every changed PNG file is already optimized."

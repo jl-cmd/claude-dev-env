@@ -53,9 +53,12 @@ ALL_OXIPNG_LOSSLESS_ARGUMENTS: tuple[str, ...] = (
     "4",
     "--strip",
     "none",
+    "--nb",
+    "--nc",
     "--quiet",
 )
-"""Oxipng options: a slow lossless search that keeps every PNG chunk."""
+"""Oxipng options: a slow lossless search that keeps every chunk, the bit
+depth, and the color type."""
 
 OXIPNG_MISSING_MESSAGE: str = (
     "oxipng is not on PATH. Install the release binary from "

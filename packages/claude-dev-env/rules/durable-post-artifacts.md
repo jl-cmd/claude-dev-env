@@ -30,14 +30,15 @@ Handle text and binary content differently:
 ## Optimize every image before it reaches GitHub
 
 The helper shrinks a PNG with [oxipng](https://github.com/oxipng/oxipng) before
-it uploads, and prints the size before and after. Oxipng is lossless, and
-`--strip none` keeps every chunk, so the image looks the same.
+it uploads, and prints the size before and after. Oxipng is lossless.
+`--strip none` keeps every chunk, and `--nb --nc` keep the bit depth and the
+color type, so a reader that checks the image mode sees the same file shape.
 
 Any other route to GitHub runs the same pass first: a PNG a commit adds, and a
 file sent with `gh release upload`.
 
 ```
-oxipng --opt 4 --strip none <file> [<file> ...]
+oxipng --opt 4 --strip none --nb --nc <file> [<file> ...]
 ```
 
 The `Binary optimization` check fails a pull request whose changed PNG files
