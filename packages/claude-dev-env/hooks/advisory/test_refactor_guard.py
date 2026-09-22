@@ -125,3 +125,24 @@ def test_untracked_probe_should_start_without_a_console_window(
 
     assert refactor_guard.is_new_file(str(tmp_path / "module.py")) is True
     assert all_recorded_keyword_arguments["creationflags"] == EXPECTED_HIDDEN_WINDOW_FLAGS
+
+
+def test_the_git_query_carries_the_advisory_s_own_executable_and_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """refactor_guard_constants supplies both names the git call is built from."""
+    all_calls: list[tuple[list[str], object]] = []
+
+    def record_call(
+        command: list[str], **keyword_arguments: object
+    ) -> subprocess.CompletedProcess[str]:
+        all_calls.append((command, keyword_arguments["timeout"]))
+        return subprocess.CompletedProcess(command, 1, "", "")
+
+    monkeypatch.setattr(refactor_guard.subprocess, "run", record_call)
+
+    refactor_guard.is_new_file(str(tmp_path / "module.py"))
+
+    command, timeout = all_calls[0]
+    assert command[:2] == ["git", "ls-files"]
+    assert timeout == refactor_guard.GIT_COMMAND_TIMEOUT_SECONDS
