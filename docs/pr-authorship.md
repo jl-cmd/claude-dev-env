@@ -24,11 +24,24 @@ cross-repository reusable workflow call cannot reach it.
 
 ## Commit authorship
 
-A commit an agent pushes carries `JonEcho <24366590+JonEcho@users.noreply.github.com>`
-as its author, set through `git config user.name` / `user.email` before the
-commit. `agent-bridge.yml`'s commit-and-push step sets this identity for
-every builder-produced commit. `24366590` is Jon's GitHub account id, so the
+A commit pushed from the `agent-pc` or `jon-pc` runner pool carries
+`JonEcho <24366590+JonEcho@users.noreply.github.com>` as its author, set
+through `git config user.name` / `user.email` before the commit.
+`agent-bridge.yml`'s commit-and-push step sets this identity for every
+builder-produced commit. `24366590` is Jon's GitHub account id, so the
 address links the commit to his account without needing his email.
+
+A commit a cloud thread session pushes stays authored as `Claude
+<noreply@anthropic.com>`, whatever the session's own `git config` says: the
+platform stamps that identity on the commit itself, separately from the
+push credential. Setting `git config user.name`/`user.email` to Jon's
+identity from a cloud session changed nothing on the commit that push
+produced; confirmed on this repository's own
+`0944be69d03a16669c76ffe1e939ff2dac034b56` and
+`Echo-Visuals-Inc/python-automation`'s `bf9c28971f1750f0a7bf96f9b786e17f6a21886a`,
+both pushed from a cloud session with `user.name` set to `JonEcho` and both
+landing authored as `Claude`. Opening the pull request as Jon through the
+workflow above does not depend on this and is unaffected by it.
 
 ## What this does not change
 
