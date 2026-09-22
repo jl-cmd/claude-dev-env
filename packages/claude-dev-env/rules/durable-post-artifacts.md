@@ -3,7 +3,8 @@
 ## When this applies
 
 Use this rule for a GitHub issue, pull request, comment, or review created
-through `gh` or a GitHub MCP post tool.
+through `gh` or a GitHub MCP post tool. The image section also covers a PNG a
+commit adds and a file a release upload sends.
 
 ## Rule
 
@@ -25,6 +26,24 @@ Handle text and binary content differently:
   The helper creates the `artifacts` prerelease when needed, uploads the file
   under a `YYYYMMDD_HHMMSS_<name>` asset name, and prints a permanent download
   URL. Put that URL in the post.
+
+## Optimize every image before it reaches GitHub
+
+The helper shrinks a PNG with [oxipng](https://github.com/oxipng/oxipng) before
+it uploads, and prints the size before and after. Oxipng is lossless.
+`--strip none` keeps every chunk, and `--nb --nc` keep the bit depth and the
+color type, so a reader that checks the image mode sees the same file shape.
+
+Any other route to GitHub runs the same pass first: a PNG a commit adds, and a
+file sent with `gh release upload`.
+
+```
+oxipng --opt 4 --strip none --nb --nc <file> [<file> ...]
+```
+
+The `Binary optimization` check fails a pull request whose changed PNG files
+still shrink under that pass. A fixture whose exact bytes a test pins takes
+`binary-optimizer=keep` in `.gitattributes`, and the check skips it.
 
 ## Volatile paths that must not appear in a post body
 

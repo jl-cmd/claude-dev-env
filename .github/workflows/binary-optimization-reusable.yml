@@ -1,0 +1,68 @@
+name: Binary optimization
+
+on:
+  workflow_call:
+    inputs:
+      tooling-ref:
+        description: claude-dev-env commit that carries the setup-oxipng action.
+        required: true
+        type: string
+      base-ref:
+        description: Base branch whose merge base with the head starts the diff.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  binary-optimization:
+    name: Binary optimization
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Load the oxipng setup action
+        uses: actions/checkout@v5
+        with:
+          repository: jl-cmd/claude-dev-env
+          ref: ${{ inputs.tooling-ref }}
+          path: .binary-optimization-tooling
+          sparse-checkout: .github/actions/setup-oxipng
+          persist-credentials: false
+
+      - name: Set up oxipng
+        uses: ./.binary-optimization-tooling/.github/actions/setup-oxipng
+
+      - name: Optimize the changed PNG files losslessly
+        env:
+          BASE_REF: ${{ inputs.base-ref }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' all_changed_images < <(
+            git diff --name-only -z --diff-filter=AMR "origin/$BASE_REF...HEAD" -- '*.png' '*.PNG'
+          )
+          all_checked_images=()
+          for each_image in "${all_changed_images[@]}"; do
+            if ! git check-attr binary-optimizer -- "$each_image" | grep -q ': keep$'; then
+              all_checked_images+=("$each_image")
+            fi
+          done
+          if [ "${#all_checked_images[@]}" -eq 0 ]; then
+            echo "No changed PNG file needs a check."
+            exit 0
+          fi
+          if ! oxipng --opt 4 --strip none --nb --nc -- "${all_checked_images[@]}"; then
+            echo "::warning::oxipng could not read every changed PNG file. The files it read are still checked."
+          fi
+          if ! git diff --quiet; then
+            git diff --stat
+            echo "::error::These PNG files shrink under a lossless oxipng pass. Run: oxipng --opt 4 --strip none --nb --nc <files>, then commit the result. A fixture whose exact bytes a test pins takes binary-optimizer=keep in .gitattributes."
+            exit 1
+          fi
+          echo "Every changed PNG file is already optimized."

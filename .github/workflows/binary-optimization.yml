@@ -1,0 +1,23 @@
+name: Binary optimization
+
+on:
+  pull_request:
+    paths:
+      - "**/*.png"
+      - "**/*.PNG"
+      - ".github/workflows/binary-optimization*.yml"
+      - ".github/actions/setup-oxipng/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: binary-optimization-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  binary-optimization:
+    uses: ./.github/workflows/binary-optimization-reusable.yml
+    with:
+      tooling-ref: ${{ github.event.pull_request.head.sha }}
+      base-ref: ${{ github.base_ref }}
