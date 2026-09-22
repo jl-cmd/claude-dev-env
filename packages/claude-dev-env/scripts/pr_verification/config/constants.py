@@ -1,21 +1,26 @@
 import re
 
+from dev_env_scripts_constants.github_http_constants import (  # noqa: F401
+    ACCEPT_HEADER,
+    AUTHORIZATION_HEADER,
+    BEARER_PREFIX,
+    GITHUB_ACCEPT_TYPE,
+    UTF8_ENCODING,
+)
+from dev_env_scripts_constants.github_http_constants import (
+    GITHUB_API_ROOT as GITHUB_API_URL,
+)
+
 SUCCESS_EXIT_CODE = 0
 INCOMPLETE_EXIT_CODE = 3
 HTTP_OK = 200
 HTTP_CREATED = 201
 HTTP_NO_CONTENT = 204
-GITHUB_API_URL = "https://api.github.com"
 GITHUB_PAGE_SIZE = 100
-UTF8_ENCODING = "utf-8"
 JSON_CONTENT_TYPE = "application/json"
-GITHUB_ACCEPT_TYPE = "application/vnd.github+json"
 GITHUB_API_VERSION = "2022-11-28"
-AUTHORIZATION_HEADER = "Authorization"
-ACCEPT_HEADER = "Accept"
 CONTENT_TYPE_HEADER = "Content-Type"
 API_VERSION_HEADER = "X-GitHub-Api-Version"
-BEARER_PREFIX = "Bearer "
 APP_JWT_ALGORITHM = "RS256"
 APP_ISSUER_CLAIM = "iss"
 APP_ISSUED_AT_CLAIM = "iat"
