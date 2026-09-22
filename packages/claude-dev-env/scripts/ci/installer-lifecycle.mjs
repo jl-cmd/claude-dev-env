@@ -10,6 +10,7 @@ import {
 import { join } from 'node:path';
 import {
     INSTALL_ENTRY,
+    SANDBOX_GIT_CONFIG_NAME,
     createScratchHome,
     removeScratchHome,
     runInstaller,
@@ -149,7 +150,7 @@ function main() {
         }
         record('settings.json carries managed hooks', managedHookCount > 0, `${managedHookCount} hook commands`);
 
-        const gitConfigGlobalPath = join(sandboxHome, '.gitconfig-sandbox');
+        const gitConfigGlobalPath = join(sandboxHome, SANDBOX_GIT_CONFIG_NAME);
         const gitHooksPathRedirectedIntoSandbox =
             existsSync(gitConfigGlobalPath) &&
             readFileSync(gitConfigGlobalPath, 'utf8').replace(/\\/g, '/').includes('/.claude/hooks/git-hooks');

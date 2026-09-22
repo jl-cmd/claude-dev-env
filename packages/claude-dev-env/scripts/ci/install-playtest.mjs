@@ -31,7 +31,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createScratchHome, removeScratchHome, runInstaller, scratchHomeEnvironment } from './scratch-home-install.mjs';
+import {
+    createScratchHome,
+    removeScratchHome,
+    runInstaller,
+    scratchHomeEnvironment,
+    SANDBOX_GIT_CONFIG_BODY,
+    SANDBOX_GIT_CONFIG_NAME,
+} from './scratch-home-install.mjs';
 
 export const EVIDENCE_PREFIX = 'cde-playtest-';
 export const SETTINGS_RELATIVE_PATH = join('.claude', 'settings.json');
@@ -253,9 +260,9 @@ export function runPlaytest(argv) {
     const scratchHome = options.homePath ?? createScratchHome();
     if (options.homePath) {
         mkdirSync(scratchHome, { recursive: true });
-        const gitConfigPath = join(scratchHome, '.gitconfig-sandbox');
+        const gitConfigPath = join(scratchHome, SANDBOX_GIT_CONFIG_NAME);
         if (!existsSync(gitConfigPath)) {
-            writeFileSync(gitConfigPath, '[safe]\n\tdirectory = *\n');
+            writeFileSync(gitConfigPath, SANDBOX_GIT_CONFIG_BODY);
         }
     }
     const evidenceDirectory = options.evidencePath ?? mkdtempSync(join(tmpdir(), EVIDENCE_PREFIX));
