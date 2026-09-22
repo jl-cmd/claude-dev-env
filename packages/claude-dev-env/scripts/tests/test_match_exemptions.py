@@ -21,8 +21,8 @@ from repository_checks.tracked_secrets import collect_tracked_secret_findings
 CONTACT = "fixture-contact@company.io"
 CHANGED_CONTACT = "changed-contact@company.io"
 DIGEST = hashlib.sha256(CONTACT.encode()).hexdigest()
-RUNNER_ADDRESS = "10.83.21.14"
-CHANGED_RUNNER_ADDRESS = "10.83.21.15"
+RUNNER_ADDRESS = "10.0.0.14"
+CHANGED_RUNNER_ADDRESS = "10.0.0.15"
 RUNNER_ADDRESS_DIGEST = hashlib.sha256(RUNNER_ADDRESS.encode()).hexdigest()
 
 
