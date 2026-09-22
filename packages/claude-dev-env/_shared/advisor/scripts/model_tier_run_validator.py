@@ -76,6 +76,7 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (
     CLI_SUCCESS_EXIT_CODE,
     CLI_USAGE_MESSAGE,
     CLI_VALIDATION_FAILURE_EXIT_CODE,
+    EVIDENCE_MUST_BE_OBJECT_MESSAGE,
     HOST_PROFILE_CLAUDE,
     HOST_PROFILE_CODEX,
     HOST_PROFILE_JSON_KEY,
@@ -242,7 +243,7 @@ def _validate_advisor_evidence(
     run: ModelTierRun,
 ) -> None:
     if not isinstance(evidence, Mapping):
-        raise ModelTierRunError("evidence must be an object")
+        raise ModelTierRunError(EVIDENCE_MUST_BE_OBJECT_MESSAGE)
     raw_schema_version = evidence.get("schema_version")
     if isinstance(raw_schema_version, bool) or raw_schema_version != 1:
         raise ModelTierRunError("evidence.schema_version must be 1")
@@ -415,7 +416,7 @@ def load_model_tier_run_from_json_path(from_path: Path) -> ModelTierRun:
         raise TypeError(HOST_PROFILE_MUST_BE_STRING_MESSAGE)
     raw_evidence = parsed_payload.get("evidence")
     if raw_evidence is not None and not isinstance(raw_evidence, dict):
-        raise TypeError("evidence must be an object")
+        raise TypeError(EVIDENCE_MUST_BE_OBJECT_MESSAGE)
     return ModelTierRun(
         own_tier=parsed_payload["own_tier"],
         candidate_tiers=list(parsed_payload["candidate_tiers"]),

@@ -23,14 +23,14 @@ try:
         sys.path.insert(0, hooks_root_directory)
 
     from hooks_constants.multi_edit_reconstruction import edits_for_tool
-    from hooks_constants.precommit_code_rules_gate_constants import GIT_COMMAND_TIMEOUT_SECONDS
     from hooks_constants.refactor_guard_constants import (
         ALL_PYTHON_KEYWORDS,
         CHANGED_SURFACE_MATCH_RATIO,
+        GIT_COMMAND_TIMEOUT_SECONDS,
+        GIT_EXECUTABLE_TOKEN,
         MAXIMUM_REFACTOR_LINE_DELTA,
         REFACTOR_LINE_DELTA_DIVISOR,
     )
-    from hooks_constants.session_edit_stage_gate_constants import GIT_EXECUTABLE_TOKEN
 except ImportError as import_error:
     raise ImportError(
         "refactor_guard: cannot import its sibling modules; "

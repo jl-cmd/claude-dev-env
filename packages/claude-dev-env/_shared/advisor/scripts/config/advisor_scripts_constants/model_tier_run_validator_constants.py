@@ -105,3 +105,4 @@ CLI_SUCCESS_EXIT_CODE: int = 0
 ALL_ADVISOR_REPLY_PATHS: frozenset[str] = frozenset(
     {"native", "sendmessage", "cli", "codex", "none"}
 )
+EVIDENCE_MUST_BE_OBJECT_MESSAGE: str = "evidence must be an object"
