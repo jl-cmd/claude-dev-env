@@ -40,7 +40,7 @@ Work a disagreement in this order: keep the observed evidence in the record, nam
 
 ## Recovery record
 
-Keep one versioned `evidence` object in the session-controlled `model-tier-run.json` record. A missing optional reference belongs in `reference.status`; it keeps the bind result independent. `fallback_kind: "broken"` identifies a bind or reply failure. On a Codex host, a successful native route records `selected_tier: "Astra"` and `reply_path: "native"`.
+Keep one versioned `evidence` object in the session-controlled `model-tier-run.json` record. A missing optional reference belongs in `reference.status`; it keeps the bind result independent. `fallback_kind: "broken"` identifies a bind or reply failure. On a Codex host, a successful native route records `selected_tier: "Astra"`, `reply_path: "native"`, and `advisor_flag`. The value is `"passed"` when the spawn tool offers the `--advisor` flag and the spawn passed it, or `"unavailable"` when the spawn tool has no flag field. `"omitted"` fails the bind.
 
 ```json
 {
@@ -56,7 +56,8 @@ Keep one versioned `evidence` object in the session-controlled `model-tier-run.j
       "selected_tier": "Astra",
       "fallback_kind": null,
       "fallback_reason": null,
-      "reply_path": "native"
+      "reply_path": "native",
+      "advisor_flag": "passed"
     },
     "consult": {
       "changed_evidence": ["native bind returned a reply"],

@@ -106,3 +106,18 @@ ALL_ADVISOR_REPLY_PATHS: frozenset[str] = frozenset(
     {"native", "sendmessage", "cli", "codex", "none"}
 )
 EVIDENCE_MUST_BE_OBJECT_MESSAGE: str = "evidence must be an object"
+ADVISOR_FLAG_PASSED: str = "passed"
+ADVISOR_FLAG_UNAVAILABLE: str = "unavailable"
+ADVISOR_FLAG_OMITTED: str = "omitted"
+ALL_ADVISOR_FLAG_STATES: frozenset[str] = frozenset(
+    {ADVISOR_FLAG_PASSED, ADVISOR_FLAG_UNAVAILABLE, ADVISOR_FLAG_OMITTED}
+)
+UNKNOWN_ADVISOR_FLAG_MESSAGE: str = (
+    "evidence.fallback.advisor_flag must be passed, unavailable, or omitted"
+)
+MISSING_ADVISOR_FLAG_MESSAGE: str = (
+    "Codex Astra success requires evidence.fallback.advisor_flag"
+)
+OMITTED_ADVISOR_FLAG_MESSAGE: str = (
+    "Codex Astra spawn skipped the --advisor flag the host offers"
+)

@@ -67,6 +67,8 @@ from advisor_scripts_constants.astra_advisor_constants import (
     ASTRA_FALLBACK_KIND_DECLINED,
 )
 from advisor_scripts_constants.model_tier_run_validator_constants import (
+    ADVISOR_FLAG_OMITTED,
+    ALL_ADVISOR_FLAG_STATES,
     ALL_ADVISOR_REPLY_PATHS,
     ATTEMPT_ORDER_MISMATCH_MESSAGE,
     ATTEMPT_TIER_OUT_OF_SLICE_MESSAGE,
@@ -82,10 +84,13 @@ from advisor_scripts_constants.model_tier_run_validator_constants import (
     HOST_PROFILE_JSON_KEY,
     HOST_PROFILE_MUST_BE_STRING_MESSAGE,
     INCOMPLETE_FALLBACK_WALK_MESSAGE,
+    MISSING_ADVISOR_FLAG_MESSAGE,
     MISSING_FALLBACK_REASON_MESSAGE,
+    OMITTED_ADVISOR_FLAG_MESSAGE,
     SELECTED_TIER_MISMATCH_MESSAGE,
     SELECTED_TIER_NOT_NULL_MESSAGE,
     THIRD_PARTY_MODEL_TIER,
+    UNKNOWN_ADVISOR_FLAG_MESSAGE,
     UNKNOWN_HOST_PROFILE_ERROR,
     UNKNOWN_OWN_TIER_MESSAGE,
 )
@@ -212,14 +217,26 @@ def _validate_fallback_reply_path(
         raise ModelTierRunError(
             "evidence.fallback.reply_path is not a known advisor path"
         )
-    if (
+    is_codex_astra_success = (
         canonical_host_profile(run.host_profile) == HOST_PROFILE_CODEX
         and maybe_run_selected_tier == ADVISOR_MODEL_TIER
-        and reply_path != "native"
-    ):
+    )
+    if is_codex_astra_success and reply_path != "native":
         raise ModelTierRunError(
             "Codex Astra success requires the native reply path"
         )
+    raw_advisor_flag = fallback_by_name.get("advisor_flag")
+    if raw_advisor_flag is None:
+        if is_codex_astra_success:
+            raise ModelTierRunError(MISSING_ADVISOR_FLAG_MESSAGE)
+        return
+    if (
+        not isinstance(raw_advisor_flag, str)
+        or raw_advisor_flag not in ALL_ADVISOR_FLAG_STATES
+    ):
+        raise ModelTierRunError(UNKNOWN_ADVISOR_FLAG_MESSAGE)
+    if is_codex_astra_success and raw_advisor_flag == ADVISOR_FLAG_OMITTED:
+        raise ModelTierRunError(OMITTED_ADVISOR_FLAG_MESSAGE)
 
 
 def _validate_fallback_evidence(

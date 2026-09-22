@@ -44,7 +44,16 @@ def _native_codex_evidence(
     *,
     reply_path: str = "native",
     reference_status: str = "missing",
+    advisor_flag: str | None = "passed",
 ) -> dict[str, object]:
+    fallback: dict[str, object] = {
+        "selected_tier": "Astra",
+        "fallback_kind": None,
+        "fallback_reason": None,
+        "reply_path": reply_path,
+    }
+    if advisor_flag is not None:
+        fallback["advisor_flag"] = advisor_flag
     return {
         "schema_version": 1,
         "reference": {
@@ -53,12 +62,7 @@ def _native_codex_evidence(
             "repair_action": "use the projected docs root",
             "repair_result": "read",
         },
-        "fallback": {
-            "selected_tier": "Astra",
-            "fallback_kind": None,
-            "fallback_reason": None,
-            "reply_path": reply_path,
-        },
+        "fallback": fallback,
         "consult": {
             "changed_evidence": ["native bind returned a reply"],
             "validation": ["signal and session id read back"],
@@ -93,6 +97,46 @@ def test_codex_native_success_rejects_non_native_reply_path() -> None:
     )
 
     with pytest.raises(ModelTierRunError, match="native reply path"):
+        validate_model_tier_run(run)
+
+
+def _codex_astra_success_run(evidence: dict[str, object]) -> ModelTierRun:
+    return ModelTierRun(
+        own_tier="Opus",
+        candidate_tiers=[ADVISOR_MODEL_TIER],
+        attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
+        selected_tier=ADVISOR_MODEL_TIER,
+        host_profile="Codex",
+        evidence=evidence,
+    )
+
+
+def test_codex_plain_astra_spawn_binds_when_host_lacks_advisor_flag() -> None:
+    run = _codex_astra_success_run(
+        _native_codex_evidence(advisor_flag="unavailable")
+    )
+
+    assert validate_model_tier_run(run) is None
+
+
+def test_codex_astra_spawn_that_skips_offered_advisor_flag_fails_closed() -> None:
+    run = _codex_astra_success_run(_native_codex_evidence(advisor_flag="omitted"))
+
+    with pytest.raises(ModelTierRunError, match="--advisor"):
+        validate_model_tier_run(run)
+
+
+def test_codex_astra_success_without_advisor_flag_record_fails_closed() -> None:
+    run = _codex_astra_success_run(_native_codex_evidence(advisor_flag=None))
+
+    with pytest.raises(ModelTierRunError, match="advisor_flag"):
+        validate_model_tier_run(run)
+
+
+def test_unknown_advisor_flag_state_is_rejected() -> None:
+    run = _codex_astra_success_run(_native_codex_evidence(advisor_flag="skipped"))
+
+    with pytest.raises(ModelTierRunError, match="advisor_flag"):
         validate_model_tier_run(run)
 
 
