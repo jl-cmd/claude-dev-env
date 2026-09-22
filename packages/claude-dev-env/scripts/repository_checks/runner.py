@@ -14,6 +14,9 @@ from repository_checks.env_var_documentation import (
 from repository_checks.models import RepositoryCheckReport, RepositoryFinding
 from repository_checks.package_inventory import collect_package_inventory_findings
 from repository_checks.pytest_testpaths import collect_pytest_testpath_findings
+from repository_checks.tracked_private_terms import (
+    collect_tracked_private_term_findings,
+)
 from repository_checks.tracked_secrets import collect_tracked_secret_findings
 
 RepositoryCollector = Callable[[Path, Sequence[str]], list[RepositoryFinding]]
@@ -89,5 +92,9 @@ def _all_collectors() -> tuple[tuple[str, RepositoryCollector], ...]:
         (
             repository_constants.CHECK_ID_TRACKED_PERSONAL_DATA,
             collect_tracked_secret_findings,
+        ),
+        (
+            repository_constants.CHECK_ID_TRACKED_PRIVATE_TERMS,
+            collect_tracked_private_term_findings,
         ),
     )

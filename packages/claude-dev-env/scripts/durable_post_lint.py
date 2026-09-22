@@ -12,6 +12,11 @@ from contrast_framing import describe_contrast_framing, find_contrast_framing
 from dev_env_scripts_constants.contrast_framing_constants import (
     CONTRAST_FRAMING_FINDING_CODE,
 )
+from dev_env_scripts_constants.private_term_constants import (
+    ALL_PRIVATE_TERM_DIGESTS,
+    PRIVATE_TERM_FINDING_CODE,
+    PRIVATE_TERM_MESSAGE_TEMPLATE,
+)
 from durable_post_lint_config.config.constants import (
     ACTION_PR_CREATE,
     ACTION_PR_EDIT,
@@ -41,6 +46,7 @@ from durable_post_lint_config.config.constants import (
     PATH_ANCHOR_CHARACTER,
     PATH_SEGMENT_START_CHARACTERS,
     RELEASE_BRANCH_PREFIX,
+    REPOSITORY_OWNER_SEPARATOR,
     REWRITTEN_RELEASE_BODY_CODE,
     REWRITTEN_RELEASE_BODY_MESSAGE,
     TITLE_NOT_ALLOWED_MESSAGE,
@@ -48,6 +54,7 @@ from durable_post_lint_config.config.constants import (
     VOLATILE_PATH_CODE,
     VOLATILE_PATH_MESSAGE,
 )
+from private_terms import private_term_line_numbers
 
 
 class DurablePostUsageError(ValueError):
@@ -153,6 +160,26 @@ def _contrast_framing_findings(text: str) -> list[DurablePostFinding]:
     ]
 
 
+def _private_term_findings(
+    text: str | None, repository: str | None
+) -> list[DurablePostFinding]:
+    if text is None:
+        return []
+    if repository is not None and private_term_line_numbers(
+        repository.split(REPOSITORY_OWNER_SEPARATOR)[0], ALL_PRIVATE_TERM_DIGESTS
+    ):
+        return []
+    return [
+        DurablePostFinding(
+            code=PRIVATE_TERM_FINDING_CODE,
+            message=PRIVATE_TERM_MESSAGE_TEMPLATE.format(line_number=each_line_number),
+        )
+        for each_line_number in private_term_line_numbers(
+            text, ALL_PRIVATE_TERM_DIGESTS
+        )
+    ]
+
+
 def _title_findings(title: str | None) -> list[DurablePostFinding]:
     if title is None:
         return []
@@ -215,12 +242,29 @@ def lint_durable_post(
     title: str | None,
     body_text: str | None,
     head_branch: str | None = None,
+    repository: str | None = None,
 ) -> tuple[DurablePostFinding, ...]:
-    """Return content findings for one locally valid GitHub post request."""
+    """Return content findings for one locally valid GitHub post request.
+
+    A post to a repository whose owner is a private organization may name that
+    organization. Every other post, and a post with no repository given, may not.
+
+    Args:
+        action: The post action, such as ``pr-create`` or ``issue-comment``.
+        title: The post title, when the action carries one.
+        body_text: The post body, when the action carries one.
+        head_branch: The pull request head branch, when known.
+        repository: The ``owner/name`` the post targets, when known.
+
+    Returns:
+        Every finding, title findings first.
+    """
     _validate_request_shape(action, title, body_text)
     return (
         *_title_findings(title),
+        *_private_term_findings(title, repository),
         *_body_findings(action, body_text, head_branch),
+        *_private_term_findings(body_text, repository),
     )
 
 
@@ -230,6 +274,7 @@ def _parse_arguments(all_arguments: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--title")
     parser.add_argument("--body-file", type=Path)
     parser.add_argument("--head-branch")
+    parser.add_argument("--repository")
     return parser.parse_args(list(all_arguments))
 
 
@@ -247,6 +292,7 @@ def main(all_arguments: Sequence[str]) -> int:
             title=arguments.title,
             body_text=body_text,
             head_branch=arguments.head_branch,
+            repository=arguments.repository,
         )
     except (DurablePostInputError, DurablePostUsageError) as error:
         sys.stderr.write(f"{error}\n")

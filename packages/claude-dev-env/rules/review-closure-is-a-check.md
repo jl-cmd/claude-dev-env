@@ -33,7 +33,7 @@ The driving account is the one that opened the pull request. Where the agent com
 
 `.github/workflows/review-closure.yml` runs it here on a push to a pull request, on a submitted or dismissed review, and on a review comment. Each run reports on the pull request's head commit, so a finding posted after the last push still turns the check red.
 
-`Echo-Visuals-Inc/python-automation` runs the same command from its own workflow, against the revision of this package that its workflow pins.
+A private repository that installs this package runs the same command from its own workflow, against the revision of this package that its workflow pins.
 
 ## Sibling rules
 
