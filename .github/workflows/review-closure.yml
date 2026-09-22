@@ -1,0 +1,52 @@
+# Trigger scope: the pull_request trigger catches a push, and the review
+# triggers catch a finding posted after that push, so the verdict follows the
+# conversation rather than the last commit alone. Each run reports on the pull
+# request's head commit.
+
+name: Review closure
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  pull_request_review:
+    types:
+      - submitted
+      - dismissed
+  pull_request_review_comment:
+    types:
+      - created
+      - edited
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+
+concurrency:
+  group: review-closure-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review-closure:
+    name: Review closure
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read the review findings on this head
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONPATH: packages/claude-dev-env/scripts
+        run: |
+          python packages/claude-dev-env/scripts/review_closure.py \
+            "${{ github.repository }}" \
+            "${{ github.event.pull_request.number }}"

@@ -108,6 +108,7 @@ Behavioral rules loaded into every session.
 
 | Rule | What it does |
 |------|-------------|
+| `agent-merges-its-own-green-pull-request` | The agent that drives a pull request merges it once its gate passes |
 | `anti-corollary-tests` | Each test carries information; skip corollary matrices |
 | `asd-ste100-language` | Plain word choice, sentence style, and tone for user-facing text |
 | `bdd` | Discovery, illustration, and should-style specifications around the TDD loop |
@@ -135,6 +136,7 @@ Behavioral rules loaded into every session.
 | `prompt-workflow-context-controls` | Prompt workflows stay low-context |
 | `re-stage-before-commit` | Stage this session's edits right before the commit |
 | `research-mode` | Cite sources, say "I don't know", use direct quotes |
+| `review-closure-is-a-check` | A review finding on the head is answered before the pull request merges |
 | `shell-invocation` | Use pwsh, and keep shell substitution out of Bash commands |
 | `testing` | Complete mocks, reference TEST_QUALITY.md |
 | `verify-before-asking` | Answer with a tool what a tool can answer |
@@ -172,20 +174,17 @@ Reference documents that rules and agents point to for detailed standards.
 | `worker-completion-gate.md` | Full detail behind the worker completion rule |
 | `wsl-docker-cowork-starter-matrix.md` | Host memory attribution under WSL2 and Docker Desktop |
 
-### Agents (8)
+### Agents (1)
 
 Specialized agent prompts for common development tasks. Claude Code automatically discovers these and makes them available for delegation.
 
 | Agent | Role |
 |---------|------|
-| `clean-coder` | Primary code-writing agent |
-| `code-quality-agent` | Multi-file code quality review |
-| `git-commit-crafter` | Conventional commit messages |
-| `issue-tracker` | GitHub issue create, update, and close |
-| `plan-packet-validator` | Fresh-context plan-packet validator |
-| `pr-description-writer` | PR descriptions from the current diff |
-| `session-advisor` | Standing reviewer; endorse/correction/plan/stop |
-| `skill-writer-agent` | SKILL.md authoring specialist |
+| `poteto-agent` | Delegates to the installed pstack poteto-mode skill for the task in each call |
+
+The 8 personal agents this package shipped before `poteto-agent` are archived
+under `.agents/agents-archived/`, each with a restore command in
+[`ARCHIVE-MANIFEST.md`](packages/claude-dev-env/.agents/agents-archived/ARCHIVE-MANIFEST.md).
 
 ### Commands (1)
 
