@@ -1,9 +1,9 @@
 """Constants for the session-edit stage gate hook trio.
 
 Shared by the PostToolUse tracker
-(``hooks/observability/session_file_edit_tracker.py``), the PreToolUse gate
-(``hooks/blocking/session_edit_stage_gate.py``), and the SessionStart cleanup
-(``hooks/session/session_edit_tracker_cleanup.py``): the per-session tracker
+(``hooks/observability/session_file_edit_tracker.py``) and the SessionStart
+cleanup (``hooks/session/session_edit_tracker_cleanup.py``): the per-session
+tracker
 filename shape and JSON payload key, the session-id sanitize pattern, the
 SessionStart source key and the fresh-startup source value the cleanup keys its
 deletion on, the edit-tool name set, the per-session lock filename suffix and
@@ -62,7 +62,6 @@ ALL_TRACKED_UNSTAGED_FILES_COMMAND: tuple[str, ...] = (
 
 PARTIAL_COMMIT_BYPASS_MARKER: str = "# partial-commit"
 COMMIT_SUBCOMMAND_TOKEN: str = "commit"
-GIT_EXECUTABLE_TOKEN: str = "git"
 ENV_ASSIGNMENT_PREFIX_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 ALL_STAGING_SUBCOMMAND_TOKENS: frozenset[str] = frozenset({"add", "stage"})
 ALL_STAGE_ALL_ADD_FLAG_TOKENS: frozenset[str] = frozenset({"-A", "--all", "-u", "--update"})
