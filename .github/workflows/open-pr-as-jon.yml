@@ -1,0 +1,75 @@
+name: Open PR as Jon
+
+on:
+  workflow_dispatch:
+    inputs:
+      head:
+        description: The branch already pushed, carrying the change
+        required: true
+        type: string
+      base:
+        description: The branch this pull request targets
+        required: false
+        type: string
+        default: main
+      title:
+        description: The pull request title
+        required: true
+        type: string
+      body:
+        description: The pull request body
+        required: false
+        type: string
+        default: ''
+      draft:
+        description: Open as a draft
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  open-as-jon:
+    runs-on: ${{ fromJSON(vars.AGENT_RUNNER_LABELS || '["self-hosted","Windows","X64","agent-pc"]') }}
+    timeout-minutes: 5
+    steps:
+      - name: Confirm the runner is signed in to gh as Jon
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $status = gh auth status 2>&1 | Out-String
+          Write-Output $status
+          if ($status -notmatch 'JonEcho') {
+            Write-Error "gh on this runner is not signed in as JonEcho. Refusing to open a pull request under an unknown identity."
+            exit 1
+          }
+
+      - name: Write the pull request body to a file
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          PR_BODY: ${{ inputs.body }}
+        run: |
+          $bodyPath = Join-Path $env:RUNNER_TEMP 'open-pr-as-jon-body.txt'
+          [IO.File]::WriteAllText($bodyPath, $env:PR_BODY, [Text.UTF8Encoding]::new($false))
+          Write-Output "body bytes: $((Get-Item $bodyPath).Length)"
+
+      - name: Open the pull request as Jon
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -File {0}
+        env:
+          GH_REPO: ${{ github.repository }}
+          PR_HEAD: ${{ inputs.head }}
+          PR_BASE: ${{ inputs.base }}
+          PR_TITLE: ${{ inputs.title }}
+          PR_DRAFT: ${{ inputs.draft }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $bodyPath = Join-Path $env:RUNNER_TEMP 'open-pr-as-jon-body.txt'
+          $ghArgs = @('pr', 'create', '--repo', $env:GH_REPO, '--head', $env:PR_HEAD, '--base', $env:PR_BASE, '--title', $env:PR_TITLE, '--body-file', $bodyPath)
+          if ($env:PR_DRAFT -eq 'true') { $ghArgs += '--draft' }
+          $result = & gh @ghArgs 2>&1 | Out-String
+          $exitCode = $LASTEXITCODE
+          Write-Output $result
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Pull request opened as Jon`n`n``````text`n$result`n``````" -Encoding utf8
+          exit $exitCode

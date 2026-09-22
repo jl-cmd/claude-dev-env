@@ -136,6 +136,7 @@ ALL_SAFE_EMAIL_DOMAINS: frozenset[str] = frozenset(
         "test",
         "local",
         "test.local",
+        "users.noreply.github.com",
     }
 )
 

@@ -24,6 +24,7 @@ SYNTHETIC_AWS_KEY = "AKIA" + ("B" * 16)
 SYNTHETIC_PEM_HEADER = "-----BEGIN RSA PRIVATE KEY-----"
 SYNTHETIC_REAL_EMAIL = "person.fixture@company-example.io"
 SYNTHETIC_SAFE_EMAIL = "user@example.com"
+SYNTHETIC_GITHUB_NOREPLY_EMAIL = "24366590+octocat@users.noreply.github.com"
 SYNTHETIC_HOME_PATH = r"C:\Users\fixture_real_user\notes.txt"
 SYNTHETIC_PLACEHOLDER_HOME = r"C:\Users\<you>\notes.txt"
 SYNTHETIC_PRIVATE_IP = "192.168.42.17"
@@ -40,6 +41,13 @@ def test_flags_real_email_and_allows_example_domain() -> None:
     assert any(each.category == "email" for each in all_email_hits)
     assert all_email_hits[0].matched_text == SYNTHETIC_REAL_EMAIL
     assert all_safe_hits == []
+
+
+def test_allows_github_noreply_email_and_still_flags_a_company_lookalike() -> None:
+    all_noreply_hits = scan_text_for_pii(f"commit author {SYNTHETIC_GITHUB_NOREPLY_EMAIL}")
+    all_lookalike_hits = scan_text_for_pii("contact person@users.noreply.github.com.evil.io")
+    assert all_noreply_hits == []
+    assert any(each.category == "email" for each in all_lookalike_hits)
 
 
 def test_flags_home_path_and_allows_placeholder_user() -> None:
