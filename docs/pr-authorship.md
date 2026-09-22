@@ -16,8 +16,7 @@ It pushes nothing; the branch it opens against is pushed first, by whatever
 wrote the change.
 
 An agent that finishes a branch and is ready to open its pull request
-dispatches this workflow instead of calling a GitHub pull-request-create
-tool directly. The workflow file lives in each repository it serves
+dispatches this workflow to open it. The workflow file lives in each repository it serves
 (`Echo-Visuals-Inc/python-automation` and this repository both carry a
 copy), because a self-hosted runner pool is registered per repository and a
 cross-repository reusable workflow call cannot reach it.
