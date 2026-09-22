@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -d '' all_changed_images < <(
-            git diff --name-only -z --diff-filter=AMR "origin/$BASE_REF...HEAD" -- '*.png' '*.PNG'
+            git diff --name-only -z --diff-filter=AMR "origin/$BASE_REF...HEAD" -- ':(icase)*.png'
           )
           all_checked_images=()
           for each_image in "${all_changed_images[@]}"; do
