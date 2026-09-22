@@ -3,8 +3,7 @@ name: Binary optimization
 on:
   pull_request:
     paths:
-      - "**/*.png"
-      - "**/*.PNG"
+      - "**/*.[pP][nN][gG]"
       - ".github/workflows/binary-optimization*.yml"
       - ".github/actions/setup-oxipng/**"
 
