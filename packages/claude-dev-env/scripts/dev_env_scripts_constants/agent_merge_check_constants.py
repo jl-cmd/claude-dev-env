@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
-GITHUB_API_ROOT = "https://api.github.com"
+from dev_env_scripts_constants.github_http_constants import (  # noqa: F401
+    ACCEPT_HEADER,
+    AUTHORIZATION_HEADER,
+    BEARER_PREFIX,
+    GITHUB_ACCEPT_TYPE,
+    GITHUB_API_ROOT,
+    UTF8_ENCODING,
+)
+
 GITHUB_GRAPHQL_ENDPOINT = "https://api.github.com/graphql"
 PULL_REQUEST_ENDPOINT_TEMPLATE = "{api_root}/repos/{slug}/pulls/{number}"
 REVIEW_THREADS_ENDPOINT_TEMPLATE = (
     "{api_root}/repos/{slug}/pulls/{number}/ccr/review_threads"
 )
-ACCEPT_HEADER = "Accept"
-GITHUB_ACCEPT_TYPE = "application/vnd.github+json"
-AUTHORIZATION_HEADER = "Authorization"
-BEARER_PREFIX = "Bearer "
 CONTENT_TYPE_HEADER = "Content-Type"
 JSON_CONTENT_TYPE = "application/json"
-UTF8_ENCODING = "utf-8"
 REQUEST_TIMEOUT_SECONDS = 30
 
 ALL_TOKEN_ENVIRONMENT_VARIABLES = ("GH_TOKEN", "GITHUB_TOKEN")
