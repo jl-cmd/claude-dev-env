@@ -25,7 +25,7 @@ One warm advisor at the strongest tier this session can reach. This session is t
 
 1. Name the session identity first (protocol **Host profiles**), then walk the model floor.
 2. Claude: when `advisor` is in this session's tool list, the built-in advisor tool is the advisor. Spawn nothing and call `advisor()` at each consult point. Otherwise spawn or resume `pstack:poteto-agent` at `ADVISOR_EFFORT` (default low) with the advisor response contract in the prompt. When the bound model is out of usage, use the configured fallback at the same effort. Codex: use the native advisor path. Third-party: use the headless advisor path. When the host's walk fails, fail closed.
-3. Name the warm instance `team-advisor-agent` and keep its advisor response contract in every first prompt. When a native Codex subagent spawn is the advisor path, pass `flags: ["--advisor"]` with Astra.
+3. Name the warm instance `team-advisor-agent` and keep its advisor response contract in every first prompt. When a native Codex subagent spawn is the advisor path and the spawn tool has a `flags` field, pass `flags: ["--advisor"]` with Astra and record `advisor_flag: passed`. A spawn that skips an offered flag is a failed bind. When the spawn tool has no `flags` field, as in `codex exec`, spawn `gpt-6-astra` plainly, record `advisor_flag: unavailable`, and treat it as bound.
 4. Skip the multi-consumer "who you are" opener. This session is the sole consumer.
 5. When the bind or reply path fails, fail closed and report to the user. On a third-party host, only the bound advisor issues ENDORSE / CORRECTION / PLAN / STOP.
 
@@ -49,7 +49,7 @@ Aim for two consults on a normal task: one after orientation and one after write
 - Bind at or above the protocol floor for this host.
 - The advisor only answers (messaging); the session runs tools and posts.
 - Keep an optional reference gap in the reference record: path, status, repair action, and repair result. A reference gap leaves bind status separate.
-- On Codex, select native Astra when its bind and reply validation pass. Record `selected_tier: Astra` and `reply_path: native`.
+- On Codex, select native Astra when its bind and reply validation pass. Record `selected_tier: Astra` and `reply_path: native`, plus `advisor_flag: passed` or `advisor_flag: unavailable`.
 - Mark `fallback_kind: broken` only when the selected bind or reply path fails. Record the selected tier, fallback reason, and reply path in the same evidence object.
 - Record first, recovery, and completion consults with changed evidence, validation, unresolved risks, and report-back status.
 - Write the evidence object to the session-controlled `model-tier-run.json` record described in `advisor-tool.md`.

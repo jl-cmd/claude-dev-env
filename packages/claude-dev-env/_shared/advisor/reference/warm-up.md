@@ -31,7 +31,9 @@ The agent finishes its first turn standing by. `SendMessage` alone resumes it; b
 ## Codex host
 
 Spawn a native in-session Astra subagent at `resolve_codex_model_id("Astra")` (`gpt-6-astra`) with the charter as its prompt.
-Record `{tier: "Astra", result: "spawned"}` on success. Fail closed when that spawn does not bind.
+When the spawn tool has a `flags` field, pass `flags: ["--advisor"]` and record `fallback.advisor_flag: "passed"`.
+When the spawn tool has no `flags` field, as in `codex exec`, spawn `gpt-6-astra` plainly, record `fallback.advisor_flag: "unavailable"`, and treat the advisor as bound.
+Record `{tier: "Astra", result: "spawned"}` on success. Fail closed when that spawn does not bind, or when it skips a flag the host offers.
 The `ADVISOR_ASTRA` flag is not required. Do not walk Fable. Consults stay in-session with that Astra subagent.
 Identity routing: [`identity.md`](identity.md).
 

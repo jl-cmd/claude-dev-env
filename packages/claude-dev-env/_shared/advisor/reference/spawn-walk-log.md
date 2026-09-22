@@ -29,5 +29,5 @@ Exit code `1` means a ladder invariant failed.
 Exit code `2` means the path or JSON was unusable.
 The same checks are available in-process via `validate_model_tier_run(run)`.
 
-The validator checks ladder shape and validates `evidence` when it is present. On Claude and ThirdParty, Astra is attempted after Fable when `astra_enabled` is enabled, and `selected_tier: "Astra"` requires `result: "codex"`. On Codex, the walk is Astra only, and `result: "spawned"` or `result: "codex"` counts as success. A Codex success record uses `reply_path: "native"`.
+The validator checks ladder shape and validates `evidence` when it is present. On Claude and ThirdParty, Astra is attempted after Fable when `astra_enabled` is enabled, and `selected_tier: "Astra"` requires `result: "codex"`. On Codex, the walk is Astra only, and `result: "spawned"` or `result: "codex"` counts as success. A Codex success record uses `reply_path: "native"` and `advisor_flag: "passed"` or `advisor_flag: "unavailable"`. A missing `advisor_flag` or `advisor_flag: "omitted"` fails validation.
 Host policy sits on top of it. See the Model floor section of the protocol.
