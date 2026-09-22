@@ -136,8 +136,25 @@ def _load_resolve_usage_window_module() -> ModuleType:
     return loaded_module
 
 
-def _probe_weekly_utilization(credentials_path: Path) -> float:
-    usage_window_resolver = _load_resolve_usage_window_module()
+@dataclass(frozen=True)
+class AccountUsageMeters:
+    """One account's 5-hour and weekly meters, each field None when unread.
+
+    ::
+
+        {"five_hour": {"utilization": 42, ...}, "seven_day": {...}}
+        -> AccountUsageMeters(42.0, <5-hour reset>, 63.0, <weekly reset>)
+    """
+
+    session_utilization: float | None
+    session_resets_at: datetime | None
+    weekly_utilization: float | None
+    weekly_resets_at: datetime | None
+
+
+def _fetch_account_usage_payload(
+    usage_window_resolver: ModuleType, credentials_path: Path
+) -> dict[str, object]:
     now = datetime.now().astimezone()
     try:
         access_token = usage_window_resolver.read_oauth_access_token(
@@ -147,7 +164,7 @@ def _probe_weekly_utilization(credentials_path: Path) -> float:
             raise WeeklyUtilizationProbeError(
                 NO_ACCESS_TOKEN_ERROR_TEMPLATE.format(credentials_path=credentials_path)
             )
-        usage_payload = usage_window_resolver._fetch_usage_payload(access_token)
+        return usage_window_resolver._fetch_usage_payload(access_token)
     except WeeklyUtilizationProbeError:
         raise
     except (
@@ -160,10 +177,37 @@ def _probe_weekly_utilization(credentials_path: Path) -> float:
         raise WeeklyUtilizationProbeError(
             USAGE_PROBE_FAILED_ERROR_TEMPLATE.format(error=probe_error)
         ) from probe_error
+
+
+def probe_account_meters(credentials_path: Path) -> AccountUsageMeters:
+    """Read one account's usage meters through the usage-pause OAuth probe.
+
+    Args:
+        credentials_path: The account's CLI credential file.
+
+    Returns:
+        The account's 5-hour and weekly meters.
+
+    Raises:
+        WeeklyUtilizationProbeError: When the credential yields no usable token
+            or the probe request fails.
+    """
+    usage_window_resolver = _load_resolve_usage_window_module()
+    usage_payload = _fetch_account_usage_payload(usage_window_resolver, credentials_path)
     usage_windows = usage_window_resolver.extract_usage_windows(usage_payload)
-    if usage_windows.weekly_utilization is None:
+    return AccountUsageMeters(
+        session_utilization=usage_windows.session_utilization,
+        session_resets_at=usage_windows.session_resets_at,
+        weekly_utilization=usage_windows.weekly_utilization,
+        weekly_resets_at=usage_windows.weekly_resets_at,
+    )
+
+
+def _probe_weekly_utilization(credentials_path: Path) -> float:
+    weekly_utilization = probe_account_meters(credentials_path).weekly_utilization
+    if weekly_utilization is None:
         raise WeeklyUtilizationProbeError(WEEKLY_UTILIZATION_MISSING_ERROR)
-    return float(usage_windows.weekly_utilization)
+    return float(weekly_utilization)
 
 
 weekly_utilization_probe: WeeklyUtilizationProbe = _probe_weekly_utilization

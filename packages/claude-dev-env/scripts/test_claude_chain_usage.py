@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -372,7 +373,10 @@ def test_probe_weekly_utilization_reuses_resolver_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class _FakeWindows:
+        session_utilization = None
+        session_resets_at = None
         weekly_utilization = 37.5
+        weekly_resets_at = None
 
     class _FakeResolver:
         def read_oauth_access_token(self, credentials_path: Path, now: object) -> str:
@@ -399,6 +403,42 @@ def test_probe_weekly_utilization_reuses_resolver_windows(
         Path(PLACEHOLDER_CREDENTIALS_PRIMARY)
     )
     assert weekly_utilization == pytest.approx(37.5)
+
+
+def should_read_both_meters_and_their_resets_for_one_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_reset = datetime(2026, 9, 22, 23, 0).astimezone()
+    weekly_reset = datetime(2026, 9, 26, 9, 0).astimezone()
+
+    class _FakeWindows:
+        session_utilization = 12.0
+        session_resets_at = session_reset
+        weekly_utilization = 64.0
+        weekly_resets_at = weekly_reset
+
+    class _FakeResolver:
+        def read_oauth_access_token(self, credentials_path: Path, now: object) -> str:
+            return "token-value"
+
+        def _fetch_usage_payload(self, access_token: str) -> dict[str, object]:
+            return {}
+
+        def extract_usage_windows(
+            self, usage_payload: dict[str, object]
+        ) -> _FakeWindows:
+            return _FakeWindows()
+
+    monkeypatch.setattr(
+        usage, "_load_resolve_usage_window_module", lambda: _FakeResolver()
+    )
+    account_meters = usage.probe_account_meters(Path(PLACEHOLDER_CREDENTIALS_PRIMARY))
+    assert account_meters == usage.AccountUsageMeters(
+        session_utilization=12.0,
+        session_resets_at=session_reset,
+        weekly_utilization=64.0,
+        weekly_resets_at=weekly_reset,
+    )
 
 
 def test_probe_weekly_utilization_raises_when_token_missing(
