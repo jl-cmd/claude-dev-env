@@ -1,0 +1,53 @@
+title = "claude-dev-env privacy rules"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "user-folder-path"
+description = "A Windows, macOS, or Linux user folder path that names a person"
+regex = '''(?i)(?:\b[a-z]:[\\/]+users[\\/]+|(?:^|[\s"'`(=:])/(?:users|home)/)([^\\/\s"'`<>|()*?{}$%\[\].][^\\/\s"'`<>|()*?{}$%\[\]]*)'''
+secretGroup = 1
+keywords = ["users", "home"]
+
+[[rules.allowlists]]
+description = "Placeholder and system user names"
+regexes = [
+  '''(?i)^(?:example|user|username|you|name|alice|bob|carol|dave|placeholder|path|me|someone|default|admin|runner|runneradmin|container|ubuntu|public|shared|all users|default user|root|node|vscode|codespace|linuxbrew|all|dev|developer|test|tester)$''',
+  '''(?i)^your''',
+]
+
+[[rules]]
+id = "private-ip-address"
+description = "An RFC 1918 private IPv4 address"
+regex = '''\b(10\.(?:25[0-5]|2[0-4]\d|1?\d?\d)\.(?:25[0-5]|2[0-4]\d|1?\d?\d)\.(?:25[0-5]|2[0-4]\d|1?\d?\d)|172\.(?:1[6-9]|2\d|3[01])\.(?:25[0-5]|2[0-4]\d|1?\d?\d)\.(?:25[0-5]|2[0-4]\d|1?\d?\d)|192\.168\.(?:25[0-5]|2[0-4]\d|1?\d?\d)\.(?:25[0-5]|2[0-4]\d|1?\d?\d))\b'''
+secretGroup = 1
+keywords = ["10.", "172.", "192.168."]
+
+[[rules]]
+id = "personal-email-address"
+description = "An email address other than a noreply or example address"
+regex = '''(?i)\b([a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,})\b'''
+secretGroup = 1
+keywords = ["@"]
+
+[[rules.allowlists]]
+description = "Noreply, example, and reserved addresses"
+regexes = [
+  '''(?i)^(?:noreply|no-reply|git)@''',
+  '''(?i)@pytest\.''',
+  '''(?i)@(?:[a-z0-9\-]+\.)*(?:example\.(?:com|org|net|edu)|users\.noreply\.github\.com|anthropic\.com)$''',
+  '''(?i)@(?:[a-z0-9\-]+\.)*(?:invalid|localhost|test|local)$''',
+]
+
+[[allowlists]]
+description = "Pattern sources for the privacy scanners and legal notices"
+paths = [
+  '''(?:^|/)\.gitleaks\.toml$''',
+  '''(?:^|/)hooks/blocking/(?:test_)?pii_(?:scanner|prevention_blocker)\.py$''',
+  '''(?:^|/)hooks/hooks_constants/(?:pii_prevention_constants|hardcoded_user_path_constants)\.py$''',
+  '''(?:^|/)hooks/hooks_constants/test_(?:local_identity|hardcoded_user_path_constants)\.py$''',
+  '''(?:^|/)hooks/blocking/test_code_rules_enforcer_hardcoded_user_path\.py$''',
+  '''(?:^|/)scripts/tests/test_(?:tracked_secrets|match_exemptions|path_exemptions|email_exemptions|exact_value_exemptions)\.py$''',
+  '''(?i)(?:^|/)(?:license|copying|notice)(?:\.md|\.txt)?$''',
+]

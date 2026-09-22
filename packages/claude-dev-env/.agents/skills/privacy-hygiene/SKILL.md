@@ -32,6 +32,7 @@ Surfaces:
 1. **Write / Edit / MultiEdit** — payload text about to land on disk (via PreToolUse dispatcher)
 2. **Durable posts** — `gh pr/issue create|comment|edit|review` bodies and GitHub MCP body/comment fields (Bash and PowerShell)
 3. **git commit** — staged blob text (non-exempt paths) on Bash and PowerShell, including `git.exe` and flag forms (`--no-verify`, `-c`, `-C`). Commit message bodies (`-m` / `-F`) are out of scope for the automated gate
+4. **CI** — the `committed-tree` job in `.github/workflows/ci-tests.yml` runs [gitleaks](https://github.com/gitleaks/gitleaks) over every commit the pull request adds, test files included. The repository-root `.gitleaks.toml` adds three rules to the gitleaks defaults: a user folder path that names a person, an RFC 1918 address, and an email other than a noreply or example address. To clear a fixture that must stay, add its gitleaks fingerprint to `.gitleaksignore`
 
 ## Sweep procedure
 

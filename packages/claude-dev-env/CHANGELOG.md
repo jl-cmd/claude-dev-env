@@ -1,5 +1,32 @@
 # Changelog
 
+## [8.8.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.7.0...claude-dev-env-v8.8.0) (2026-09-22)
+
+
+### Features
+
+* **scripts:** run a second Claude account beside the main one ([a048007](https://github.com/jl-cmd/claude-dev-env/commit/a048007ddf1fd0cdcdfcc95dc3d5098f39245b31))
+* **scripts:** run a second Claude account beside the main one ([717a312](https://github.com/jl-cmd/claude-dev-env/commit/717a3121f8696894b101f0da864c41494b24b1f6))
+
+
+### Bug Fixes
+
+* **advisor:** accept a plain Astra spawn when the Codex host has no advisor flag ([25b35e6](https://github.com/jl-cmd/claude-dev-env/commit/25b35e630e501806fddd240ee763814642af715e))
+* **advisor:** accept a plain Astra spawn when the Codex host has no advisor flag ([94a21d4](https://github.com/jl-cmd/claude-dev-env/commit/94a21d4fabafdd0ef447d10ccb05ef473d64acec))
+* allow GitHub noreply commit-author emails in the PII scanner ([4422311](https://github.com/jl-cmd/claude-dev-env/commit/4422311a4db7abb4a7d45a1b4849394019e1b637))
+* **scripts:** keep credential backups out of the shared profile links ([4fbb222](https://github.com/jl-cmd/claude-dev-env/commit/4fbb222f784b27421eafd62fe496c4ff593d2681))
+
+
+### Documentation
+
+* **rules:** name the four early turn endings in long-horizon autonomy ([e21264d](https://github.com/jl-cmd/claude-dev-env/commit/e21264d01d898c949f12b59d6c4a4e5376a7c4e7))
+* **rules:** name the four early turn endings in long-horizon autonomy ([d1c85f4](https://github.com/jl-cmd/claude-dev-env/commit/d1c85f436cdcc298b104bb393f9651943ae69227))
+
+
+### CI
+
+* open pull requests as Jon so Graphite reviews them ([933c17b](https://github.com/jl-cmd/claude-dev-env/commit/933c17b629b0f39ac55ef0873ec6f1d5577a0637))
+
 ## [8.7.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.6.1...claude-dev-env-v8.7.0) (2026-09-22)
 
 
