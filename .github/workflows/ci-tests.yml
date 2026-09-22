@@ -318,7 +318,8 @@ jobs:
       - name: Install committed-tree checker dependencies
         run: pip install -e packages/claude-dev-env/
 
-      - name: Lint changes from the event merge base
+      - name: Resolve the event merge base
+        id: event-merge-base
         env:
           EVENT_BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
@@ -328,8 +329,25 @@ jobs:
           if [ -z "${event_base_revision}" ] || [ "${event_base_revision}" = "${zero_revision}" ]; then
             event_base_revision="$(git rev-parse HEAD^1)"
           fi
-          comparison_revision="$(git merge-base HEAD "${event_base_revision}")"
-          python packages/claude-dev-env/scripts/cde_lint.py --base "${comparison_revision}"
+          echo "comparison_revision=$(git merge-base HEAD "${event_base_revision}")" >> "${GITHUB_OUTPUT}"
+
+      - name: Lint changes from the event merge base
+        env:
+          COMPARISON_REVISION: ${{ steps.event-merge-base.outputs.comparison_revision }}
+        run: python packages/claude-dev-env/scripts/cde_lint.py --base "${COMPARISON_REVISION}"
+
+      - name: Scan added lines for personal data with gitleaks
+        env:
+          COMPARISON_REVISION: ${{ steps.event-merge-base.outputs.comparison_revision }}
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -euo pipefail
+          archive_name="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "${RUNNER_TEMP}/${archive_name}" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive_name}"
+          echo "${GITLEAKS_SHA256}  ${RUNNER_TEMP}/${archive_name}" | sha256sum --check --strict
+          tar -xzf "${RUNNER_TEMP}/${archive_name}" -C "${RUNNER_TEMP}" gitleaks
+          "${RUNNER_TEMP}/gitleaks" git --config .gitleaks.toml --no-banner --redact=50 --verbose --log-opts="${COMPARISON_REVISION}..HEAD" .
 
       - name: Check repository policy
         run: python packages/claude-dev-env/scripts/repository_policy.py
