@@ -5,6 +5,8 @@ on:
     paths:
       - "**/*.png"
       - "**/*.PNG"
+      - ".github/workflows/binary-optimization*.yml"
+      - ".github/actions/setup-oxipng/**"
 
 permissions:
   contents: read
