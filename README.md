@@ -108,6 +108,7 @@ Behavioral rules loaded into every session.
 
 | Rule | What it does |
 |------|-------------|
+| `agent-merges-its-own-green-pull-request` | The agent that drives a pull request merges it once its gate passes |
 | `anti-corollary-tests` | Each test carries information; skip corollary matrices |
 | `asd-ste100-language` | Plain word choice, sentence style, and tone for user-facing text |
 | `bdd` | Discovery, illustration, and should-style specifications around the TDD loop |
@@ -135,6 +136,7 @@ Behavioral rules loaded into every session.
 | `prompt-workflow-context-controls` | Prompt workflows stay low-context |
 | `re-stage-before-commit` | Stage this session's edits right before the commit |
 | `research-mode` | Cite sources, say "I don't know", use direct quotes |
+| `review-closure-is-a-check` | A review finding on the head is answered before the pull request merges |
 | `shell-invocation` | Use pwsh, and keep shell substitution out of Bash commands |
 | `testing` | Complete mocks, reference TEST_QUALITY.md |
 | `verify-before-asking` | Answer with a tool what a tool can answer |
