@@ -56,6 +56,7 @@ node --test packages/claude-dev-env/bin/cde.test.mjs
 - `--repository-root` defaults to the working directory. A command run from a subdirectory reads and writes a separate ledger under that subdirectory.
 - `ingest` records every diagnostic as a `smell`, including the ones `cde lint` marks `error`. Settle the blocking findings before you ingest a report.
 - `cde lint` exits 1 when it writes any diagnostic. Read the report file, and ignore that exit code before `ingest`.
+- Write the lint report from `pwsh` 7, whose `>` writes UTF-8 with no byte-order mark. `ingest` reads UTF-8 only, so a UTF-16 file from the Windows PowerShell 5.1 `>` or a UTF-8 file with a byte-order mark stops with `cannot read the lint report` and exit 2.
 - A diagnostic with no `check_id` records its `rule_id` in that field. A diagnostic with no `rule_id` or no `message` is skipped.
 - A record is written once per `check_id`, path, and message. A second `ingest` of the same report adds no line.
 - `origin_commit` comes from the `.git/HEAD` file and the loose ref it names. It is empty in a linked worktree, where `.git` is a file, and after `git pack-refs` moves the branch ref into `packed-refs`.
