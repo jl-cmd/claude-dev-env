@@ -8,3 +8,4 @@ Use the feature file that matches the changed user path:
 - [Cross-tool projection](cross-tool-projection.md)
 - [Claude configuration surfaces](claude-configuration-surfaces.md)
 - [Hook lifecycle](hook-lifecycle.md)
+- [Merge readiness](merge-readiness.md)
