@@ -11,10 +11,23 @@ from typing import Never, TextIO
 
 from policy_lint.config.constants import INVALID_INPUT_EXIT_CODE
 from policy_lint.engine import lint
-from policy_lint.model import LintReport, LintRequest, SelectionKind, TextDocument
+from policy_lint.model import (
+    LintReport,
+    LintRequest,
+    SelectionKind,
+    Severity,
+    TextDocument,
+)
 from policy_lint.render import ReportFormat, render
 from policy_lint.selection import SelectionRunFatal
 from policy_lint.selection_git import GitSelectionError, git_bytes_for
+
+_hooks_directory = str(Path(__file__).resolve().parents[1] / "hooks")
+if _hooks_directory not in sys.path:
+    sys.path.insert(0, _hooks_directory)
+
+from followup_ledger import FollowupFinding, head_commit, record_followup_finding
+from hooks_constants.followup_ledger_constants import SEVERITY_SMELL
 
 
 class _LintUsageError(ValueError):
@@ -201,6 +214,38 @@ def _write_invalid_input(error: Exception, stderr: TextIO) -> int:
     return INVALID_INPUT_EXIT_CODE
 
 
+def _record_warning_followups(report: LintReport, repository_root: Path) -> None:
+    """Append each warning in the report to the repository's follow-up ledger.
+
+    Args:
+        report: The findings this run produced.
+        repository_root: The repository whose ledger receives the warnings.
+    """
+    all_warnings = [
+        each_diagnostic
+        for each_diagnostic in report.diagnostics
+        if each_diagnostic.severity is Severity.WARNING
+    ]
+    if not all_warnings:
+        return
+    origin_commit = head_commit(repository_root)
+    for each_warning in all_warnings:
+        file_path = (
+            "" if each_warning.location is None else each_warning.location.path.as_posix()
+        )
+        record_followup_finding(
+            repository_root,
+            FollowupFinding(
+                each_warning.rule_id,
+                file_path,
+                each_warning.message,
+                each_warning.check_id or each_warning.rule_id,
+                SEVERITY_SMELL,
+                origin_commit,
+            ),
+        )
+
+
 def _render_lint(
     all_arguments: Sequence[str],
     repository_root: Path,
@@ -212,6 +257,7 @@ def _render_lint(
         all_arguments, stdin, repository_root, lint_runner
     )
     stdout.write(render(report, report_format))
+    _record_warning_followups(report, repository_root)
     return report.exit_code
 
 

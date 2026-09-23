@@ -5,9 +5,10 @@ from collections import Counter
 from pathlib import PurePosixPath
 
 from . import adapter_support
+from .check_catalog import severity_for_check_id
 from .config import constants
 from .config.approved_test_pairs import APPROVED_TEST_PATHS_BY_PRODUCTION_PATH
-from .model import Diagnostic, Document, DocumentSet, Location, SelectionKind, Severity
+from .model import Diagnostic, Document, DocumentSet, Location, SelectionKind
 
 
 def _is_test_path(path: PurePosixPath) -> bool:
@@ -319,9 +320,10 @@ def _changed_test_paths(document_set: DocumentSet) -> frozenset[PurePosixPath]:
 def _pairing_diagnostic(document: Document) -> Diagnostic:
     return Diagnostic(
         "test-pairing",
-        Severity.ERROR,
+        severity_for_check_id("test-pairing"),
         "Changed production file has no changed matching test",
         Location(document.path, 1, 1),
+        "test-pairing",
     )
 
 

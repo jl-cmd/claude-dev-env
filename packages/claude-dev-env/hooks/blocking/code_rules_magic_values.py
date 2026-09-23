@@ -36,9 +36,7 @@ def _mask_string_literals_preserving_length(source_line: str) -> str:
 
     Matching tests live in
     ``test_code_rules_enforcer_magic_string_masking.py``, one of the
-    ``test_code_rules_enforcer_<suffix>.py`` family files the
-    ``tdd_enforcer.py`` hook accepts as test candidates for the
-    ``code_rules_*`` module family.
+    ``test_code_rules_enforcer_<suffix>.py`` family files.
     """
 
     string_literal_pattern = re.compile(

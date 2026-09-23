@@ -18,7 +18,7 @@ Load `CODE_RULES.md` when reviewing a PR, resolving a policy conflict, or genera
 
 Two standards live in `CODE_RULES.md` in full:
 
-- **TDD** — CODE_RULES §8 / AGENTS Tests: red, green, refactor; no production code before a failing test.
+- **TDD** — CODE_RULES §8: red, green, refactor is the default loop for a bug fix and for new behavior, and the TDD skill (`pstack:tdd`) carries the procedure. A prototype may run ahead of its tests and adds them before the pull request goes ready. A bug fix ships with a test that reproduces the bug.
 - **Right-sized engineering** — CODE_RULES §7 / AGENTS Design: functions over classes; concrete over abstract; add an abstraction at the commit that introduces its second concrete implementation. That count is a house call, one occurrence earlier than the rule of three Fowler credits to Don Roberts. The direction comes from the literature; the number does not, so read it as this package's setting rather than as a cited standard.
 
 BDD is the outer process and TDD is the inner loop: [`bdd.md`](bdd.md) discovers and formulates the behavior a feature needs, then each formulated behavior is built through the TDD cycle.
