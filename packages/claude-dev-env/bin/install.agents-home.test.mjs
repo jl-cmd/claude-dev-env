@@ -18,7 +18,7 @@ import {
     writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CONTENT_DIRECTORIES } from './install.mjs';
 import {
@@ -204,6 +204,81 @@ test('a full install writes skills and agents under .agents and points .claude a
             false,
             'the agents-home agents directory is a real directory',
         );
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
+
+/**
+ * @param {string} hubPath
+ * @returns {string}
+ */
+function resolveHubImportTarget(hubPath) {
+    const hubText = readFileSync(hubPath, 'utf8').trim();
+    assert.match(hubText, /^@\S+$/, 'the Claude hub holds one import line');
+    return resolve(dirname(hubPath), hubText.slice(1));
+}
+
+for (const eachLayout of [
+    { label: 'default home', extraArguments: [], claudeHomeName: '.claude', agentsHomeName: '.agents' },
+    {
+        label: 'profile root',
+        extraArguments: ['--target', '.claude-profile-a'],
+        claudeHomeName: '.claude-profile-a',
+        agentsHomeName: '.claude-profile-a.agents',
+    },
+]) {
+    test(`a ${eachLayout.label} install loads the package guidance from the agents home through the Claude hub`, () => {
+        const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-agents-hub-'));
+        const claudeHome = join(homeDirectory, eachLayout.claudeHomeName);
+        const sharedGuidancePath = join(homeDirectory, eachLayout.agentsHomeName, 'AGENTS.md');
+        try {
+            runInstaller(homeDirectory, eachLayout.extraArguments.map(
+                (eachArgument) => (eachArgument.startsWith('.') ? join(homeDirectory, eachArgument) : eachArgument),
+            ));
+
+            assert.equal(
+                readFileSync(sharedGuidancePath, 'utf8'),
+                readFileSync(join(PACKAGE_DIRECTORY, 'AGENTS.md'), 'utf8'),
+                'the package guidance lives once in the agents home',
+            );
+            assert.equal(
+                resolveHubImportTarget(join(claudeHome, 'CLAUDE.md')),
+                sharedGuidancePath,
+                'the Claude hub import resolves to the shared guidance file',
+            );
+            assert.equal(
+                existsSync(join(claudeHome, 'AGENTS.md')),
+                false,
+                'no second guidance copy lands in the Claude home',
+            );
+        } finally {
+            rmSync(homeDirectory, { recursive: true, force: true });
+        }
+    });
+}
+
+test('an upgrade moves the guidance copy an earlier install left in the Claude home into the run backup', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-agents-hub-upgrade-'));
+    const claudeHome = join(homeDirectory, '.claude');
+    const retiredGuidancePath = join(claudeHome, 'AGENTS.md');
+    const retiredGuidanceText = 'guidance an earlier install copied here\n';
+    try {
+        runInstaller(homeDirectory, []);
+        writeFileSync(retiredGuidancePath, retiredGuidanceText);
+        const manifestPath = join(claudeHome, '.claude-dev-env-manifest.json');
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        manifest.files.push(retiredGuidancePath);
+        writeFileSync(manifestPath, JSON.stringify(manifest));
+
+        runInstaller(homeDirectory, []);
+
+        assert.equal(existsSync(retiredGuidancePath), false, 'the old Claude-home copy is gone');
+        const backupRoot = join(claudeHome, '.claude-dev-env-pruned');
+        const backupName = readdirSync(backupRoot, { recursive: true })
+            .find(name => name.endsWith('AGENTS.md'));
+        assert.ok(backupName, 'the old copy sits in the run backup');
+        assert.equal(readFileSync(join(backupRoot, backupName), 'utf8'), retiredGuidanceText);
     } finally {
         rmSync(homeDirectory, { recursive: true, force: true });
     }
