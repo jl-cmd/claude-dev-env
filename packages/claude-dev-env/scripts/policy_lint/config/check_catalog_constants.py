@@ -68,4 +68,5 @@ SEVERITY_SMELL: str = "smell"
 SEVERITY_BY_CHECK_ID: dict[str, str] = {
     "code-rules/paired-test-missing-function": SEVERITY_SMELL,
     "code-rules/paired-test-omitted-function": SEVERITY_SMELL,
+    "test-pairing": SEVERITY_SMELL,
 }

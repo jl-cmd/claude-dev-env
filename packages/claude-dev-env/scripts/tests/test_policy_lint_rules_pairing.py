@@ -14,6 +14,7 @@ from policy_lint.model import (
     Document,
     DocumentSet,
     SelectionKind,
+    Severity,
 )
 
 _MODULE_DOCSTRING_BEFORE = '''"""Before."""
@@ -115,6 +116,17 @@ def test_pairing_requires_a_test_for_python_body_changes(tmp_path: Path) -> None
         _changed_document(_BODY_AFTER, _BODY_BEFORE),
     )
     assert len(all_diagnostics) == 1
+
+
+def test_pairing_reports_an_unpaired_change_as_a_recorded_warning(
+    tmp_path: Path,
+) -> None:
+    all_diagnostics = _pairing_diagnostics(
+        tmp_path,
+        _changed_document(_BODY_AFTER, _BODY_BEFORE),
+    )
+    assert [each.severity for each in all_diagnostics] == [Severity.WARNING]
+    assert all_diagnostics[0].check_id == "test-pairing"
 
 
 def test_pairing_rejects_python_syntax_errors_without_a_test(tmp_path: Path) -> None:
