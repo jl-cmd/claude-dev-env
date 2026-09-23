@@ -1,5 +1,26 @@
 # Changelog
 
+## [8.12.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.11.1...claude-dev-env-v8.12.0) (2026-09-23)
+
+
+### Features
+
+* **e-code-review:** add low, medium, xhigh, and max levels matching built-in /code-review ([c64a4ff](https://github.com/jl-cmd/claude-dev-env/commit/c64a4ff133108a3a6f71d5f8ac9adddc48348ee4))
+* **e-code-review:** five levels matching built-in /code-review ([af3d30b](https://github.com/jl-cmd/claude-dev-env/commit/af3d30b32e5f463f82a139f7543ef0e322b71999))
+* **e-code-review:** one level, high, matching built-in /code-review high ([a849c39](https://github.com/jl-cmd/claude-dev-env/commit/a849c39adbf0dbdac23f0f6a1d6a33958e0b9159))
+* **e-code-review:** one shared --fix step for every level ([a4139ab](https://github.com/jl-cmd/claude-dev-env/commit/a4139aba38e06143cfc1ecce80601842678257f4))
+* **e-code-review:** print findings when ReportFindings is missing; sr-loop falls back to e-code-review ([9b0e484](https://github.com/jl-cmd/claude-dev-env/commit/9b0e484252e97c04dc271cf4fa299034a836907b))
+
+
+### Bug Fixes
+
+* **e-code-review:** reword level files to pass the prose gates ([abc6f25](https://github.com/jl-cmd/claude-dev-env/commit/abc6f259f94c48a1de538c13b9d392704b3972b0))
+
+
+### Documentation
+
+* **e-code-review:** say the levels match step for step ([4b4f7f4](https://github.com/jl-cmd/claude-dev-env/commit/4b4f7f4c2fd4488705a582b633a32899cfb1b5d1))
+
 ## [8.11.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.11.0...claude-dev-env-v8.11.1) (2026-09-23)
 
 
