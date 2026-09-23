@@ -1,90 +1,43 @@
 ---
 name: e-code-review
 description: >-
-  Max-recall code review at a selectable effort level (low, medium, xhigh), with
-  optional auto-fix and an auto-execute loop for any level. Triggers:
-  /e-code-review, /e-code-review low, /e-code-review medium, /e-code-review
-  xhigh, /e-code-review <level> --fix, /e-code-review <level> loop,
-  /e-code-review preflight-proposal.
+  Code review at one of five effort levels that match the built-in
+  /code-review recipes step for step: low, medium, high, xhigh, max.
+  Triggers: /e-code-review, /e-code-review low, /e-code-review medium,
+  /e-code-review high, /e-code-review xhigh, /e-code-review max, and any
+  level with --fix.
 ---
 
 # e-code-review
 
-**Pick a level, run that review, optionally fix and loop.** Each level has its own procedure file. Fix application lives in `reference/fix.md`; repeat-until-clean lives in `reference/loop.md`.
+**Pick a level, load its file, run it.** Each file has the same steps, angles, caps, and fields as the built-in `/code-review` recipe for that level. Only the wording differs, where this repo's prose rules require it.
 
-## Mode routing
-
-Resolve the first matching invocation before the normal refusal and loop rules:
-
-1. `preflight-proposal` requires `<pr_number>`, `--level <low|medium|xhigh>`, `--base-sha <immutable SHA>`, `--head-sha <immutable SHA>`, and `--worktree <isolated path>`. Default level is `low`. Follow [reference/preflight-proposal.md](reference/preflight-proposal.md). The mode runs `<review_level> --fix loop` locally and returns selected-candidate-ready proposal evidence.
-2. Normal mode follows the current level, `--fix`, and `loop` behavior.
-
-Proposal mode selects the review level and records finding outcomes. The downstream owner records selected proposal IDs before reapplication. Each new finding gets a new ID.
-
-## Gotchas
-
-- **`low` stays single-pass.** No subagents, no full-file reads: one read pass per target item, one findings pass.
-- **Collection reports every finding.** Keep every CONFIRMED or PLAUSIBLE finding at its assigned severity (`blocker`, `high`, `medium`, `low`, `nit`). Do not drop low or nit findings during collection. Severity or action filtering is a separate consumer stage after the collection record is complete (`scripts/finding_pipeline.py`).
-- **`medium` favors precision, `xhigh` favors recall.** At `medium` (8 angles) assign severity carefully so a later filter can pick maintainer-action findings. At `xhigh` (10 angles plus a gap sweep) a single non-REFUTED vote carries the finding; do not drop on uncertainty.
-- **Every retained finding carries `severity` and `verdict`.** Severity is one of `blocker`, `high`, `medium`, `low`, `nit`. Verdict is `CONFIRMED` or `PLAUSIBLE`. Drop REFUTED candidates only; never emit an unclassified retained finding.
-- **`--fix` applies findings once.** Load `reference/fix.md` and follow it. That file owns the fix agent, the code-rules gate, skip logging, and outcome reporting. Commits are lead-owned; fix agents never commit or push.
-- **`loop` never asks.** A round with bug findings validates them with an advisor, fixes, and re-reviews. Terminals are exactly `clean`, `nits_fixed`, and `advisor_blocked`. There is no reviewed-head count limit; a new head increments the count once, a re-review of the same head does not. Load `reference/loop.md` and follow it.
-- **`--fix` and `loop` combine.** With both, each loop round runs the level file, and the round's fixing happens inside `reference/loop.md`'s gate sequence, which loads `reference/fix.md` for the mechanics. There is no separate fix pass around the round.
-
-## When this skill applies
-
-Triggers: `/e-code-review <level> [--fix] [loop]`. `<level>` is `low`, `medium`, or `xhigh`. `--fix` and `loop` are each optional and may be used together.
-
-**Refusal. First match wins:**
-
-- **No level, or an unknown level.** Respond exactly: `Which effort level — low, medium, or xhigh?`
-
-## Evaluation-backed defaults (e-code-review family)
-
-When the caller asks which level to pick for a known fixture band (easy / medium / demanding scope), use the committed OP-02B evaluation evidence. Thinking stays on; **effort** is the only cost/latency lever.
-
-| Fixture band | Skill effort | Source |
+| Level | File | Shape |
 |---|---|---|
-| easy | `medium` | `scripts/effort_defaults_evidence.json` → `skill_defaults.default_by_band.easy` |
-| medium | `xhigh` | same file → `medium` (maps evaluation `high`) |
-| demanding | `xhigh` | same file → `demanding` (maps evaluation `max`) |
+| `low` | [reference/low.md](reference/low.md) | 1 diff pass, no verify, at most 4 findings |
+| `medium` | [reference/medium.md](reference/medium.md) | 1 careful diff pass, at most 15 findings |
+| `high` | [reference/high.md](reference/high.md) | 8 inline angles, dedup with no verify, at most 10 findings |
+| `xhigh` | [reference/xhigh.md](reference/xhigh.md) | 10 inline angles, dedup, gap sweep, at most 15 findings |
+| `max` | [reference/max.md](reference/max.md) | 10 subagent angles, 1-vote verify, gap sweep, at most 15 findings |
 
-Resolve programmatically with `scripts/effort_evaluation.py` → `resolve_skill_effort_for_band`. Every default cites a completed evaluation row. The user-facing command still requires an explicit level flag; these defaults answer "what should I pick?" for this workflow family only.
+## Level
 
-Detail: `reference/effort-evaluation.md`.
+With no level, or an unknown one, run `high`.
+
+## Target
+
+A PR number, branch name, or file path after the level is the review target. With no target, the review reads the current diff.
+
+## Report
+
+Each level file reports through the ReportFindings tool. When the host has no ReportFindings tool, print the findings in its place, most severe first, one per line as `file:line — summary`. `--fix` reports its outcomes the same way, with the outcome at the end of each line.
+
+## --fix
+
+`--fix` works with every level. It lives in one file, [reference/fix.md](reference/fix.md). No level file carries its own fix steps.
 
 ## The process
 
-1. Read `<level>` and the optional `--fix` and `loop` flags. Apply the refusal first.
-2. Load `reference/low.md`, `reference/medium.md`, or `reference/xhigh.md`. Run that file as one review cycle, ending in its structured findings report.
-3. If `--fix` is set and `loop` is not set, load `reference/fix.md` and apply it to that cycle's findings. This path has no commit step: the fixes stay uncommitted in the working tree for the user to review and commit.
-4. If `loop` is set, load `reference/loop.md` and follow it with that cycle's findings still unfixed. Round 1's findings are the ones step 2 already produced; from the second round on, the round re-runs that same level file end to end. End to end means the level file's review phases, up to and including its findings report. Skip that file's *Looping* section, which hands control to `loop.md` and would re-enter the loop the round is already inside. `loop.md`'s gate sequence owns when the round fixes.
-5. Without `--fix` or `loop`, return the cycle findings and stop.
-
-## File index
-
-| File | Purpose |
-|---|---|
-| `SKILL.md` | Route by level; dispatch `--fix` and `loop` |
-| `reference/low.md` | low review procedure: 1 diff pass per target item, no verify |
-| `reference/medium.md` | medium review procedure: 8 angles, 1-vote verify |
-| `reference/xhigh.md` | xhigh review procedure: 10 angles, 1-vote verify, gap sweep |
-| `reference/fix.md` | Fix application, code-rules gate, skip logging, outcome reporting |
-| `reference/loop.md` | Repeat review/fix rounds until clean |
-| `reference/preflight-proposal.md` | Isolated local review, immutable SHAs, proposal evidence, and mutation boundary |
-| `reference/effort-evaluation.md` | Effort evaluation fixtures, evidence, and skill defaults |
-| `reference/runner-selection.md` | Runner selection map |
-| `scripts/finding_pipeline.py` | Collect every finding; filter severity only later |
-| `scripts/test_finding_pipeline.py` | Collection and filter-stage behavioral tests |
-| `scripts/e_code_review_scripts_constants/finding_pipeline_constants.py` | Named constants for the collect-then-filter pipeline |
-| `scripts/effort_evaluation.py` | Effort rows, recommendation, skill default resolver |
-| `scripts/effort_defaults_evidence.json` | Committed evaluation rows + e-code-review skill defaults |
-| `scripts/grok_code_review.py` | Grok medium-review discovery and verification |
-| `scripts/test_grok_code_review.py` | Behavioral tests for the Grok medium-review module |
-| `scripts/e_code_review_scripts_constants/` | Skill-local constants (unique package name; avoids bare `config` import shadow) |
-
-## Folder map
-
-- `SKILL.md`: route and dispatch.
-- `reference/`: level procedures, fix/loop, effort evaluation, runner selection.
-- `scripts/`: collect-then-filter finding pipeline, effort evaluation, Grok medium-review module, tests, and `e_code_review_scripts_constants/`.
+1. Read the level and the optional `--fix` flag. Load the level file.
+2. Run it end to end, ending in its ReportFindings call.
+3. With `--fix`, load `reference/fix.md` and run it on those findings.

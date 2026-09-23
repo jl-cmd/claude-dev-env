@@ -56,4 +56,17 @@ ALL_CHECK_CATALOG_ENTRIES: tuple[CheckCatalogEntry, ...] = (
         "missing type annotation (CODE_RULES §6)", "missing-type-annotation"
     ),
     CheckCatalogEntry("Single-letter variable", "single-letter-variable"),
+    CheckCatalogEntry(
+        "is exercised by no test in the module's paired test suite",
+        "paired-test-missing-function",
+    ),
+    CheckCatalogEntry("but exercises nowhere", "paired-test-omitted-function"),
 )
+
+SEVERITY_BREAKING: str = "breaking"
+SEVERITY_SMELL: str = "smell"
+SEVERITY_BY_CHECK_ID: dict[str, str] = {
+    "code-rules/paired-test-missing-function": SEVERITY_SMELL,
+    "code-rules/paired-test-omitted-function": SEVERITY_SMELL,
+    "test-pairing": SEVERITY_SMELL,
+}

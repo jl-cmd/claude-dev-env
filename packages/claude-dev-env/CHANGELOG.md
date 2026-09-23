@@ -1,5 +1,91 @@
 # Changelog
 
+## [8.12.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.11.1...claude-dev-env-v8.12.0) (2026-09-23)
+
+
+### Features
+
+* **e-code-review:** add low, medium, xhigh, and max levels matching built-in /code-review ([c64a4ff](https://github.com/jl-cmd/claude-dev-env/commit/c64a4ff133108a3a6f71d5f8ac9adddc48348ee4))
+* **e-code-review:** five levels matching built-in /code-review ([af3d30b](https://github.com/jl-cmd/claude-dev-env/commit/af3d30b32e5f463f82a139f7543ef0e322b71999))
+* **e-code-review:** one level, high, matching built-in /code-review high ([a849c39](https://github.com/jl-cmd/claude-dev-env/commit/a849c39adbf0dbdac23f0f6a1d6a33958e0b9159))
+* **e-code-review:** one shared --fix step for every level ([a4139ab](https://github.com/jl-cmd/claude-dev-env/commit/a4139aba38e06143cfc1ecce80601842678257f4))
+* **e-code-review:** print findings when ReportFindings is missing; sr-loop falls back to e-code-review ([9b0e484](https://github.com/jl-cmd/claude-dev-env/commit/9b0e484252e97c04dc271cf4fa299034a836907b))
+
+
+### Bug Fixes
+
+* **e-code-review:** reword level files to pass the prose gates ([abc6f25](https://github.com/jl-cmd/claude-dev-env/commit/abc6f259f94c48a1de538c13b9d392704b3972b0))
+
+
+### Documentation
+
+* **e-code-review:** say the levels match step for step ([4b4f7f4](https://github.com/jl-cmd/claude-dev-env/commit/4b4f7f4c2fd4488705a582b633a32899cfb1b5d1))
+
+## [8.11.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.11.0...claude-dev-env-v8.11.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **ci:** let the fix test proof read Node tests ([db9b417](https://github.com/jl-cmd/claude-dev-env/commit/db9b417ed5939aba055ec756713c9989ccc109a3))
+* **install:** keep Codex guidance when AGENTS.md links to the old copy ([893d721](https://github.com/jl-cmd/claude-dev-env/commit/893d721ee6c95a340a71bdb6136ef5ef8d3cfb38))
+* **install:** keep Codex guidance when AGENTS.md links to the old copy ([3c7d320](https://github.com/jl-cmd/claude-dev-env/commit/3c7d320f43f3d712a2b739e39842d6ac341d210a))
+* **policy:** let an organization's own repository name it, and read ci and tools folders ([72cd9ab](https://github.com/jl-cmd/claude-dev-env/commit/72cd9ab60d976dfe467f0a5f4a300ccfff026196))
+* **policy:** let an organization's own repository name it, and read ci and tools folders ([7be7083](https://github.com/jl-cmd/claude-dev-env/commit/7be7083a53ad922800ffb551b401e9f65a064b4d))
+
+## [8.11.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.10.0...claude-dev-env-v8.11.0) (2026-09-23)
+
+
+### Features
+
+* **hooks:** run nested checkout project hooks in multi-repo sessions ([38b3ddb](https://github.com/jl-cmd/claude-dev-env/commit/38b3ddb6d6fe89df2aa10a5e992036a935c0daad))
+* **hooks:** run nested checkout project hooks in multi-repo sessions ([898dca4](https://github.com/jl-cmd/claude-dev-env/commit/898dca40779c8e45494b7fe1ec0c1ef3adf22753))
+* **install:** tell Codex helpers to load poteto-mode ([7af20b7](https://github.com/jl-cmd/claude-dev-env/commit/7af20b7a76128649df1fdbc74f205e7e9ff365f1))
+* **install:** tell Codex helpers to load poteto-mode ([9c4e6bd](https://github.com/jl-cmd/claude-dev-env/commit/9c4e6bdc58ab3616d4d2f6a0235739b5e0736383))
+* **policy-lint:** fail a new code file that nothing calls ([9382cd9](https://github.com/jl-cmd/claude-dev-env/commit/9382cd9701b0099e398938321c1c9948355b7600))
+* **policy-lint:** fail a new code file that nothing calls ([a447fc2](https://github.com/jl-cmd/claude-dev-env/commit/a447fc26291b86efbee01950622b782c8d07dabe))
+* **policy-lint:** record paired-test coverage findings as smells ([b73288a](https://github.com/jl-cmd/claude-dev-env/commit/b73288aa6ca0aa04fe5e449277dafcbe39ac1eb6))
+* **policy-lint:** record test-pairing findings as smells ([6a446c6](https://github.com/jl-cmd/claude-dev-env/commit/6a446c636773912c72dc9f1105533a96a44305dc))
+* **pstack:** seed Codex model mapping on fresh installs ([07e1bf5](https://github.com/jl-cmd/claude-dev-env/commit/07e1bf59daf43d88c8d4199634018cb885e9567c))
+* **pstack:** seed Codex model mapping on fresh installs ([7c1a7e7](https://github.com/jl-cmd/claude-dev-env/commit/7c1a7e79e8637579b42870dfecd246a80a46985f))
+
+
+### Bug Fixes
+
+* **followup:** keep the ledger directory out of git status ([13c66d1](https://github.com/jl-cmd/claude-dev-env/commit/13c66d14b665d8204bb88c21fdf51030b1cc4306))
+* **install:** load the package guidance from the shared agents home ([71e2f0c](https://github.com/jl-cmd/claude-dev-env/commit/71e2f0cc6957e967318df97d4522ff62b8ea2eea))
+* **install:** load the package guidance from the shared agents home ([427661a](https://github.com/jl-cmd/claude-dev-env/commit/427661aa0f19eca218ac82317c5bc6818df03bb8))
+* **policy-lint:** leave directory pointers out of the diff selection ([a11953e](https://github.com/jl-cmd/claude-dev-env/commit/a11953efc3e947f55e25d0faf7fe4f994125645e))
+
+
+### Documentation
+
+* **code-rules:** ask each pull request body for proof of check ([24ad6d6](https://github.com/jl-cmd/claude-dev-env/commit/24ad6d6e70179d476fdbb22d315b81eb6a234f31))
+* **verify:** map the follow-up ledger and keep it out of git status ([e5518c6](https://github.com/jl-cmd/claude-dev-env/commit/e5518c665a11043ede0522e19ce9f24a3da028cd))
+
+
+### Maintenance
+
+* **codex:** delete the Codex compat watcher that nothing runs ([200c44a](https://github.com/jl-cmd/claude-dev-env/commit/200c44a679b7bc41970132812ea7a6511c919272))
+* **codex:** delete the Codex compat watcher that nothing runs ([4b6f311](https://github.com/jl-cmd/claude-dev-env/commit/4b6f31197948579c0b4956c09a425538be29b62b))
+
+
+### Refactoring
+
+* **tdd:** carry test order in the TDD skill and archive tdd_enforcer ([1e876a9](https://github.com/jl-cmd/claude-dev-env/commit/1e876a9b29d9b8791b82aa1d8f9178e0c20af7bd))
+* **tdd:** loosen TDD enforcement and require proof per change ([f19e424](https://github.com/jl-cmd/claude-dev-env/commit/f19e4242995e322bcbe0584b30823e95e5c661d3))
+* **verify:** read the verify skill from one home in every tool ([d47107c](https://github.com/jl-cmd/claude-dev-env/commit/d47107cc8bcb190a0c1865caab75ac1ee8537b3a))
+* **verify:** read the verify skill from one home in every tool ([df9c6fc](https://github.com/jl-cmd/claude-dev-env/commit/df9c6fc017c69d0b678b3bcc78c33f4e7f941b9a))
+
+
+### CI
+
+* require a fix pull request to carry a failing-then-passing test ([f70e3b4](https://github.com/jl-cmd/claude-dev-env/commit/f70e3b48732bb89cb2029b1b2fd5816e088d04dc))
+
+
+### Tests
+
+* **install:** expect the skill-load block beside kept Codex guidance ([958e11e](https://github.com/jl-cmd/claude-dev-env/commit/958e11e7b64d76e2de3c49e0cc4f1dadb8012cfb))
+
 ## [8.10.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.9.0...claude-dev-env-v8.10.0) (2026-09-23)
 
 

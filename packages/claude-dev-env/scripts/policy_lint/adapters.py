@@ -9,6 +9,7 @@ from types import ModuleType
 from shared_tree_paths import resolve_shared_scripts_directory
 
 from . import (
+    adapter_callers,
     adapter_configuration,
     adapter_contrast_framing,
     adapter_detectors,
@@ -243,6 +244,20 @@ def test_pairing_diagnostics(document_set: DocumentSet) -> tuple[Diagnostic, ...
         Test-pairing diagnostics for unmatched production files.
     """
     return adapter_pairing.test_pairing_diagnostics(document_set, _hooks_module)
+
+
+def uncalled_new_file_diagnostics(
+    document_set: DocumentSet,
+) -> tuple[Diagnostic, ...]:
+    """Report new code files that nothing outside their tests calls.
+
+    Args:
+        document_set: Staged or base change selection.
+
+    Returns:
+        One diagnostic for each uncalled new file.
+    """
+    return adapter_callers.uncalled_new_file_diagnostics(document_set)
 
 
 def terminology_diagnostics(document_set: DocumentSet) -> tuple[Diagnostic, ...]:

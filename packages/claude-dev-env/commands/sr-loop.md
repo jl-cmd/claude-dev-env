@@ -54,7 +54,9 @@ stack's design, intent, and changes.
 ## Phase B — loop /code-review low --fix
 
 1. Invoke the `code-review` skill with arguments `low --fix` on the same
-   target. Let it report findings and apply its fixes.
+   target. Let it report findings and apply its fixes. When the host has no
+   `code-review` skill, invoke the `e-code-review` skill with `low --fix`
+   instead. It runs the same review and fix steps.
 2. After any pass that changed files: test, commit, push as in Phase A.
 3. Repeat until a pass reports zero findings, or until a pass reports only
    nits — then fix, test, commit, push, and stop with no confirming pass.

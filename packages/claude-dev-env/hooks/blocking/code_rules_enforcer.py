@@ -11,9 +11,7 @@ Advisory only (non-blocking):
 
 Companion tests live alongside this file as
 ``test_code_rules_enforcer_<suffix>.py``; the ``<suffix>`` split keeps each
-concern focused. The separate ``tdd_enforcer.py`` hook accepts any
-``test_code_rules_enforcer_*.py`` sibling as a test candidate for the
-``code_rules_*`` module family, so the suffix files satisfy its gate.
+concern focused.
 """
 import json
 import sys

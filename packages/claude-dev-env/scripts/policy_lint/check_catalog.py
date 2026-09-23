@@ -21,8 +21,12 @@ from .config.check_catalog_constants import (
     ALL_BUNDLING_RULE_IDS,
     ALL_CHECK_CATALOG_ENTRIES,
     CHECK_ID_SEPARATOR,
+    SEVERITY_BREAKING,
+    SEVERITY_BY_CHECK_ID,
+    SEVERITY_SMELL,
     UNCLASSIFIED_CHECK_NAME,
 )
+from .model import Severity
 
 
 def check_id_for_message(rule_id: str, message: str) -> str:
@@ -42,3 +46,23 @@ def check_id_for_message(rule_id: str, message: str) -> str:
         if each_entry.message_marker in message:
             return rule_id + CHECK_ID_SEPARATOR + each_entry.check_name
     return rule_id + CHECK_ID_SEPARATOR + UNCLASSIFIED_CHECK_NAME
+
+
+def severity_for_check_id(check_id: str) -> Severity:
+    """Return the severity ``SEVERITY_BY_CHECK_ID`` declares for one check.
+
+    ::
+
+        "code-rules/paired-test-missing-function" -> Severity.WARNING
+        "code-rules/unclassified"                 -> Severity.ERROR
+
+    Args:
+        check_id: The identifier ``check_id_for_message`` returned.
+
+    Returns:
+        ``Severity.WARNING`` for a smell, which the lint records and passes,
+        and ``Severity.ERROR`` for every other check.
+    """
+    if SEVERITY_BY_CHECK_ID.get(check_id, SEVERITY_BREAKING) == SEVERITY_SMELL:
+        return Severity.WARNING
+    return Severity.ERROR

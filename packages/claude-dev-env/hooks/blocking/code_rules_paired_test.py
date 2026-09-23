@@ -1,10 +1,9 @@
 """Public-function paired-test coverage check for ``code_rules_enforcer``.
 
-The TDD gate ``tdd_enforcer.py`` requires a fresh test file to exist before a
-production module is written, but it judges coverage at file granularity: a
-module whose dedicated test file exercises some public functions while leaving
-one untested still satisfies it. This check closes that gap from both write
-orders, so a forgotten function gets a behavioral test before the
+The staged policy lint's test-pairing rule judges coverage at file
+granularity: a module whose dedicated test file exercises some public functions
+while leaving one untested still satisfies it. This check closes that gap from
+both write orders, so a forgotten function gets a behavioral test before the
 partially-covered module lands.
 
 ``check_public_function_missing_paired_test`` fires on the production-module
@@ -25,7 +24,7 @@ Both checks stay conservative to keep false positives near zero:
 
 - The production-side check runs only on a production module whose stem-matched
   test file already exists; a module with no dedicated test file is out of scope
-  and left to the file-level TDD gate. The test-side check runs only on a
+  and left to the staged lint's test-pairing rule. The test-side check runs only on a
   stem-matched test file whose paired production module exists on disk.
 - The production-side check fires only when the suite already exercises the
   module — covering at least one of its public functions, or referencing one of

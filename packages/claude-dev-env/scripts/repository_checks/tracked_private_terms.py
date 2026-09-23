@@ -13,6 +13,7 @@ from policy_lint.config import constants as policy_constants
 from private_terms import private_term_line_numbers
 
 from repository_checks.config import constants as repository_constants
+from repository_checks.hook_modules import load_hooks_module
 from repository_checks.models import RepositoryFinding
 
 
@@ -25,6 +26,15 @@ def _read_text_or_none(absolute_path: Path) -> str | None:
         return None
 
 
+def _is_owned_by_private_organization(repository_root: Path) -> bool:
+    exemption = load_hooks_module(repository_constants.REPOSITORY_EXEMPTION_MODULE_NAME)
+    origin_slug = exemption.repository_origin_slug(repository_root)
+    if origin_slug is None:
+        return False
+    owner_name = origin_slug.split(policy_constants.PATH_SEPARATOR)[0]
+    return bool(private_term_line_numbers(owner_name, ALL_PRIVATE_TERM_DIGESTS))
+
+
 def collect_tracked_private_term_findings(
     repository_root: Path, all_tracked_paths: Sequence[str]
 ) -> list[RepositoryFinding]:
@@ -35,8 +45,12 @@ def collect_tracked_private_term_findings(
         all_tracked_paths: Repository-relative tracked paths.
 
     Returns:
-        Findings that carry the path and line number, never the name.
+        Findings that carry the path and line number, never the name. A
+        repository whose github.com origin owner is itself a private
+        organization returns none, since that organization may name itself.
     """
+    if _is_owned_by_private_organization(repository_root):
+        return []
     all_findings: list[RepositoryFinding] = []
     for each_relative_path in all_tracked_paths:
         if (content := _read_text_or_none(repository_root / each_relative_path)) is None:

@@ -3,7 +3,10 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
 
-from .config.constants import ARCHIVED_SKILLS_DIRECTORY_NAME
+from .config.constants import (
+    ARCHIVED_HOOKS_DIRECTORY_NAME,
+    ARCHIVED_SKILLS_DIRECTORY_NAME,
+)
 from .model import (
     ChangeSetRule,
     Diagnostic,
@@ -27,7 +30,7 @@ def lint(
     """Run the selected rules on one source selection.
 
     Repository and diff selections check active code. File and editor
-    selections include archived skills.
+    selections include archived skills and archived hooks.
 
     Args:
         request: Repository root, source, and rule sets.
@@ -55,7 +58,10 @@ def lint(
 
 
 def _is_runtime_path(path: PurePosixPath) -> bool:
-    return path.parts[0] != ARCHIVED_SKILLS_DIRECTORY_NAME
+    return (
+        path.parts[0] != ARCHIVED_SKILLS_DIRECTORY_NAME
+        and ARCHIVED_HOOKS_DIRECTORY_NAME not in path.parts
+    )
 
 
 def _runtime_document_set(document_set: DocumentSet) -> DocumentSet:

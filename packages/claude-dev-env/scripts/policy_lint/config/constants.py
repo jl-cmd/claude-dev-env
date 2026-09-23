@@ -6,6 +6,7 @@ GIT_EXECUTABLE = "git"
 UTF8_ENCODING = "utf-8"
 PATH_SEPARATOR = "/"
 ARCHIVED_SKILLS_DIRECTORY_NAME = "skill-archive"
+ARCHIVED_HOOKS_DIRECTORY_NAME = "hooks-archived"
 NUL_BYTE = b"\0"
 ALL_GIT_ROOT_ARGUMENTS = ("rev-parse", "--show-toplevel")
 ALL_GIT_HEAD_ARGUMENTS = ("rev-parse", "--verify", "HEAD")
@@ -171,3 +172,19 @@ RETIRED_HOOK_PROSE_MESSAGE = (
 )
 
 CONTRAST_FRAMING_RULE_ID = "contrast-framing"
+
+UNCALLED_NEW_FILE_RULE_ID = "uncalled-new-file"
+UNCALLED_NEW_FILE_MESSAGE = (
+    "New file {file_name} has no caller outside its tests. Wire it into a hook,"
+    " workflow, skill, command or import in this change, or drop it."
+)
+ALL_CALLED_CODE_SUFFIXES = frozenset({".py", ".mjs", ".js", ".sh", ".ps1"})
+ALL_CALLED_CODE_SEGMENTS = ("/scripts/", "/hooks/", "/bin/", "/ci/", "/tools/")
+ALL_CALLER_SEARCH_SKIPPED_DIRECTORIES = frozenset(
+    {".git", "node_modules", "__pycache__", ".venv"}
+)
+ALL_INVENTORY_FILE_NAMES = frozenset(
+    {"CHANGELOG.md", "README.md", "ever-shipped-skills.mjs"}
+)
+ALL_UNCALLED_EXEMPT_FILE_NAMES = frozenset({"__init__.py", "conftest.py"})
+CALLER_NAME_PATTERN_TEMPLATE = r"(?<![\w-]){name}(?![\w-])"

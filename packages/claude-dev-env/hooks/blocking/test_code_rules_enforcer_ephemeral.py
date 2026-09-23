@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -21,13 +20,11 @@ if _HOOKS_DIRECTORY not in sys.path:
 from code_rules_enforcer import main as enforcer_main  # noqa: E402
 from code_rules_shared import is_ephemeral_script_path  # noqa: E402
 from code_rules_enforcer_test_support import (  # noqa: E402
-    build_write_payload,
     run_enforcer_cli,
     run_write_entrypoint,
 )
 
 _ENFORCER_SCRIPT = Path(__file__).resolve().parent / "code_rules_enforcer.py"
-_TDD_SCRIPT = Path(__file__).resolve().parent / "tdd_enforcer.py"
 
 _VIOLATING_PRODUCTION_SOURCE = "def process_data(payload: str) -> None:\n    print(payload)\n"
 
@@ -54,44 +51,6 @@ def _run_main_with_write_payload(
 ) -> tuple[str, int]:
     """Drive enforcer_main through its stdin entry point for a Write payload."""
     return run_write_entrypoint(enforcer_main, file_path, content)
-
-
-def _run_tdd_with_write_payload(
-    file_path: str,
-    content: str,
-) -> subprocess.CompletedProcess[str]:
-    """Drive the TDD enforcer through subprocess with a Write payload.
-
-    Args:
-        file_path: The destination path the Write targets.
-        content: The production-looking content to write.
-
-    Returns:
-        The completed process carrying stdout, stderr, and the exit code.
-    """
-    write_payload = build_write_payload(file_path, content)
-    return subprocess.run(
-        [sys.executable, str(_TDD_SCRIPT)],
-        input=write_payload,
-        capture_output=True,
-        text=True,
-    )
-
-
-def _decision_from(completed: subprocess.CompletedProcess[str]) -> str | None:
-    """Extract the permissionDecision from a hook's JSON stdout.
-
-    Args:
-        completed: The completed subprocess carrying the hook's stdout.
-
-    Returns:
-        The permissionDecision string, or None when stdout is empty.
-    """
-    if not completed.stdout:
-        return None
-    parsed = json.loads(completed.stdout)
-    hook_output = parsed.get("hookSpecificOutput", {})
-    return hook_output.get("permissionDecision")
 
 
 def test_should_return_true_for_claude_job_dir_tmp_path(
@@ -320,7 +279,7 @@ def test_should_exempt_same_path_set_on_both_gates(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """B21: every ephemeral path exits 0 on both enforcer main and TDD enforcer main."""
+    """B21: every ephemeral path exits 0 on enforcer main."""
     monkeypatch.setenv("CLAUDE_JOB_DIR", str(tmp_path))
     all_ephemeral_paths = [
         str(tmp_path / "tmp" / "scratch.py"),
@@ -338,8 +297,4 @@ def test_should_exempt_same_path_set_on_both_gates(
         )
         assert "deny" not in captured_stdout.lower(), (
             f"enforcer must not deny ephemeral path {each_ephemeral_path!r}"
-        )
-        completed = _run_tdd_with_write_payload(each_ephemeral_path, _VIOLATING_PRODUCTION_SOURCE)
-        assert _decision_from(completed) != "deny", (
-            f"TDD enforcer must not deny ephemeral path {each_ephemeral_path!r}"
         )

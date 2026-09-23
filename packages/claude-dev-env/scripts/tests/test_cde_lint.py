@@ -396,3 +396,53 @@ def test_should_emit_only_located_diagnostics_in_editor_format(
     assert exit_code == 1
     assert "src/app.py:4:2:" in stdout_text
     assert "unlocated finding" not in stdout_text
+
+
+def test_should_exit_zero_and_record_a_followup_when_only_warnings_exist(
+    tmp_path: Path,
+) -> None:
+    warning_report = LintReport(
+        1,
+        (
+            Diagnostic(
+                "code-rules",
+                Severity.WARNING,
+                "Line 4: paired test gap",
+                Location(PurePosixPath("src/app.py"), 4, 1),
+                "code-rules/paired-test-missing-function",
+            ),
+        ),
+        (PurePosixPath("src/app.py"),),
+        ("code-rules",),
+        (),
+        (),
+    )
+    exit_code, stdout_text, _stderr_text = _run_cli(
+        ["--files", "src/app.py"],
+        lint_runner=lambda _request: warning_report,
+        repository_root=tmp_path,
+    )
+    ledger_path = tmp_path / ".claude" / "followups" / "smells.jsonl"
+    all_ledger_records = [
+        json.loads(each_line)
+        for each_line in ledger_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert exit_code == 0
+    assert "paired test gap" in stdout_text
+    assert [each_record["check_id"] for each_record in all_ledger_records] == [
+        "code-rules/paired-test-missing-function"
+    ]
+    assert all_ledger_records[0]["file_path"] == "src/app.py"
+
+
+def test_should_leave_the_ledger_absent_when_every_finding_is_an_error(
+    tmp_path: Path,
+) -> None:
+    _run_cli(
+        ["--files", "src/app.py"],
+        lint_runner=lambda _request: LintReport(
+            1, (_located_diagnostic(),), (), ("rule-a",), (), ()
+        ),
+        repository_root=tmp_path,
+    )
+    assert not (tmp_path / ".claude" / "followups" / "smells.jsonl").exists()

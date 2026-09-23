@@ -154,6 +154,12 @@ def default_registry() -> tuple[model.Rule, ...]:
             frozenset({model.SelectionKind.STAGED, model.SelectionKind.BASE}),
             adapters.terminology_diagnostics,
         ),
+        model.ChangeSetRule(
+            "uncalled-new-file",
+            frozenset({"changed"}),
+            frozenset({model.SelectionKind.STAGED, model.SelectionKind.BASE}),
+            adapters.uncalled_new_file_diagnostics,
+        ),
         model.RepositoryRule(
             "repository-path-collision",
             frozenset({"repository"}),

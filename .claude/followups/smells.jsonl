@@ -1,0 +1,1 @@
+{"rule_id": "test-pairing", "file_path": "packages/claude-dev-env/_shared/pr-loop/scripts/code_rules_gate_parts/staged_test_regression.py", "message": "Changed production file has no changed matching test", "check_id": "test-pairing", "severity": "smell", "origin_commit": "6a446c636773912c72dc9f1105533a96a44305dc"}

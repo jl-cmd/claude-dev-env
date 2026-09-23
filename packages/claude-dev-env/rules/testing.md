@@ -25,4 +25,8 @@ Tests exercise production behavior, production data, and production code paths. 
 
 ## No Gate Holds the Test-First Order
 
-`tdd_enforcer.py` once required a fresh, failing test before a production module was written. Nothing runs it now, and the staged policy lint carries no replacement. Hold the red-green-refactor order yourself, and let review check it on the diff.
+Red, green, refactor is the default loop for a bug fix and for new behavior. The TDD skill (`pstack:tdd`) carries the procedure, and no hook or lint checks the order. A prototype may run ahead of its tests and adds them before the pull request goes ready. A bug fix ships with a test that reproduces the bug. Review reads the tests on the diff.
+
+## A Fix Carries Its Proof Test
+
+The `Fix test proof` job in `.github/workflows/pr-check.yml` runs `_shared/pr-loop/scripts/fix_pr_test_proof.py` on every pull request whose title starts with `fix`. A fix that changes production code must change at least one Python or Node test that fails on the base and passes on the head. Node tests are files ending in `.test.mjs`, `.test.js`, or `.test.cjs`, and the job runs them with `node --test`. A fix that changes only docs or CI config passes. A fix proven by a PowerShell test needs a Python or Node test beside it.

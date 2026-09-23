@@ -43,3 +43,43 @@ jobs:
             build
             ci
             revert
+
+  fix-test-proof:
+    name: Fix test proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python test dependencies
+        run: |
+          pip install -e packages/claude-dev-env/ \
+            -r packages/claude-dev-env/scripts/pr_verification/requirements.txt \
+            pytest \
+            pyyaml \
+            Pillow
+
+      - name: Configure git identity for test repos
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+
+      - name: Require a fix to carry a test that fails on the base
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PYTHONPATH: packages/claude-dev-env/_shared/pr-loop/scripts
+        run: |
+          python packages/claude-dev-env/_shared/pr-loop/scripts/fix_pr_test_proof.py \
+            --title "$PR_TITLE" \
+            --base "$BASE_SHA" \
+            --repository-root .
