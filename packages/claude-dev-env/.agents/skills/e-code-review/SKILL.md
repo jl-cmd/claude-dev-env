@@ -2,7 +2,7 @@
 name: e-code-review
 description: >-
   Code review at one of five effort levels that match the built-in
-  /code-review recipes word for word: low, medium, high, xhigh, max.
+  /code-review recipes step for step: low, medium, high, xhigh, max.
   Triggers: /e-code-review, /e-code-review low, /e-code-review medium,
   /e-code-review high, /e-code-review xhigh, /e-code-review max, and any
   level with --fix.
@@ -10,7 +10,7 @@ description: >-
 
 # e-code-review
 
-**Pick a level, load its file, run it.** Each file is the built-in `/code-review` recipe for that level, word for word.
+**Pick a level, load its file, run it.** Each file has the same steps, angles, caps, and fields as the built-in `/code-review` recipe for that level. Only the wording differs, where this repo's prose rules require it.
 
 | Level | File | Shape |
 |---|---|---|
