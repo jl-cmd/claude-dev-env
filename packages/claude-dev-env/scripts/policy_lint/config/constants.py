@@ -20,6 +20,7 @@ ALL_MISSING_BLOB_ERROR_FRAGMENTS = (
     "does not exist in",
     "does not exist (at stage",
     "exists on disk, but not in",
+    ": bad file",
 )
 GIT_DIFF_ARGUMENT = "diff"
 GIT_CACHED_FLAG = "--cached"
