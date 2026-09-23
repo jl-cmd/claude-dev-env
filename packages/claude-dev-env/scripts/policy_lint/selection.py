@@ -205,6 +205,8 @@ def _append_change(
     all_renamed_paths: list[tuple[PurePosixPath, PurePosixPath]],
 ) -> None:
     old_path, new_path = all_paths if status[:1] in {"R", "C"} else (all_paths[0], all_paths[0])
+    if status != "D" and (repository_root / new_path).is_symlink():
+        return
     normalized_old_path = _normalize_path(repository_root, old_path)
     normalized_new_path = _normalize_path(repository_root, new_path)
     if status == "D":
