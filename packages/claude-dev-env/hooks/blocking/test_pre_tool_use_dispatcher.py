@@ -496,8 +496,8 @@ def test_aggregate_exit_code_zero_with_no_output_allows() -> None:
 def test_aggregate_explicit_allow_payload_signals_allow_decision() -> None:
     """An explicit permissionDecision allow from a hosted hook signals an allow decision.
 
-    tdd_enforcer writes an explicit allow payload on its allow path, which
-    auto-approves the write standalone. The aggregator must surface that as an
+    A hosted hook can write an explicit allow payload, which auto-approves the
+    write standalone. The aggregator must surface that as an
     explicit allow decision so the dispatcher re-emits it rather than silently
     falling back to the default permission flow.
     """
@@ -680,43 +680,6 @@ def _orphan_claude_md_payload(tmp_path: Path) -> str:
     return _write_payload(claude_md_path, orphan_table)
 
 
-def _parse_hook_allow(completed_process: subprocess.CompletedProcess[str]) -> bool:
-    """Parse one hook's subprocess result for an explicit permissionDecision allow.
-
-    Args:
-        completed_process: The completed subprocess from running a hook.
-
-    Returns:
-        True when the hook emitted an explicit allow decision.
-    """
-    stdout_text = completed_process.stdout.strip()
-    if not stdout_text:
-        return False
-    try:
-        parsed_output = json.loads(stdout_text)
-    except json.JSONDecodeError:
-        return False
-    hook_specific = parsed_output.get("hookSpecificOutput", {})
-    if not isinstance(hook_specific, dict):
-        return False
-    return hook_specific.get("permissionDecision") == "allow"
-
-
-def test_retired_tdd_hook_cannot_auto_approve_the_write(tmp_path: Path) -> None:
-    """Pairing belongs to staged lint; its edit-time auto-approval is absent."""
-    config_target_path = str(tmp_path / "config" / "timing.py")
-    constants_only_content = (
-        '"""Timing constants."""\n\nMAXIMUM_RETRIES = 3\nRETRY_DELAY_SECONDS = 5\n'
-    )
-    payload_text = _write_payload(config_target_path, constants_only_content)
-    standalone_result = _run_hook_subprocess("blocking/tdd_enforcer.py", payload_text)
-    assert _parse_hook_allow(standalone_result)
-    dispatcher_result = _run_dispatcher(payload_text)
-    dispatcher_is_deny, reason = _parse_hook_decision(dispatcher_result)
-    assert not dispatcher_is_deny, reason
-    assert not _parse_hook_allow(dispatcher_result)
-
-
 def test_runpy_hosted_hook_sees_its_own_argv_not_the_dispatchers(tmp_path: Path) -> None:
     """A runpy-hosted hook resolves its own script path as sys.argv, not the dispatcher's.
 
@@ -851,7 +814,6 @@ ALL_RETAINED_PATHS = {
 ALL_RETIRED_PATHS = {
     "validation/hook_format_validator.py",
     "blocking/code_rules_enforcer.py",
-    "blocking/tdd_enforcer.py",
     "blocking/windows_rmtree_blocker.py",
     "blocking/state_description_blocker.py",
     "blocking/subprocess_budget_completeness.py",

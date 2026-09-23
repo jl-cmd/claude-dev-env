@@ -33,7 +33,7 @@ A public function counts as covered when its name appears — imported, called, 
 
 ## Relationship to the file-level TDD order
 
-`tdd_enforcer.py` once required a fresh test file to exist before a production module was written, judging coverage one file at a time. Nothing runs it now, and the staged policy lint carries no replacement, so the test-first order is yours to hold. This check judges coverage one function at a time for a module that already carries such a test file. Write the test file first, and the lint then reports any public function that file leaves uncovered.
+No hook or lint checks the order in which a test and its module are written. Red-green-refactor is the default loop, and the TDD skill (`pstack:tdd`) carries it; a prototype may run ahead of its tests and adds them before the pull request goes ready. This check judges coverage one function at a time for a module that already carries a stem-matched test file, and reports any public function that file leaves uncovered.
 
 ## Why this check is mechanical
 

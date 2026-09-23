@@ -75,7 +75,9 @@ Parameters follow YAGNI: add an optional parameter when a caller varies the valu
 
 ## 8. TDD PROCESS
 
-1. **RED** — failing test first. 2. **GREEN** — minimum code to pass. 3. **REFACTOR** — only if valuable.
+1. **RED** — a failing test. 2. **GREEN** — minimum code to pass. 3. **REFACTOR** — only if valuable.
+
+This loop is the default for a bug fix and for new behavior, and the TDD skill (`pstack:tdd`) carries the procedure. No hook or lint checks the order. A prototype may run ahead of its tests and adds them before the pull request goes ready. A bug fix ships with a test that reproduces the bug.
 
 ## 9. SELF-CONTAINED COMPONENTS
 

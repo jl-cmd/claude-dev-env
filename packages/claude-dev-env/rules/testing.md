@@ -25,4 +25,4 @@ Tests exercise production behavior, production data, and production code paths. 
 
 ## No Gate Holds the Test-First Order
 
-`tdd_enforcer.py` once required a fresh, failing test before a production module was written. Nothing runs it now, and the staged policy lint carries no replacement. Hold the red-green-refactor order yourself, and let review check it on the diff.
+Red, green, refactor is the default loop for a bug fix and for new behavior. The TDD skill (`pstack:tdd`) carries the procedure, and no hook or lint checks the order. A prototype may run ahead of its tests and adds them before the pull request goes ready. A bug fix ships with a test that reproduces the bug. Review reads the tests on the diff.
