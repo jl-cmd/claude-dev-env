@@ -31,9 +31,15 @@ def _load_astra_module() -> ModuleType:
 astra_advisor = _load_astra_module()
 
 SCRIPTS_ROOT = Path(__file__).parent.parent
-USAGE_PROBE_PATH = (
-    SCRIPTS_ROOT.parents[1] / "pr-loop" / "scripts" / "codex_usage_probe.py"
-)
+PICKER_PATH = SCRIPTS_ROOT.parents[2] / "scripts" / "codex_account_choice.py"
+PICKED_CODEX_HOME = Path("codex-profiles") / "codex-2"
+NORMAL_ANSWER = {
+    "tier": "normal",
+    "account": "codex-2",
+    "codex_home": str(PICKED_CODEX_HOME),
+    "percent_left": 90,
+    "reason": "codex-2 has 90% left",
+}
 ENABLED_SETTINGS = {astra_advisor.ASTRA_ENV_VAR: "1"}
 
 
@@ -42,9 +48,9 @@ def _codex_on_search_path(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(astra_advisor.shutil, "which", lambda name: "codex")
 
 
-def _probe(payload: object, returncode: int = 0) -> subprocess.CompletedProcess[str]:
+def _pick(payload: object, returncode: int = 0) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(
-        [sys.executable, str(USAGE_PROBE_PATH)],
+        [sys.executable, str(PICKER_PATH), "choose"],
         returncode,
         json.dumps(payload),
         "",
@@ -66,14 +72,18 @@ def _events(session_id: str = "thread-1", guidance: str = "PLAN\ninspect") -> st
 
 
 def _two_step_runner(
-    all_calls: list[list[str]], guidance: str = "PLAN\ninspect"
+    all_calls: list[list[str]],
+    guidance: str = "PLAN\ninspect",
+    all_call_keywords: list[dict[str, object]] | None = None,
 ) -> _ProcessRunner:
     def runner(
         arguments: list[str], **kwargs: object
     ) -> subprocess.CompletedProcess[str]:
         all_calls.append(arguments)
+        if all_call_keywords is not None:
+            all_call_keywords.append(kwargs)
         if len(all_calls) == 1:
-            return _probe({"percent_left": 90})
+            return _pick(NORMAL_ANSWER)
         return subprocess.CompletedProcess(arguments, 0, _events(guidance=guidance), "")
     return runner
 
@@ -155,31 +165,63 @@ def test_argument_parser_accepts_astra_and_rejects_sol() -> None:
         parser.parse_args(["--bind", "--cwd", ".", "--enable-sol"])
 
 
-def test_usage_probe_path_uses_supplied_home(tmp_path: Path) -> None:
-    path = astra_advisor.resolve_usage_probe_path(tmp_path)
-    assert path == tmp_path / ".claude" / "_shared" / "pr-loop" / "scripts" / "codex_usage_probe.py"
+def test_account_picker_path_names_the_packaged_picker() -> None:
+    path = astra_advisor.resolve_account_picker_path()
+    assert path == PICKER_PATH.resolve()
+    assert path.is_file()
 
 
-def test_preflight_accepts_meter_above_gate() -> None:
+def test_preflight_runs_the_picker_choose_command() -> None:
+    all_calls: list[list[str]] = []
+
+    def runner(arguments: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        all_calls.append(arguments)
+        return _pick(NORMAL_ANSWER)
+
+    astra_advisor.run_astra_preflight(PICKER_PATH, runner)
+    assert all_calls == [[sys.executable, str(PICKER_PATH), "choose"]]
+
+
+def test_preflight_accepts_the_normal_tier_and_keeps_its_codex_home() -> None:
     preflight = astra_advisor.run_astra_preflight(
-        USAGE_PROBE_PATH, lambda arguments, **kwargs: _probe({"percent_left": 90})
+        PICKER_PATH, lambda arguments, **kwargs: _pick(NORMAL_ANSWER)
     )
     assert preflight.eligible
     assert preflight.percent_left == 90
+    assert preflight.codex_home == PICKED_CODEX_HOME
 
 
-def test_preflight_declines_meter_at_gate() -> None:
+@pytest.mark.parametrize("tier", ["luna", "wait"])
+def test_preflight_declines_a_tier_without_room(tier: str) -> None:
+    answer = {**NORMAL_ANSWER, "tier": tier, "reason": "every account is low"}
     preflight = astra_advisor.run_astra_preflight(
-        USAGE_PROBE_PATH, lambda arguments, **kwargs: _probe({"percent_left": 10})
+        PICKER_PATH, lambda arguments, **kwargs: _pick(answer)
     )
     assert not preflight.eligible
     assert preflight.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_DECLINED
+    assert preflight.codex_home is None
 
 
-@pytest.mark.parametrize("payload", [{"percent_left": None}, {"percent_left": "90"}, ["bad"]])
-def test_preflight_rejects_malformed_meter(payload: object) -> None:
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"tier": None},
+        {**NORMAL_ANSWER, "codex_home": None},
+        {**NORMAL_ANSWER, "percent_left": "90"},
+        ["bad"],
+    ],
+)
+def test_preflight_rejects_a_malformed_answer(payload: object) -> None:
     preflight = astra_advisor.run_astra_preflight(
-        USAGE_PROBE_PATH, lambda arguments, **kwargs: _probe(payload)
+        PICKER_PATH, lambda arguments, **kwargs: _pick(payload)
+    )
+    assert not preflight.eligible
+    assert preflight.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_BROKEN
+
+
+def test_preflight_rejects_a_failed_picker() -> None:
+    preflight = astra_advisor.run_astra_preflight(
+        PICKER_PATH, lambda arguments, **kwargs: _pick(NORMAL_ANSWER, returncode=1)
     )
     assert not preflight.eligible
     assert preflight.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_BROKEN
@@ -208,17 +250,21 @@ def test_jsonl_parser_falls_back_for_invalid_reply(jsonl_text: str) -> None:
     assert not reply.successful
 
 
-def test_bind_runs_probe_then_codex() -> None:
+def test_bind_runs_picker_then_codex_under_the_chosen_home() -> None:
     calls: list[list[str]] = []
+    all_call_keywords: list[dict[str, object]] = []
     reply = astra_advisor.run_codex_astra_advisor(
         "consult",
         Path("."),
         None,
-        USAGE_PROBE_PATH,
+        PICKER_PATH,
         ENABLED_SETTINGS,
         None,
-        _two_step_runner(calls),
+        _two_step_runner(calls, all_call_keywords=all_call_keywords),
     )
+    codex_environment = all_call_keywords[1]["env"]
+    assert isinstance(codex_environment, dict)
+    assert codex_environment["CODEX_HOME"] == str(PICKED_CODEX_HOME)
     assert reply.successful
     assert reply.selected_tier == "Astra"
     assert reply.outcome == "codex"
@@ -236,7 +282,7 @@ def test_bind_routes_astra_xhigh_to_the_policy_effort() -> None:
         "consult",
         Path("."),
         None,
-        USAGE_PROBE_PATH,
+        PICKER_PATH,
         settings,
         None,
         _two_step_runner(calls),
@@ -263,7 +309,7 @@ def test_disabled_flag_returns_declined_fallback() -> None:
 def test_missing_codex_returns_broken_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(astra_advisor.shutil, "which", lambda name: None)
     reply = astra_advisor.run_codex_astra_advisor(
-        "consult", Path("."), None, USAGE_PROBE_PATH, ENABLED_SETTINGS, None, subprocess.run
+        "consult", Path("."), None, PICKER_PATH, ENABLED_SETTINGS, None, subprocess.run
     )
     assert reply.is_fallback
     assert reply.fallback_kind == astra_advisor.ASTRA_FALLBACK_KIND_BROKEN
@@ -275,7 +321,7 @@ def test_resume_uses_existing_session() -> None:
         "resume",
         Path("."),
         None,
-        USAGE_PROBE_PATH,
+        PICKER_PATH,
         ENABLED_SETTINGS,
         "thread-1",
         _two_step_runner(calls, "ENDORSE\nready"),

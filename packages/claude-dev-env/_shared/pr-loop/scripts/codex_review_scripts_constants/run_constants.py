@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 CODEX_BINARY_NAME = "codex"
+WINDOWS_OS_NAME = "nt"
+WINDOWS_COMMAND_SHELL = "cmd"
+WINDOWS_COMMAND_SHELL_RUN_FLAG = "/c"
+ALL_WINDOWS_SCRIPT_SUFFIXES = (".cmd", ".bat")
 EXEC_SUBCOMMAND = "exec"
 REVIEW_SUBCOMMAND = "review"
 HELP_FLAG = "--help"

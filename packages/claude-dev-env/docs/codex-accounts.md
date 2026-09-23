@@ -64,5 +64,16 @@ python packages/claude-dev-env/scripts/codex_account_choice.py check codex-2 --f
 `check` exits 0 while the account has more than the floor left, and 3 once it has
 not or its meter is unread. The job stops on 3.
 
+## Shared callers
+
+Two scripts under `_shared` run `choose` by path. Each finds the picker at
+`scripts/codex_account_choice.py` in the directory that holds `_shared`. Once
+installed, that is `~/.claude/scripts/codex_account_choice.py`.
+
+| Caller | What it does with the answer |
+|---|---|
+| `_shared/pr-loop/scripts/check_convergence.py` | Requires a Codex clean stamp on HEAD only on `normal`. `luna`, `wait`, or a failed picker skips the Codex gate |
+| `_shared/advisor/scripts/codex_astra_advisor.py` | Binds Astra only on `normal`, and runs Codex with `CODEX_HOME` set to `codex_home` |
+
 Pass `--codex-path` when `codex` is off PATH. Without it the picker also tries
 the desktop install path under the user home.

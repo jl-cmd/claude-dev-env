@@ -29,9 +29,10 @@ The frozen process env is only a fallback when that disk read fails (logged once
 A probe error does not waive the gate; the live GitHub checks still run.
 
 The Codex gate is conditional-required: it demands
-``codex_clean_at == current_head`` only when the weekly usage probe reports
-more than the probe's threshold percent left. At or below that threshold, null
-usage, the codex token, or ``codex_down`` never blocks ready.
+``codex_clean_at == current_head`` only when the Codex account picker
+(``scripts/codex_account_choice.py choose``) answers the ``normal`` tier, so
+one signed-in account has room for a review. A ``luna`` or ``wait`` answer, an
+unreadable picker, the codex token, or ``codex_down`` never blocks ready.
 """
 
 from __future__ import annotations
@@ -62,13 +63,12 @@ from check_convergence_thread_gates import (
     _check_no_pending_reviews,
     _count_unresolved_bot_threads,
 )
-from codex_review_scripts_constants.codex_usage_probe_constants import (
-    USAGE_REPORT_KEY_PERCENT_LEFT,
-)
-from codex_usage_probe import is_codex_review_required, probe_weekly_usage_via_subprocess
 from pr_converge_scripts_constants.convergence_gate_constants import (
+    ALL_CODEX_ACCOUNT_PICKER_RELATIVE_PARTS,
     BUGBOT_DOWN_BYPASS_NOTE,
     CLAUDE_JOB_DIR_ENV_VAR_NAME,
+    CODEX_ACCOUNT_PICK_TIMEOUT_SECONDS,
+    CODEX_ACCOUNT_PICKER_CHOOSE_COMMAND,
     CODEX_BYPASS_DETAIL,
     CODEX_CLEAN_AT_STATE_KEY,
     CODEX_CLEAN_DETAIL_TEMPLATE,
@@ -76,11 +76,13 @@ from pr_converge_scripts_constants.convergence_gate_constants import (
     CODEX_GATE_LABEL,
     CODEX_MISSING_CLEAN_DETAIL_TEMPLATE,
     CODEX_SKIPPED_USAGE_DETAIL,
+    CODEX_TIER_KEY,
+    CODEX_TIER_NORMAL,
     COPILOT_DOWN_BYPASS_NOTE,
     FIXTURE_DEFAULT_PENDING_DETAIL,
     FIXTURE_DEFAULT_THREADS_DETAIL,
     FIXTURE_KEY_CODEX_CLEAN_AT,
-    FIXTURE_KEY_CODEX_PERCENT_LEFT,
+    FIXTURE_KEY_CODEX_TIER,
     FIXTURE_KEY_HEAD_SHA,
     FIXTURE_KEY_PENDING_REVIEWS_DETAIL,
     FIXTURE_KEY_PENDING_REVIEWS_PASSED,
@@ -90,6 +92,7 @@ from pr_converge_scripts_constants.convergence_gate_constants import (
     FIXTURE_KEY_UNRESOLVED_BOT_THREADS_PASSED,
     MINIMUM_ABBREVIATED_SHA_LENGTH,
     PR_CONVERGE_STATE_FILENAME,
+    SHARED_PACKAGE_ROOT_PARENT_INDEX,
 )
 from pr_converge_skill_constants.constants import (
     ALL_COPILOT_CLEAN_REVIEW_STATES,
@@ -128,7 +131,7 @@ class ConvergenceFixture(NamedTuple):
     unresolved_bot_threads_detail: str
     is_no_pending_reviews: bool
     pending_reviews_detail: str
-    codex_percent_left: float | None
+    codex_tier: str | None
     codex_clean_at: str | None
 
 
@@ -333,24 +336,24 @@ def _sha_matches_head(stamp_sha: str, head_sha: str) -> bool:
 
 def _evaluate_codex_clean(
     *,
-    read_percent_left: Callable[[], float | None],
+    read_codex_tier: Callable[[], str | None],
     codex_clean_at: str | None,
     head_sha: str,
 ) -> tuple[bool, str]:
-    """Return whether the conditional Codex gate passes for the given stamp and usage.
+    """Return whether the conditional Codex gate passes for the given stamp and account tier.
 
     ::
 
-        clean stamp on head                -> pass  (usage never read)
-        no stamp, percent None or <= limit -> skip  (never blocks)
-        no stamp, percent > limit          -> fail
+        clean stamp on head                  -> pass  (picker never runs)
+        no stamp, tier luna, wait, or None   -> skip  (never blocks)
+        no stamp, tier normal                -> fail
 
-    A stamp on the current HEAD settles the gate on its own, so the usage read
-    stays behind it: the weekly probe spawns a Codex subprocess, and the common
-    already-clean tick has no reason to pay for one.
+    A stamp on the current HEAD settles the gate on its own, so the picker
+    stays behind it: the picker starts one Codex app server per account, and
+    the common already-clean tick has no reason to pay for them.
 
     Args:
-        read_percent_left: Reads weekly Codex percent remaining, or None when unknown.
+        read_codex_tier: Returns the picker's tier, or None when the picker cannot say.
         codex_clean_at: HEAD SHA where Codex last reported clean, or None.
         head_sha: Current PR HEAD commit SHA.
 
@@ -359,32 +362,38 @@ def _evaluate_codex_clean(
     """
     if codex_clean_at is not None and _sha_matches_head(codex_clean_at, head_sha):
         return True, CODEX_CLEAN_DETAIL_TEMPLATE % _short_sha(head_sha)
-    if not is_codex_review_required(read_percent_left()):
+    if read_codex_tier() != CODEX_TIER_NORMAL:
         return True, CODEX_SKIPPED_USAGE_DETAIL
     return False, CODEX_MISSING_CLEAN_DETAIL_TEMPLATE % _short_sha(head_sha)
 
 
-def _probe_codex_percent_left() -> float | None:
-    """Probe weekly Codex usage and return percent remaining, or None when unknown."""
+def _codex_account_picker_path() -> Path:
+    """Return the installed Codex account picker beside this shared tree."""
+    shared_root = Path(__file__).resolve().parents[SHARED_PACKAGE_ROOT_PARENT_INDEX]
+    return shared_root.joinpath(*ALL_CODEX_ACCOUNT_PICKER_RELATIVE_PARTS)
+
+
+def _read_codex_tier() -> str | None:
+    """Ask the Codex account picker which tier a review runs on, or None when it cannot say."""
     try:
-        usage_report = probe_weekly_usage_via_subprocess()
-    except (
-        FileNotFoundError,
-        OSError,
-        subprocess.TimeoutExpired,
-        subprocess.SubprocessError,
-        json.JSONDecodeError,
-        ValueError,
-        TypeError,
-        KeyError,
-    ):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(_codex_account_picker_path()),
+                CODEX_ACCOUNT_PICKER_CHOOSE_COMMAND,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=CODEX_ACCOUNT_PICK_TIMEOUT_SECONDS,
+        )
+        answer = json.loads(completed.stdout)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
         return None
-    raw_percent = usage_report.get(USAGE_REPORT_KEY_PERCENT_LEFT)
-    if isinstance(raw_percent, bool):
+    if completed.returncode != 0 or not isinstance(answer, dict):
         return None
-    if isinstance(raw_percent, (int, float)):
-        return float(raw_percent)
-    return None
+    tier = answer.get(CODEX_TIER_KEY)
+    return tier if isinstance(tier, str) else None
 
 
 def _read_job_state() -> dict[str, object]:
@@ -468,11 +477,11 @@ def _codex_condition(context: GateContext) -> GateCondition:
     if context.is_codex_down:
         return (CODEX_GATE_LABEL, (True, CODEX_BYPASS_DETAIL))
     if context.fixture is not None:
-        fixture_percent_left = context.fixture.codex_percent_left
+        fixture_codex_tier = context.fixture.codex_tier
         return (
             CODEX_GATE_LABEL,
             _evaluate_codex_clean(
-                read_percent_left=lambda: fixture_percent_left,
+                read_codex_tier=lambda: fixture_codex_tier,
                 codex_clean_at=context.fixture.codex_clean_at,
                 head_sha=context.head_sha,
             ),
@@ -480,7 +489,7 @@ def _codex_condition(context: GateContext) -> GateCondition:
     return (
         CODEX_GATE_LABEL,
         _evaluate_codex_clean(
-            read_percent_left=_probe_codex_percent_left,
+            read_codex_tier=_read_codex_tier,
             codex_clean_at=context.live_codex_clean_at,
             head_sha=context.head_sha,
         ),
@@ -623,17 +632,13 @@ def _load_convergence_fixture(from_path: Path) -> ConvergenceFixture:
         raise ValueError("fixture pending_reviews_passed must be a bool")
     if not isinstance(pending_detail, str):
         raise ValueError("fixture pending_reviews_detail must be a string")
-    codex_percent_left = payload.get(FIXTURE_KEY_CODEX_PERCENT_LEFT)
+    codex_tier = payload.get(FIXTURE_KEY_CODEX_TIER)
     codex_clean_at = payload.get(FIXTURE_KEY_CODEX_CLEAN_AT)
-    if isinstance(codex_percent_left, bool):
-        raise ValueError("fixture codex_percent_left must be a number or null")
-    if codex_percent_left is not None and not isinstance(codex_percent_left, (int, float)):
-        raise ValueError("fixture codex_percent_left must be a number or null")
+    if codex_tier is not None and not isinstance(codex_tier, str):
+        raise ValueError("fixture codex_tier must be a string or null")
     if codex_clean_at is not None and not isinstance(codex_clean_at, str):
         raise ValueError("fixture codex_clean_at must be a string or null")
-    typed_percent_left: float | None = (
-        float(codex_percent_left) if isinstance(codex_percent_left, (int, float)) else None
-    )
+    typed_codex_tier: str | None = codex_tier if isinstance(codex_tier, str) else None
     typed_codex_clean_at: str | None = codex_clean_at if isinstance(codex_clean_at, str) else None
     return ConvergenceFixture(
         head_sha=head_sha,
@@ -643,7 +648,7 @@ def _load_convergence_fixture(from_path: Path) -> ConvergenceFixture:
         unresolved_bot_threads_detail=threads_detail,
         is_no_pending_reviews=is_pending_ok,
         pending_reviews_detail=pending_detail,
-        codex_percent_left=typed_percent_left,
+        codex_tier=typed_codex_tier,
         codex_clean_at=typed_codex_clean_at,
     )
 

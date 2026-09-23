@@ -45,7 +45,7 @@ FIXTURE_KEY_UNRESOLVED_BOT_THREADS_PASSED: str = "unresolved_bot_threads_passed"
 FIXTURE_KEY_UNRESOLVED_BOT_THREADS_DETAIL: str = "unresolved_bot_threads_detail"
 FIXTURE_KEY_PENDING_REVIEWS_PASSED: str = "pending_reviews_passed"
 FIXTURE_KEY_PENDING_REVIEWS_DETAIL: str = "pending_reviews_detail"
-FIXTURE_KEY_CODEX_PERCENT_LEFT: str = "codex_percent_left"
+FIXTURE_KEY_CODEX_TIER: str = "codex_tier"
 FIXTURE_KEY_CODEX_CLEAN_AT: str = "codex_clean_at"
 FIXTURE_DEFAULT_THREADS_DETAIL: str = "0 unresolved"
 FIXTURE_DEFAULT_PENDING_DETAIL: str = "none pending"
@@ -68,3 +68,12 @@ PR_CONVERGE_STATE_FILENAME: str = "pr-converge-state.json"
 CODEX_CLEAN_AT_STATE_KEY: str = "codex_clean_at"
 CODEX_DOWN_STATE_KEY: str = "codex_down"
 MINIMUM_ABBREVIATED_SHA_LENGTH: int = 7
+SHARED_PACKAGE_ROOT_PARENT_INDEX: int = 3
+ALL_CODEX_ACCOUNT_PICKER_RELATIVE_PARTS: tuple[str, ...] = (
+    "scripts",
+    "codex_account_choice.py",
+)
+CODEX_ACCOUNT_PICKER_CHOOSE_COMMAND: str = "choose"
+CODEX_ACCOUNT_PICK_TIMEOUT_SECONDS: float = 150.0
+CODEX_TIER_KEY: str = "tier"
+CODEX_TIER_NORMAL: str = "normal"

@@ -118,14 +118,14 @@ def _refuse_bugteam_clean(**_call_keywords: object) -> tuple[bool, str]:
     )
 
 
-def _null_codex_percent_left() -> float | None:
+def _unread_codex_tier() -> str | None:
     return None
 
 
 def _patch_gates_clean(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(check_convergence, "_get_pr_head_sha", _clean_head)
     monkeypatch.setattr(
-        check_convergence, "_probe_codex_percent_left", _null_codex_percent_left
+        check_convergence, "_read_codex_tier", _unread_codex_tier
     )
     for each_gate_name in _ALL_LEAF_GATE_NAMES:
         monkeypatch.setattr(check_convergence, each_gate_name, _clean_gate)
