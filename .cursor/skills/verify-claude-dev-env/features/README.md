@@ -9,4 +9,5 @@ Use the feature file that matches the changed user path:
 - [Claude configuration surfaces](claude-configuration-surfaces.md)
 - [Hook lifecycle](hook-lifecycle.md)
 - [Merge readiness](merge-readiness.md)
+- [Second Claude account](second-claude-account.md)
 - [Follow-up ledger](follow-up-ledger.md)
