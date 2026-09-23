@@ -27,6 +27,7 @@
         "_shared/",
         "audit-rubrics/",
         "codex-rules/",
+        "pstack-codex-models.md",
         "AGENTS.md",
         ".claude/CLAUDE.md",
         "!**/__pycache__/**",

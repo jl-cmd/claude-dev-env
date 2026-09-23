@@ -44,6 +44,7 @@ import {
     installPstackPlugin,
     shouldInstallPstackPlugin,
 } from './install-pstack-plugin.mjs';
+import { seedCodexPstackModels } from './seed-codex-pstack-models.mjs';
 import {
     continuityHostConfigurationPaths,
     removeContinuityHooks,
@@ -2769,6 +2770,17 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     if (!selectedGroups && shouldInstallPstackPlugin()) {
         const pstackPlugin = installPstackPluginForHosts();
         summary.pstackPlugin = pstackPlugin;
+        if (pstackPlugin.hosts.some(host => host.host === 'codex' && host.status === 'installed')) {
+            summary.codexPstackModels = seedCodexPstackModels(
+                INSTALL_ROOT_RESOLUTION.codexHomeDirectory,
+            );
+            if (summary.codexPstackModels) {
+                allInstalledFiles.push(...summary.codexPstackModels);
+                for (const eachPath of summary.codexPstackModels) {
+                    allUserOwnedPreferencePaths.add(eachPath);
+                }
+            }
+        }
         for (const eachHost of pstackPlugin.hosts) {
             console.log(eachHost.warning
                 ? `  Pstack (${eachHost.host}): ${eachHost.status} \u2014 ${eachHost.warning}`

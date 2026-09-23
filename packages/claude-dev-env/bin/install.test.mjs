@@ -3064,6 +3064,30 @@ test('a full install adds the pstack marketplace and plugin on both hosts', t =>
     ]);
     assert.match(installerOutput, /Pstack \(claude\): installed/);
     assert.match(installerOutput, /Pstack \(codex\): installed/);
+    const codexHome = join(sandbox.homeDirectory, '.codex');
+    const sheet = readFileSync(join(codexHome, 'pstack-models.md'), 'utf8');
+    const agents = readFileSync(join(codexHome, 'AGENTS.md'), 'utf8');
+    assert.match(sheet, /^session hook: on$/m);
+    assert.match(agents, /^feature, refactoring: gpt-6-sol$/m);
+    assert.doesNotMatch(agents, /^session hook:/m);
+    assert.equal(existsSync(join(sandbox.homeDirectory, '.claude', 'pstack-models.md')), false);
+    const manifestPath = join(sandbox.homeDirectory, '.claude', '.claude-dev-env-manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    assert.equal(manifest.files.includes(join(codexHome, 'pstack-models.md')), false);
+    assert.equal(manifest.files.includes(join(codexHome, 'AGENTS.md')), false);
+});
+
+test('a repeat install preserves Codex pstack configuration', t => {
+    const sandbox = pstackPluginSandbox(t);
+    const codexHome = join(sandbox.homeDirectory, '.codex');
+    runPstackInstaller(sandbox.homeDirectory, [], sandbox.environment);
+    writeFileSync(join(codexHome, 'AGENTS.md'), 'Custom Codex guidance\n');
+    writeFileSync(join(codexHome, 'pstack-models.md'), 'session hook: off\n');
+
+    runPstackInstaller(sandbox.homeDirectory, [], sandbox.environment);
+
+    assert.equal(readFileSync(join(codexHome, 'AGENTS.md'), 'utf8'), 'Custom Codex guidance\n');
+    assert.equal(readFileSync(join(codexHome, 'pstack-models.md'), 'utf8'), 'session hook: off\n');
 });
 
 test('an absent host command is reported and leaves the other host installed', t => {
@@ -3085,6 +3109,8 @@ test('an absent host command is reported and leaves the other host installed', t
         sandbox.recordedCommands().filter(eachCommand => eachCommand.startsWith('codex')),
         [],
     );
+    assert.equal(existsSync(join(sandbox.homeDirectory, '.codex', 'pstack-models.md')), false);
+    assert.equal(existsSync(join(sandbox.homeDirectory, '.codex', 'AGENTS.md')), false);
 });
 
 test('--no-pstack leaves both hosts untouched', t => {
@@ -3096,6 +3122,8 @@ test('--no-pstack leaves both hosts untouched', t => {
 
     assert.deepEqual(sandbox.recordedCommands(), []);
     assert.doesNotMatch(installerOutput, /Pstack \(/);
+    assert.equal(existsSync(join(sandbox.homeDirectory, '.codex', 'pstack-models.md')), false);
+    assert.equal(existsSync(join(sandbox.homeDirectory, '.codex', 'AGENTS.md')), false);
 });
 
 function continuityCommandCount(configurationPath) {

@@ -270,13 +270,6 @@ test('runWithInstallTransaction commits and discards journal on success', () => 
     rmSync(box.root, { recursive: true, force: true });
 });
 
-/**
- * Spawn the real installer against a sandbox home with optional fault phase.
- *
- * @param {string} homeDirectory
- * @param {string[]} extraArguments
- * @param {{ faultPhase?: string|null }} [options]
- */
 function runInstaller(homeDirectory, extraArguments, options = {}) {
     const childEnvironment = {
         ...process.env,
@@ -285,6 +278,7 @@ function runInstaller(homeDirectory, extraArguments, options = {}) {
         USERPROFILE: homeDirectory,
         GIT_CONFIG_GLOBAL: join(homeDirectory, '.gitconfig'),
         CODEX_HOME: join(homeDirectory, '.codex'),
+        ...options.environment,
     };
     if (options.faultPhase) {
         childEnvironment[INSTALL_FAULT_ENV] = options.faultPhase;
@@ -297,6 +291,34 @@ function runInstaller(homeDirectory, extraArguments, options = {}) {
         env: childEnvironment,
     });
 }
+
+test('a later install fault removes newly seeded Codex pstack files', () => {
+    const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-txn-codex-pstack-'));
+    try {
+        const codexCommandPath = join(
+            homeDirectory,
+            process.platform === 'win32' ? 'codex.cmd' : 'codex',
+        );
+        writeFileSync(
+            codexCommandPath,
+            process.platform === 'win32' ? '@echo off\r\nexit /b 0\r\n' : '#!/bin/sh\nexit 0\n',
+            { mode: 0o755 },
+        );
+        const failedRun = runInstaller(homeDirectory, [], {
+            faultPhase: FAULT_PHASES.AFTER_MANIFEST_WRITE,
+            environment: {
+                CDE_INSTALL_PSTACK: '1',
+                CDE_CODEX_EXECUTABLE: codexCommandPath,
+            },
+        });
+        assert.notEqual(failedRun.status, 0, failedRun.stdout + failedRun.stderr);
+        assert.match(`${failedRun.stdout}${failedRun.stderr}`, /after_manifest_write/);
+        assert.equal(existsSync(join(homeDirectory, '.codex', 'pstack-models.md')), false);
+        assert.equal(existsSync(join(homeDirectory, '.codex', 'AGENTS.md')), false);
+    } finally {
+        rmSync(homeDirectory, { recursive: true, force: true });
+    }
+});
 
 function seedPriorInstall(homeDirectory) {
     const claudeDirectory = join(homeDirectory, '.claude');

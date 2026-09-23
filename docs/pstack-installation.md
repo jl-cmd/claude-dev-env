@@ -18,6 +18,8 @@ codex plugin marketplace add michael-denyer/pstack-claude
 codex plugin add pstack@pstack-claude
 ```
 
+After a successful Codex plugin install, a fresh Codex home receives the packaged pstack model mapping in `pstack-models.md` and its model guidance in `AGENTS.md`. The sheet sets the selected Astra, Sol, and Luna roles, reasoning effort, substitutions, and `session hook: on`. Codex reads the role guidance from `AGENTS.md`, while the plugin reads the hook setting from the sheet. If either file already exists, the installer leaves both files alone. Claude Code configuration stays under its own user control.
+
 Both commands run without a prompt and report their outcome on stdout. Claude Code records the marketplace under `extraKnownMarketplaces` and the plugin under `enabledPlugins` in that root's `settings.json`, then unpacks the plugin under `plugins/cache/pstack-claude/pstack/<version>`.
 
 ## When a host is absent
@@ -39,7 +41,7 @@ The plugin keeps its own state under each host's plugin store. The install manif
 
 `claude plugin marketplace update pstack-claude` refreshes the catalog and `claude plugin install pstack@pstack-claude` adopts the new version. A later `claude-dev-env` install runs the same two commands, so an install adopts whatever the marketplace publishes.
 
-Run `/pstack:setup-pstack` in Claude Code, or `setup-pstack` in Codex, to change the plugin's model defaults or turn its automatic routing off. This repository's own `subagent-model-policy.json` and its `subagent_model_routing` hook stay in place and are unrelated to the plugin's routing.
+Run `/pstack:setup-pstack` in Claude Code, or `setup-pstack` in Codex, to change the plugin's model defaults or turn its automatic routing off. This repository's own `subagent-model-policy.json` and its `subagent_model_routing` hook stay in place and are unrelated to the plugin's routing. A later install preserves existing Codex model files.
 
 ## Windows command shims
 
