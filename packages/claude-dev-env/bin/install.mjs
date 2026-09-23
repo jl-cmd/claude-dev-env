@@ -45,7 +45,7 @@ import {
     shouldInstallPstackPlugin,
 } from './install-pstack-plugin.mjs';
 import { seedCodexPstackModels } from './seed-codex-pstack-models.mjs';
-import { writeCodexSkillLoadBlock } from './codex-skill-load-block.mjs';
+import { writeCodexAgentsGuidance } from './codex-skill-load-block.mjs';
 import {
     continuityHostConfigurationPaths,
     removeContinuityHooks,
@@ -2788,8 +2788,10 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
                     allUserOwnedPreferencePaths.add(eachPath);
                 }
             }
-            const skillLoadGuidancePath = writeCodexSkillLoadBlock(
+            const skillLoadGuidancePath = writeCodexAgentsGuidance(
                 INSTALL_ROOT_RESOLUTION.codexHomeDirectory,
+                readFileSync(join(PACKAGE_ROOT, 'AGENTS.md'), 'utf8'),
+                [join(CLAUDE_HOME, 'AGENTS.md'), join(AGENTS_HOME, 'AGENTS.md')],
             );
             if (skillLoadGuidancePath) {
                 console.log(`  \u2713 ${skillLoadGuidancePath} (Codex skill-load line)`);
