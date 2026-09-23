@@ -151,7 +151,7 @@ Starlark `*.rules` files Codex loads from `~/.codex/rules`. The package ships `c
 
 ### Cursor rule files
 
-The installer runs `sync_to_cursor.py` so each Claude `rules/*.md` file becomes `~/.cursor/rules/<stem>.mdc` with Cursor frontmatter (`alwaysApply` or a `globs` list from Claude `paths:`). Inventory files `CLAUDE.md` and `AGENTS.md` stay out of that folder.
+The installer writes no Cursor rule files. Cursor Agent reads a repository's own `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, and `.agents/skills`, and it reads `~/.cursor/rules` only for a workspace inside the home directory. A reinstall moves the `~/.cursor/rules` files an older install generated into the run backup.
 
 ### Docs
 
