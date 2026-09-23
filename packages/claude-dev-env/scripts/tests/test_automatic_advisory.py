@@ -172,7 +172,7 @@ def _build_registration(tmp_path: Path, checkout_path: Path) -> AdvisoryRegistra
         encoding="utf-8",
     )
     return AdvisoryRegistration(
-        RepositorySettings("JonEcho/python-automation", "unused"),
+        RepositorySettings("example-owner/example-repo", "unused"),
         2985,
         checkout_path,
         PurePosixPath("manifest.json"),
@@ -185,7 +185,7 @@ def _build_registration(tmp_path: Path, checkout_path: Path) -> AdvisoryRegistra
 
 def _build_candidate(head_sha: str, merge_sha: str = "unused") -> PullRequestCandidate:
     return PullRequestCandidate(
-        "JonEcho/python-automation",
+        "example-owner/example-repo",
         2985,
         "main",
         head_sha,
@@ -291,7 +291,7 @@ def _publish_recorded(
 ) -> FakePublication:
     all_events.append("publish")
     assert github_client is github
-    assert repository.slug == "JonEcho/python-automation"
+    assert repository.slug == "example-owner/example-repo"
     assert pull_request_number == 2985
     assert checkout.is_dir()
     assert manifest.is_file()

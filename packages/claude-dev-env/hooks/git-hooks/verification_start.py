@@ -20,9 +20,8 @@ from git_hooks_constants.verification_notice_constants import (
     RUNNER_FILE_NAME,
     RUNNER_PYTHON_FIELD,
     RUNNER_SETTINGS_FIELD,
-    TARGET_REPOSITORY_REMOTE,
 )
-from verification_notice_context import VerificationNoticeContext
+from verification_notice_context import VerificationNoticeContext, is_target_repository
 
 _subprocess_window_hooks_directory = str(Path(__file__).resolve().parents[2] / "hooks")
 if _subprocess_window_hooks_directory not in sys.path:
@@ -33,7 +32,7 @@ from hooks_constants.subprocess_window import hidden_window_creation_flags
 
 def start_automatic_advisory(context: VerificationNoticeContext) -> None:
     """Start the detached advisory poller when native metadata is valid."""
-    if context.repository_remote != TARGET_REPOSITORY_REMOTE:
+    if not is_target_repository(context.repository_remote):
         return
     if context.event not in ALL_NOTICE_EVENTS:
         return

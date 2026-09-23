@@ -22,7 +22,7 @@ import pull_request
 REPOSITORY = "jl-cmd/claude-dev-env"
 PR_NUMBER = "2518"
 PR_TITLE = "feat(skills): add guarded pull request publication"
-ACCOUNT_A = "JonEcho"
+ACCOUNT_A = "octocat"
 ACCOUNT_B = "ReviewBot"
 BODY_FILENAME = "pull-request-body.md"
 LINTER_PATH = _SCRIPTS_DIRECTORY.parents[3] / "scripts/durable_post_lint.py"

@@ -28,7 +28,7 @@ class _CycleFailsOnceRunner:
             raise self.cycle_error
         return (
             AdvisoryState(
-                "JonEcho/python-automation",
+                "example-owner/example-repo",
                 3087,
                 "passed",
                 "unchanged remote head and base",

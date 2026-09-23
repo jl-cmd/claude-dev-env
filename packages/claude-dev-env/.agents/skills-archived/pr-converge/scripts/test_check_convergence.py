@@ -135,7 +135,7 @@ def should_pass_when_clean_bugteam_review_present_on_current_head(
         check_convergence, "_gh_api_paginated", _make_stub_gh_paginated(reviews_payload)
     )
     passed, detail = check_convergence._check_bugteam_clean(
-        owner="JonEcho", repo="tests", number=42, head_sha=CURRENT_HEAD_SHA
+        owner="octocat", repo="tests", number=42, head_sha=CURRENT_HEAD_SHA
     )
     assert passed is True
     assert "clean bugteam audit" in detail
@@ -157,7 +157,7 @@ def should_fail_when_dirty_bugteam_review_present_on_current_head(
         check_convergence, "_gh_api_paginated", _make_stub_gh_paginated(reviews_payload)
     )
     passed, detail = check_convergence._check_bugteam_clean(
-        owner="JonEcho", repo="tests", number=42, head_sha=CURRENT_HEAD_SHA
+        owner="octocat", repo="tests", number=42, head_sha=CURRENT_HEAD_SHA
     )
     assert passed is False
     assert "dirty bugteam audit" in detail
@@ -185,7 +185,7 @@ def should_fail_when_no_bugteam_review_present_on_current_head(
         check_convergence, "_gh_api_paginated", _make_stub_gh_paginated(reviews_payload)
     )
     passed, detail = check_convergence._check_bugteam_clean(
-        owner="JonEcho", repo="tests", number=42, head_sha=CURRENT_HEAD_SHA
+        owner="octocat", repo="tests", number=42, head_sha=CURRENT_HEAD_SHA
     )
     assert passed is False
     assert "no bugteam review found" in detail
@@ -204,7 +204,7 @@ def should_fail_with_shape_detail_when_gh_returns_non_list_payload(
         check_convergence, "_gh_api_paginated", stub_gh_api_paginated_returning_object
     )
     passed, detail = check_convergence._check_bugteam_clean(
-        owner="JonEcho", repo="tests", number=42, head_sha=CURRENT_HEAD_SHA
+        owner="octocat", repo="tests", number=42, head_sha=CURRENT_HEAD_SHA
     )
     assert passed is False
     assert "unexpected gh api response shape" in detail

@@ -123,12 +123,12 @@ Use [reference/offense-taxonomy.md](reference/offense-taxonomy.md). Assign prior
 |------|------|
 | Theme DB status flip | `shared_utils/theme_db/status_promotion.py` |
 | Account folder ↔ ThemeAccount | `shared_utils/theme_persistence/account_adapter.py` |
-| STP basename parsing | `shared_utils/samsung_utils/stp_filenames.py` |
+| STP basename parsing | `shared_utils/vendor_utils/stp_filenames.py` |
 | Drive backup upload | `shared_utils/files/drive_production_backup.py` |
 | Timestamp scratch dirs | `shared_utils/files/timestamp_directory_retention.py` |
 | Foreground extraction | `shared_utils/theme_assets/background_removal.py` |
 | Cert fix / promote actions | `shared_utils/theme_assets/cert_closeout/` |
-| Fixed-STP promotion sweep | `shared_utils/samsung_utils/promote_fixed_stp_sweep.py` |
+| Fixed-STP promotion sweep | `shared_utils/vendor_utils/promote_fixed_stp_sweep.py` |
 | Cert queue orchestration only | `cert_fix_queue/pipeline/` (`queue_run`) and `run_cli` |
 
 See also `.claude/rules/reuse-existing-tooling.md` before adding helpers.

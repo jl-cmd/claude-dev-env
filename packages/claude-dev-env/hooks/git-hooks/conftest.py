@@ -28,3 +28,19 @@ for each_module_name in list(sys.modules):
     ):
         del sys.modules[each_module_name]
 importlib.invalidate_caches()
+
+
+import pytest
+
+from git_hooks_constants.verification_notice_constants import (
+    TARGET_REPOSITORY_ENVIRONMENT_VARIABLE,
+)
+
+EXAMPLE_TARGET_REPOSITORY = "example-owner/example-repo"
+
+
+@pytest.fixture(autouse=True)
+def configured_target_repository(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Point the verification notice at the example repository for each test."""
+    monkeypatch.setenv(TARGET_REPOSITORY_ENVIRONMENT_VARIABLE, EXAMPLE_TARGET_REPOSITORY)
+    return EXAMPLE_TARGET_REPOSITORY

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -28,6 +29,8 @@ from dev_env_scripts_constants.private_term_constants import (
     COMMIT_MESSAGE_PART,
     COMMIT_RECORD_SEPARATOR,
     FINDING_LINE_TEMPLATE,
+    GITHUB_NOREPLY_ADDRESS_PATTERN,
+    MASKED_ADDRESS,
     PRIVATE_TERM_MESSAGE_TEMPLATE,
     PRIVATE_TERM_TEXT_ENCODING,
     SHORT_SHA_LENGTH,
@@ -76,7 +79,7 @@ def _commit_findings(record: str) -> list[str]:
     return [
         *_findings_for(
             COMMIT_LABEL_TEMPLATE.format(short_sha=short_sha, part=COMMIT_IDENTITY_PART),
-            identity,
+            re.sub(GITHUB_NOREPLY_ADDRESS_PATTERN, MASKED_ADDRESS, identity, flags=re.IGNORECASE),
         ),
         *_findings_for(
             COMMIT_LABEL_TEMPLATE.format(short_sha=short_sha, part=COMMIT_MESSAGE_PART),
@@ -94,7 +97,8 @@ def scan_commits(repository_root: Path, commit_range: str) -> list[str]:
 
     Returns:
         One finding per commit identity or message line that names a private
-        organization.
+        organization. An identity address ending in users.noreply.github.com
+        is left out of the scan, since GitHub builds it from the account handle.
     """
     log_text = subprocess.run(
         ["git", "-C", str(repository_root), "log", "--reverse", COMMIT_LOG_FORMAT, commit_range],

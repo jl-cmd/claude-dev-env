@@ -236,9 +236,9 @@ def should_count_the_pull_request_author_as_the_driving_agent() -> None:
 
 
 def should_add_each_login_named_on_the_command_line() -> None:
-    all_logins = model.driver_logins({"user": {"login": "claude[bot]"}}, ["JonEcho"])
+    all_logins = model.driver_logins({"user": {"login": "claude[bot]"}}, ["octocat"])
 
-    assert all_logins == frozenset({"claude[bot]", "JonEcho"})
+    assert all_logins == frozenset({"claude[bot]", "octocat"})
 
 
 def should_read_the_head_commit_from_the_pull_request() -> None:

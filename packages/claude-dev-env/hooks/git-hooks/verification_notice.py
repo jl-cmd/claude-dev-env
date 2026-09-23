@@ -35,7 +35,6 @@ from git_hooks_constants.verification_notice_constants import (
     PYTHON_COMMAND,
     REPORT_FILE_NAME,
     SCOPED_VERIFICATION_SCRIPT_PATH,
-    TARGET_REPOSITORY_REMOTE,
     UNKNOWN_SHA,
 )
 
@@ -49,6 +48,7 @@ from verification_notice_context import (
     VerificationNoticeContext,
     _load_notice_context,
     _run_git_query,
+    is_target_repository,
 )
 from verification_start import load_runner_configuration, start_automatic_advisory
 from verification_notice_state import (
@@ -71,7 +71,7 @@ def build_verification_notice(context: VerificationNoticeContext) -> str:
     Returns:
         The formatted advisory text, or an empty string for another repository.
     """
-    if context.repository_remote != TARGET_REPOSITORY_REMOTE:
+    if not is_target_repository(context.repository_remote):
         return ""
     current_head = context.current_head or UNKNOWN_SHA
     state, verified_head = _evaluate_context(context, _run_git_query)

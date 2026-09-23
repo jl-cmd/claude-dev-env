@@ -47,7 +47,7 @@ class ClosedPullRequestGitHub(AdvisoryGitHub):
 
 def _build_registration(tmp_path: Path) -> AdvisoryRegistration:
     return AdvisoryRegistration(
-        RepositorySettings("JonEcho/python-automation", "unused"),
+        RepositorySettings("example-owner/example-repo", "unused"),
         3082,
         tmp_path / "checkout",
         PurePosixPath("manifest.json"),

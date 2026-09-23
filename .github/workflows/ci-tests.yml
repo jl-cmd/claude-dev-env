@@ -169,8 +169,8 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/pytest-basetemp-root"
 
-      # Collect-count floor (mirrors the pattern in
-      # .github/workflows/standalone-packages-tests.yml in python-automation):
+      # Collect-count floor (mirrors the collect-count pattern a consuming
+      # repository uses in its own standalone package workflow):
       # renaming or moving a root-suite test file outside python_files =
       # test_*.py collects zero from that path while the rest of tests/ still
       # passes, so the step would otherwise exit 0 looking identical to

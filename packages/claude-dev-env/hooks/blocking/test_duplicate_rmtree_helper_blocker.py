@@ -172,7 +172,7 @@ def test_path_exempts_test_file_suffix() -> None:
 
 def test_path_does_not_exempt_production_module() -> None:
     assert not path_is_exempt(
-        "shared_utils/samsung_utils/cert_failure_processor/failure_categorizer.py"
+        "shared_utils/vendor_utils/cert_failure_processor/failure_categorizer.py"
     )
 
 
@@ -241,7 +241,7 @@ def test_main_blocks_trio_copy_introduced_by_second_multi_edit() -> None:
         {
             "tool_name": "MultiEdit",
             "tool_input": {
-                "file_path": "shared_utils/samsung_utils/cert_failure_processor/parser.py",
+                "file_path": "shared_utils/vendor_utils/cert_failure_processor/parser.py",
                 "edits": [
                     {"old_string": "a = 1", "new_string": "a = 11"},
                     {"old_string": "b = 2", "new_string": COPIED_TRIO},
@@ -261,7 +261,7 @@ def test_main_allows_clean_multi_edit() -> None:
         {
             "tool_name": "MultiEdit",
             "tool_input": {
-                "file_path": "shared_utils/samsung_utils/cert_failure_processor/parser.py",
+                "file_path": "shared_utils/vendor_utils/cert_failure_processor/parser.py",
                 "edits": [
                     {"old_string": "a = 1", "new_string": "a = 11"},
                     {"old_string": "b = 2", "new_string": "b = 22"},
@@ -301,7 +301,7 @@ def test_main_blocks_local_trio_copy_in_production_module() -> None:
             "tool_name": "Write",
             "tool_input": {
                 "file_path": (
-                    "shared_utils/samsung_utils/cert_failure_processor/failure_categorizer.py"
+                    "shared_utils/vendor_utils/cert_failure_processor/failure_categorizer.py"
                 ),
                 "content": COPIED_TRIO,
             },
@@ -319,7 +319,7 @@ def test_main_allows_import_of_shared_helper() -> None:
         {
             "tool_name": "Write",
             "tool_input": {
-                "file_path": "shared_utils/samsung_utils/cleanup.py",
+                "file_path": "shared_utils/vendor_utils/cleanup.py",
                 "content": (
                     "from shared_utils.web_automation.utils.windows_filesystem import "
                     "force_rmtree\n\nforce_rmtree(path)\n"

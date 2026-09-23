@@ -26,7 +26,7 @@ so there is nothing to converge. Report that and stop.
 
 Given a non-empty list of deferred PRs `{ owner, repo, prNumber, copilotDisabled, bugbotDisabled }`
 (a generation may span more than one repository — a hardening PR lands in whichever repo owns
-the surface that blocks the deferred class, so `JonEcho/llm-settings` for hooks
+the surface that blocks the deferred class, so `octocat/llm-settings` for hooks
 and `jl-cmd/claude-dev-env` for rules and skills both appear):
 
 1. **Check out each deferred PR.** Run the
