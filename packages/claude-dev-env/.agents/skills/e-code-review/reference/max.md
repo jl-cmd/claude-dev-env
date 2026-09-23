@@ -1,6 +1,6 @@
-`xhigh effort → 10 inline angles → dedup (no verify) → sweep → ≤15 findings`
+`max effort → 5+5 angles × 8 candidates → 1-vote verify → sweep → ≤15 findings`
 
-You are reviewing for **recall** at extra-high effort: catch every bug. At
+You are reviewing for **recall** at maximum effort: catch every bug. At
 this level, surface a finding even when it may be a false positive. A
 missed bug ships. Err on the side of surfacing.
 
@@ -15,10 +15,10 @@ review that target instead. Treat this diff as the review scope.
 
 ## Phase 1 — Find candidates (5 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, up to 8 each)
 
-Run **10 independent finder angles** in sequence yourself, in THIS context — do NOT spawn subagents for them. Each
+Run **10 independent finder angles** via the Agent tool. Each
 surfaces **up to 8 candidate findings**. Do NOT let one angle's conclusions
 suppress another's — if two angles flag the same line for different reasons,
-record both.
+record both. If the Agent tool is not available in your current tool set, do not error — perform each angle (and each verification) yourself, sequentially, in this context.
 
 ### Angle A — line-by-line diff scan
 
@@ -109,13 +109,28 @@ cost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule
 is broken) in the place a crash would go. Correctness bugs always outrank cleanup,
 altitude, and conventions findings when the output cap forces a cut.
 
-## Phase 2 — Dedup only (no verify)
+## Phase 2 — Verify (1-vote, 3-state)
 
-Pool all candidates. Dedup near-duplicates only (same defect, same location, same reason → keep one). Do NOT run verifiers; do NOT re-judge. Sort by severity. Do NOT drop on uncertainty.
+Dedup candidates that point at the same line/mechanism, keeping the one with
+the most concrete failure scenario. For each remaining candidate, run **one
+verifier** via the Agent tool: give it the diff, the relevant
+file(s), and the candidate, and have it return exactly one of:
+
+- **CONFIRMED** — can name the inputs/state that trigger it and the wrong
+  output or crash. Quote the line.
+- **PLAUSIBLE** — mechanism is present, trigger is uncertain (timing, env,
+  config). State what would confirm it.
+- **REFUTED** — factually wrong (code doesn't say that) or guarded elsewhere.
+  Quote the line that proves it.
+
+Keep candidates where the vote is CONFIRMED or PLAUSIBLE.
+
+This is recall mode — a single non-REFUTED vote carries the finding. Do NOT
+drop on uncertainty.
 
 ## Phase 3 — Sweep for gaps
 
-Take one more pass (same context — no subagent) as a fresh reviewer who has the deduplicated list. Re-read
+Run **one more finder** as a fresh reviewer who has the verified list. Re-read
 the diff and enclosing functions looking ONLY for defects not already listed.
 Do not re-derive or re-confirm anything already there — the job is gaps. Focus
 on what the first pass tends to miss: moved/extracted code that dropped a guard
@@ -124,11 +139,9 @@ non-determinism, lock-scope shrink, predicate methods with side effects);
 setup/teardown asymmetry in tests; config defaults flipped.
 
 Surface **up to 8 additional candidates**, each naming a defect not already on
-the list. If nothing new, return nothing from this phase — do not pad.
+the list. If nothing new, return an empty sweep — do not pad.
 
 ## Output
-
-Target **at least 7 findings**. If fewer findings exist, emit what you have — do not invent to hit the floor.
 
 Call the ReportFindings tool once to report this review's results
 with `{level, findings}`. `findings` is at most 15 entries ranked
@@ -139,7 +152,7 @@ that produced it (`correctness`, `simplification`, `efficiency`,
 `reuse`, `altitude`, `conventions`, or a more specific slug like
 `test-coverage` when one fits better) — plus `verdict` when a verify pass
 produced one. If more than 15 survive, keep the 15 most severe. If
-nothing survives, call it with an empty array. Do not also print
+nothing survives verification, call it with an empty array. Do not also print
 the findings as text, and do not create or publish an artifact of the review -
 the tool call is the report.
 

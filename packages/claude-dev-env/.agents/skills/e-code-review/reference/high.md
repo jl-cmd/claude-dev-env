@@ -1,8 +1,8 @@
-`xhigh effort → 10 inline angles → dedup (no verify) → sweep → ≤15 findings`
+`high effort → 8 inline angles → dedup (no verify) → ≤10 findings`
 
-You are reviewing for **recall** at extra-high effort: catch every bug. At
-this level, surface a finding even when it may be a false positive. A
-missed bug ships. Err on the side of surfacing.
+You are reviewing for **recall** at high effort: catch every bug a careful
+reviewer would catch in one sitting. At this level, surface a finding even when
+it may be a false positive. Err on the side of surfacing.
 
 ## Phase 0 — Gather the diff
 
@@ -13,12 +13,11 @@ include the working-tree changes in scope — the review often runs before the
 commit. If a PR number, branch name, or file path was passed as an argument,
 review that target instead. Treat this diff as the review scope.
 
-## Phase 1 — Find candidates (5 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, up to 8 each)
+## Phase 1 — Find candidates (3 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, up to 6 each)
 
-Run **10 independent finder angles** in sequence yourself, in THIS context — do NOT spawn subagents for them. Each
-surfaces **up to 8 candidate findings**. Do NOT let one angle's conclusions
-suppress another's — if two angles flag the same line for different reasons,
-record both.
+Run **8 independent finder angles** in sequence yourself, in THIS context — do NOT spawn subagents for them. Each
+surfaces **up to 6 candidate findings** with `file`, `line`, a one-line
+`summary`, and a concrete `failure_scenario`.
 
 ### Angle A — line-by-line diff scan
 
@@ -42,22 +41,6 @@ For each function the diff changes, find its callers (Grep for the symbol) and
 check whether the change breaks any call site: a new precondition, a changed
 return shape, a new exception, a timing/ordering dependency. Also check callees:
 does a parallel change in the same PR make a call unsafe?
-
-### Angle D — language-pitfall specialist
-
-Scan for the classic pitfalls of the diff's language/framework — for example:
-JS falsy-zero, `==` coercion, closure-captured loop var; Python mutable default
-args, late-binding closures; Go nil-map write, range-var capture; SQL injection;
-timezone/DST drift; float equality. Flag any instance the diff introduces.
-
-### Angle E — wrapper/proxy correctness
-
-When the PR adds or modifies a type that wraps another (cache, proxy, decorator,
-adapter): check that every method routes to the wrapped instance and not back
-through a registry/session/global — e.g. a caching provider holding a
-`delegate` field that resolves IDs via `session.get(...)` where it should call
-`delegate.get(...)` will re-enter the cache or recurse. Also check that the
-wrapper forwards all the methods the callers use.
 
 ### Reuse
 
@@ -109,36 +92,26 @@ cost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule
 is broken) in the place a crash would go. Correctness bugs always outrank cleanup,
 altitude, and conventions findings when the output cap forces a cut.
 
+Pass every candidate with a nameable failure scenario through — finders that
+silently drop half-believed candidates are the dominant cause of misses.
+
 ## Phase 2 — Dedup only (no verify)
 
-Pool all candidates. Dedup near-duplicates only (same defect, same location, same reason → keep one). Do NOT run verifiers; do NOT re-judge. Sort by severity. Do NOT drop on uncertainty.
-
-## Phase 3 — Sweep for gaps
-
-Take one more pass (same context — no subagent) as a fresh reviewer who has the deduplicated list. Re-read
-the diff and enclosing functions looking ONLY for defects not already listed.
-Do not re-derive or re-confirm anything already there — the job is gaps. Focus
-on what the first pass tends to miss: moved/extracted code that dropped a guard
-or anchor; second-tier footguns (dataclass default evaluated once, `hash()`
-non-determinism, lock-scope shrink, predicate methods with side effects);
-setup/teardown asymmetry in tests; config defaults flipped.
-
-Surface **up to 8 additional candidates**, each naming a defect not already on
-the list. If nothing new, return nothing from this phase — do not pad.
+Pool all candidates. Dedup near-duplicates only (same defect, same location, same reason → keep one). Do NOT run verifiers; do NOT re-judge. Sort by severity.
 
 ## Output
 
-Target **at least 7 findings**. If fewer findings exist, emit what you have — do not invent to hit the floor.
+Target **at least 5 findings**. If fewer findings exist, emit what you have — do not invent to hit the floor.
 
 Call the ReportFindings tool once to report this review's results
-with `{level, findings}`. `findings` is at most 15 entries ranked
+with `{level, findings}`. `findings` is at most 10 entries ranked
 most-severe first; each entry has `file`, `line`, `summary`,
 `short_summary` — the claim compressed to ≤60 characters, no rationale
 or consequence clause — `failure_scenario`, and `category` — a short kebab-case slug for the angle
 that produced it (`correctness`, `simplification`, `efficiency`,
 `reuse`, `altitude`, `conventions`, or a more specific slug like
 `test-coverage` when one fits better) — plus `verdict` when a verify pass
-produced one. If more than 15 survive, keep the 15 most severe. If
+produced one. If more than 10 survive, keep the 10 most severe. If
 nothing survives, call it with an empty array. Do not also print
 the findings as text, and do not create or publish an artifact of the review -
 the tool call is the report.
