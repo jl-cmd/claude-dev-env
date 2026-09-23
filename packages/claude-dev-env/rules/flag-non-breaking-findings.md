@@ -108,6 +108,13 @@ naming a file that does not exist, an env-var row naming a file that never
 reads the variable, a test outside the testpaths allowlist, and a tracked
 secret.
 
+`scripts/cde_lint.py` splits the policy-lint findings the same way.
+`SEVERITY_BY_CHECK_ID` in `scripts/policy_lint/config/check_catalog_constants.py`
+carries one row per smell, and a check id with no row reads as breaking. Three
+checks are smells there: `test-pairing` and the two paired-test coverage
+checks. The lint prints each as a warning, records it in the ledger, and exits
+zero when no error remains.
+
 ## Sibling rules
 
 | Rule | Role |

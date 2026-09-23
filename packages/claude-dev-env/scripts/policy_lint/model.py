@@ -341,11 +341,15 @@ class LintReport:
         """Return the process exit code for this report.
 
         Returns:
-            Zero for clean output, one for findings, or three for rule failure.
+            Zero for clean output or warnings only, one for an error finding,
+            or three for rule failure.
         """
         if self.failed_rules:
             return INCOMPLETE_EXIT_CODE
-        if self.diagnostics:
+        if any(
+            each_diagnostic.severity is Severity.ERROR
+            for each_diagnostic in self.diagnostics
+        ):
             return 1
         return 0
 
