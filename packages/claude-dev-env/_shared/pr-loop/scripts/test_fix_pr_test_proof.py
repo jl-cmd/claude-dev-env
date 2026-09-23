@@ -1,7 +1,7 @@
 """Behavioral tests for the fix pull request test-proof check.
 
-Every case drives a git repository under ``tmp_path`` and a pytest subprocess,
-the same shape the CI job runs.
+Every case drives a git repository under ``tmp_path`` and a pytest or
+``node --test`` subprocess, the same shape the CI job runs.
 """
 
 from pathlib import Path
@@ -27,6 +27,18 @@ PROOF_TEST_TEXT = (
 ALWAYS_PASSING_TEST_TEXT = (
     "def test_nothing_in_particular() -> None:\n    assert True\n"
 )
+BUGGY_NODE_PRODUCTION_TEXT = "export function add(left, right) {\n    return left - right;\n}\n"
+FIXED_NODE_PRODUCTION_TEXT = "export function add(left, right) {\n    return left + right;\n}\n"
+NODE_PROOF_TEST_TEXT = (
+    "import { test } from 'node:test';\n"
+    "import { strict as assert } from 'node:assert';\n"
+    "import { add } from './calc.mjs';\n\n"
+    "test('add sums both operands', () => {\n    assert.equal(add(1, 2), 3);\n});\n"
+)
+NODE_ALWAYS_PASSING_TEST_TEXT = (
+    "import { test } from 'node:test';\n\n"
+    "test('nothing in particular', () => {});\n"
+)
 
 
 def _commit_files(repository_root: Path, all_file_texts: dict[str, str]) -> None:
@@ -45,6 +57,12 @@ def _head_revision(repository_root: Path) -> str:
 def _repository_at_buggy_base(tmp_path: Path) -> tuple[Path, str]:
     repository_root = repository_with_root_pytest_config(tmp_path)
     _commit_files(repository_root, {"pkg/calc.py": BUGGY_PRODUCTION_TEXT})
+    return repository_root, _head_revision(repository_root)
+
+
+def _repository_at_buggy_node_base(tmp_path: Path) -> tuple[Path, str]:
+    repository_root = repository_with_root_pytest_config(tmp_path)
+    _commit_files(repository_root, {"bin/calc.mjs": BUGGY_NODE_PRODUCTION_TEXT})
     return repository_root, _head_revision(repository_root)
 
 
@@ -82,7 +100,7 @@ def test_a_fix_with_no_changed_test_fails(
     _commit_files(repository_root, {"pkg/calc.py": FIXED_PRODUCTION_TEXT})
 
     assert _run_check(repository_root, "fix: sum operands", base_revision) == 1
-    assert "no Python test" in capsys.readouterr().err
+    assert "no Python or Node test" in capsys.readouterr().err
 
 
 def test_a_fix_whose_test_fails_on_base_and_passes_on_head_passes(
@@ -123,4 +141,46 @@ def test_a_fix_whose_changed_test_fails_on_head_fails(
     )
 
     assert _run_check(repository_root, "fix: sum operands", base_revision) == 1
+    assert "fails on the head" in capsys.readouterr().err
+
+
+def test_a_node_fix_whose_test_fails_on_base_and_passes_on_head_passes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repository_root, base_revision = _repository_at_buggy_node_base(tmp_path)
+    _commit_files(
+        repository_root,
+        {"bin/calc.mjs": FIXED_NODE_PRODUCTION_TEXT, "bin/calc.test.mjs": NODE_PROOF_TEST_TEXT},
+    )
+
+    assert _run_check(repository_root, "fix(bin): sum operands", base_revision) == 0
+    assert "fail on the base and pass on the head" in capsys.readouterr().out
+
+
+def test_a_node_fix_whose_changed_test_also_passes_on_base_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repository_root, base_revision = _repository_at_buggy_node_base(tmp_path)
+    _commit_files(
+        repository_root,
+        {
+            "bin/calc.mjs": FIXED_NODE_PRODUCTION_TEXT,
+            "bin/calc.test.mjs": NODE_ALWAYS_PASSING_TEST_TEXT,
+        },
+    )
+
+    assert _run_check(repository_root, "fix(bin): sum operands", base_revision) == 1
+    assert "passes on the base" in capsys.readouterr().err
+
+
+def test_a_node_fix_whose_changed_test_fails_on_head_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repository_root, base_revision = _repository_at_buggy_node_base(tmp_path)
+    _commit_files(
+        repository_root,
+        {"bin/calc.test.mjs": NODE_PROOF_TEST_TEXT, "bin/extra.mjs": "export const VALUE = 1;\n"},
+    )
+
+    assert _run_check(repository_root, "fix(bin): sum operands", base_revision) == 1
     assert "fails on the head" in capsys.readouterr().err

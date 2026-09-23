@@ -15,6 +15,10 @@ ALL_PRODUCTION_CODE_SUFFIXES: tuple[str, ...] = (
     ".ps1",
     ".sh",
 )
+ALL_NODE_TEST_SUFFIXES: tuple[str, ...] = (".test.mjs", ".test.js", ".test.cjs")
+ALL_NODE_TEST_COMMAND: tuple[str, ...] = ("node", "--test")
+NODE_BASE_WORKTREE_TEMP_DIRECTORY_PREFIX: str = "fix_pr_test_proof_node_base_"
+NODE_BASE_WORKTREE_DIRECTORY_NAME: str = "tree"
 CI_CONFIG_DIRECTORY_NAME: str = ".github"
 PASSED_EXIT_CODE: int = 0
 FAILED_EXIT_CODE: int = 1
@@ -24,7 +28,7 @@ NO_PRODUCTION_CHANGE_MESSAGE: str = (
     "fix_pr_test_proof: the fix changes no production code; nothing to prove."
 )
 NO_CHANGED_TEST_MESSAGE: str = (
-    "fix_pr_test_proof: this fix changes production code and no Python test. "
+    "fix_pr_test_proof: this fix changes production code and no Python or Node test. "
     "Add a test that fails on the base and passes on the head."
 )
 WORKTREE_FAILED_MESSAGE: str = (

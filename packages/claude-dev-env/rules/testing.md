@@ -29,4 +29,4 @@ Red, green, refactor is the default loop for a bug fix and for new behavior. The
 
 ## A Fix Carries Its Proof Test
 
-The `Fix test proof` job in `.github/workflows/pr-check.yml` runs `_shared/pr-loop/scripts/fix_pr_test_proof.py` on every pull request whose title starts with `fix`. A fix that changes production code must change at least one Python test that fails on the base and passes on the head. A fix that changes only docs or CI config passes. Version one reads Python tests only, so a fix proven by a JavaScript or PowerShell test needs a Python test beside it.
+The `Fix test proof` job in `.github/workflows/pr-check.yml` runs `_shared/pr-loop/scripts/fix_pr_test_proof.py` on every pull request whose title starts with `fix`. A fix that changes production code must change at least one Python or Node test that fails on the base and passes on the head. Node tests are files ending in `.test.mjs`, `.test.js`, or `.test.cjs`, and the job runs them with `node --test`. A fix that changes only docs or CI config passes. A fix proven by a PowerShell test needs a Python or Node test beside it.
