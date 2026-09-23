@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""PreToolUse, SessionStart and UserPromptSubmit hook. Keeps poteto-mode loaded in every context.
+"""Hook that keeps poteto-mode loaded in every session, subagent and workflow helper.
 
 ::
 
     Agent or Codex spawn_agent, skill not named -> prompt opens with "invoke pstack:poteto-mode"
+    Workflow script helper starts               -> "invoke pstack:poteto-mode now"
     context compacted mid-run                    -> "invoke pstack:poteto-mode again"
     user turn, skill not loaded since compacting -> "invoke pstack:poteto-mode now"
     user turn, skill already loaded              -> nothing
@@ -36,10 +37,12 @@ from hooks_constants.skill_loaded_reminder_constants import (
     SESSION_START_EVENT_NAME,
     SKILL_TOOL_NAME,
     SLASH_COMMAND_MARKER,
+    SUBAGENT_START_EVENT_NAME,
     ALL_SPAWN_PROMPT_FIELDS_AND_PREFIXES_BY_TOOL_NAME,
     TOOL_USE_BLOCK_TYPE,
     USER_ENTRY_TYPE,
     USER_PROMPT_SUBMIT_EVENT_NAME,
+    WORKFLOW_SUBAGENT_TYPE,
 )
 from hooks_constants.pre_tool_use_allow_output import write_pre_tool_use_allow_to_stdout
 from hooks_constants.pre_tool_use_stdin import read_hook_input_dictionary_from_stdin
@@ -155,6 +158,7 @@ def reminder_for(all_hook_fields: dict[str, object]) -> str | None:
     ::
 
         SessionStart, source compact                     -> COMPACTION_REMINDER
+        SubagentStart, workflow-subagent                 -> NOT_LOADED_REMINDER
         UserPromptSubmit, transcript lacks the skill     -> NOT_LOADED_REMINDER
         UserPromptSubmit, transcript loaded the skill    -> None
 
@@ -164,6 +168,9 @@ def reminder_for(all_hook_fields: dict[str, object]) -> str | None:
     event_name = all_hook_fields.get("hook_event_name")
     if event_name == SESSION_START_EVENT_NAME:
         return COMPACTION_REMINDER if all_hook_fields.get("source") == COMPACTION_SOURCE else None
+    if event_name == SUBAGENT_START_EVENT_NAME:
+        is_workflow_helper = all_hook_fields.get("agent_type") == WORKFLOW_SUBAGENT_TYPE
+        return NOT_LOADED_REMINDER if is_workflow_helper else None
     if event_name != USER_PROMPT_SUBMIT_EVENT_NAME:
         return None
     if _is_loaded_in_transcript(all_hook_fields.get("transcript_path")):

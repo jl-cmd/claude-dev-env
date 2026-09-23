@@ -234,5 +234,20 @@ class TestReminderFor:
     def test_a_resumed_session_keeps_its_context_and_prints_nothing(self) -> None:
         assert _run_main({"hook_event_name": "SessionStart", "source": "resume"}) == ""
 
+    def test_a_workflow_helper_starting_is_told_to_invoke_the_skill(self) -> None:
+        emitted = json.loads(
+            _run_main({"hook_event_name": "SubagentStart", "agent_type": "workflow-subagent"})
+        )
+        hook_output = emitted["hookSpecificOutput"]
+        assert hook_output["hookEventName"] == "SubagentStart"
+        assert hook_output["additionalContext"] == NOT_LOADED_REMINDER
+
+    def test_an_agent_tool_helper_starting_prints_nothing_since_its_prompt_carries_the_line(
+        self,
+    ) -> None:
+        assert (
+            _run_main({"hook_event_name": "SubagentStart", "agent_type": "general-purpose"}) == ""
+        )
+
     def test_a_payload_that_is_not_json_prints_nothing(self) -> None:
         assert _run_main("not json") == ""

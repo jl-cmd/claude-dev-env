@@ -122,6 +122,18 @@
         ]
       }
     ],
+    "SubagentStart": [
+      {
+        "matcher": "workflow-subagent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/skill_loaded_reminder.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "matcher": "",
