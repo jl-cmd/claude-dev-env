@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -232,7 +232,7 @@ function runInstaller(paths = buildVerificationPaths()) {
 }
 
 function printUsage() {
-    console.error('Usage: node .cursor/skills/verify-claude-dev-env/scripts/verify-installer.mjs doctor|run');
+    console.error('Usage: node .agents/skills/verify/scripts/verify-installer.mjs doctor|run');
 }
 
 function runMain(argumentsList = process.argv.slice(2)) {
@@ -262,7 +262,7 @@ export {
 };
 
 const isEntryPoint = process.argv[1]
-    && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+    && realpathSync(resolve(process.argv[1])) === fileURLToPath(import.meta.url);
 if (isEntryPoint) {
     process.exitCode = runMain(process.argv.slice(2));
 }

@@ -285,6 +285,41 @@ def test_base_source_should_compare_merge_base_and_read_worktree_bytes(
     assert selected_document.origin == ContentOrigin.REVISION_DIFF
 
 
+def test_base_file_that_was_a_directory_at_base_should_have_no_prior_text(
+    tmp_path: Path,
+) -> None:
+    repository_root = _initialize_repository(tmp_path)
+    _commit_text(repository_root, "skills/verify/notes.md", "base-text\n")
+    _run_git(repository_root, "checkout", "--quiet", "-b", "feature")
+    _run_git(repository_root, "rm", "--quiet", "-r", "--", "skills")
+    _commit_text(repository_root, "skills", "../shared/skills\n")
+
+    document_set = select_documents(LintRequest.base(repository_root, "main"))
+    selected_document = _document_for(document_set, "skills")
+
+    assert selected_document.text == "../shared/skills\n"
+    assert selected_document.prior_text is None
+
+
+def test_base_directory_pointer_should_be_left_out_of_the_selection(
+    tmp_path: Path,
+) -> None:
+    repository_root = _initialize_repository(tmp_path)
+    _commit_text(repository_root, "shared/skills/verify/notes.md", "base-text\n")
+    _run_git(repository_root, "checkout", "--quiet", "-b", "feature")
+    try:
+        os.symlink("shared/skills", repository_root / "skills", target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"this host cannot create a directory pointer: {error}")
+    _run_git(repository_root, "add", "--", "skills")
+    _run_git(repository_root, "commit", "--quiet", "-m", "selection pointer fixture")
+
+    document_set = select_documents(LintRequest.base(repository_root, "main"))
+
+    assert "skills" not in _all_selected_paths(document_set)
+    assert "shared/skills" not in _all_selected_paths(document_set)
+
+
 def test_base_selection_records_merge_base_revision_and_staged_does_not(
     tmp_path: Path,
 ) -> None:

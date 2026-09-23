@@ -186,10 +186,10 @@ def test_cursor_verifier_constants_require_the_changed_driver_suite(
     tmp_path: Path,
 ) -> None:
     constants_path = PurePosixPath(
-        ".cursor/skills/verify-claude-dev-env/scripts/verify_installer_constants/constants.mjs"
+        ".agents/skills/verify/scripts/verify_installer_constants/constants.mjs"
     )
     suite_path = PurePosixPath(
-        ".cursor/skills/verify-claude-dev-env/scripts/verify-installer.test.mjs"
+        ".agents/skills/verify/scripts/verify-installer.test.mjs"
     )
     constants_change = _body_change_at(constants_path)
     assert _diagnostic_paths(tmp_path, constants_change) == (constants_path,)

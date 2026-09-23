@@ -18,5 +18,5 @@ test('the driver path segments should compose the location the skill owns', () =
         DRIVER_FILE_NAME,
     ].join('/');
 
-    assert.equal(composedPath, '.cursor/skills/verify-claude-dev-env/scripts/driver.mjs');
+    assert.equal(composedPath, '.agents/skills/verify/scripts/driver.mjs');
 });
