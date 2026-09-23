@@ -11,6 +11,7 @@ import {
     readdirSync,
     existsSync,
     copyFileSync,
+    lstatSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -3097,6 +3098,25 @@ test('a repeat install preserves Codex pstack configuration', t => {
         withSkillLoadBlock('Custom Codex guidance\n'),
     );
     assert.equal(readFileSync(join(codexHome, 'pstack-models.md'), 'utf8'), 'session hook: off\n');
+});
+
+test('a Codex guidance link to the retired Claude copy becomes a file Codex can read', t => {
+    const sandbox = pstackPluginSandbox(t);
+    const codexHome = join(sandbox.homeDirectory, '.codex');
+    const codexAgentsPath = join(codexHome, 'AGENTS.md');
+    mkdirSync(codexHome, { recursive: true });
+    symlinkSync(join(sandbox.homeDirectory, '.claude', 'AGENTS.md'), codexAgentsPath);
+
+    runPstackInstaller(sandbox.homeDirectory, [], sandbox.environment);
+
+    const packageGuidance = readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), '..', 'AGENTS.md'),
+        'utf8',
+    );
+    assert.equal(lstatSync(codexAgentsPath).isSymbolicLink(), false);
+    const codexGuidance = readFileSync(codexAgentsPath, 'utf8');
+    assert.ok(codexGuidance.startsWith(`${SKILL_LOAD_BLOCK_START}\n${SKILL_LOAD_INSTRUCTION}\n`));
+    assert.ok(codexGuidance.includes(packageGuidance));
 });
 
 test('an absent host command is reported and leaves the other host installed', t => {
