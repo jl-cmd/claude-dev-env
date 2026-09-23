@@ -307,3 +307,37 @@ def test_run_staged_test_files_passes_when_config_less_packages_share_a_module_n
     _stage_package_owning_a_bare_config(repository_root, "beta_package", "beta")
 
     assert staged_test_regression.run_staged_test_files(repository_root) == 0
+
+
+def test_a_revision_run_executes_an_overlaid_test_against_the_older_code(
+    tmp_path: Path,
+) -> None:
+    repository_root = repository_with_root_pytest_config(tmp_path)
+    write_and_stage(repository_root, "pkg_a/calc.py", "VALUE = 'old'\n")
+    run_git(repository_root, "commit", "--no-verify", "-m", "old value")
+    base_revision = (
+        run_git(repository_root, "rev-parse", "HEAD").stdout.decode().strip()
+    )
+    write_and_stage(repository_root, "pkg_a/calc.py", "VALUE = 'new'\n")
+    test_path = write_and_stage(
+        repository_root,
+        "pkg_a/test_calc.py",
+        "from calc import VALUE\n\n\ndef test_value_is_new() -> None:\n"
+        "    assert VALUE == 'new'\n",
+    )
+    run_git(repository_root, "commit", "--no-verify", "-m", "new value")
+
+    working_tree_outcomes, revision_outcomes = (
+        staged_test_regression.working_tree_and_revision_outcomes(
+            {repository_root.resolve(): [test_path]},
+            repository_root,
+            base_revision,
+            [test_path],
+        )
+    )
+
+    assert [each.exit_code for each in working_tree_outcomes.values()] == [0]
+    assert revision_outcomes is not None
+    assert [
+        len(each.failing_identities) for each in revision_outcomes.values()
+    ] == [1]

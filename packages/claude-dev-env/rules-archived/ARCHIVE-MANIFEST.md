@@ -16,6 +16,15 @@ restore is one `git mv` back, plus the referrers named in its row.
 | `vault-context.md` | Names one person's Obsidian vault layout, so it is preference by definition. Archiving it costs a capability rather than removing noise: it is how an agent learns to search prior decisions before starting work. Restore it if agents stop finding earlier decisions. | `git mv packages/claude-dev-env/rules-archived/vault-context.md packages/claude-dev-env/rules/` and restore its assertion in `bin/install.test.mjs`. |
 | `file-global-constants.md` | "A module-level constant used by one caller belongs in that caller's scope" sets a reference-count threshold no style guide states. It was the one archived rule with a live check behind it, so `check_file_global_constants_use_count` and its tests went with the document rather than leaving code enforcing an unwritten rule. | `git mv packages/claude-dev-env/rules-archived/file-global-constants.md packages/claude-dev-env/rules/` and restore the check in `hooks/blocking/code_rules_constants_config.py`, its call in `code_rules_enforcer.py`, `hooks/blocking/test_code_rules_enforcer_file_global_constants.py`, and the rows in `clean-coder.md`, `docs/CODE_RULES.md` and `bin/install.agents-home.test.mjs`. |
 
+## Archived hooks
+
+Hook code archived under `hooks-archived/`, a sibling of `hooks/`. The installer copies `hooks/` alone, so nothing here ships, and the root `pytest.ini` skips the directory.
+
+| File | Why it moved | Restore |
+|---|---|---|
+| `hooks-archived/blocking/tdd_enforcer.py` with `test_tdd_enforcer.py`, `test_tdd_enforcer_restore.py` and `test_tdd_enforcer_scratchpad.py` | The test-first gate had no registration in `hooks.json` and no host in the PreToolUse dispatcher. The TDD skill (`pstack:tdd`) carries test order as a procedure. `bin/install.mjs` lists the path in `RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS`, so an install drops an old registration. | `git mv packages/claude-dev-env/hooks-archived/blocking/tdd_enforcer.py packages/claude-dev-env/hooks/blocking/` and the same for each test file. Remove the path from `RETIRED_HOOK_REGISTRATION_RELATIVE_PATHS`, restore `USER_FACING_TDD_NOTICE` in `hooks/hooks_constants/messages.py`, and restore the standalone TDD cases in `test_pre_tool_use_dispatcher.py` and `test_code_rules_enforcer_ephemeral.py`. |
+| `hooks-archived/blocking/tdd_enforcer_parts/` modules `candidate_paths`, `content_hash_store`, `decisions`, `freshness`, `git_tracking`, `path_classification`, `config/`, and their tests | Only `tdd_enforcer.py` imported them. `content_analysis.py` stays in `hooks/blocking/tdd_enforcer_parts/` because `scripts/policy_lint/adapter_pairing.py` loads it. | `git mv` each file back to the same path under `packages/claude-dev-env/hooks/blocking/tdd_enforcer_parts/`. |
+
 ## Never archived
 
 One file is exempt from this procedure. A prune pass, a consolidation, or a

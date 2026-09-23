@@ -118,3 +118,19 @@ def test_retirement_and_restoration_preserve_live_change_metadata(tmp_path: Path
     assert tuple(document.path for document in runtime_set.documents) == (restored_path,)
     assert runtime_set.deleted_paths == (deleted_path, retired_path)
     assert runtime_set.renamed_paths == ((restored_source, restored_path),)
+
+
+def test_archived_hook_moves_leave_the_automatic_checks(tmp_path: Path) -> None:
+    live_hook_path = PurePosixPath("packages/tool/hooks/blocking/retired_gate.py")
+    archived_hook_path = PurePosixPath("packages/tool/hooks-archived/blocking/retired_gate.py")
+    document_set = DocumentSet(
+        (Document.from_text(archived_hook_path, "archived"),),
+        SelectionKind.BASE,
+        tmp_path,
+        (),
+        ((live_hook_path, archived_hook_path),),
+    )
+    runtime_set = _runtime_document_set(document_set)
+    assert runtime_set.documents == ()
+    assert runtime_set.deleted_paths == (live_hook_path,)
+    assert runtime_set.renamed_paths == ()

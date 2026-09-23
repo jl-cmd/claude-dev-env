@@ -14,7 +14,6 @@ from test_native_hook_support import run_git
 
 ALL_RETIRED_HOOK_PATHS = (
     "blocking/code_rules_enforcer.py",
-    "blocking/tdd_enforcer.py",
     "blocking/windows_rmtree_blocker.py",
     "blocking/state_description_blocker.py",
     "blocking/subprocess_budget_completeness.py",
@@ -26,6 +25,7 @@ ALL_RETIRED_HOOK_PATHS = (
     "blocking/plain_language_blocker.py",
     "lifecycle/config_change_guard.py",
 )
+ALL_ARCHIVED_HOOK_PATHS = ("blocking/tdd_enforcer.py",)
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 ALL_RULE_FIXTURES = (
     ("code-rules", "src/worker.py", "from typing import Any\n\ndef worker() -> Any:\n    return None\n"),
@@ -80,7 +80,7 @@ def _legacy_settings_bytes(managed_root: Path, foreign_command: str) -> bytes:
                     "type": "command",
                     "command": f"python {managed_root.as_posix()}/hooks/{each_path}",
                     "timeout": 10,
-                } for each_path in ALL_RETIRED_HOOK_PATHS),
+                } for each_path in (*ALL_RETIRED_HOOK_PATHS, *ALL_ARCHIVED_HOOK_PATHS)),
             ],
         }]},
     }
@@ -135,6 +135,8 @@ def _assert_retired_registrations(managed_root: Path, settings_bytes: bytes, for
         source = PACKAGE_ROOT / "hooks" / each_relative_path
         installed = managed_root / "hooks" / each_relative_path
         assert hashlib.sha256(installed.read_bytes()).digest() == hashlib.sha256(source.read_bytes()).digest()
+    for each_relative_path in ALL_ARCHIVED_HOOK_PATHS:
+        assert not any(each_relative_path in each_command for each_command in all_commands)
 
 
 @pytest.fixture(scope="module")

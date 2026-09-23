@@ -20,6 +20,8 @@ When you add a public function to a module whose test suite already exercises th
 
 Two complementary checks in `code_rules_paired_test.py` reach changed files through `code_rules_enforcer.py`, which the staged policy lint runs under its `code-rules` rule. No write-time hook runs them, so CI is where they report, against the merge base. The two checks cover the two write orders.
 
+Both checks record smells, per [`flag-non-breaking-findings.md`](flag-non-breaking-findings.md). `SEVERITY_BY_CHECK_ID` in `scripts/policy_lint/config/check_catalog_constants.py` declares `code-rules/paired-test-missing-function` and `code-rules/paired-test-omitted-function` as smells. The lint prints each finding as a warning, records it in `.claude/followups/smells.jsonl`, and exits zero when every finding is a warning. A later pull request adds the missing tests.
+
 `check_public_function_missing_paired_test` runs on a production Python write or edit and flags a public function when all of these hold:
 
 1. The target is production code — not a test module, hook infrastructure, config module, migration, workflow registry, or `__init__.py`.
@@ -33,8 +35,8 @@ A public function counts as covered when its name appears — imported, called, 
 
 ## Relationship to the file-level TDD order
 
-`tdd_enforcer.py` once required a fresh test file to exist before a production module was written, judging coverage one file at a time. Nothing runs it now, and the staged policy lint carries no replacement, so the test-first order is yours to hold. This check judges coverage one function at a time for a module that already carries such a test file. Write the test file first, and the lint then reports any public function that file leaves uncovered.
+No hook or lint checks the order in which a test and its module are written. Red-green-refactor is the default loop, and the TDD skill (`pstack:tdd`) carries it; a prototype may run ahead of its tests and adds them before the pull request goes ready. This check judges coverage one function at a time for a module that already carries a stem-matched test file, and reports any public function that file leaves uncovered.
 
 ## Why this check is mechanical
 
-A public function with no test reads as covered when the module's test file sits right beside it and exercises its siblings. The gap survives review because the suite looks complete. Running the lint on every staged change keeps the module's public surface and its test suite in step.
+A public function with no test reads as covered when the module's test file sits right beside it and exercises its siblings. The gap survives review because the suite looks complete. Running the lint on every staged change records each gap in the follow-up ledger, where `cde followup list` names it until a pull request closes it.
