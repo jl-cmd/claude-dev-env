@@ -1,5 +1,14 @@
 # Changelog
 
+## [8.10.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.9.0...claude-dev-env-v8.10.0) (2026-09-23)
+
+
+### Features
+
+* **hooks:** open Codex subagent messages with the poteto-mode mention ([680d0e6](https://github.com/jl-cmd/claude-dev-env/commit/680d0e69321600d8d1903f675c6cd166102a5841))
+* **hooks:** tell each workflow helper to load poteto-mode when it starts ([6fe9330](https://github.com/jl-cmd/claude-dev-env/commit/6fe93309e735f23edad8d1c9bc6f3f2c30886128))
+* **hooks:** tell each workflow helper to load poteto-mode when it starts ([e3fc332](https://github.com/jl-cmd/claude-dev-env/commit/e3fc332cc9ebb593e7bbc74bfa0518b921f27170))
+
 ## [8.9.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.8.0...claude-dev-env-v8.9.0) (2026-09-23)
 
 
