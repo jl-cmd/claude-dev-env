@@ -124,3 +124,17 @@ def test_should_run_on_staged_and_base_selections() -> None:
     assert uncalled_rule.selections == frozenset(
         {SelectionKind.STAGED, SelectionKind.BASE}
     )
+
+
+def test_should_report_new_ci_and_tools_helpers_only_tests_name(
+    tmp_path: Path,
+) -> None:
+    ci_helper = ".github/ci/lonely_router.py"
+    tools_helper = "tools/lonely_archiver.py"
+    _write(tmp_path, ci_helper, "print('hi')\n")
+    _write(tmp_path, tools_helper, "print('hi')\n")
+    _write(tmp_path, ".github/ci/test_lonely_router.py", "import lonely_router\n")
+
+    all_messages = _messages(tmp_path, (_added(ci_helper), _added(tools_helper)))
+
+    assert len(all_messages) == 2

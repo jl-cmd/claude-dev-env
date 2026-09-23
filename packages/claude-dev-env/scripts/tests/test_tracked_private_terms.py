@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
 import sys
 from pathlib import Path
 
@@ -69,3 +70,37 @@ def test_should_pass_a_tree_that_names_no_private_organization(
     exit_code, stdout_text, _stderr_text = run_policy(repository_root)
     assert exit_code == SUCCESS_EXIT_CODE
     assert stdout_text == ""
+
+
+def test_should_pass_a_repository_the_named_organization_owns(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    initialize_repository(repository_root)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/AcmeWidget/app.git"],
+        cwd=repository_root,
+        check=True,
+    )
+    write_text(repository_root / "docs" / "notes.md", "Built by Acme Widgets.\n")
+    commit_tracked_files(repository_root)
+    exit_code, stdout_text, _stderr_text = run_policy(repository_root)
+    assert exit_code == SUCCESS_EXIT_CODE
+    assert stdout_text == ""
+
+
+def test_should_flag_a_repository_another_owner_holds(
+    tmp_path: Path,
+) -> None:
+    repository_root = tmp_path / "repo"
+    initialize_repository(repository_root)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/someone/app.git"],
+        cwd=repository_root,
+        check=True,
+    )
+    write_text(repository_root / "docs" / "notes.md", "Built by Acme Widgets.\n")
+    commit_tracked_files(repository_root)
+    exit_code, stdout_text, _stderr_text = run_policy(repository_root)
+    assert exit_code == FINDINGS_EXIT_CODE
+    assert f"{CHECK_ID_TRACKED_PRIVATE_TERMS}: docs/notes.md:" in stdout_text

@@ -19,6 +19,7 @@ from pii_prevention_blocker_parts.repository_exemption import (
     _is_repository_exempt_from_pii_scan,
     _owner_repo_slug_from_origin_url,
     repository_allowlisted_values,
+    repository_origin_slug,
 )
 
 _ALLOWED_VALUE = "owner.fixture" + "@" + "acme-corp" + ".example" + ".io"
@@ -103,3 +104,9 @@ def test_repository_without_origin_is_never_exempt(tmp_path: Path) -> None:
 
 def test_owner_repo_slug_strips_a_trailing_slash_origin() -> None:
     assert _owner_repo_slug_from_origin_url("https://github.com/Owner/Repo/") == "owner/repo"
+
+
+def test_repository_origin_slug_reads_the_origin_remote(tmp_path: Path) -> None:
+    repository_root = tmp_path / "repo"
+    _init_repo_with_github_origin(repository_root, "SlugOwner/slug-repo")
+    assert repository_origin_slug(repository_root) == "slugowner/slug-repo"
