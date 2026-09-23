@@ -22,7 +22,7 @@
  * observable result of each against the sandbox tree. Exit code 0 means
  * every assertion held.
  *
- * Usage: node .cursor/skills/verify-claude-dev-env/scripts/driver.mjs
+ * Usage: node .agents/skills/verify/scripts/driver.mjs
  */
 
 import { spawnSync } from 'node:child_process';
@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url';
 /**
  * Resolve the package paths the driver spawns, given the directory holding this
  * file. The driver sits four levels below the repository root at
- * `.cursor/skills/verify-claude-dev-env/scripts/`.
+ * `.agents/skills/verify/scripts/`.
  *
  * @param {string} driverDirectory Directory holding this driver file.
  * @returns {{repositoryRoot: string, packageRoot: string, installEntry: string}} The resolved roots and the installer entry point.
@@ -253,6 +253,6 @@ function main() {
     console.log('ALL CHECKS PASSED');
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(resolve(process.argv[1])) === fileURLToPath(import.meta.url)) {
     main();
 }

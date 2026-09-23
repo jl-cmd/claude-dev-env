@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
     buildDoctorRecord,
@@ -16,13 +18,14 @@ import {
     DRIVER_FAILURE_EXIT_STATUS,
     RUN_COMMAND,
     SUCCESS_EXIT_STATUS,
+    USAGE_EXIT_STATUS,
 } from './verify_installer_constants/constants.mjs';
 
 test('buildVerificationPaths keeps the driver and evidence paths inside the repository', () => {
     const paths = buildVerificationPaths('C:/workspace');
     assert.equal(
         paths.driverPath.replaceAll('\\', '/'),
-        'C:/workspace/.cursor/skills/verify-claude-dev-env/scripts/driver.mjs',
+        'C:/workspace/.agents/skills/verify/scripts/driver.mjs',
     );
     assert.equal(
         paths.transcriptPath.replaceAll('\\', '/'),
@@ -97,4 +100,19 @@ test('parseCommand returns the first command token', () => {
     assert.equal(parseCommand([DOCTOR_COMMAND]), DOCTOR_COMMAND);
     assert.equal(parseCommand([RUN_COMMAND, 'extra']), RUN_COMMAND);
     assert.equal(parseCommand([]), '');
+});
+
+test('the helper should run when started through a directory pointer', () => {
+    const pointerRoot = mkdtempSync(join(tmpdir(), 'verify-pointer-'));
+    try {
+        const pointerDirectory = join(pointerRoot, 'scripts');
+        symlinkSync(dirname(fileURLToPath(import.meta.url)), pointerDirectory, 'junction');
+        const helper = spawnSync(process.execPath, [join(pointerDirectory, 'verify-installer.mjs')], {
+            encoding: 'utf8',
+        });
+        assert.equal(helper.status, USAGE_EXIT_STATUS);
+        assert.match(helper.stderr, /Usage: node \.agents\/skills\/verify\/scripts\/verify-installer\.mjs doctor\|run/);
+    } finally {
+        rmSync(pointerRoot, { recursive: true, force: true });
+    }
 });

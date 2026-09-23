@@ -1,5 +1,5 @@
 ---
-name: verify-claude-dev-env
+name: verify
 description: Verifies the claude-dev-env command-line installer in a disposable home. Maps checks for configuration projections, hooks, policy lint, and continuous integration.
 ---
 
@@ -7,12 +7,14 @@ description: Verifies the claude-dev-env command-line installer in a disposable 
 
 Run the installer with disposable home and Git configuration roots. Never use the live install commands for verification.
 
+This skill and its feature maps live in `.agents/skills/verify/`, which Codex reads. `.claude/skills` and `.cursor/skills` are directory pointers to `.agents/skills`, so Claude Code and Cursor read the same files. Add a new feature map here and link it from `features/README.md`. `tests/test_repository_skill_pointers.py` fails when a pointer turns into a directory or a map is missing from the index.
+
 ## Launch
 
 Run this command from the repository root:
 
 ```powershell
-node .cursor/skills/verify-claude-dev-env/scripts/verify-installer.mjs run
+node .agents/skills/verify/scripts/verify-installer.mjs run
 ```
 
 The command succeeds when the transcript reports `21/21 checks passed` and `ALL CHECKS PASSED`. The driver removes its sandbox before the helper exits.
@@ -22,14 +24,14 @@ The command succeeds when the transcript reports `21/21 checks passed` and `ALL 
 Run the read-only environment check first:
 
 ```powershell
-node .cursor/skills/verify-claude-dev-env/scripts/verify-installer.mjs doctor
+node .agents/skills/verify/scripts/verify-installer.mjs doctor
 ```
 
 Continue only when the command prints `Doctor command: ready`.
 
 ## Drive
 
-`run` covers the installer lifecycle only. It calls `.cursor/skills/verify-claude-dev-env/scripts/driver.mjs`.
+`run` covers the installer lifecycle only. It calls `.agents/skills/verify/scripts/driver.mjs`.
 
 For other changes, use the matching file in [features](features/README.md). Exercise each changed feature before you verify.
 
@@ -71,9 +73,9 @@ After each run, confirm that the transcript contains `Sandbox removed`. Keep the
 Run these helpers:
 
 ```powershell
-node .cursor/skills/verify-claude-dev-env/scripts/verify-installer.mjs doctor
-node .cursor/skills/verify-claude-dev-env/scripts/verify-installer.mjs run
-node --test .cursor/skills/verify-claude-dev-env/scripts/verify-installer.test.mjs
+node .agents/skills/verify/scripts/verify-installer.mjs doctor
+node .agents/skills/verify/scripts/verify-installer.mjs run
+node --test .agents/skills/verify/scripts/verify-installer.test.mjs
 python -m pytest packages/claude-dev-env/scripts/tests/test_policy_lint_selection.py packages/claude-dev-env/scripts/tests/test_policy_lint_rules_engine.py packages/claude-dev-env/scripts/tests/test_policy_lint_rules_registry.py packages/claude-dev-env/scripts/tests/test_cde_lint.py -q
 node --test packages/claude-dev-env/bin/cde.test.mjs
 ```

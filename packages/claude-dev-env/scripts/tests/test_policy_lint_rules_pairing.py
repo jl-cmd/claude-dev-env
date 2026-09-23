@@ -186,10 +186,10 @@ def test_cursor_verifier_constants_require_the_changed_driver_suite(
     tmp_path: Path,
 ) -> None:
     constants_path = PurePosixPath(
-        ".cursor/skills/verify-claude-dev-env/scripts/verify_installer_constants/constants.mjs"
+        ".agents/skills/verify/scripts/verify_installer_constants/constants.mjs"
     )
     suite_path = PurePosixPath(
-        ".cursor/skills/verify-claude-dev-env/scripts/verify-installer.test.mjs"
+        ".agents/skills/verify/scripts/verify-installer.test.mjs"
     )
     constants_change = _body_change_at(constants_path)
     assert _diagnostic_paths(tmp_path, constants_change) == (constants_path,)
@@ -524,6 +524,23 @@ def test_pairing_accepts_installer_modules_with_the_cursor_rules_suite(
         tmp_path,
         *(_body_change_at(each_path) for each_path in _INSTALLER_PRODUCTION_PATHS),
         _body_change_at(_INSTALLER_SUITE_PATH),
+    )
+    assert all_paths == ()
+
+
+_INSTALLER_MODULE_PATH = PurePosixPath("packages/claude-dev-env/bin/install.mjs")
+_AGENTS_HOME_SUITE_PATH = PurePosixPath(
+    "packages/claude-dev-env/bin/install.agents-home.test.mjs"
+)
+
+
+def test_pairing_accepts_installer_module_with_the_agents_home_suite(
+    tmp_path: Path,
+) -> None:
+    all_paths = _diagnostic_paths(
+        tmp_path,
+        _body_change_at(_INSTALLER_MODULE_PATH),
+        _body_change_at(_AGENTS_HOME_SUITE_PATH),
     )
     assert all_paths == ()
 

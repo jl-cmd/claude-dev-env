@@ -6,11 +6,11 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
     PurePosixPath, frozenset[PurePosixPath]
 ] = {
     PurePosixPath(
-        ".cursor/skills/verify-claude-dev-env/scripts/verify_installer_constants/constants.mjs"
+        ".agents/skills/verify/scripts/verify_installer_constants/constants.mjs"
     ): frozenset(
         {
             PurePosixPath(
-                ".cursor/skills/verify-claude-dev-env/scripts/verify-installer.test.mjs"
+                ".agents/skills/verify/scripts/verify-installer.test.mjs"
             ),
         }
     ),
@@ -21,6 +21,7 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
     ),
     PurePosixPath("packages/claude-dev-env/bin/install.mjs"): frozenset(
         {
+            PurePosixPath("packages/claude-dev-env/bin/install.agents-home.test.mjs"),
             PurePosixPath("packages/claude-dev-env/bin/install.cursor-rules.test.mjs"),
         }
     ),
