@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync, unlinkSync, rmSync, rmdirSync, renameSync, realpathSync, lstatSync, constants as filesystemConstants } from 'node:fs';
-import { join, dirname, resolve, relative, basename, isAbsolute, extname } from 'node:path';
+import { join, dirname, resolve, relative, basename, isAbsolute, extname, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync, execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -1174,11 +1174,9 @@ export function copyTree(sourceBase, destBase, options = {}) {
  * @param {string} backupName The managed file name used in the backup path.
  * @returns {string|null} The backup path when existing content differs.
  */
-function backupHubBeforeOverwrite(destPath, incomingPath, backupName) {
+function backupHubBeforeOverwrite(destPath, incomingText, backupName) {
     if (!existsSync(destPath)) return null;
-    const existingBytes = readFileSync(destPath);
-    const incomingBytes = readFileSync(incomingPath);
-    if (existingBytes.equals(incomingBytes)) return null;
+    if (readFileSync(destPath, 'utf8') === incomingText) return null;
     const backupsDir = join(CLAUDE_HOME, 'backups');
     mkdirSync(backupsDir, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -2372,6 +2370,15 @@ function pruneStaleFilesAcrossManagedRoots(priorInstalledFiles, currentInstalled
             skillsPrunedCount += rootOutcome.prunedCount;
         }
     }
+    const retiredClaudeGuidancePath = join(CLAUDE_HOME, 'AGENTS.md');
+    const retiredGuidanceOutcome = pruneStaleInstalledFiles(
+        priorInstalledFiles?.filter(priorFile => resolve(priorFile) === retiredClaudeGuidancePath) ?? null,
+        currentInstalledFiles,
+        CLAUDE_HOME,
+        backupRoot,
+    );
+    prunedCount += retiredGuidanceOutcome.prunedCount;
+    failedPaths.push(...retiredGuidanceOutcome.failedPaths);
     return { prunedCount, skillsPrunedCount, failedPaths };
 }
 
@@ -2889,31 +2896,27 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
         );
     }
 
-    const claudeHubSource = join(PACKAGE_ROOT, '.claude', 'CLAUDE.md');
-    if (existsSync(claudeHubSource)) {
-        const claudeHubDest = join(CLAUDE_HOME, 'CLAUDE.md');
-        const backupPath = backupHubBeforeOverwrite(claudeHubDest, claudeHubSource, 'CLAUDE.md');
-        if (backupPath) {
-            console.log(
-                `  \u21bb ${relative(CLAUDE_HOME, backupPath)} (previous CLAUDE.md hub preserved)`
-            );
-        }
-        copyFileSync(claudeHubSource, claudeHubDest);
-        allInstalledFiles.push(claudeHubDest);
-        console.log(`  \u2713 ${relative(CLAUDE_HOME, claudeHubDest)} (hub)`);
-    }
     const agentsHubSource = join(PACKAGE_ROOT, 'AGENTS.md');
     if (existsSync(agentsHubSource)) {
-        const agentsHubDest = join(CLAUDE_HOME, 'AGENTS.md');
-        const backupPath = backupHubBeforeOverwrite(agentsHubDest, agentsHubSource, 'AGENTS.md');
-        if (backupPath) {
-            console.log(
-                `  \u21bb ${relative(CLAUDE_HOME, backupPath)} (previous AGENTS.md guidance preserved)`
-            );
+        const agentsHubDest = join(AGENTS_HOME, 'AGENTS.md');
+        const claudeHubDest = join(CLAUDE_HOME, 'CLAUDE.md');
+        const claudeHubText = `@${relative(CLAUDE_HOME, agentsHubDest).split(sep).join('/')}\n`;
+        const allHubWrites = [
+            { destPath: agentsHubDest, text: readFileSync(agentsHubSource, 'utf8'), label: 'AGENTS.md', role: 'shared guidance' },
+            { destPath: claudeHubDest, text: claudeHubText, label: 'CLAUDE.md', role: 'hub' },
+        ];
+        mkdirSync(AGENTS_HOME, { recursive: true });
+        for (const eachHubWrite of allHubWrites) {
+            const backupPath = backupHubBeforeOverwrite(eachHubWrite.destPath, eachHubWrite.text, eachHubWrite.label);
+            if (backupPath) {
+                console.log(
+                    `  \u21bb ${relative(CLAUDE_HOME, backupPath)} (previous ${eachHubWrite.label} preserved)`
+                );
+            }
+            writeFileSync(eachHubWrite.destPath, eachHubWrite.text);
+            allInstalledFiles.push(eachHubWrite.destPath);
+            console.log(`  \u2713 ${eachHubWrite.destPath} (${eachHubWrite.role})`);
         }
-        copyFileSync(agentsHubSource, agentsHubDest);
-        allInstalledFiles.push(agentsHubDest);
-        console.log(`  \u2713 ${relative(CLAUDE_HOME, agentsHubDest)} (canonical guidance)`);
     }
     const isFullInstall = !selectedGroups;
     const didPruneRun = isFullInstall && UNRESOLVED_DEPENDENCY_NAMES.length === 0;
@@ -3334,10 +3337,10 @@ Profile selection (--profile/--profiles) is mutually exclusive with --target.
 Target selection finishes before any mutation. Each target writes its own manifest
 with package, version, targetIdentity, managedRoot, files, and skills.
 
-If ~/.claude/CLAUDE.md already exists and differs from the package copy, the installer
-writes the previous contents to ~/.claude/backups/CLAUDE.md.<timestamp>.bak first.
-If ~/.claude/AGENTS.md already exists and differs from the package copy, the installer
-writes the previous contents to ~/.claude/backups/AGENTS.md.<timestamp>.bak first.
+The package guidance lands once at ~/.agents/AGENTS.md, and ~/.claude/CLAUDE.md
+holds one import line that loads it. If either file already exists with other
+contents, the installer writes the previous contents to
+~/.claude/backups/<name>.<timestamp>.bak first.
 `);
 }
 

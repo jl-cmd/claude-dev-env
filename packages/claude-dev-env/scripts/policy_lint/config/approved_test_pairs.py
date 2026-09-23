@@ -21,6 +21,7 @@ APPROVED_TEST_PATHS_BY_PRODUCTION_PATH: dict[
     ),
     PurePosixPath("packages/claude-dev-env/bin/install.mjs"): frozenset(
         {
+            PurePosixPath("packages/claude-dev-env/bin/install.agents-home.test.mjs"),
             PurePosixPath("packages/claude-dev-env/bin/install.cursor-rules.test.mjs"),
         }
     ),
