@@ -203,7 +203,7 @@ that carry them.
 | Skill | Purpose |
 |-------|---------|
 | `cert-classification-rule` | Add or change a Samsung cert-failure classification rule |
-| `e-code-review` | Max-recall code review at a selectable effort level |
+| `e-code-review` | High-effort code review matching the built-in `/code-review high` |
 | `e-simplify` | Cleanup pass on the current diff for reuse, simplification, and efficiency |
 | `eli5` | Beginner-friendly presentation with large visuals and minimal text |
 | `everything-search` | Fast Windows file search through the Everything es.exe tool |

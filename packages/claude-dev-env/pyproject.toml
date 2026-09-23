@@ -23,12 +23,10 @@ packages = [
     "pr_converge_scripts_constants",
     "usage_pause_constants",
     "codex_review_scripts_constants",
-    "e_code_review_scripts_constants",
     "dev_env_scripts_constants",
     "advisor_scripts_constants",
     "process_tree_scripts_constants",
     "fresh_branch_scripts_constants",
-    "e_code_review_effort_constants",
     "test_runner_constants",
 ]
 
@@ -40,10 +38,8 @@ pr_converge_skill_constants = "_shared/pr-loop/scripts/pr_converge_skill_constan
 pr_converge_scripts_constants = "_shared/pr-loop/scripts/pr_converge_scripts_constants"
 usage_pause_constants = ".agents/skills/usage-pause/scripts/usage_pause_constants"
 codex_review_scripts_constants = "_shared/pr-loop/scripts/codex_review_scripts_constants"
-e_code_review_scripts_constants = ".agents/skills/e-code-review/scripts/e_code_review_scripts_constants"
 dev_env_scripts_constants = "scripts/dev_env_scripts_constants"
 advisor_scripts_constants = "_shared/advisor/scripts/config/advisor_scripts_constants"
 process_tree_scripts_constants = "_shared/process-tree/scripts/config/process_tree_scripts_constants"
 fresh_branch_scripts_constants = ".agents/skills/fresh-branch/scripts/fresh_branch_scripts_constants"
-e_code_review_effort_constants = ".agents/skills/e-code-review/scripts/config/e_code_review_effort_constants"
 test_runner_constants = ".agents/skills/test-runner/scripts/test_runner_constants"

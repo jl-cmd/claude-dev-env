@@ -39,7 +39,7 @@ const REFERENCE_DIRECTORY_NAME = 'reference';
 const SHIPPED_AGENT_FILE_NAME = 'AGENTS.md';
 const RETIRED_AGENT_FILE_NAMES = ['clean-coder.md', 'code-quality-agent.md', 'pr-description-writer.md'];
 const PERSONAL_SKILL_NAME = 'my-notes';
-const PREFLIGHT_PROPOSAL_FILE_NAME = 'preflight-proposal.md';
+const REVIEW_PROCEDURE_FILE_NAME = 'high.md';
 
 /**
  * @param {string} homeDirectory
@@ -70,22 +70,22 @@ function runInstaller(homeDirectory, extraArguments, environmentOverrides = {}) 
 /**
  * @param {{ skillsInstallDirectory: string }} installationPaths
  */
-function assertProposalContractInstallation(installationPaths) {
+function assertReviewProcedureInstallation(installationPaths) {
     const { skillsInstallDirectory } = installationPaths;
-    const allContractPathSegments = [
+    const allProcedurePathSegments = [
         E_CODE_REVIEW_SKILL_NAME,
         REFERENCE_DIRECTORY_NAME,
-        PREFLIGHT_PROPOSAL_FILE_NAME,
+        REVIEW_PROCEDURE_FILE_NAME,
     ];
-    const installedContractPath = join(skillsInstallDirectory, ...allContractPathSegments);
+    const installedProcedurePath = join(skillsInstallDirectory, ...allProcedurePathSegments);
     const sourceSkillsDirectory = resolvePackageManagedDirectory(
         PACKAGE_DIRECTORY,
         MANAGED_SKILLS_DIRECTORY_NAME,
     );
-    const sourceContractPath = join(sourceSkillsDirectory, ...allContractPathSegments);
+    const sourceProcedurePath = join(sourceSkillsDirectory, ...allProcedurePathSegments);
 
-    assert.equal(existsSync(installedContractPath), true);
-    assert.equal(readFileSync(installedContractPath, 'utf8'), readFileSync(sourceContractPath, 'utf8'));
+    assert.equal(existsSync(installedProcedurePath), true);
+    assert.equal(readFileSync(installedProcedurePath, 'utf8'), readFileSync(sourceProcedurePath, 'utf8'));
 }
 
 
@@ -179,7 +179,7 @@ test('a full install writes skills and agents under .agents and points .claude a
         );
         assert.equal(realpathSync(lookupSkillFile), realpathSync(canonicalSkillFile));
         assert.equal(realpathSync(lookupEli5SkillFile), realpathSync(canonicalEli5SkillFile));
-        assertProposalContractInstallation({ skillsInstallDirectory });
+        assertReviewProcedureInstallation({ skillsInstallDirectory });
         const projectedAdvisorPaths = [
             join(skillsInstallDirectory, TEAM_ADVISOR_SKILL_NAME, 'SKILL.md'),
             join(claudeHome, 'docs', 'references', 'advisor-tool.md'),
