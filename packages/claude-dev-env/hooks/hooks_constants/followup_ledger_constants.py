@@ -6,6 +6,8 @@ __all__ = [
     "ALL_FOLLOWUP_LEDGER_PATH_SEGMENTS",
     "LEDGER_ENCODING",
     "LEDGER_APPEND_MODE",
+    "LEDGER_IGNORE_FILE_NAME",
+    "LEDGER_IGNORE_TEXT",
     "RULE_ID_KEY",
     "FILE_PATH_KEY",
     "MESSAGE_KEY",
@@ -24,6 +26,8 @@ __all__ = [
 ALL_FOLLOWUP_LEDGER_PATH_SEGMENTS: tuple[str, ...] = (".claude", "followups", "smells.jsonl")
 LEDGER_ENCODING: str = "utf-8"
 LEDGER_APPEND_MODE: str = "a"
+LEDGER_IGNORE_FILE_NAME: str = ".gitignore"
+LEDGER_IGNORE_TEXT: str = "*\n"
 
 RULE_ID_KEY: str = "rule_id"
 FILE_PATH_KEY: str = "file_path"

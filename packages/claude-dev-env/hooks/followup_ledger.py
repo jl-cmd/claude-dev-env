@@ -31,6 +31,8 @@ from hooks_constants.followup_ledger_constants import (
     GIT_REFERENCE_PREFIX,
     LEDGER_APPEND_MODE,
     LEDGER_ENCODING,
+    LEDGER_IGNORE_FILE_NAME,
+    LEDGER_IGNORE_TEXT,
     MESSAGE_KEY,
     ORIGIN_COMMIT_KEY,
     RULE_ID_KEY,
@@ -88,7 +90,9 @@ def record_followup_finding(repository_root: Path, finding: FollowupFinding) -> 
     """Append one finding to the repository's ledger, once.
 
     A finding already present in the ledger is left alone, so a gate that runs
-    on every commit records a standing smell a single time. Every filesystem
+    on every commit records a standing smell a single time. The ledger
+    directory carries a ``.gitignore`` matching every file in it, so the
+    ledger stays out of ``git status`` in any repository. Every filesystem
     error is swallowed, so a ledger failure leaves the caller's gate decision
     unchanged.
 
@@ -116,6 +120,9 @@ def record_followup_finding(repository_root: Path, finding: FollowupFinding) -> 
     )
     try:
         ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        ignore_path = ledger_path.parent / LEDGER_IGNORE_FILE_NAME
+        if not ignore_path.exists():
+            ignore_path.write_text(LEDGER_IGNORE_TEXT, encoding=LEDGER_ENCODING)
         with ledger_path.open(LEDGER_APPEND_MODE, encoding=LEDGER_ENCODING) as ledger_file:
             ledger_file.write(record_text + "\n")
     except OSError:
