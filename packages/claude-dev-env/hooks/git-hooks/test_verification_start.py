@@ -23,7 +23,7 @@ def build_context(
     repository_root: Path,
     *,
     event: str = "commit",
-    repository_remote: str = "jonecho/python-automation",
+    repository_remote: str = "example-owner/example-repo",
 ) -> VerificationNoticeContext:
     git_directory = repository_root / ".git"
     return VerificationNoticeContext(

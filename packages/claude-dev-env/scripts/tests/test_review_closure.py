@@ -60,12 +60,12 @@ def stub_reads(
 
 def should_build_a_parser_that_collects_extra_driver_logins() -> None:
     parsed = command.build_parser().parse_args(
-        [SLUG, "7", "--driver-login", "JonEcho", "--driver-login", "claude[bot]"]
+        [SLUG, "7", "--driver-login", "octocat", "--driver-login", "claude[bot]"]
     )
 
     assert parsed.slug == SLUG
     assert parsed.number == 7
-    assert parsed.driver_login == ["JonEcho", "claude[bot]"]
+    assert parsed.driver_login == ["octocat", "claude[bot]"]
 
 
 def should_report_an_unanswered_finding(monkeypatch: pytest.MonkeyPatch) -> None:

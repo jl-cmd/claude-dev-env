@@ -20,7 +20,7 @@ HOOK_SCRIPT_PATH = HOOK_DIRECTORY / "pytest_testpaths_orphan_blocker.py"
 
 PYPROJECT_WITH_EXPLICIT_TESTPATHS = (
     "[tool.pytest.ini_options]\n"
-    'testpaths = [\n    "tests",\n    "samsung_utils/tests",\n]\n'
+    'testpaths = [\n    "tests",\n    "vendor_utils/tests",\n]\n'
     'python_files = ["test_*.py"]\n'
 )
 
@@ -91,7 +91,7 @@ def test_find_flags_test_directory_absent_from_explicit_testpaths(tmp_path: Path
 def test_find_passes_test_directory_listed_in_testpaths(tmp_path: Path) -> None:
     package_root = tmp_path / "shared_utils"
     _write_package(package_root, PYPROJECT_WITH_EXPLICIT_TESTPATHS)
-    registered_test_file = package_root / "samsung_utils" / "tests" / "test_normalizer.py"
+    registered_test_file = package_root / "vendor_utils" / "tests" / "test_normalizer.py"
     assert find_unregistered_test_directory(str(registered_test_file)) is None
 
 

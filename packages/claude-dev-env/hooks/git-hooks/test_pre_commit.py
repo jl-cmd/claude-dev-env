@@ -44,7 +44,7 @@ def test_native_git_commit_allows_missing_setup_and_prints_advisory(tmp_path: Pa
     repository_path.mkdir()
     configure_native_repository(
         repository_path,
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
     )
     hook_directory = tmp_path / "hooks"
     install_native_hook(repository_path, hook_directory, "pre-commit", "pre_commit")

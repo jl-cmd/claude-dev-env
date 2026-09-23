@@ -44,7 +44,7 @@ def test_native_git_push_to_local_bare_remote_allows_missing_setup(tmp_path: Pat
     repository_path = create_native_repository(
         tmp_path,
         "repo",
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
         initial_branch="main",
     )
     run_git(repository_path, "add", "README.md")
@@ -54,7 +54,7 @@ def test_native_git_push_to_local_bare_remote_allows_missing_setup(tmp_path: Pat
     configure_remote_url_rewrite(
         repository_path,
         bare_repository_path,
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
     )
     hook_directory = tmp_path / "hooks"
     install_native_hook(repository_path, hook_directory, "pre-push", "pre_push")

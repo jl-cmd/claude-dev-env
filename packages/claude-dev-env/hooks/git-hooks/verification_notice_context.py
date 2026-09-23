@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -32,7 +33,7 @@ from git_hooks_constants.verification_notice_constants import (
     REPOSITORY_PART_INDEX,
     SELECTED_MANIFEST_PATH_FIELD,
     SELECTION_FIELD,
-    TARGET_REPOSITORY_REMOTE,
+    TARGET_REPOSITORY_ENVIRONMENT_VARIABLE,
 )
 from local_verification.manifest import ManifestRunFatal, load_manifest
 
@@ -50,6 +51,24 @@ class VerificationNoticeContext:
     git_directory: Path | None
     report_is_present: bool
     all_report_fields: Mapping[str, object] | None
+
+
+def is_target_repository(repository_remote: str | None) -> bool:
+    """Report whether a normalized remote names the configured target repository.
+
+    The target is read from the environment at call time and has no default,
+    so an unset or blank setting matches no repository.
+
+    Args:
+        repository_remote: The normalized owner/name remote, or None.
+
+    Returns:
+        True when the remote equals the configured target, case-insensitively.
+    """
+    configured_target = os.environ.get(TARGET_REPOSITORY_ENVIRONMENT_VARIABLE, "").strip()
+    if not configured_target or repository_remote is None:
+        return False
+    return repository_remote.casefold() == configured_target.casefold()
 
 
 def normalize_repository_remote(remote_url: str) -> str | None:
@@ -85,7 +104,7 @@ def _load_notice_context(
     normalized_remote = normalize_repository_remote(
         _run_git_query(repository_root, ALL_GIT_REMOTE_URL_QUERY, False) or ""
     )
-    if normalized_remote != TARGET_REPOSITORY_REMOTE or current_head is None:
+    if not is_target_repository(normalized_remote) or current_head is None:
         return None
     if not git_directory_text:
         return None

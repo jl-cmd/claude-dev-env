@@ -1,6 +1,7 @@
-"""Digests of the private organization names this public repository never names.
+"""Digests of the private names this public repository never names.
 
-The names stay out of the tree. Each entry holds the SHA-256 digest of one
+The names cover private organizations, the owner's private repository, the
+owner's personal handle, and a private client. They stay out of the tree. Each entry holds the SHA-256 digest of one
 name after normalization, which keeps only ASCII letters and digits in lower
 case::
 
@@ -31,6 +32,18 @@ ALL_PRIVATE_TERM_DIGESTS: frozenset[PrivateTermDigest] = frozenset(
             length=10,
             sha256="c2a70b3186691a74dece4ca824bec178bfaec83be119be28faedd14aa392233f",
         ),
+        PrivateTermDigest(
+            length=16,
+            sha256="182cb82e3e973d041b8527659064153f8c4af79503bd198508d3655d9a932fdf",
+        ),
+        PrivateTermDigest(
+            length=7,
+            sha256="d526db5593d5986500e4770cb6018f2d33c459ed93657487958a6086e52e6147",
+        ),
+        PrivateTermDigest(
+            length=7,
+            sha256="968e2d5b08687bf42997461cbdef6c844eabbf04f440cee888c95b864c2a4bcc",
+        ),
     }
 )
 PRIVATE_TERM_TEXT_ENCODING = "utf-8"
@@ -57,4 +70,6 @@ SHORT_SHA_LENGTH = 12
 COMMIT_FIELD_SEPARATOR = "\x1f"
 COMMIT_RECORD_SEPARATOR = "\x1e"
 COMMIT_FIELD_SPLIT_LIMIT = 2
+GITHUB_NOREPLY_ADDRESS_PATTERN = r"<[^<>]*@users\.noreply\.github\.com>"
+MASKED_ADDRESS = "<>"
 COMMIT_LOG_FORMAT = "--format=%H%x1f%an <%ae> %cn <%ce>%x1f%B%x1e"

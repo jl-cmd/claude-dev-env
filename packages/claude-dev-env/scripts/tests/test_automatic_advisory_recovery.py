@@ -271,7 +271,7 @@ def test_start_polling_returns_without_waiting_for_detached_process(
 def test_configuration_rejects_two_pairs_for_one_repository(tmp_path: Path) -> None:
     settings_path = tmp_path / "settings.json"
     registration = {
-        "repository": "JonEcho/python-automation",
+        "repository": "example-owner/example-repo",
         "pull_request": 2985,
         "app_id": 4841271,
         "installation_id": 159293880,

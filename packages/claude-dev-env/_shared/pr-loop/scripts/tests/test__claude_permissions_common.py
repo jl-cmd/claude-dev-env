@@ -127,10 +127,10 @@ def test_path_contains_glob_metacharacters_accepts_windows_paths_with_parens() -
     `(`, `)`, and `,` are not glob metacharacters in Claude Code's permission
     rule matching. Including them in the metacharacter set causes
     get_current_project_path to raise ValueError for any user whose home
-    directory contains parentheses (e.g. `C:/Users/Jon (Admin)/...`).
+    directory contains parentheses (e.g. `C:/Users/Example (Admin)/...`).
     """
     assert common.path_contains_glob_metacharacters("C:/Program Files (x86)/app") is False
-    assert common.path_contains_glob_metacharacters("C:/Users/Jon (Admin)/project") is False
+    assert common.path_contains_glob_metacharacters("C:/Users/Example (Admin)/project") is False
     assert common.path_contains_glob_metacharacters("C:/Projects/a,b/file.py") is False
 
 

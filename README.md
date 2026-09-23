@@ -202,7 +202,6 @@ that carry them.
 
 | Skill | Purpose |
 |-------|---------|
-| `cert-classification-rule` | Add or change a Samsung cert-failure classification rule |
 | `e-code-review` | Code review at five levels matching the built-in `/code-review` recipes |
 | `e-simplify` | Cleanup pass on the current diff for reuse, simplification, and efficiency |
 | `eli5` | Beginner-friendly presentation with large visuals and minimal text |

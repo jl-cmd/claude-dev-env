@@ -48,11 +48,18 @@ def collect_tracked_private_term_findings(
         Findings that carry the path and line number, never the name. A
         repository whose github.com origin owner is itself a private
         organization returns none, since that organization may name itself.
+        A file named CHANGELOG.md is skipped, since release automation writes
+        it from commit subjects and history keeps it.
     """
     if _is_owned_by_private_organization(repository_root):
         return []
     all_findings: list[RepositoryFinding] = []
     for each_relative_path in all_tracked_paths:
+        if (
+            Path(each_relative_path).name
+            == repository_constants.PRIVATE_TERMS_SKIPPED_FILE_NAME
+        ):
+            continue
         if (content := _read_text_or_none(repository_root / each_relative_path)) is None:
             continue
         posix_relative_path = each_relative_path.replace(

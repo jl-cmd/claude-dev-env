@@ -3,7 +3,7 @@ from __future__ import annotations
 NOTICE_EVENT_COMMIT: str = "commit"
 NOTICE_EVENT_PUSH: str = "push"
 ALL_NOTICE_EVENTS: frozenset[str] = frozenset({NOTICE_EVENT_COMMIT, NOTICE_EVENT_PUSH})
-TARGET_REPOSITORY_REMOTE: str = "jonecho/python-automation"
+TARGET_REPOSITORY_ENVIRONMENT_VARIABLE: str = "CLAUDE_VERIFICATION_TARGET_REPOSITORY"
 GIT_CONFIG_SUBCOMMAND: str = "config"
 GIT_REV_PARSE_SUBCOMMAND: str = "rev-parse"
 ALL_GIT_REMOTE_URL_QUERY: tuple[str, ...] = (GIT_CONFIG_SUBCOMMAND, "--get", "remote.origin.url")

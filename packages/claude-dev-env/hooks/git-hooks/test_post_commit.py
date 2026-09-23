@@ -27,7 +27,7 @@ def test_native_git_commit_notice_reports_the_new_head(tmp_path: Path) -> None:
     repository_path = create_native_repository(
         tmp_path,
         "repo",
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
     )
     hook_directory = tmp_path / "hooks"
     install_native_hook(repository_path, hook_directory, "post-commit", "post_commit")

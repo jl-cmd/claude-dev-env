@@ -10,16 +10,23 @@ from pathlib import Path
 HOOKS_DIRECTORY = Path(__file__).resolve().parents[2] / "hooks" / "git-hooks"
 NOTICE_SCRIPT = HOOKS_DIRECTORY / "verification_notice.py"
 ALL_REMOTE_URLS = (
-    "https://github.com/JonEcho/python-automation.git",
-    "git@github.com:JonEcho/python-automation.git",
-    "ssh://git@github.com/JonEcho/python-automation.git",
+    "https://github.com/example-owner/example-repo.git",
+    "git@github.com:example-owner/example-repo.git",
+    "ssh://git@github.com/example-owner/example-repo.git",
 )
+TARGET_REPOSITORY_SETTING = "CLAUDE_VERIFICATION_TARGET_REPOSITORY"
+EXAMPLE_TARGET_REPOSITORY = "example-owner/example-repo"
 
 
 def run_notice(
     repository_path: Path,
     event_name: str = "commit",
+    target_repository: str | None = EXAMPLE_TARGET_REPOSITORY,
 ) -> subprocess.CompletedProcess[str]:
+    notice_environment = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    notice_environment.pop(TARGET_REPOSITORY_SETTING, None)
+    if target_repository is not None:
+        notice_environment[TARGET_REPOSITORY_SETTING] = target_repository
     return subprocess.run(
         [
             sys.executable,
@@ -33,7 +40,7 @@ def run_notice(
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        env=notice_environment,
     )
 
 
@@ -41,7 +48,7 @@ def create_target_repository(
     temporary_directory: Path,
     remote_url: str,
 ) -> tuple[Path, str]:
-    repository_path = temporary_directory / "Jon Echo project with spaces Ω"
+    repository_path = temporary_directory / "Example project with spaces Ω"
     repository_path.mkdir(parents=True)
     run_git(repository_path, "init", "--quiet")
     run_git(repository_path, "config", "user.email", "test@example.invalid")
@@ -173,7 +180,7 @@ def test_notice_reports_pending_when_manifest_exists_without_report(
 ) -> None:
     repository_path, _ = create_target_repository(
         tmp_path,
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
     )
     write_report(repository_path, {})
     (repository_path / ".git" / "local-verification" / "report.json").unlink()
@@ -199,7 +206,7 @@ def test_notice_ignores_unrelated_remote(tmp_path: Path) -> None:
 def test_notice_reports_failed_checks_without_pass_label(tmp_path: Path) -> None:
     repository_path, current_head = create_target_repository(
         tmp_path,
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
     )
     write_report(repository_path, {"head": current_head, "status": "failed"})
     completed_notice = run_notice(repository_path)
@@ -213,7 +220,7 @@ def test_notice_reports_failed_checks_without_pass_label(tmp_path: Path) -> None
 def test_notice_reports_pass_only_for_complete_current_revision(tmp_path: Path) -> None:
     repository_path, _ = create_target_repository(
         tmp_path,
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
     )
     current_head = write_passing_report(repository_path)
     completed_notice = run_notice(repository_path)
@@ -229,7 +236,7 @@ def test_notice_reports_pass_only_for_complete_current_revision(tmp_path: Path) 
 def test_notice_handles_malformed_report_and_missing_repository(tmp_path: Path) -> None:
     repository_path, _ = create_target_repository(
         tmp_path,
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
     )
     manifest_path = repository_path / "config" / "local-verification.json"
     manifest_path.parent.mkdir(exist_ok=True)
@@ -261,7 +268,7 @@ def test_notice_handles_malformed_report_and_missing_repository(tmp_path: Path) 
 def test_notice_uses_worktree_specific_report_path(tmp_path: Path) -> None:
     repository_path, _ = create_target_repository(
         tmp_path / "main",
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
     )
     linked_worktree_path = tmp_path / "linked worktree Ω"
     run_git(repository_path, "worktree", "add", "--detach", str(linked_worktree_path))
@@ -281,7 +288,7 @@ def test_notice_uses_worktree_specific_report_path(tmp_path: Path) -> None:
 def test_notice_accepts_complete_report_in_worktree_metadata(tmp_path: Path) -> None:
     repository_path, _ = create_target_repository(
         tmp_path / "main",
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
     )
     current_head = write_passing_report(repository_path)
     linked_worktree_path = tmp_path / "linked worktree Ω"
@@ -312,7 +319,7 @@ def test_notice_accepts_complete_report_in_worktree_metadata(tmp_path: Path) -> 
 def test_notice_invalidates_pass_after_worktree_edit(tmp_path: Path) -> None:
     repository_path, _ = create_target_repository(
         tmp_path,
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
     )
     current_head = write_passing_report(repository_path)
     passed_notice = run_notice(repository_path)
@@ -329,7 +336,7 @@ def test_notice_invalidates_pass_after_worktree_edit(tmp_path: Path) -> None:
 def test_notice_invalidates_pass_after_origin_base_moves(tmp_path: Path) -> None:
     repository_path, _ = create_target_repository(
         tmp_path,
-        "https://github.com/JonEcho/python-automation.git",
+        "https://github.com/example-owner/example-repo.git",
     )
     current_head = write_passing_report(repository_path)
     passed_notice = run_notice(repository_path)
@@ -345,3 +352,12 @@ def test_notice_invalidates_pass_after_origin_base_moves(tmp_path: Path) -> None
     assert "State: passed" in passed_notice.stdout
     assert "Verified SHA: none" in moved_base_notice.stdout
     assert "State: unverified" in moved_base_notice.stdout
+
+
+def test_notice_stays_silent_without_a_configured_target(tmp_path: Path) -> None:
+    repository_path, _ = create_target_repository(tmp_path, ALL_REMOTE_URLS[0])
+
+    completed_process = run_notice(repository_path, target_repository=None)
+
+    assert completed_process.returncode == 0
+    assert completed_process.stdout == ""

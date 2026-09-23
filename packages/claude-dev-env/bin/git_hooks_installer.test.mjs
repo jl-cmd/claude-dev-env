@@ -227,7 +227,7 @@ test('generated advisory shims keep temporary Git commit and push available afte
     const { temporaryRoot, gitHooksDirectory } = makeTemporaryGitHooksDirectory();
     const repositoryRoot = join(temporaryRoot, 'repository');
     const bareRepositoryRoot = join(temporaryRoot, 'remote.git');
-    const targetRemote = 'https://github.com/JonEcho/python-automation.git';
+    const targetRemote = 'https://github.com/example-owner/example-repo.git';
     try {
         writeFileSync(
             join(gitHooksDirectory, 'broken_advisory.py'),

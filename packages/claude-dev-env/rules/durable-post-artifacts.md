@@ -67,9 +67,10 @@ server write. Pass the matching action and body file. Use `pr-create`,
 
 Pass `--repository <owner>/<name>` for the repository the post targets. A
 post may name a private organization only inside a repository that
-organization owns. The linter holds the names as digests, so it reports the
-line that names one without printing the name. Describe the organization in
-general terms and drop the link.
+organization owns. The same digests cover the owner's private repository, the
+owner's personal handle, and a private client. The linter holds the names as
+digests, so it reports the line that names one without printing the name.
+Describe the name in general terms and drop the link.
 
 The linter reads the body file and reports a volatile local path without
 printing the body. Fix the body and rerun the linter before posting.

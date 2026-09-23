@@ -162,6 +162,34 @@ def test_should_flag_a_commit_message_and_a_commit_identity(tmp_path: Path) -> N
     assert all("acme" not in each_finding.lower() for each_finding in all_findings)
 
 
+def test_should_skip_a_github_noreply_address_in_a_commit_identity(
+    tmp_path: Path,
+) -> None:
+    repository_root, base, head = _repository_with_commits(
+        tmp_path,
+        [
+            ("fix: clean change", "Pat", "81234567+acmewidget@users.noreply.github.com"),
+            ("chore: clean", *_CLEAN_IDENTITY),
+        ],
+    )
+    assert private_term_scan.scan_commits(repository_root, f"{base}..{head}") == []
+
+
+def test_should_flag_a_private_name_beside_a_github_noreply_address(
+    tmp_path: Path,
+) -> None:
+    repository_root, base, head = _repository_with_commits(
+        tmp_path,
+        [
+            ("fix: clean change", "Acme Widget", "81234567+pat@users.noreply.github.com"),
+            ("chore: clean", *_CLEAN_IDENTITY),
+        ],
+    )
+    all_findings = private_term_scan.scan_commits(repository_root, f"{base}..{head}")
+    assert len(all_findings) == 1
+    assert " identity:" in all_findings[0]
+
+
 def test_should_print_findings_and_fail_from_the_command_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
