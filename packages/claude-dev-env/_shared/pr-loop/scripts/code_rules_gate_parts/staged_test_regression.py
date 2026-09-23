@@ -385,11 +385,13 @@ def _first_nonzero(all_exit_codes: Iterable[int]) -> int:
     return 0
 
 
-def _add_baseline_worktree(repository_root: Path, baseline_worktree: Path) -> bool:
-    """Attach a detached-HEAD checkout at *baseline_worktree*; True when git created it."""
+def _add_baseline_worktree(
+    repository_root: Path, baseline_worktree: Path, revision: str = GIT_HEAD_REVISION
+) -> bool:
+    """Attach a detached checkout of *revision* at *baseline_worktree*; True when git created it."""
     worktree_added = _run_git(
         repository_root,
-        (*ALL_GIT_WORKTREE_ADD_DETACH_ARGS, str(baseline_worktree), GIT_HEAD_REVISION),
+        (*ALL_GIT_WORKTREE_ADD_DETACH_ARGS, str(baseline_worktree), revision),
     )
     return worktree_added.returncode == 0
 
@@ -513,6 +515,86 @@ def run_grouped_tests_with_regression_gate(
     if first_failing_exit_code != 0:
         sys.stderr.write(STAGED_TEST_FAILURE_HEADER + "\n")
     return first_failing_exit_code
+
+
+def _overlay_files_into_worktree(
+    all_overlay_paths: list[Path], repository_root: Path, baseline_worktree: Path
+) -> None:
+    """Copy each working-tree file onto the same relative path inside the worktree."""
+    for each_path in all_overlay_paths:
+        worktree_path = _path_under_baseline_worktree(
+            each_path, repository_root, baseline_worktree
+        )
+        worktree_path.parent.mkdir(parents=True, exist_ok=True)
+        worktree_path.write_bytes(each_path.read_bytes())
+
+
+def _revision_outcomes(
+    all_tests_by_root: dict[Path, list[Path]],
+    repository_root: Path,
+    revision: str,
+    all_overlay_paths: list[Path],
+    junit_root: Path,
+) -> dict[Path, GroupOutcome] | None:
+    """Run every group in a worktree of *revision* with the overlay files copied in."""
+    with tempfile.TemporaryDirectory(
+        prefix=REGRESSION_BASELINE_WORKTREE_TEMP_DIRECTORY_PREFIX,
+        ignore_cleanup_errors=True,
+    ) as baseline_parent_text:
+        baseline_worktree = (
+            Path(baseline_parent_text) / REGRESSION_BASELINE_WORKTREE_DIRECTORY_NAME
+        )
+        if not _add_baseline_worktree(repository_root, baseline_worktree, revision):
+            return None
+        try:
+            _overlay_files_into_worktree(
+                all_overlay_paths, repository_root, baseline_worktree
+            )
+            return _baseline_outcomes_for_failing_groups(
+                repository_root, all_tests_by_root, junit_root, baseline_worktree
+            )
+        finally:
+            _remove_baseline_worktree(repository_root, baseline_worktree)
+
+
+def working_tree_and_revision_outcomes(
+    all_tests_by_root: dict[Path, list[Path]],
+    repository_root: Path,
+    revision: str,
+    all_overlay_paths: list[Path],
+) -> tuple[dict[Path, GroupOutcome], dict[Path, GroupOutcome] | None]:
+    """Run the test groups on the working tree, then on *revision* with overlays copied in.
+
+    ::
+
+        working tree: pkg/test_calc.py passes            -> exit 0
+        revision:     base code + head pkg/test_calc.py  -> fails, the test proves the fix
+
+    The revision run reuses the baseline worktree and its import isolation, so
+    a run that read working-tree code reports no failures.
+
+    Args:
+        all_tests_by_root: Test files grouped by owning pytest-config root.
+        repository_root: The repository the test files belong to.
+        revision: The git revision the second run checks out.
+        all_overlay_paths: Working-tree files copied into the revision checkout
+            before it runs, such as the test files a change adds or edits.
+
+    Returns:
+        The working-tree outcomes, and the revision outcomes keyed by the same
+        group roots, or None when git could not create the revision worktree.
+    """
+    with tempfile.TemporaryDirectory(
+        prefix=REGRESSION_JUNIT_TEMP_DIRECTORY_PREFIX
+    ) as junit_root_text:
+        junit_root = Path(junit_root_text)
+        working_tree_outcomes = _run_staged_groups(
+            all_tests_by_root, repository_root, junit_root
+        )
+        revision_outcomes = _revision_outcomes(
+            all_tests_by_root, repository_root, revision, all_overlay_paths, junit_root
+        )
+    return working_tree_outcomes, revision_outcomes
 
 
 def run_staged_test_files(repository_root: Path) -> int:
