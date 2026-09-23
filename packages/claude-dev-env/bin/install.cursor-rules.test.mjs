@@ -148,6 +148,12 @@ test('seeds one editable policy and one native Codex routing hook', () => {
         assert.equal(firstRoutingGroups.length, 1);
         assert.equal(firstRoutingGroups[0].hooks.length, 1);
         assert.match(firstRoutingGroups[0].hooks[0].command, /subagent_model_routing\.mjs/);
+        const firstSpawnPromptGroups = firstCodexHooks.hooks.PreToolUse.filter(
+            group => group.matcher === 'Agent|Task',
+        );
+        assert.equal(firstSpawnPromptGroups.length, 1);
+        assert.match(firstSpawnPromptGroups[0].hooks[0].command, /skill_loaded_reminder\.py/);
+        assert.deepEqual(Object.keys(firstCodexHooks.hooks), ['PreToolUse']);
         assert.equal(
             firstCodexHooks.hooks.PreToolUse.some(group => group.matcher === 'Write|Edit|MultiEdit|apply_patch'),
             false,

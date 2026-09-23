@@ -3,7 +3,7 @@
 
 ::
 
-    Agent tool call, prompt lacks the skill      -> prompt opens with "invoke pstack:poteto-mode"
+    Agent or Codex spawn_agent, skill not named -> prompt opens with "invoke pstack:poteto-mode"
     context compacted mid-run                    -> "invoke pstack:poteto-mode again"
     user turn, skill not loaded since compacting -> "invoke pstack:poteto-mode now"
     user turn, skill already loaded              -> nothing
@@ -25,7 +25,6 @@ if _hooks_dir not in sys.path:
 
 from hooks_constants.skill_loaded_reminder_constants import (
     ALL_SELF_LOADING_SUBAGENT_TYPES,
-    ALL_SUBAGENT_TOOL_NAMES,
     ASSISTANT_ENTRY_TYPE,
     COMPACT_BOUNDARY_SUBTYPE,
     COMPACTION_REMINDER,
@@ -37,7 +36,7 @@ from hooks_constants.skill_loaded_reminder_constants import (
     SESSION_START_EVENT_NAME,
     SKILL_TOOL_NAME,
     SLASH_COMMAND_MARKER,
-    SUBAGENT_PROMPT_PREFIX,
+    ALL_SPAWN_PROMPT_FIELDS_AND_PREFIXES_BY_TOOL_NAME,
     TOOL_USE_BLOCK_TYPE,
     USER_ENTRY_TYPE,
     USER_PROMPT_SUBMIT_EVENT_NAME,
@@ -48,25 +47,32 @@ from hooks_constants.setup_project_paths_constants import DECODE_ERRORS_POLICY, 
 
 
 def subagent_input_with_poteto_mode(
+    tool_name: str,
     all_tool_input_fields: dict[str, object],
 ) -> dict[str, object] | None:
-    """Return the Agent tool input with the poteto-mode instruction first, or None to leave it.
+    """Return the spawn input with the poteto-mode invocation first, or None to leave it.
 
     ::
 
-        {"prompt": "Reply leaf."}                          -> {"prompt": "Before any ...\\n\\nReply leaf."}
-        {"prompt": "Invoke pstack:poteto-mode, then ..."}  -> None
-        {"subagent_type": "pstack:poteto-agent", ...}      -> None, that agent loads the skill itself
+        Agent        {"prompt": "Reply leaf."}   -> {"prompt": "Before any ...\\n\\nReply leaf."}
+        spawn_agent  {"message": "Fix it."}      -> {"message": "$pstack:poteto-mode\\n\\nFix it."}
+        Agent        {"prompt": "Invoke pstack:poteto-mode, then ..."}  -> None
+        Agent        {"subagent_type": "pstack:poteto-agent", ...}      -> None, it loads the skill
+
+    Claude Code spawns through Agent or Task and Codex through spawn_agent, so
+    each tool name carries its own prompt field and invocation text.
 
     Args:
-        all_tool_input_fields: The Agent tool input the session is about to send.
+        tool_name: The spawn tool the session called.
+        all_tool_input_fields: The spawn input the session is about to send.
     """
-    prompt = all_tool_input_fields.get("prompt")
+    field_name, invocation_prefix = ALL_SPAWN_PROMPT_FIELDS_AND_PREFIXES_BY_TOOL_NAME[tool_name]
+    prompt = all_tool_input_fields.get(field_name)
     if not isinstance(prompt, str) or POTETO_MODE_SKILL_NAME in prompt:
         return None
     if all_tool_input_fields.get("subagent_type") in ALL_SELF_LOADING_SUBAGENT_TYPES:
         return None
-    return {**all_tool_input_fields, "prompt": SUBAGENT_PROMPT_PREFIX + PROMPT_SEPARATOR + prompt}
+    return {**all_tool_input_fields, field_name: invocation_prefix + PROMPT_SEPARATOR + prompt}
 
 
 def _invokes_poteto_mode(all_entry_fields: dict[str, object]) -> bool:
@@ -168,7 +174,7 @@ def reminder_for(all_hook_fields: dict[str, object]) -> str | None:
 def _is_subagent_spawn(all_hook_fields: dict[str, object]) -> bool:
     return (
         all_hook_fields.get("hook_event_name") == PRE_TOOL_USE_EVENT_NAME
-        and all_hook_fields.get("tool_name") in ALL_SUBAGENT_TOOL_NAMES
+        and all_hook_fields.get("tool_name") in ALL_SPAWN_PROMPT_FIELDS_AND_PREFIXES_BY_TOOL_NAME
         and isinstance(all_hook_fields.get("tool_input"), dict)
     )
 
@@ -179,7 +185,9 @@ def main() -> None:
     if hook_payload is None:
         return
     if _is_subagent_spawn(hook_payload):
-        rewritten_input = subagent_input_with_poteto_mode(hook_payload["tool_input"])
+        rewritten_input = subagent_input_with_poteto_mode(
+            hook_payload["tool_name"], hook_payload["tool_input"]
+        )
         if rewritten_input is not None:
             write_pre_tool_use_allow_to_stdout(rewritten_input)
         return
