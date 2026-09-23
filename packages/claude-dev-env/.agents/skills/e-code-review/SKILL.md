@@ -4,7 +4,8 @@ description: >-
   Code review at one of five effort levels that match the built-in
   /code-review recipes word for word: low, medium, high, xhigh, max.
   Triggers: /e-code-review, /e-code-review low, /e-code-review medium,
-  /e-code-review high, /e-code-review xhigh, /e-code-review max.
+  /e-code-review high, /e-code-review xhigh, /e-code-review max, and any
+  level with --fix.
 ---
 
 # e-code-review
@@ -27,7 +28,12 @@ With no level, or an unknown one, run `high`.
 
 A PR number, branch name, or file path after the level is the review target. With no target, the review reads the current diff.
 
+## --fix
+
+`--fix` works with every level. It lives in one file, [reference/fix.md](reference/fix.md). No level file carries its own fix steps.
+
 ## The process
 
-1. Read the level and load its file.
+1. Read the level and the optional `--fix` flag. Load the level file.
 2. Run it end to end, ending in its ReportFindings call.
+3. With `--fix`, load `reference/fix.md` and run it on those findings.
