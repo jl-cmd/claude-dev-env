@@ -4,7 +4,6 @@ from __future__ import annotations
 
 __all__ = [
     "ALL_SELF_LOADING_SUBAGENT_TYPES",
-    "ALL_SUBAGENT_TOOL_NAMES",
     "ASSISTANT_ENTRY_TYPE",
     "COMPACT_BOUNDARY_SUBTYPE",
     "COMPACTION_REMINDER",
@@ -16,7 +15,9 @@ __all__ = [
     "SESSION_START_EVENT_NAME",
     "SKILL_TOOL_NAME",
     "SLASH_COMMAND_MARKER",
-    "SUBAGENT_PROMPT_PREFIX",
+    "CLAUDE_SUBAGENT_PROMPT_PREFIX",
+    "CODEX_SUBAGENT_PROMPT_PREFIX",
+    "ALL_SPAWN_PROMPT_FIELDS_AND_PREFIXES_BY_TOOL_NAME",
     "TOOL_USE_BLOCK_TYPE",
     "USER_ENTRY_TYPE",
     "USER_PROMPT_SUBMIT_EVENT_NAME",
@@ -27,7 +28,6 @@ SESSION_START_EVENT_NAME = "SessionStart"
 USER_PROMPT_SUBMIT_EVENT_NAME = "UserPromptSubmit"
 COMPACTION_SOURCE = "compact"
 
-ALL_SUBAGENT_TOOL_NAMES = frozenset({"Agent", "Task"})
 ALL_SELF_LOADING_SUBAGENT_TYPES = frozenset({"pstack:poteto-agent", "poteto-agent"})
 
 POTETO_MODE_SKILL_NAME = "pstack:poteto-mode"
@@ -40,10 +40,18 @@ USER_ENTRY_TYPE = "user"
 TOOL_USE_BLOCK_TYPE = "tool_use"
 COMPACT_BOUNDARY_SUBTYPE = "compact_boundary"
 
-SUBAGENT_PROMPT_PREFIX = (
+CLAUDE_SUBAGENT_PROMPT_PREFIX = (
     "Before any other work, invoke the pstack:poteto-mode skill with the Skill tool. "
     "Every prompt you write for a subagent opens with the same instruction."
 )
+
+CODEX_SUBAGENT_PROMPT_PREFIX = "$pstack:poteto-mode"
+
+ALL_SPAWN_PROMPT_FIELDS_AND_PREFIXES_BY_TOOL_NAME = {
+    "Agent": ("prompt", CLAUDE_SUBAGENT_PROMPT_PREFIX),
+    "Task": ("prompt", CLAUDE_SUBAGENT_PROMPT_PREFIX),
+    "spawn_agent": ("message", CODEX_SUBAGENT_PROMPT_PREFIX),
+}
 
 NOT_LOADED_REMINDER = (
     "The pstack:poteto-mode skill is not loaded in this context. "

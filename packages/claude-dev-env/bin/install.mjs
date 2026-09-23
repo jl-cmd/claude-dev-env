@@ -38,7 +38,7 @@ import {
     SUBAGENT_MODEL_POLICY_FILE_NAME,
     WINDOWS_PYTHON_LAUNCHER_COMMAND,
     PYTHON_PROBE_TIMEOUT_MILLISECONDS,
-    CODEX_NATIVE_ROUTING_MATCHER,
+    ALL_CODEX_NATIVE_PRE_TOOL_USE_MATCHERS,
 } from './install-constants.mjs';
 import {
     installPstackPlugin,
@@ -2102,7 +2102,7 @@ function selectCodexNativeHooksConfig(hooksConfig) {
         ...hooksConfig,
         hooks: {
             PreToolUse: Array.isArray(preToolUseGroups)
-                ? preToolUseGroups.filter(group => group?.matcher === CODEX_NATIVE_ROUTING_MATCHER)
+                ? preToolUseGroups.filter(group => ALL_CODEX_NATIVE_PRE_TOOL_USE_MATCHERS.has(group?.matcher))
                 : [],
         },
     };

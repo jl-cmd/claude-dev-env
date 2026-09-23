@@ -132,14 +132,46 @@ class TestSubagentSpawn:
 class TestSubagentInputWithPotetoMode:
     def test_every_other_input_field_is_kept(self) -> None:
         rewritten_input = reminder.subagent_input_with_poteto_mode(
-            {"prompt": "Go.", "model": "sonnet", "run_in_background": True}
+            "Agent", {"prompt": "Go.", "model": "sonnet", "run_in_background": True}
         )
         assert rewritten_input is not None
         assert rewritten_input["model"] == "sonnet"
         assert rewritten_input["run_in_background"] is True
 
     def test_an_input_with_no_prompt_is_left_alone(self) -> None:
-        assert reminder.subagent_input_with_poteto_mode({"description": "Go"}) is None
+        assert reminder.subagent_input_with_poteto_mode("Agent", {"description": "Go"}) is None
+
+    def test_a_codex_spawn_input_with_only_items_is_left_alone(self) -> None:
+        assert (
+            reminder.subagent_input_with_poteto_mode(
+                "spawn_agent", {"items": [{"type": "text", "text": "Go."}]}
+            )
+            is None
+        )
+
+
+class TestCodexSpawn:
+    def test_a_codex_spawn_message_opens_with_the_skill_mention(self) -> None:
+        emitted = json.loads(
+            _run_main(
+                _agent_call(
+                    {"message": "Fix the failing test.", "model": "gpt-6-luna"},
+                    tool_name="spawn_agent",
+                )
+            )
+        )
+        rewritten_input = emitted["hookSpecificOutput"]["updatedInput"]
+        assert rewritten_input["message"] == "$pstack:poteto-mode\n\nFix the failing test."
+        assert rewritten_input["model"] == "gpt-6-luna"
+        assert "prompt" not in rewritten_input
+
+    def test_a_codex_spawn_message_that_already_mentions_the_skill_is_left_alone(self) -> None:
+        assert (
+            _run_main(
+                _agent_call({"message": "$pstack:poteto-mode\n\nFix it."}, tool_name="spawn_agent")
+            )
+            == ""
+        )
 
 
 class TestIsPotetoModeLoaded:
