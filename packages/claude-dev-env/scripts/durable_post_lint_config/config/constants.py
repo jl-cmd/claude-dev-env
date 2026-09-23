@@ -101,3 +101,4 @@ REWRITTEN_RELEASE_BODY_MESSAGE = (
     "release automation reads this body back to recognize its own merge; "
     "keep the generated text whole"
 )
+REPOSITORY_OWNER_SEPARATOR = "/"

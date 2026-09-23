@@ -20,6 +20,7 @@ from repository_checks.config.constants import (
     CHECK_ID_PACKAGE_INVENTORY,
     CHECK_ID_PYTEST_TESTPATHS,
     CHECK_ID_TRACKED_PERSONAL_DATA,
+    CHECK_ID_TRACKED_PRIVATE_TERMS,
     FOLLOWUP_LEDGER_MODULE_NAME,
     SUCCESS_EXIT_CODE,
 )
@@ -52,6 +53,7 @@ def test_should_keep_stable_check_identifiers() -> None:
         CHECK_ID_PACKAGE_INVENTORY,
         CHECK_ID_PYTEST_TESTPATHS,
         CHECK_ID_TRACKED_PERSONAL_DATA,
+        CHECK_ID_TRACKED_PRIVATE_TERMS,
     )
 
 

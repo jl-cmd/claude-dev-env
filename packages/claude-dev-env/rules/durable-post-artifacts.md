@@ -65,5 +65,11 @@ server write. Pass the matching action and body file. Use `pr-create`,
 `pr-edit`, `pr-comment`, `pr-review`, `issue-create`, `issue-edit`,
 `issue-comment`, or `github-mcp-post`.
 
+Pass `--repository <owner>/<name>` for the repository the post targets. A
+post may name a private organization only inside a repository that
+organization owns. The linter holds the names as digests, so it reports the
+line that names one without printing the name. Describe the organization in
+general terms and drop the link.
+
 The linter reads the body file and reports a volatile local path without
 printing the body. Fix the body and rerun the linter before posting.

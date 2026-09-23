@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ if str(_SCRIPTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIRECTORY))
 
 import durable_post_lint
+from dev_env_scripts_constants.private_term_constants import PrivateTermDigest
 
 SCRIPT_PATH = _SCRIPTS_DIRECTORY / "durable_post_lint.py"
 VALID_PR_BODY = """## Why
@@ -506,3 +508,91 @@ def test_a_release_body_carrying_a_contrast_stays_accepted() -> None:
     )
 
     assert all_findings == ()
+
+
+_PRIVATE_FIXTURE_TERM = "acmewidget"
+_ALL_PRIVATE_FIXTURE_DIGESTS = frozenset(
+    {
+        PrivateTermDigest(
+            length=len(_PRIVATE_FIXTURE_TERM),
+            sha256=hashlib.sha256(_PRIVATE_FIXTURE_TERM.encode("utf-8")).hexdigest(),
+        )
+    }
+)
+
+
+@pytest.fixture
+def private_fixture_terms(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        durable_post_lint, "ALL_PRIVATE_TERM_DIGESTS", _ALL_PRIVATE_FIXTURE_DIGESTS
+    )
+
+
+@pytest.mark.usefixtures("private_fixture_terms")
+def test_a_body_naming_a_private_organization_reports_its_line() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-comment",
+        title=None,
+        body_text="Fixed.\nSee Acme-Widgets-Inc/tools#12.\n",
+    )
+
+    assert [each_finding.code for each_finding in all_findings] == ["private-term"]
+    assert "Line 2" in all_findings[0].message
+    assert "Acme" not in all_findings[0].message
+
+
+@pytest.mark.usefixtures("private_fixture_terms")
+def test_a_title_naming_a_private_organization_reports() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-create",
+        title="fix: handle the acme widgets upload",
+        body_text=VALID_PR_BODY,
+    )
+
+    assert [each_finding.code for each_finding in all_findings] == ["private-term"]
+
+
+@pytest.mark.usefixtures("private_fixture_terms")
+def test_a_post_inside_the_private_organization_may_name_it() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-comment",
+        title=None,
+        body_text="See Acme-Widgets-Inc/tools#12.\n",
+        repository="Acme-Widgets-Inc/tools",
+    )
+
+    assert all_findings == ()
+
+
+@pytest.mark.usefixtures("private_fixture_terms")
+def test_a_post_to_a_public_repository_may_not_name_it() -> None:
+    all_findings = durable_post_lint.lint_durable_post(
+        action="pr-comment",
+        title=None,
+        body_text="See Acme-Widgets-Inc/tools#12.\n",
+        repository="pat/public-tools",
+    )
+
+    assert [each_finding.code for each_finding in all_findings] == ["private-term"]
+
+
+def test_cli_accepts_a_repository(tmp_path: Path) -> None:
+    body_file = tmp_path / "body.md"
+    body_file.write_text("Comment body.\n", encoding="utf-8")
+    completed_process = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--action",
+            "pr-comment",
+            "--repository",
+            "pat/public-tools",
+            "--body-file",
+            str(body_file),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed_process.returncode == 0
+    assert completed_process.stderr == ""

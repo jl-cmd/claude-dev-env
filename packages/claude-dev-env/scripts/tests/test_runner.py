@@ -12,6 +12,7 @@ if str(_TESTS_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIRECTORY))
 
 from repository_checks.config.constants import (
+    CHECK_ID_TRACKED_PRIVATE_TERMS,
     FAILED_CHECK_EXIT_CODE,
     FINDINGS_EXIT_CODE,
 )
@@ -57,3 +58,22 @@ def test_should_emit_stable_sorted_findings(tmp_path: Path) -> None:
     assert first_exit_code == FINDINGS_EXIT_CODE
     assert first_stdout == second_stdout
     assert first_stdout.index("alpha/CLAUDE.md") < first_stdout.index("zeta/CLAUDE.md")
+
+
+def test_should_fail_closed_when_the_private_term_check_cannot_read_a_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository_root = seed_clean_repository(tmp_path / "repo")
+
+    def fail_private_term_scan(
+        _repository_root: Path, _all_tracked_paths: object
+    ) -> list[object]:
+        raise OSError("tracked file unreadable")
+
+    monkeypatch.setattr(
+        "repository_checks.runner.collect_tracked_private_term_findings",
+        fail_private_term_scan,
+    )
+    exit_code, stdout_text, _stderr_text = run_policy(repository_root)
+    assert exit_code == FAILED_CHECK_EXIT_CODE
+    assert f"error: rule failed: {CHECK_ID_TRACKED_PRIVATE_TERMS}" in stdout_text

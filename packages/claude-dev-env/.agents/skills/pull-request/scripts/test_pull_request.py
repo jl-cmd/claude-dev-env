@@ -198,6 +198,8 @@ def test_actions_run_exact_linter_then_gh_arguments(
         "--body-file",
         BODY_FILENAME,
         *head_arguments,
+        "--repository",
+        all_cli_arguments[all_cli_arguments.index("--repo") + 1],
     ]
     assert exit_code == 0
     assert _calls(command_runner) == [expected_linter, expected_gh]
