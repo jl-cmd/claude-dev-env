@@ -78,6 +78,28 @@ class TestChooseCodexAccount:
         assert (decision.tier, decision.reading.name) == ("luna", "codex-2")
         assert decision.stop_below_percent == 1.0
 
+    def should_keep_luna_off_an_account_under_twenty_percent_of_its_five_hour_window(
+        self,
+    ) -> None:
+        decision = choice.choose_codex_account(
+            [
+                reading("codex-1", weekly_used=92.0, short_used=85.0),
+                reading("codex-2", weekly_used=97.0, short_used=80.0),
+            ]
+        )
+        assert (decision.tier, decision.reading.name) == ("luna", "codex-2")
+
+    def should_run_luna_on_an_account_with_no_five_hour_window(self) -> None:
+        weekly_only = choice.AccountReading(
+            "codex-3",
+            Path("/profiles/codex-3"),
+            CodexAccountMeters((UsageWindow(10080, 95.0, NOW + timedelta(days=1)),)),
+        )
+        decision = choice.choose_codex_account(
+            [reading("codex-1", weekly_used=92.0, short_used=90.0), weekly_only]
+        )
+        assert (decision.tier, decision.reading.name) == ("luna", "codex-3")
+
     def should_wait_on_the_account_that_resets_first_when_none_passes_one_percent(
         self,
     ) -> None:

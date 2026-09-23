@@ -11,7 +11,7 @@ skills, plugins and prompts. A job asks the picker which account to use.
 |---|---|
 | `scripts/codex_account_choice.py` | `choose` names the account and tier a job runs on, `check` tells a running job whether its account is still above a floor, `sync` links the shared setup into every account's home |
 | `scripts/codex_account_meters.py` | Reads one account's rate-limit windows through `codex app-server` with `CODEX_HOME` set to that account's home |
-| `scripts/dev_env_scripts_constants/codex_account_constants.py` | The account names in try order, the shared entry names, the 10% bar and the 1% Luna stop |
+| `scripts/dev_env_scripts_constants/codex_account_constants.py` | The account names in try order, the shared entry names, the 10% bar, the 1% Luna stop, and the 20% 5-hour floor for Luna |
 
 ## Names and order
 
@@ -44,6 +44,7 @@ Room is the smaller of an account's two windows: the 5-hour window and the week.
 |---|---|
 | First account in order with more than 10% left | `normal` on that account |
 | No account over 10%, one or more over 1% | `luna` on the account with the most room, `stop_below_percent` 1 |
+| An account that reports a 5-hour window, with under 20% of that window left | never takes `luna` |
 | No account over 1% | `wait`, naming the account whose blocking windows reset first |
 | Account not signed in, or its meter unread | skipped, with the reason in `accounts` |
 

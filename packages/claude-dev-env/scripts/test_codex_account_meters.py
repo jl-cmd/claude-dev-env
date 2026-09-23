@@ -84,6 +84,25 @@ class TestParseRateLimitsReply:
             parse_rate_limits_reply(line)
 
 
+class TestShortWindowPercentLeft:
+    def should_read_the_room_left_in_the_five_hour_window(self) -> None:
+        meters = parse_rate_limits_reply(
+            reply_line(
+                {
+                    "primary": {"usedPercent": 70, "windowDurationMins": 300},
+                    "secondary": {"usedPercent": 20, "windowDurationMins": 10080},
+                }
+            )
+        )
+        assert meters.short_window_percent_left == 30.0
+
+    def should_name_no_short_window_for_a_weekly_only_account(self) -> None:
+        meters = parse_rate_limits_reply(
+            reply_line({"secondary": {"usedPercent": 20, "windowDurationMins": 10080}})
+        )
+        assert meters.short_window_percent_left is None
+
+
 class TestBlockingReset:
     def should_name_when_the_last_blocking_window_resets(self) -> None:
         meters = parse_rate_limits_reply(

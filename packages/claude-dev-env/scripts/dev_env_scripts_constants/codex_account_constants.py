@@ -45,6 +45,12 @@ NORMAL_TIER_MINIMUM_PERCENT_LEFT: float = 10.0
 LUNA_TIER_STOP_PERCENT_LEFT: float = 1.0
 """A Luna fallback job stops once its account is at or below this percent left."""
 
+LUNA_TIER_SHORT_WINDOW_MINIMUM_PERCENT_LEFT: float = 20.0
+"""An account with a window shorter than a week runs Luna only with this much of it left."""
+
+WEEKLY_WINDOW_MINUTES: int = 10080
+"""Length of the weekly window. Any shorter window is a short window, such as 5 hours."""
+
 FULL_PERCENT: float = 100.0
 """Percent scale ceiling, so percent left is this minus percent used."""
 

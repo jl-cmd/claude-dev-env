@@ -48,6 +48,7 @@ from dev_env_scripts_constants.codex_account_constants import (
     RATE_LIMITS_REQUEST_ID,
     READER_JOIN_TIMEOUT_SECONDS,
     TEXT_ENCODING,
+    WEEKLY_WINDOW_MINUTES,
 )
 from shared_tree_paths import resolve_shared_process_tree_scripts_directory
 
@@ -79,7 +80,7 @@ class UsageWindow:
 
 @dataclass(frozen=True)
 class CodexAccountMeters:
-    """One account's windows, with percent_left and resets_before_room read from them."""
+    """One account's windows, with percent_left, short_window_percent_left and resets_before_room."""
 
     all_windows: tuple[UsageWindow, ...]
 
@@ -88,6 +89,19 @@ class CodexAccountMeters:
         """Room left in the tightest window, from 0 to 100."""
         most_used = max(each_window.used_percent for each_window in self.all_windows)
         return max(0.0, FULL_PERCENT - most_used)
+
+    @property
+    def short_window_percent_left(self) -> float | None:
+        """Room left in the windows shorter than a week, or None when the account has none."""
+        all_short_used = [
+            each_window.used_percent
+            for each_window in self.all_windows
+            if each_window.duration_minutes is not None
+            and each_window.duration_minutes < WEEKLY_WINDOW_MINUTES
+        ]
+        if not all_short_used:
+            return None
+        return max(0.0, FULL_PERCENT - max(all_short_used))
 
     def resets_before_room(self, minimum_percent_left: float) -> datetime | None:
         """When every window that holds the account at or under a bar has reset.

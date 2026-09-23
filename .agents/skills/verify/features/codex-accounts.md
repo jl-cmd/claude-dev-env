@@ -9,6 +9,7 @@ The codex_account_choice picker reads the rate-limit windows of up to four Codex
 - Meter read. `scripts/codex_account_meters.py` starts `codex app-server` with `CODEX_HOME` set, sends the handshake and `account/rateLimits/read`, and keeps standard input open until the reply lands.
 - Picker. `choose` prints `tier`, `account`, `codex_home`, `percent_left`, `stop_below_percent`, `reason`, and every account's reading.
 - Luna stop. `check <account> --floor 1` exits 0 above the floor and 3 at or below it.
+- Luna short-window floor. An account that reports a window shorter than a week, such as 5 hours, takes `luna` only with at least 20% of that window left.
 
 ## How to get to it (user POV)
 

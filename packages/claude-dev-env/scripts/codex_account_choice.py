@@ -6,6 +6,7 @@ Up to four Codex accounts sign in, each under its own Codex home in
 
     first account with more than 10% left              -> normal, that account
     none over 10%, the roomiest one over 1%            -> luna, stop at 1% left
+    ... but an account with a 5-hour window needs 20% of it left for luna
     none over 1%, or no meter reads                    -> wait, name the first reset
     account not signed in, or its meter unread         -> skipped
 
@@ -50,6 +51,7 @@ from dev_env_scripts_constants.codex_account_constants import (
     CODEX_PROFILES_ROOT_ENVIRONMENT_VARIABLE,
     EXIT_CODE_NO_ROOM,
     EXIT_CODE_ROOM,
+    LUNA_TIER_SHORT_WINDOW_MINIMUM_PERCENT_LEFT,
     LUNA_TIER_STOP_PERCENT_LEFT,
     MAIN_CODEX_HOME_DIRECTORY_NAME,
     NORMAL_TIER_MINIMUM_PERCENT_LEFT,
@@ -194,12 +196,18 @@ def _normal_decision(all_read: Sequence[AccountReading]) -> CodexAccountDecision
     return None
 
 
+def _can_run_luna(reading: AccountReading) -> bool:
+    if reading.meters is None or reading.meters.percent_left <= LUNA_TIER_STOP_PERCENT_LEFT:
+        return False
+    short_window_left = reading.meters.short_window_percent_left
+    return (
+        short_window_left is None
+        or short_window_left >= LUNA_TIER_SHORT_WINDOW_MINIMUM_PERCENT_LEFT
+    )
+
+
 def _luna_decision(all_read: Sequence[AccountReading]) -> CodexAccountDecision | None:
-    all_candidates = [
-        each_reading
-        for each_reading in all_read
-        if _percent_left(each_reading) > LUNA_TIER_STOP_PERCENT_LEFT
-    ]
+    all_candidates = [each_reading for each_reading in all_read if _can_run_luna(each_reading)]
     if not all_candidates:
         return None
     roomiest = max(all_candidates, key=_percent_left)
@@ -223,6 +231,7 @@ def choose_codex_account(all_readings: Sequence[AccountReading]) -> CodexAccount
 
         codex-1 8%, codex-2 40%          -> normal on codex-2
         codex-1 8%, codex-2 3%, others 0 -> luna on codex-1, stop at 1%
+        codex-1 week 8%, 5-hour 15% left -> no luna on codex-1, 5-hour under 20%
         every account 1% or less         -> wait, naming the account that resets first
         codex-1 unread, codex-2 40%      -> normal on codex-2
 
