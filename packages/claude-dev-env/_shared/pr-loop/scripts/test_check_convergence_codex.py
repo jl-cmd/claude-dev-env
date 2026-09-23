@@ -1,8 +1,8 @@
 """Fixture-driven tests for the conditional Codex convergence gate.
 
-Covers: required-and-clean, required-and-dirty, skipped-by-threshold,
-skipped-by-token, skipped-by-down. Threshold comes from the probe constant
-via ``is_codex_review_required`` — this module never inlines the percent.
+Covers: required-and-clean, required-and-dirty, skipped-by-tier,
+skipped-by-token, skipped-by-down, and the read of the Codex account picker's
+``choose`` answer. The required tier comes from ``CODEX_TIER_NORMAL``.
 """
 
 from __future__ import annotations
@@ -16,10 +16,8 @@ from types import ModuleType
 import pytest
 
 import _pr_converge_path_setup  # noqa: F401
-from codex_review_scripts_constants.codex_usage_probe_constants import (
-    WEEKLY_USAGE_GATE_THRESHOLD_PERCENT,
-)
 from pr_converge_scripts_constants.convergence_gate_constants import (
+    CODEX_TIER_NORMAL,
     MINIMUM_ABBREVIATED_SHA_LENGTH,
 )
 
@@ -33,8 +31,7 @@ CLEAN_BODY = (
 )
 HEAD_SHA = "ae8005aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 OTHER_SHA = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-PERCENT_ABOVE_THRESHOLD = float(WEEKLY_USAGE_GATE_THRESHOLD_PERCENT) + 1.0
-PERCENT_AT_THRESHOLD = float(WEEKLY_USAGE_GATE_THRESHOLD_PERCENT)
+ALL_TIERS_WITHOUT_ROOM_FOR_REVIEW = ("luna", "wait")
 
 
 def _load_module() -> ModuleType:
@@ -64,7 +61,7 @@ check_convergence = _load_module()
 def _write_fixture(
     tmp_path: Path,
     *,
-    codex_percent_left: float | None,
+    codex_tier: str | None,
     codex_clean_at: str | None,
     filename: str = "codex-gate.json",
 ) -> Path:
@@ -83,7 +80,7 @@ def _write_fixture(
         "unresolved_bot_threads_detail": "0 unresolved",
         "pending_reviews_passed": True,
         "pending_reviews_detail": "none pending",
-        "codex_percent_left": codex_percent_left,
+        "codex_tier": codex_tier,
         "codex_clean_at": codex_clean_at,
     }
     fixture_path.write_text(json.dumps(payload), encoding="utf-8")
@@ -95,7 +92,7 @@ def should_pass_when_codex_required_and_clean(
 ) -> None:
     fixture_path = _write_fixture(
         tmp_path,
-        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_tier=CODEX_TIER_NORMAL,
         codex_clean_at=HEAD_SHA,
         filename="required-clean.json",
     )
@@ -120,20 +117,18 @@ def should_pass_when_codex_required_and_clean(
     assert "All pre-conditions met" in captured
 
 
-def should_pass_without_reading_usage_when_the_clean_stamp_is_on_head(
+def should_pass_without_running_the_picker_when_the_clean_stamp_is_on_head(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def _probe_that_must_not_run() -> float | None:
+    def _picker_that_must_not_run() -> str | None:
         raise AssertionError(
-            "the weekly usage probe must not run when codex_clean_at is on HEAD"
+            "the Codex account picker must not run when codex_clean_at is on HEAD"
         )
 
-    monkeypatch.setattr(
-        check_convergence, "_probe_codex_percent_left", _probe_that_must_not_run
-    )
+    monkeypatch.setattr(check_convergence, "_read_codex_tier", _picker_that_must_not_run)
 
     is_passed, detail = check_convergence._evaluate_codex_clean(
-        read_percent_left=check_convergence._probe_codex_percent_left,
+        read_codex_tier=check_convergence._read_codex_tier,
         codex_clean_at=HEAD_SHA,
         head_sha=HEAD_SHA,
     )
@@ -151,7 +146,7 @@ def should_fail_when_codex_clean_stamp_is_shorter_than_an_abbreviated_sha(
 ) -> None:
     fixture_path = _write_fixture(
         tmp_path,
-        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_tier=CODEX_TIER_NORMAL,
         codex_clean_at=HEAD_SHA[:1],
         filename="required-short-stamp.json",
     )
@@ -179,7 +174,7 @@ def should_pass_when_codex_clean_stamp_is_an_abbreviated_head_sha(
 ) -> None:
     fixture_path = _write_fixture(
         tmp_path,
-        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_tier=CODEX_TIER_NORMAL,
         codex_clean_at=HEAD_SHA[:MINIMUM_ABBREVIATED_SHA_LENGTH],
         filename="required-abbreviated-stamp.json",
     )
@@ -207,7 +202,7 @@ def should_fail_when_codex_required_and_dirty(
 ) -> None:
     fixture_path = _write_fixture(
         tmp_path,
-        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_tier=CODEX_TIER_NORMAL,
         codex_clean_at=OTHER_SHA,
         filename="required-dirty.json",
     )
@@ -232,14 +227,15 @@ def should_fail_when_codex_required_and_dirty(
     assert "do not mark ready" in captured
 
 
-def should_skip_when_usage_at_or_below_threshold(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize("tier_without_room", ALL_TIERS_WITHOUT_ROOM_FOR_REVIEW)
+def should_skip_when_the_picker_names_no_account_with_room_for_review(
+    tier_without_room: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     fixture_path = _write_fixture(
         tmp_path,
-        codex_percent_left=PERCENT_AT_THRESHOLD,
+        codex_tier=tier_without_room,
         codex_clean_at=None,
-        filename="skipped-threshold.json",
+        filename="skipped-tier.json",
     )
     exit_code = check_convergence.main(
         [
@@ -261,12 +257,12 @@ def should_skip_when_usage_at_or_below_threshold(
     assert "skipped (codex review not required)" in captured
 
 
-def should_skip_when_codex_percent_left_is_null(
+def should_skip_when_codex_tier_is_null(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     fixture_path = _write_fixture(
         tmp_path,
-        codex_percent_left=None,
+        codex_tier=None,
         codex_clean_at=None,
         filename="skipped-null.json",
     )
@@ -297,7 +293,7 @@ def should_bypass_when_codex_token_disables_reviewer(
     monkeypatch.setenv("CLAUDE_REVIEWS_DISABLED", "codex")
     fixture_path = _write_fixture(
         tmp_path,
-        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_tier=CODEX_TIER_NORMAL,
         codex_clean_at=None,
         filename="skipped-token.json",
     )
@@ -326,7 +322,7 @@ def should_bypass_when_codex_down_flag_set(
 ) -> None:
     fixture_path = _write_fixture(
         tmp_path,
-        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_tier=CODEX_TIER_NORMAL,
         codex_clean_at=None,
         filename="skipped-down.json",
     )
@@ -433,7 +429,7 @@ def should_bypass_when_job_state_codex_down_is_true(
     )
     fixture_path = _write_fixture(
         tmp_path,
-        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_tier=CODEX_TIER_NORMAL,
         codex_clean_at=None,
         filename="job-state-codex-down.json",
     )
@@ -470,7 +466,7 @@ def should_fail_when_job_state_lacks_codex_down_and_clean_stamp(
     )
     fixture_path = _write_fixture(
         tmp_path,
-        codex_percent_left=PERCENT_ABOVE_THRESHOLD,
+        codex_tier=CODEX_TIER_NORMAL,
         codex_clean_at=None,
         filename="job-state-no-down.json",
     )
@@ -515,3 +511,49 @@ def should_accept_codex_clean_at_flag_in_parsed_arguments() -> None:
         ]
     )
     assert arguments.codex_clean_at == HEAD_SHA
+
+
+def _install_fake_picker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, picker_source: str
+) -> None:
+    picker_path = tmp_path / "codex_account_choice.py"
+    picker_path.write_text(picker_source, encoding="utf-8")
+    monkeypatch.setattr(check_convergence, "_codex_account_picker_path", lambda: picker_path)
+
+
+def should_read_the_tier_the_picker_chooses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install_fake_picker(
+        tmp_path,
+        monkeypatch,
+        "import json, sys\n"
+        "assert sys.argv[1:] == ['choose']\n"
+        "print(json.dumps({'tier': 'normal', 'account': 'codex-2'}))\n",
+    )
+
+    assert check_convergence._read_codex_tier() == CODEX_TIER_NORMAL
+
+
+@pytest.mark.parametrize(
+    "picker_source",
+    [
+        "import sys\nprint('{\"tier\": \"normal\"}')\nsys.exit(1)\n",
+        "print('not json')\n",
+        "print('[\"normal\"]')\n",
+        "print('{\"tier\": 1}')\n",
+    ],
+)
+def should_read_no_tier_when_the_picker_fails_or_answers_out_of_shape(
+    picker_source: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install_fake_picker(tmp_path, monkeypatch, picker_source)
+
+    assert check_convergence._read_codex_tier() is None
+
+
+def should_locate_the_packaged_codex_account_picker() -> None:
+    picker_path = check_convergence._codex_account_picker_path()
+
+    assert picker_path.name == "codex_account_choice.py"
+    assert picker_path.is_file()

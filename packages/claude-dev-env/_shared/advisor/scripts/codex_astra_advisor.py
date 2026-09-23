@@ -30,6 +30,7 @@ from advisor_scripts_constants.advisor_route_constants import (
 )
 from advisor_scripts_constants.astra_advisor_constants import (
     ADVISOR_CODEX_EXECUTABLE_ENV_VAR,
+    ALL_ACCOUNT_PICKER_RELATIVE_PARTS,
     ALL_ASTRA_TRUTHY_VALUES,
     ASTRA_BIND_FAILURE_REASON,
     ASTRA_CODEX_TIMEOUT_REASON,
@@ -41,10 +42,10 @@ from advisor_scripts_constants.astra_advisor_constants import (
     ASTRA_FALLBACK_KIND_BROKEN,
     ASTRA_FALLBACK_KIND_DECLINED,
     ASTRA_SESSION_ID_METAVAR,
-    CLAUDE_CONFIG_DIRECTORY_NAME,
     CODEX_CONFIG_FLAG,
     CODEX_EXEC_SUBCOMMAND,
     CODEX_EXECUTABLE,
+    CODEX_HOME_ENV_VAR,
     CODEX_JSON_FLAG,
     CODEX_MODEL_FLAG,
     CODEX_PROMPT_FROM_STDIN,
@@ -52,10 +53,7 @@ from advisor_scripts_constants.astra_advisor_constants import (
     CODEX_REASONING_CONFIG_TEMPLATE,
     CODEX_RESUME_SUBCOMMAND,
     CODEX_SANDBOX_FLAG,
-    USAGE_PROBE_FILENAME,
-    USAGE_PROBE_PACKAGE_DIRECTORY_NAME,
-    USAGE_PROBE_SCRIPTS_DIRECTORY_NAME,
-    USAGE_PROBE_SHARED_DIRECTORY_NAME,
+    SHARED_PACKAGE_ROOT_PARENT_INDEX,
 )
 from codex_astra_preflight import AstraPreflight, run_astra_preflight
 from codex_astra_reply import (
@@ -176,23 +174,18 @@ def resolve_advisor_effort(all_settings: Mapping[str, str] | None) -> str:
     return resolve_advisor_pair(all_settings, None)[1]
 
 
-def resolve_usage_probe_path(home_directory: Path) -> Path:
-    """Return the Codex usage-probe path under home_directory.
+def resolve_account_picker_path() -> Path:
+    """Return the Codex account picker in the scripts directory beside this shared tree.
 
-    Args:
-        home_directory: Home directory that holds the installed probe.
+    ::
+
+        ~/.claude/_shared/advisor/scripts  ->  ~/.claude/scripts/codex_account_choice.py
 
     Returns:
-        Path to the usage probe under that home.
+        Path to ``codex_account_choice.py``.
     """
-    return (
-        home_directory
-        / CLAUDE_CONFIG_DIRECTORY_NAME
-        / USAGE_PROBE_SHARED_DIRECTORY_NAME
-        / USAGE_PROBE_PACKAGE_DIRECTORY_NAME
-        / USAGE_PROBE_SCRIPTS_DIRECTORY_NAME
-        / USAGE_PROBE_FILENAME
-    )
+    shared_root = _scripts_directory.parents[SHARED_PACKAGE_ROOT_PARENT_INDEX]
+    return shared_root.joinpath(*ALL_ACCOUNT_PICKER_RELATIVE_PARTS)
 
 
 def resolve_codex_executable(all_settings: Mapping[str, str] | None) -> str | None:
@@ -244,13 +237,19 @@ def build_codex_arguments(
 
 def _resolve_preflight(
     preflight: AstraPreflight | None,
-    probe_path: Path | None,
+    picker_path: Path | None,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> AstraPreflight:
     if preflight is not None:
         return preflight
-    resolved_path = resolve_usage_probe_path(Path.home()) if probe_path is None else probe_path
+    resolved_path = resolve_account_picker_path() if picker_path is None else picker_path
     return run_astra_preflight(resolved_path, process_runner)
+
+
+def _codex_environment(codex_home: Path | None) -> dict[str, str] | None:
+    if codex_home is None:
+        return None
+    return {**os.environ, CODEX_HOME_ENV_VAR: str(codex_home)}
 
 
 def _run_codex(
@@ -259,6 +258,7 @@ def _run_codex(
     session_id: str | None,
     all_settings: Mapping[str, str] | None,
     executable: str,
+    codex_home: Path | None,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> subprocess.CompletedProcess[str]:
     model_id, effort = resolve_advisor_pair(all_settings, None)
@@ -270,6 +270,7 @@ def _run_codex(
             model_id=model_id,
         ),
         cwd=str(working_directory),
+        env=_codex_environment(codex_home),
         input=prompt,
         capture_output=True,
         text=True,
@@ -292,7 +293,13 @@ def _run_enabled_advisor(
         return build_fallback_reply(resolved_preflight.reason, True, resolved_preflight.fallback_kind)
     try:
         completed = _run_codex(
-            prompt, working_directory, session_id, setting_by_name, executable, process_runner
+            prompt,
+            working_directory,
+            session_id,
+            setting_by_name,
+            executable,
+            resolved_preflight.codex_home,
+            process_runner,
         )
     except subprocess.TimeoutExpired as error:
         return build_fallback_reply(
@@ -324,7 +331,7 @@ def run_codex_astra_advisor(
     prompt: str,
     working_directory: Path,
     preflight: AstraPreflight | None,
-    probe_path: Path | None,
+    picker_path: Path | None,
     setting_by_name: Mapping[str, str] | None,
     session_id: str | None,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
@@ -334,11 +341,11 @@ def run_codex_astra_advisor(
     Args:
         prompt: Advisor prompt text.
         working_directory: Working directory for Codex.
-        preflight: Usage probe result, or None to run the probe.
-        probe_path: Usage-probe path, or None for the installed path.
+        preflight: Account picker result, or None to run the picker.
+        picker_path: Account picker path, or None for the one beside this shared tree.
         setting_by_name: Environment mapping, or None to read os.environ.
         session_id: Session to resume, or None for a new bind.
-        process_runner: Callable that runs the probe and Codex.
+        process_runner: Callable that runs the picker and Codex.
 
     Returns:
         Advisor reply, or a fallback.
@@ -348,7 +355,7 @@ def run_codex_astra_advisor(
     executable = resolve_codex_executable(setting_by_name)
     if executable is None:
         return build_fallback_reply(ASTRA_EXECUTABLE_NOT_FOUND_REASON, True)
-    resolved_preflight = _resolve_preflight(preflight, probe_path, process_runner)
+    resolved_preflight = _resolve_preflight(preflight, picker_path, process_runner)
     return _run_enabled_advisor(prompt, working_directory, setting_by_name, session_id, executable, resolved_preflight, process_runner)
 
 
