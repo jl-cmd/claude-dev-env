@@ -10,4 +10,5 @@ Use the feature file that matches the changed user path:
 - [Hook lifecycle](hook-lifecycle.md)
 - [Merge readiness](merge-readiness.md)
 - [Second Claude account](second-claude-account.md)
+- [Codex accounts](codex-accounts.md)
 - [Follow-up ledger](follow-up-ledger.md)

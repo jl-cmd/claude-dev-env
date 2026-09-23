@@ -31,6 +31,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -214,11 +215,11 @@ def _unlink_orphaned_links(main_home: Path, profile_home: Path) -> tuple[str, ..
 
 
 def _unlink_local_names_linked_to_main(
-    main_home: Path, profile_home: Path
+    main_home: Path, profile_home: Path, is_local: Callable[[str], bool]
 ) -> tuple[str, ...]:
     all_unlinked: list[str] = []
     for each_entry in sorted(profile_home.iterdir()):
-        if not is_account_local(each_entry.name):
+        if not is_local(each_entry.name):
             continue
         if not links_to(each_entry, main_home / each_entry.name):
             continue
@@ -237,13 +238,16 @@ def _clear_entry(entry_path: Path, source_path: Path, replaced_directory: Path) 
 
 
 def _link_shared_entries(
-    main_home: Path, profile_home: Path, replaced_directory: Path
+    main_home: Path,
+    profile_home: Path,
+    replaced_directory: Path,
+    is_local: Callable[[str], bool],
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     all_linked: list[str] = []
     all_moved_aside: list[str] = []
     for each_source in sorted(main_home.iterdir()):
         entry_path = profile_home / each_source.name
-        if is_account_local(each_source.name) or links_to(entry_path, each_source):
+        if is_local(each_source.name) or links_to(entry_path, each_source):
             continue
         if os.path.lexists(entry_path) and _clear_entry(
             entry_path, each_source, replaced_directory
@@ -255,14 +259,19 @@ def _link_shared_entries(
 
 
 def sync_profile(
-    *, main_home: Path, profile_home: Path, now: datetime
+    *,
+    main_home: Path,
+    profile_home: Path,
+    now: datetime,
+    is_local: Callable[[str], bool] = is_account_local,
 ) -> ProfileSyncReport:
     """Link every shared main-home entry into the profile home.
 
     Args:
-        main_home: The main account's Claude home.
-        profile_home: The second account's Claude home.
+        main_home: The main account's home.
+        profile_home: The profile account's home.
         now: The run time that names the folder stale entries move into.
+        is_local: Tells whether a top-level entry belongs to one account only.
 
     Returns:
         The entries the run linked, moved aside, and unlinked.
@@ -271,11 +280,14 @@ def sync_profile(
     all_unlinked = tuple(
         sorted(
             _unlink_orphaned_links(main_home, profile_home)
-            + _unlink_local_names_linked_to_main(main_home, profile_home)
+            + _unlink_local_names_linked_to_main(main_home, profile_home, is_local)
         )
     )
     all_linked, all_moved_aside = _link_shared_entries(
-        main_home, profile_home, profile_home / REPLACED_DIRECTORY_NAME / _stamp(now)
+        main_home,
+        profile_home,
+        profile_home / REPLACED_DIRECTORY_NAME / _stamp(now),
+        is_local,
     )
     return ProfileSyncReport(
         all_linked=all_linked,

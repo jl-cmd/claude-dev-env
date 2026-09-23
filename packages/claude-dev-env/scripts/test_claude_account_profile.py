@@ -76,6 +76,18 @@ class TestSyncProfile:
             profile_home / "settings.json", main_home / "settings.json"
         )
 
+    def should_link_only_what_the_callers_rule_shares(self, tmp_path: Path) -> None:
+        main_home = build_main_home(tmp_path)
+        profile_home = tmp_path / "codex-1"
+        report = profile.sync_profile(
+            main_home=main_home,
+            profile_home=profile_home,
+            now=NOW,
+            is_local=lambda entry_name: entry_name != "rules",
+        )
+        assert report.all_linked == ("rules",)
+        assert not (profile_home / "skills").exists()
+
     def should_keep_the_accounts_own_sign_in_state_and_history_apart(
         self, tmp_path: Path
     ) -> None:
