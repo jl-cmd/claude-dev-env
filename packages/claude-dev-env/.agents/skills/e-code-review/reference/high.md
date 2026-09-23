@@ -1,8 +1,8 @@
 `high effort → 8 inline angles → dedup (no verify) → ≤10 findings`
 
-You are reviewing for **recall** at high effort: catch every real bug a careful
-reviewer would catch in one sitting. At this level, catching real bugs matters
-more than avoiding false positives. Err on the side of surfacing.
+You are reviewing for **recall** at high effort: catch every bug a careful
+reviewer would catch in one sitting. At this level, surface a finding even when
+it may be a false positive. Err on the side of surfacing.
 
 ## Phase 0 — Gather the diff
 
@@ -30,10 +30,10 @@ wrong-variable copy-paste, error swallowed in catch, unescaped regex metachars.
 
 ### Angle B — removed-behavior auditor
 
-For every line the diff DELETES or replaces, name the invariant or behavior it
+For every line the diff DELETES or rewrites, name the invariant or behavior it
 enforced, then search the new code for where that invariant is re-established.
 If you can't find it, that's a candidate: a removed guard, a dropped error
-path, a narrowed validation, a deleted test that was covering a real case.
+path, a narrowed validation, a deleted test that was covering a live case.
 
 ### Angle C — cross-file tracer
 
@@ -67,8 +67,8 @@ alternative.
 
 ### Altitude
 
-Check that each change fixes the root cause at the right depth rather than
-patching a symptom with a fragile bandaid. Special cases layered on shared
+Check that each change fixes the root cause at the right depth. A fix that
+patches a symptom with a fragile bandaid is a finding. Special cases layered on shared
 infrastructure are a sign the fix isn't deep enough — prefer the simpler, more
 general change to the underlying mechanism over adding special cases, and name
 that change.
@@ -89,7 +89,7 @@ report can cite it. If no CLAUDE.md applies, return nothing for this angle.
 Cleanup, altitude, and conventions candidates use the same
 `file`/`line`/`summary` shape; in `failure_scenario`, state the concrete
 cost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule
-is broken) instead of a crash. Correctness bugs always outrank cleanup,
+is broken) in the place a crash would go. Correctness bugs always outrank cleanup,
 altitude, and conventions findings when the output cap forces a cut.
 
 Pass every candidate with a nameable failure scenario through — finders that
@@ -101,7 +101,7 @@ Pool all candidates. Dedup near-duplicates only (same defect, same location, sam
 
 ## Output
 
-Target **at least 5 findings**. If fewer genuine findings exist, emit what you have — do not invent to hit the floor.
+Target **at least 5 findings**. If fewer findings exist, emit what you have — do not invent to hit the floor.
 
 Call the ReportFindings tool once to report this review's results
 with `{level, findings}`. `findings` is at most 10 entries ranked
@@ -122,7 +122,7 @@ the tool call is the report.
 Whenever reported findings get fixed later in this session - the user asks you
 to fix them, or later work fixes them incidentally - you MUST call ReportFindings again with the same findings, each
 carrying an `outcome`: `fixed`, `no_change_needed` (the finding was wrong or
-already handled), or `skipped` (real but not applied). Do not repeat the
+already handled), or `skipped` (valid but not applied). Do not repeat the
 findings as text.
 Make that call immediately after the fixes land, before any prose summary; the
 host UI's per-finding status updates only from it, and without it the findings

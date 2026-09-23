@@ -1,7 +1,7 @@
 `max effort → 5+5 angles × 8 candidates → 1-vote verify → sweep → ≤15 findings`
 
-You are reviewing for **recall** at maximum effort: catch every real bug. At
-this level, catching real bugs matters more than avoiding false positives — a
+You are reviewing for **recall** at maximum effort: catch every bug. At
+this level, surface a finding even when it may be a false positive. A
 missed bug ships. Err on the side of surfacing.
 
 ## Phase 0 — Gather the diff
@@ -31,10 +31,10 @@ wrong-variable copy-paste, error swallowed in catch, unescaped regex metachars.
 
 ### Angle B — removed-behavior auditor
 
-For every line the diff DELETES or replaces, name the invariant or behavior it
+For every line the diff DELETES or rewrites, name the invariant or behavior it
 enforced, then search the new code for where that invariant is re-established.
 If you can't find it, that's a candidate: a removed guard, a dropped error
-path, a narrowed validation, a deleted test that was covering a real case.
+path, a narrowed validation, a deleted test that was covering a live case.
 
 ### Angle C — cross-file tracer
 
@@ -55,9 +55,9 @@ timezone/DST drift; float equality. Flag any instance the diff introduces.
 When the PR adds or modifies a type that wraps another (cache, proxy, decorator,
 adapter): check that every method routes to the wrapped instance and not back
 through a registry/session/global — e.g. a caching provider holding a
-`delegate` field that resolves IDs via `session.get(...)` instead of
+`delegate` field that resolves IDs via `session.get(...)` where it should call
 `delegate.get(...)` will re-enter the cache or recurse. Also check that the
-wrapper forwards all the methods the callers actually use.
+wrapper forwards all the methods the callers use.
 
 ### Reuse
 
@@ -84,8 +84,8 @@ alternative.
 
 ### Altitude
 
-Check that each change fixes the root cause at the right depth rather than
-patching a symptom with a fragile bandaid. Special cases layered on shared
+Check that each change fixes the root cause at the right depth. A fix that
+patches a symptom with a fragile bandaid is a finding. Special cases layered on shared
 infrastructure are a sign the fix isn't deep enough — prefer the simpler, more
 general change to the underlying mechanism over adding special cases, and name
 that change.
@@ -106,7 +106,7 @@ report can cite it. If no CLAUDE.md applies, return nothing for this angle.
 Cleanup, altitude, and conventions candidates use the same
 `file`/`line`/`summary` shape; in `failure_scenario`, state the concrete
 cost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule
-is broken) instead of a crash. Correctness bugs always outrank cleanup,
+is broken) in the place a crash would go. Correctness bugs always outrank cleanup,
 altitude, and conventions findings when the output cap forces a cut.
 
 ## Phase 2 — Verify (1-vote, 3-state)
@@ -118,7 +118,7 @@ file(s), and the candidate, and have it return exactly one of:
 
 - **CONFIRMED** — can name the inputs/state that trigger it and the wrong
   output or crash. Quote the line.
-- **PLAUSIBLE** — mechanism is real, trigger is uncertain (timing, env,
+- **PLAUSIBLE** — mechanism is present, trigger is uncertain (timing, env,
   config). State what would confirm it.
 - **REFUTED** — factually wrong (code doesn't say that) or guarded elsewhere.
   Quote the line that proves it.
@@ -162,7 +162,7 @@ the tool call is the report.
 Whenever reported findings get fixed later in this session - the user asks you
 to fix them, or later work fixes them incidentally - you MUST call ReportFindings again with the same findings, each
 carrying an `outcome`: `fixed`, `no_change_needed` (the finding was wrong or
-already handled), or `skipped` (real but not applied). Do not repeat the
+already handled), or `skipped` (valid but not applied). Do not repeat the
 findings as text.
 Make that call immediately after the fixes land, before any prose summary; the
 host UI's per-finding status updates only from it, and without it the findings
