@@ -1,5 +1,24 @@
 # Changelog
 
+## [8.13.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.12.0...claude-dev-env-v8.13.0) (2026-09-23)
+
+
+### Features
+
+* **privacy:** drop private names from the tree and catch them in the check ([a1bbb01](https://github.com/jl-cmd/claude-dev-env/commit/a1bbb0197a11d9c009f3da569e45859bbf3f04d1))
+* **privacy:** scrub private names and widen the private-term check ([1cfeacf](https://github.com/jl-cmd/claude-dev-env/commit/1cfeacf860a92673b5122cbc72da58c36eb40100))
+* **scripts:** hold Luna off an account under 20% of its 5-hour window ([97da761](https://github.com/jl-cmd/claude-dev-env/commit/97da76135f216aa2e1ec56aba1801c031b19ab59))
+* **scripts:** pick one of four Codex accounts per job ([74abc00](https://github.com/jl-cmd/claude-dev-env/commit/74abc00e01e072688cab308aeb3fb4363eeb9f68))
+* **scripts:** pick one of four Codex accounts per job ([d6d0f82](https://github.com/jl-cmd/claude-dev-env/commit/d6d0f82f684ab0b41f0963b98ee8798aeae05fd8))
+
+
+### Refactoring
+
+* **install:** stop generating Cursor rule files ([4c3b3d1](https://github.com/jl-cmd/claude-dev-env/commit/4c3b3d146c6ba51d9176908bd9203e29ebe4e534))
+* **install:** stop generating Cursor rule files ([c61ccf6](https://github.com/jl-cmd/claude-dev-env/commit/c61ccf65aa351b9c53c1615187217ec81847c9e2))
+* **shared:** retire the Codex usage probe for the account picker ([e96265b](https://github.com/jl-cmd/claude-dev-env/commit/e96265b645d0bc2aaa511a5f64f98f82189376d1))
+* **shared:** retire the Codex usage probe for the account picker ([2e115a3](https://github.com/jl-cmd/claude-dev-env/commit/2e115a33d05844ffd34de86ffe261dc455017ee4))
+
 ## [8.12.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.11.1...claude-dev-env-v8.12.0) (2026-09-23)
 
 
