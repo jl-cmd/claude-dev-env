@@ -1,5 +1,41 @@
 # Changelog
 
+## [8.9.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.8.0...claude-dev-env-v8.9.0) (2026-09-23)
+
+
+### Features
+
+* **accounts:** print both accounts' meters with the picker's choice ([825b01c](https://github.com/jl-cmd/claude-dev-env/commit/825b01cb115ebb6978cbaa86c3a4f10dbeaf3f83))
+* **accounts:** print both accounts' meters with the picker's choice ([4281d3c](https://github.com/jl-cmd/claude-dev-env/commit/4281d3c2784bf05a3bcedd37b6202836506d9c0c))
+* **hooks:** keep the poteto-mode skill loaded in every session and subagent ([573fe68](https://github.com/jl-cmd/claude-dev-env/commit/573fe6825f0aa9853c8d1229df83369b573c7095))
+* **hooks:** keep the poteto-mode skill loaded in every session and subagent ([cebd859](https://github.com/jl-cmd/claude-dev-env/commit/cebd8590664a2abfb07717723ede2e1c38e45f13))
+* **privacy:** fail any file, commit or post that names a private organization ([8f05cce](https://github.com/jl-cmd/claude-dev-env/commit/8f05ccea76dace1f7ee23d7c6f66370766755636))
+* **privacy:** fail any file, commit or post that names a private organization ([cec2342](https://github.com/jl-cmd/claude-dev-env/commit/cec23427a822a03ae065a6cf0ac5c6acff685c5d))
+* **uploads:** shrink every PNG with oxipng before it reaches GitHub ([9af387b](https://github.com/jl-cmd/claude-dev-env/commit/9af387b58299991b39e2817cd7df091c255f6604))
+* **uploads:** shrink every PNG with oxipng before it reaches GitHub ([554f5e6](https://github.com/jl-cmd/claude-dev-env/commit/554f5e689f0e676a3db74f7869912998bc5bea72))
+
+
+### Bug Fixes
+
+* **uploads:** keep the PNG bit depth and color type in every oxipng pass ([d02ebd2](https://github.com/jl-cmd/claude-dev-env/commit/d02ebd22bee2704cc037548b6b9984a7032ca231))
+
+
+### Documentation
+
+* **rules:** search for an existing tool before building one ([fba680d](https://github.com/jl-cmd/claude-dev-env/commit/fba680d0ab5bc2eb30a1468f9c65ed904f420fdc))
+* **rules:** search for an existing tool before building one ([07ebaa2](https://github.com/jl-cmd/claude-dev-env/commit/07ebaa21d21155b3a007c476713ba478a58610f9))
+
+
+### CI
+
+* scan added lines for personal data with gitleaks ([5d9744f](https://github.com/jl-cmd/claude-dev-env/commit/5d9744f9757d23564c0b87ff842a82f2713d1d34))
+* scan added lines for personal data with gitleaks ([0be834d](https://github.com/jl-cmd/claude-dev-env/commit/0be834d09c8432e05fa80f786f5371c7197dad6f))
+
+
+### Tests
+
+* **scripts:** use a generic private address in the exemption fixtures ([dfdad1f](https://github.com/jl-cmd/claude-dev-env/commit/dfdad1f44f585711d866c1bb296391d48159351c))
+
 ## [8.8.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.7.0...claude-dev-env-v8.8.0) (2026-09-22)
 
 
