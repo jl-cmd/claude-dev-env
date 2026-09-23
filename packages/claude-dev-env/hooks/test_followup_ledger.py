@@ -1,6 +1,7 @@
 """Behavior tests for the non-breaking-finding follow-up ledger."""
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -80,6 +81,23 @@ def test_record_followup_finding_writes_one_json_object_per_line(tmp_path: Path)
 
     assert len(all_lines) == 1
     assert json.loads(all_lines[0])["rule_id"] == "instruction-mode"
+
+
+def test_a_recorded_ledger_stays_out_of_git_status(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+
+    record_followup_finding(
+        tmp_path, FollowupFinding("instruction-mode", "docs/AGENTS.md", "wrong mode")
+    )
+
+    status_result = subprocess.run(
+        ["git", "-C", str(tmp_path), "status", "--porcelain", "--untracked-files=all"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert followup_ledger_path(tmp_path).is_file()
+    assert status_result.stdout == ""
 
 
 def test_record_followup_finding_swallows_a_write_failure(tmp_path: Path) -> None:
