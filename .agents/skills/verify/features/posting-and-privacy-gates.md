@@ -8,7 +8,7 @@ Every GitHub post passes a local linter before it leaves the machine. CI scans e
 - `packages/claude-dev-env/.agents/skills/pull-request/scripts/pull_request.py` runs that linter first and calls `gh` only on a clean result. It creates every pull request as a draft.
 - `packages/claude-dev-env/scripts/private_term_scan.py` runs in `.github/workflows/private-terms.yml`. It scans the event text and, on a pull request, every commit message and author identity in `base..head`.
 - `packages/claude-dev-env/scripts/private_terms.py` holds the matcher. It compares SHA-256 digests of normalized text windows, so no file stores the names.
-- `packages/claude-dev-env/scripts/repository_policy.py` runs the `tracked-private-terms` and `tracked-secrets` checks. Both are breaking.
+- `packages/claude-dev-env/scripts/repository_policy.py` runs the `tracked-private-terms` and `tracked-secrets` checks. Both are breaking. A repository whose github.com origin owner is itself a private organization passes `tracked-private-terms`, because that organization may name itself.
 - `config/repository-policy.json` in a consumer repository owns its `email_exemptions` and `private_ip_exemptions`. Each entry holds `path`, `sha256` of the matched text, and `reason`.
 - `packages/claude-dev-env/scripts/gh_artifact_upload.py` uploads a file to the `artifacts` prerelease and prints its download URL. A PNG passes through `oxipng --opt 4 --strip none --nb --nc` on a staged copy first.
 - `.github/workflows/binary-optimization.yml` fails a pull request whose changed PNG files still shrink under that oxipng pass.

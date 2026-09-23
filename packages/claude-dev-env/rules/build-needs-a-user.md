@@ -32,7 +32,7 @@ correction arrives a second time, per
 ## Where it is enforced
 
 The staged policy lint's `uncalled-new-file` rule reads each code file a change
-adds under `scripts/`, `hooks/`, or `bin/`. It reports the file when its name
+adds under `scripts/`, `hooks/`, `bin/`, `ci/`, or `tools/`. It reports the file when its name
 appears only in its own tests, `CHANGELOG.md`, `README.md`, and
 `bin/ever-shipped-skills.mjs`. CI runs that lint against the merge base, so a
 file with no caller turns the pull request red.

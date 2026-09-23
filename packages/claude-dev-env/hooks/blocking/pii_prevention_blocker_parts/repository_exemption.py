@@ -64,7 +64,7 @@ def repository_allowlisted_values(repository_root: Path) -> frozenset[str]:
         The exact literal values the repository's commits and writes may carry
         past the PII scan, or an empty set when the repository has none.
     """
-    origin_slug = _repository_origin_slug(repository_root)
+    origin_slug = repository_origin_slug(repository_root)
     if origin_slug is None:
         return frozenset()
     return pii_allowlisted_values_by_repository().get(origin_slug, frozenset())
@@ -171,7 +171,7 @@ def _owner_repo_slug_from_origin_url(origin_url: str) -> str | None:
     return _owner_repo_slug_from_path(repository_path)
 
 
-def _repository_origin_slug(repository_root: Path) -> str | None:
+def repository_origin_slug(repository_root: Path) -> str | None:
     """Return the lowercased owner/repo slug of the origin remote, or None.
 
     Args:
@@ -211,7 +211,7 @@ def _is_repository_exempt_from_pii_scan(repository_root: Path) -> bool:
     Returns:
         True when the repository's origin slug is in the exempt set.
     """
-    origin_slug = _repository_origin_slug(repository_root)
+    origin_slug = repository_origin_slug(repository_root)
     if origin_slug is None:
         return False
     return origin_slug in pii_exempt_repository_slugs()

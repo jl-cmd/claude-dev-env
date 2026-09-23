@@ -179,7 +179,7 @@ UNCALLED_NEW_FILE_MESSAGE = (
     " workflow, skill, command or import in this change, or drop it."
 )
 ALL_CALLED_CODE_SUFFIXES = frozenset({".py", ".mjs", ".js", ".sh", ".ps1"})
-ALL_CALLED_CODE_SEGMENTS = ("/scripts/", "/hooks/", "/bin/")
+ALL_CALLED_CODE_SEGMENTS = ("/scripts/", "/hooks/", "/bin/", "/ci/", "/tools/")
 ALL_CALLER_SEARCH_SKIPPED_DIRECTORIES = frozenset(
     {".git", "node_modules", "__pycache__", ".venv"}
 )
