@@ -107,14 +107,14 @@ def _raise_if_called(gate_label: str) -> Callable[..., tuple[bool, str]]:
     return _stub
 
 
-def _null_codex_percent_left() -> float | None:
+def _unread_codex_tier() -> str | None:
     return None
 
 
 def _patch_all_gates_passing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(check_convergence, "_get_pr_head_sha", _passing_head_sha)
     monkeypatch.setattr(
-        check_convergence, "_probe_codex_percent_left", _null_codex_percent_left
+        check_convergence, "_read_codex_tier", _unread_codex_tier
     )
     for each_gate_name in _ALL_LEAF_GATE_NAMES:
         monkeypatch.setattr(check_convergence, each_gate_name, _passing_gate)

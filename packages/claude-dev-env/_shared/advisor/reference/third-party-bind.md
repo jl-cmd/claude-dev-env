@@ -5,13 +5,13 @@ Open this when binding or re-binding the advisor from a third-party (non-Claude,
 
 ## GOTCHA: Cursor Astra first shot
 
-Cursor is a third-party host. When the walk reaches Astra (`ADVISOR_ASTRA=1` / `--enable-astra` after Fable is out of usage, or the user asks for Astra), bind Astra on the **first** tool call through the headless Codex helper. Do not use the Agent or Task tool, do not spawn Grok as a substitute, and do not search the filesystem for `codex_usage_probe.py`.
+Cursor is a third-party host. When the walk reaches Astra (`ADVISOR_ASTRA=1` / `--enable-astra` after Fable is out of usage, or the user asks for Astra), bind Astra on the **first** tool call through the headless Codex helper. Do not use the Agent or Task tool, do not spawn Grok as a substitute, and do not search the filesystem for the Codex account picker.
 
 ```
 python "$HOME/.claude/_shared/advisor/scripts/codex_astra_advisor.py" --bind --enable-astra --cwd <repo-root>
 ```
 
-Pipe the standing-reviewer charter on stdin. Persist `session_id` from the JSON reply. Later consults: `--resume <session_id>` with the delta on stdin. Capture helper / `codex` stdout as UTF-8 on Windows (`encoding="utf-8"`, `errors="replace"`). Probe path and preflight: [`astra-rung.md`](astra-rung.md).
+Pipe the standing-reviewer charter on stdin. Persist `session_id` from the JSON reply. Later consults: `--resume <session_id>` with the delta on stdin. Capture helper / `codex` stdout as UTF-8 on Windows (`encoding="utf-8"`, `errors="replace"`). Picker path and preflight: [`astra-rung.md`](astra-rung.md).
 
 When the Astra flag is off, follow the Claude-chain steps below.
 

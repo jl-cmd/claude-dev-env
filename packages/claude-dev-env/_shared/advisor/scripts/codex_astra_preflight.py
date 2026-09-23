@@ -1,8 +1,7 @@
-"""Evaluate Codex usage before an Astra advisor request."""
+"""Ask the Codex account picker for an account before an Astra advisor request."""
 
 from __future__ import annotations
 
-import importlib
 import json
 import math
 import subprocess
@@ -12,11 +11,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from advisor_scripts_constants.astra_advisor_constants import (
+    ACCOUNT_PICKER_CHOOSE_COMMAND,
+    ASTRA_ACCOUNT_PICK_TIMEOUT_REASON,
+    ASTRA_ACCOUNT_PICK_TIMEOUT_SECONDS,
     ASTRA_FALLBACK_KIND_BROKEN,
     ASTRA_FALLBACK_KIND_DECLINED,
     ASTRA_PREFLIGHT_FAILURE_REASON,
-    ASTRA_PROBE_TIMEOUT_REASON,
-    ASTRA_USAGE_PROBE_TIMEOUT_SECONDS,
+    CODEX_TIER_NORMAL,
 )
 
 
@@ -26,6 +27,7 @@ class AstraPreflight:
     percent_left: float | None
     reason: str
     fallback_kind: str | None = None
+    codex_home: Path | None = None
 
 
 def _preflight_fallback(
@@ -34,82 +36,82 @@ def _preflight_fallback(
     return AstraPreflight(False, percent_left, reason, fallback_kind)
 
 
-def _load_usage_gate(probe_path: Path) -> Callable[[float], bool]:
-    probe_directory = str(probe_path.parent)
-    if probe_directory not in sys.path:
-        sys.path.insert(0, probe_directory)
-    return importlib.import_module("codex_usage_probe").is_codex_review_required
+def _broken(detail: str) -> AstraPreflight:
+    return _preflight_fallback(
+        f"{ASTRA_PREFLIGHT_FAILURE_REASON}: {detail}", None, ASTRA_FALLBACK_KIND_BROKEN
+    )
 
 
-def _parse_probe_percent(stdout_text: str) -> tuple[float | None, str | None]:
-    try:
-        report = json.loads(stdout_text)
-    except (TypeError, json.JSONDecodeError):
-        return None, "usage report is malformed"
-    if not isinstance(report, dict):
-        return None, "usage report is malformed"
-    raw_percent = report.get("percent_left")
+def _finite_percent(raw_percent: object) -> float | None:
     if isinstance(raw_percent, bool) or not isinstance(raw_percent, (int, float)):
-        return None, "usage meter is unknown" if raw_percent is None else "usage meter is malformed"
-    percent_left = float(raw_percent)
-    if not math.isfinite(percent_left):
-        return None, "usage meter is malformed"
-    return percent_left, None
+        return None
+    return float(raw_percent) if math.isfinite(raw_percent) else None
 
 
-def _run_probe(
-    probe_path: Path,
+def _preflight_from_answer(field_by_name: dict[str, object]) -> AstraPreflight:
+    if not isinstance(field_by_name.get("tier"), str):
+        return _broken("picker answer is malformed")
+    if field_by_name["tier"] != CODEX_TIER_NORMAL:
+        reason = f"{ASTRA_PREFLIGHT_FAILURE_REASON}: no Codex account has room ({field_by_name.get('reason')})"
+        return _preflight_fallback(reason, None, ASTRA_FALLBACK_KIND_DECLINED)
+    codex_home = field_by_name.get("codex_home")
+    percent_left = _finite_percent(field_by_name.get("percent_left"))
+    if not isinstance(codex_home, str) or not codex_home or percent_left is None:
+        return _broken("picker answer names no Codex home with room")
+    reason = f"{field_by_name.get('account')} has {percent_left:.0f}% left"
+    return AstraPreflight(True, percent_left, reason, codex_home=Path(codex_home))
+
+
+def _run_picker(
+    picker_path: Path,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> subprocess.CompletedProcess[str]:
     return process_runner(
-        [sys.executable, str(probe_path)],
+        [sys.executable, str(picker_path), ACCOUNT_PICKER_CHOOSE_COMMAND],
         capture_output=True,
         text=True,
         check=False,
         shell=False,
-        timeout=ASTRA_USAGE_PROBE_TIMEOUT_SECONDS,
+        timeout=ASTRA_ACCOUNT_PICK_TIMEOUT_SECONDS,
     )
 
 
-def _preflight_from_probe(
-    probe_path: Path, completed: subprocess.CompletedProcess[str]
-) -> AstraPreflight:
+def _preflight_from_picker(completed: subprocess.CompletedProcess[str]) -> AstraPreflight:
     if completed.returncode != 0:
-        reason = f"{ASTRA_PREFLIGHT_FAILURE_REASON}: probe exit {completed.returncode}"
-        return _preflight_fallback(reason, None, ASTRA_FALLBACK_KIND_BROKEN)
-    percent_left, parse_reason = _parse_probe_percent(completed.stdout)
-    if parse_reason is not None or percent_left is None:
-        reason = f"{ASTRA_PREFLIGHT_FAILURE_REASON}: {parse_reason or 'usage meter is unknown'}"
-        return _preflight_fallback(reason, None, ASTRA_FALLBACK_KIND_BROKEN)
-    if not _load_usage_gate(probe_path)(percent_left):
-        reason = f"{ASTRA_PREFLIGHT_FAILURE_REASON}: usage meter is at or below the gate"
-        return _preflight_fallback(reason, percent_left, ASTRA_FALLBACK_KIND_DECLINED)
-    return AstraPreflight(True, percent_left, "usage meter is above the Astra gate")
+        return _broken(f"picker exit {completed.returncode}")
+    try:
+        answer = json.loads(completed.stdout)
+    except (TypeError, json.JSONDecodeError):
+        return _broken("picker answer is malformed")
+    if not isinstance(answer, dict):
+        return _broken("picker answer is malformed")
+    return _preflight_from_answer(answer)
 
 
 def run_astra_preflight(
-    probe_path: Path,
+    picker_path: Path,
     process_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> AstraPreflight:
-    """Run the usage probe and decide whether Astra may bind.
+    """Run the Codex account picker and decide whether Astra may bind.
+
+    ::
+
+        tier normal, codex-2, 62% left  -> eligible, codex_home of codex-2
+        tier luna or wait               -> declined
+        picker exit 1, bad JSON, timeout -> broken
 
     Args:
-        probe_path: Path to the installed usage probe.
-        process_runner: Callable that runs the probe.
+        picker_path: Path to ``codex_account_choice.py``.
+        process_runner: Callable that runs the picker.
 
     Returns:
-        Eligibility, remaining usage percent, reason, and fallback kind.
+        Eligibility, the chosen account's percent left and Codex home, reason, and fallback kind.
     """
     try:
-        completed = _run_probe(probe_path, process_runner)
-        return _preflight_from_probe(probe_path, completed)
+        return _preflight_from_picker(_run_picker(picker_path, process_runner))
     except subprocess.TimeoutExpired as error:
         return _preflight_fallback(
-            f"{ASTRA_PROBE_TIMEOUT_REASON}: {error}", None, ASTRA_FALLBACK_KIND_BROKEN
+            f"{ASTRA_ACCOUNT_PICK_TIMEOUT_REASON}: {error}", None, ASTRA_FALLBACK_KIND_BROKEN
         )
-    except (OSError, subprocess.SubprocessError, ImportError, AttributeError, TypeError, ValueError) as error:
-        return _preflight_fallback(
-            f"{ASTRA_PREFLIGHT_FAILURE_REASON}: {error}",
-            None,
-            ASTRA_FALLBACK_KIND_BROKEN,
-        )
+    except (OSError, subprocess.SubprocessError, TypeError, ValueError) as error:
+        return _broken(str(error))

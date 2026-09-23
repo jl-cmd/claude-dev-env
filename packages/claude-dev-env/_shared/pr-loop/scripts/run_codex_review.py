@@ -44,14 +44,9 @@ from process_tree_kill import (  # noqa: E402
     terminate_process_tree,
 )
 
-from codex_review_scripts_constants.codex_usage_probe_constants import (  # noqa: E402
-    ALL_WINDOWS_SCRIPT_SUFFIXES,
-    WINDOWS_COMMAND_SHELL,
-    WINDOWS_COMMAND_SHELL_RUN_FLAG,
-    WINDOWS_OS_NAME,
-)
 from codex_review_scripts_constants.run_constants import (  # noqa: E402
     ALL_SHAPE_PROBE_REQUIRED_FLAGS,
+    ALL_WINDOWS_SCRIPT_SUFFIXES,
     BASE_TARGET_FLAG,
     CAPTURE_STREAMS_KEYWORD,
     CHECK_KEYWORD,
@@ -88,6 +83,9 @@ from codex_review_scripts_constants.run_constants import (  # noqa: E402
     UTF8_ENCODING,
     VERSION_FLAG,
     VERSION_PROBE_PATTERN,
+    WINDOWS_COMMAND_SHELL,
+    WINDOWS_COMMAND_SHELL_RUN_FLAG,
+    WINDOWS_OS_NAME,
 )
 
 from subprocess_window_access import hidden_window_creation_flags
