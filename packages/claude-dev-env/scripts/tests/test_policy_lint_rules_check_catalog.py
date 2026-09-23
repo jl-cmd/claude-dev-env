@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from policy_lint.check_catalog import check_id_for_message
+from policy_lint.check_catalog import check_id_for_message, severity_for_check_id
 from policy_lint.config.check_catalog_constants import (
     ALL_CHECK_CATALOG_ENTRIES,
     UNCLASSIFIED_CHECK_NAME,
@@ -71,6 +71,17 @@ ALL_MESSAGE_SAMPLES: tuple[tuple[str, str], ...] = (
         "missing-return-annotation",
     ),
     ("src/app.py:3: Single-letter variable 'p'", "single-letter-variable"),
+    (
+        "Line 45: public function 'run' is exercised by no test in the module's"
+        " paired test suite, though that suite already exercises this module",
+        "paired-test-missing-function",
+    ),
+    (
+        "app.py public function 'run' is a public function this stem-matched test"
+        " suite defines its module for but exercises nowhere, though the suite"
+        " already covers another public function in that module",
+        "paired-test-omitted-function",
+    ),
 )
 
 
@@ -149,3 +160,16 @@ def test_a_diagnostic_reports_the_check_identifier_it_carries() -> None:
     )
 
     assert diagnostic.as_dict()["check_id"] == "code-rules/constant-outside-config"
+
+
+@pytest.mark.parametrize(
+    "check_name", ("paired-test-missing-function", "paired-test-omitted-function")
+)
+def test_a_paired_test_check_reports_as_a_warning(check_name: str) -> None:
+    assert severity_for_check_id(f"{_BUNDLING_RULE_ID}/{check_name}") is Severity.WARNING
+
+
+def test_an_unclassified_check_reports_as_an_error() -> None:
+    unclassified_check_id = f"{_BUNDLING_RULE_ID}/{UNCLASSIFIED_CHECK_NAME}"
+
+    assert severity_for_check_id(unclassified_check_id) is Severity.ERROR
