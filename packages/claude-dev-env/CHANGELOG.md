@@ -1,5 +1,16 @@
 # Changelog
 
+## [8.11.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.11.0...claude-dev-env-v8.11.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **ci:** let the fix test proof read Node tests ([db9b417](https://github.com/jl-cmd/claude-dev-env/commit/db9b417ed5939aba055ec756713c9989ccc109a3))
+* **install:** keep Codex guidance when AGENTS.md links to the old copy ([893d721](https://github.com/jl-cmd/claude-dev-env/commit/893d721ee6c95a340a71bdb6136ef5ef8d3cfb38))
+* **install:** keep Codex guidance when AGENTS.md links to the old copy ([3c7d320](https://github.com/jl-cmd/claude-dev-env/commit/3c7d320f43f3d712a2b739e39842d6ac341d210a))
+* **policy:** let an organization's own repository name it, and read ci and tools folders ([72cd9ab](https://github.com/jl-cmd/claude-dev-env/commit/72cd9ab60d976dfe467f0a5f4a300ccfff026196))
+* **policy:** let an organization's own repository name it, and read ci and tools folders ([7be7083](https://github.com/jl-cmd/claude-dev-env/commit/7be7083a53ad922800ffb551b401e9f65a064b4d))
+
 ## [8.11.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.10.0...claude-dev-env-v8.11.0) (2026-09-23)
 
 
