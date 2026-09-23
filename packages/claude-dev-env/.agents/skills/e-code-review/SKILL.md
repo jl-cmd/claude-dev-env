@@ -28,6 +28,10 @@ With no level, or an unknown one, run `high`.
 
 A PR number, branch name, or file path after the level is the review target. With no target, the review reads the current diff.
 
+## Report
+
+Each level file reports through the ReportFindings tool. When the host has no ReportFindings tool, print the findings in its place, most severe first, one per line as `file:line — summary`. `--fix` reports its outcomes the same way, with the outcome at the end of each line.
+
 ## --fix
 
 `--fix` works with every level. It lives in one file, [reference/fix.md](reference/fix.md). No level file carries its own fix steps.
