@@ -41,7 +41,7 @@ Expected results:
 | `ingest` with no path, or an unknown subcommand | The usage text | 2 |
 | `list` | One line per record: check id, path, origin commit, message, tab-separated | 0 |
 | `brief` | A header, one `- [<check id>] <path>: <message> (recorded at <commit>)` line per record, and a footer naming `clear` | 0 |
-| `clear` | Nothing, and the ledger file is gone | 0 |
+| `clear` | Nothing, and `smells.jsonl` is gone | 0 |
 | The instruction-pair gate on a `CLAUDE.md` with Git mode 100755 | `recorded for follow-up: Commit the instruction file with Git mode 100644: CLAUDE.md` | 0 |
 
 Run the paired tests:
@@ -60,4 +60,4 @@ node --test packages/claude-dev-env/bin/cde.test.mjs
 - A record is written once per `check_id`, path, and message. A second `ingest` of the same report adds no line.
 - `origin_commit` comes from the `.git/HEAD` file and the loose ref it names. It is empty in a linked worktree, where `.git` is a file, and after `git pack-refs` moves the branch ref into `packed-refs`.
 - The `brief` footer names `python <absolute path>/followup_cli.py clear`, the script inside the package that ran it.
-- No ignore rule covers `.claude/followups/`, so `git status` lists the ledger as untracked. Keep it out of every commit.
+- The first record writes `.claude/followups/.gitignore` holding `*`, so `git status` lists nothing from the ledger directory. `clear` removes only `smells.jsonl`.
