@@ -52,6 +52,11 @@ import {
     retainNewestRunBackupOnly,
 } from './install.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
+import {
+    SKILL_LOAD_BLOCK_START,
+    SKILL_LOAD_INSTRUCTION,
+    withSkillLoadBlock,
+} from './codex-skill-load-block.mjs';
 
 
 test('installer reports the authoritative Git hook names', () => {
@@ -3070,6 +3075,7 @@ test('a full install adds the pstack marketplace and plugin on both hosts', t =>
     assert.match(sheet, /^session hook: on$/m);
     assert.match(agents, /^feature, refactoring: gpt-6-sol$/m);
     assert.doesNotMatch(agents, /^session hook:/m);
+    assert.ok(agents.startsWith(`${SKILL_LOAD_BLOCK_START}\n${SKILL_LOAD_INSTRUCTION}\n`));
     assert.equal(existsSync(join(sandbox.homeDirectory, '.claude', 'pstack-models.md')), false);
     const manifestPath = join(sandbox.homeDirectory, '.claude', '.claude-dev-env-manifest.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
@@ -3086,7 +3092,10 @@ test('a repeat install preserves Codex pstack configuration', t => {
 
     runPstackInstaller(sandbox.homeDirectory, [], sandbox.environment);
 
-    assert.equal(readFileSync(join(codexHome, 'AGENTS.md'), 'utf8'), 'Custom Codex guidance\n');
+    assert.equal(
+        readFileSync(join(codexHome, 'AGENTS.md'), 'utf8'),
+        withSkillLoadBlock('Custom Codex guidance\n'),
+    );
     assert.equal(readFileSync(join(codexHome, 'pstack-models.md'), 'utf8'), 'session hook: off\n');
 });
 

@@ -45,6 +45,7 @@ import {
     shouldInstallPstackPlugin,
 } from './install-pstack-plugin.mjs';
 import { seedCodexPstackModels } from './seed-codex-pstack-models.mjs';
+import { writeCodexSkillLoadBlock } from './codex-skill-load-block.mjs';
 import {
     continuityHostConfigurationPaths,
     removeContinuityHooks,
@@ -2786,6 +2787,12 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
                 for (const eachPath of summary.codexPstackModels) {
                     allUserOwnedPreferencePaths.add(eachPath);
                 }
+            }
+            const skillLoadGuidancePath = writeCodexSkillLoadBlock(
+                INSTALL_ROOT_RESOLUTION.codexHomeDirectory,
+            );
+            if (skillLoadGuidancePath) {
+                console.log(`  \u2713 ${skillLoadGuidancePath} (Codex skill-load line)`);
             }
         }
         for (const eachHost of pstackPlugin.hosts) {
