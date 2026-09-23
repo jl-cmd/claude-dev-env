@@ -15,7 +15,6 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import {
     resolveInstallRoot,
-    isAllowedInstallDestination,
 } from './resolve-install-root.mjs';
 import {
     DEFAULT_CURSOR_DIRECTORY_NAME,
@@ -43,78 +42,54 @@ function runInstaller(homeDirectory, extraArguments, environmentOverrides = {}) 
     });
 }
 
-test('resolveInstallRoot names ~/.cursor/rules and allows generated mdc files under it', () => {
-    const homeDirectory = join(tmpdir(), 'cdev-cursor-rules-home');
-    const resolution = resolveInstallRoot({
-        homeDirectory,
-        environment: {},
-        explicitTarget: null,
-    });
-    const expectedDirectory = join(
-        homeDirectory,
-        DEFAULT_CURSOR_DIRECTORY_NAME,
-        CURSOR_RULES_DIRECTORY_NAME,
-    );
-    assert.equal(resolution.cursorRulesInstallDirectory, expectedDirectory);
-    assert.equal(
-        isAllowedInstallDestination(join(expectedDirectory, 'asd-ste100-language.mdc'), resolution),
-        true,
-    );
-    assert.equal(
-        isAllowedInstallDestination(join(homeDirectory, '.ssh', 'id_rsa'), resolution),
-        false,
-    );
-});
-
-test('a full install writes stem-named Cursor rules and leaves a local extra mdc in place', () => {
+test('a reinstall moves the Cursor rules an older install generated and keeps a local mdc', () => {
     const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-cursor-install-'));
     try {
-        const extraRulePath = join(
-            homeDirectory,
-            DEFAULT_CURSOR_DIRECTORY_NAME,
-            CURSOR_RULES_DIRECTORY_NAME,
-            'user-local.mdc',
-        );
-        mkdirSync(dirname(extraRulePath), { recursive: true });
-        writeFileSync(extraRulePath, 'keep-me\n');
+        runInstaller(homeDirectory, []);
+        const cursorDirectory = join(homeDirectory, DEFAULT_CURSOR_DIRECTORY_NAME);
+        const rulesDirectory = join(cursorDirectory, CURSOR_RULES_DIRECTORY_NAME);
+        const generatedRulePath = join(rulesDirectory, 'asd-ste100-language.mdc');
+        const syncManifestPath = join(cursorDirectory, '.sync-manifest.json');
+        const localRulePath = join(rulesDirectory, 'user-local.mdc');
+        mkdirSync(rulesDirectory, { recursive: true });
+        writeFileSync(generatedRulePath, 'generated\n');
+        writeFileSync(syncManifestPath, '{}\n');
+        writeFileSync(localRulePath, 'keep-me\n');
+        const manifestPath = join(homeDirectory, '.claude', '.claude-dev-env-manifest.json');
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        manifest.files.push(generatedRulePath, syncManifestPath);
+        writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 
         runInstaller(homeDirectory, []);
 
-        const generatedPath = join(
-            homeDirectory,
-            DEFAULT_CURSOR_DIRECTORY_NAME,
-            CURSOR_RULES_DIRECTORY_NAME,
-            'asd-ste100-language.mdc',
-        );
-        assert.equal(existsSync(generatedPath), true);
-        const generatedText = readFileSync(generatedPath, 'utf8');
-        assert.equal(generatedText.includes('alwaysApply: true'), true);
-        assert.equal(readFileSync(extraRulePath, 'utf8'), 'keep-me\n');
+        assert.equal(existsSync(generatedRulePath), false);
+        assert.equal(existsSync(syncManifestPath), false);
+        assert.equal(readFileSync(localRulePath, 'utf8'), 'keep-me\n');
+        const reinstalledManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        assert.equal(reinstalledManifest.files.includes(generatedRulePath), false);
     } finally {
         rmSync(homeDirectory, { recursive: true, force: true });
     }
 });
 
-test('--only journal is rejected before Cursor rules change; --only core writes them', () => {
+test('--only journal is rejected before the policy is seeded; --only core seeds it and writes no Cursor rules', () => {
     const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-cursor-groups-'));
     try {
-        const generatedPath = join(
+        const cursorRulesDirectory = join(
             homeDirectory,
             DEFAULT_CURSOR_DIRECTORY_NAME,
             CURSOR_RULES_DIRECTORY_NAME,
-            'asd-ste100-language.mdc',
         );
         const policyPath = join(homeDirectory, '.agents', 'rules', 'subagent-model-policy.json');
         assert.throws(
             () => runInstaller(homeDirectory, ['--only', 'journal']),
             error => error.status === 1 && /Unknown group\(s\): journal/.test(error.stderr),
         );
-        assert.equal(existsSync(generatedPath), false);
         assert.equal(existsSync(policyPath), false);
 
         runInstaller(homeDirectory, ['--only', 'core']);
-        assert.equal(existsSync(generatedPath), true);
         assert.equal(existsSync(policyPath), true);
+        assert.equal(existsSync(cursorRulesDirectory), false);
     } finally {
         rmSync(homeDirectory, { recursive: true, force: true });
     }
@@ -427,7 +402,7 @@ test('uninstalling one profile keeps routing for another installed profile', () 
     }
 });
 
-test('a blocked shared rule destination rolls back generated Cursor files', () => {
+test('a blocked shared rule destination fails the install and keeps the existing file', () => {
     const homeDirectory = mkdtempSync(join(tmpdir(), 'cdev-pstack-rollback-'));
     try {
         const sharedRulesPath = join(homeDirectory, '.agents', 'rules');
@@ -435,8 +410,6 @@ test('a blocked shared rule destination rolls back generated Cursor files', () =
         writeFileSync(sharedRulesPath, 'keep-existing-file');
         assert.throws(() => runInstaller(homeDirectory, ['--only', 'core']));
         assert.equal(readFileSync(sharedRulesPath, 'utf8'), 'keep-existing-file');
-        assert.equal(existsSync(join(homeDirectory, '.cursor', 'rules', 'pstack-models.mdc')), false);
-        assert.equal(existsSync(join(homeDirectory, '.cursor', '.sync-manifest.json')), false);
     } finally {
         rmSync(homeDirectory, { recursive: true, force: true });
     }

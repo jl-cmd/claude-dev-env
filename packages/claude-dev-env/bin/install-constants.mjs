@@ -159,14 +159,9 @@ export const CODEX_RULES_SHIPPED_FILE_NAME = 'claude-dev-env.rules';
 export const DEFAULT_CURSOR_DIRECTORY_NAME = '.cursor';
 
 /**
- * Directory name under the Cursor home that holds generated `.mdc` rule files.
+ * Directory name for rule files, under the Cursor home and under the agents home.
  */
 export const CURSOR_RULES_DIRECTORY_NAME = 'rules';
-
-/**
- * Installed script that writes Cursor `.mdc` files from Claude rules.
- */
-export const CURSOR_SYNC_SCRIPT_FILE_NAME = 'sync_to_cursor.py';
 
 /**
  * Windows Python launcher command the installer may bake into hook settings.
