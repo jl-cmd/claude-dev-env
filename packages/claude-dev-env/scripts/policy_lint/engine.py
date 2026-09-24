@@ -252,7 +252,7 @@ def _scoped_diagnostics(
     all_diagnostics: Iterable[Diagnostic],
     document: Document,
 ) -> tuple[Diagnostic, ...]:
-    if document.changed_lines is None or not document.changed_lines:
+    if document.changed_lines is None:
         return tuple(all_diagnostics)
     return tuple(
         each_diagnostic

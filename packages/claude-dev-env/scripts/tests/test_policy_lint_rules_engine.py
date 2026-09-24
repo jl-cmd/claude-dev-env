@@ -209,7 +209,7 @@ def test_changed_line_filter_drops_other_located_line(tmp_path: Path) -> None:
     assert lint_report.diagnostics == ()
 
 
-def test_lint_keeps_located_findings_when_changed_lines_are_empty(
+def test_lint_drops_located_findings_when_a_change_only_deletes_lines(
     tmp_path: Path,
 ) -> None:
     repository_root = tmp_path.resolve()
@@ -233,7 +233,7 @@ def test_lint_keeps_located_findings_when_changed_lines_are_empty(
         (document,),
         (_changed_document_rule("probe", collect_diagnostics),),
     )
-    assert len(lint_report.diagnostics) == 1
+    assert lint_report.diagnostics == ()
 
 
 def test_code_rule_diagnostics_includes_comment_policy_without_prior_text(
