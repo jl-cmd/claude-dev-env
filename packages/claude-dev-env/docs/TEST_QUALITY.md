@@ -4,19 +4,7 @@
 
 ## Test Infrastructure Anti-Patterns
 
-**CRITICAL: Test helpers get over-engineered MORE than any other code.**
-
-**ALWAYS:**
-- Single file
-- Simple functions
-- Minimal abstractions
-- Pragmatic approach
-
-**NEVER:**
-- Multi-file packages
-- Cache classes
-- Abstractions "for future"
-- Rigid constraints
+Test helpers drift toward over-engineering faster than production code, because nothing reviews them for size. Keep a helper to one file of plain functions with the fewest abstractions the current tests need. Add a package, a cache class, or an abstraction only when a second test needs it today.
 
 **Pre-check (MANDATORY):**
 - [ ] ONE file?
