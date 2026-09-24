@@ -42,7 +42,7 @@ Path and operator searches run when the registry file is missing. Malformed regi
 **Path (WSL):** `/mnt/c/Program\ Files/Everything/es.exe`
 **Path (Windows):** `"C:/Program Files/Everything/es.exe"`
 
-**Syntax:**
+Syntax:
 - Separate search terms with spaces. Quotes hold one exact filename or path; a quoted group of terms breaks parsing.
 - When searching a path, use backslashes inside quotes: `"Y:\\path\\to\\folder"`
 

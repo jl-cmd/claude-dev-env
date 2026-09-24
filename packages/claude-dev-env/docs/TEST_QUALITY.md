@@ -4,11 +4,7 @@
 
 ## Test Infrastructure Anti-Patterns
 
-Test helpers drift toward over-engineering faster than production code. Keep
-each helper in one file, as plain functions with the fewest abstractions the
-current tests use. Add a cache class, a multi-file package, or an abstraction
-only when a current test needs it. A junior developer reads the helper on the
-first pass.
+Test helpers drift toward over-engineering faster than production code, because nothing reviews them for size. Keep a helper to one file of plain functions with the fewest abstractions the current tests need. Add a package, a cache class, or an abstraction only when a second test needs it today. A junior developer reads the helper on the first pass.
 
 ## Delete Useless Tests
 
