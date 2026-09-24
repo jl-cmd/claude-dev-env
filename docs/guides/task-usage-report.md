@@ -22,12 +22,12 @@ The reporter records token use, available cost, and your pass or fail result for
 
 2. Judge the answer using your task check. Choose `pass` if it met the check, or `fail` if it did not.
 
-3. Read one Claude headless JSON result and append its report to `task-usage.jsonl`.
+3. Read one Claude headless JSON result and append its report to `usage.jsonl`.
 
    ```powershell
    Get-Content -Raw -LiteralPath '.\claude-output.json' |
        python $usageScript run --task-id task-7 --run-id run-1 --repository team/project --outcome pass --source-format claude-json |
-       Add-Content -LiteralPath '.\task-usage.jsonl'
+       Add-Content -LiteralPath '.\usage.jsonl'
    ```
 
    Replace the file name, IDs, repository, and outcome with your values. Use the same task ID for retries and a new run ID for each attempt. A JSONL file holds one JSON object per line.
@@ -35,7 +35,7 @@ The reporter records token use, available cost, and your pass or fail result for
 4. Check the saved line.
 
    ```powershell
-   Get-Content -LiteralPath '.\task-usage.jsonl' | Select-Object -Last 1
+   Get-Content -LiteralPath '.\usage.jsonl' | Select-Object -Last 1
    ```
 
    You should see your task ID, run ID, repository, outcome, token counts, `cost_usd`, and `cost_basis`. A missing source count or cost appears as `null`.
@@ -60,7 +60,7 @@ $rateSource = Read-Host 'Enter a source label using letters, digits, dots, dashe
 $rateDate = Read-Host 'Enter the price date as YYYY-MM-DD'
 Get-Content -Raw -LiteralPath '.\codex-output.jsonl' |
     python $usageScript run --task-id task-7 --run-id run-2 --repository team/project --outcome pass --source-format codex-json --rate $rateSpec --rate-source $rateSource --rate-effective-date $rateDate |
-    Add-Content -LiteralPath '.\task-usage.jsonl'
+    Add-Content -LiteralPath '.\usage.jsonl'
 ```
 
 Replace the file name, IDs, repository, and outcome with this run's values. Use the same task ID only when this Codex run retries that task.
@@ -76,7 +76,7 @@ For Codex, cached input and reasoning output are subsets of the input and output
 1. Read the saved report lines with `summary`.
 
    ```powershell
-   Get-Content -Raw -LiteralPath '.\task-usage.jsonl' |
+   Get-Content -Raw -LiteralPath '.\usage.jsonl' |
        python $usageScript summary
    ```
 
@@ -86,6 +86,6 @@ If any attempt lacks cost or outcome, or no task passed, the summary reports `st
 
 ## Privacy and limits
 
-The reporter writes selected IDs, outcome, model names, counts, and cost. It does not copy prompts, answers, request bodies, or session IDs into the report. Choose IDs that contain no personal or secret text. A source file you saved still contains its original content; keep it private and remove it when you no longer need it.
+The reporter writes selected IDs, outcome, model names, counts, and cost. It does not copy prompts, answers, request bodies, or session IDs into the report. Choose IDs that contain no personal or secret text. The saved source file still contains its original content. Keep it private and delete it after you finish comparing attempts.
 
 The counts describe a whole attempt. The reporter cannot assign tokens to a system prompt, tool schema, file read, or message. Compare cost per passed task only after you have scored the tasks with the same checks.
