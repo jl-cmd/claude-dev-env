@@ -7,6 +7,7 @@ UTF8_ENCODING = "utf-8"
 PATH_SEPARATOR = "/"
 ARCHIVED_SKILLS_DIRECTORY_NAME = "skill-archive"
 ARCHIVED_HOOKS_DIRECTORY_NAME = "hooks-archived"
+ARCHIVED_AUDIT_RUBRICS_DIRECTORY_NAME = "audit-rubrics-archived"
 NUL_BYTE = b"\0"
 ALL_GIT_ROOT_ARGUMENTS = ("rev-parse", "--show-toplevel")
 ALL_GIT_HEAD_ARGUMENTS = ("rev-parse", "--verify", "HEAD")

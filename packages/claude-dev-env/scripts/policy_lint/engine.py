@@ -4,6 +4,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
 
 from .config.constants import (
+    ARCHIVED_AUDIT_RUBRICS_DIRECTORY_NAME,
     ARCHIVED_HOOKS_DIRECTORY_NAME,
     ARCHIVED_SKILLS_DIRECTORY_NAME,
 )
@@ -30,7 +31,8 @@ def lint(
     """Run the selected rules on one source selection.
 
     Repository and diff selections check active code. File and editor
-    selections include archived skills and archived hooks.
+    selections include archived skills, archived hooks, and archived
+    audit rubrics.
 
     Args:
         request: Repository root, source, and rule sets.
@@ -61,6 +63,7 @@ def _is_runtime_path(path: PurePosixPath) -> bool:
     return (
         path.parts[0] != ARCHIVED_SKILLS_DIRECTORY_NAME
         and ARCHIVED_HOOKS_DIRECTORY_NAME not in path.parts
+        and ARCHIVED_AUDIT_RUBRICS_DIRECTORY_NAME not in path.parts
     )
 
 

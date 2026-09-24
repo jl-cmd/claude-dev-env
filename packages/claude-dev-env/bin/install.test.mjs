@@ -281,10 +281,10 @@ test('EVER_SHIPPED_SKILL_NAMES retains repairing-hook-boundaries so reinstall pr
 });
 
 
-test('CONTENT_DIRECTORIES includes audit-rubrics so installer copies category rubrics and prompts to ~/.claude/audit-rubrics/', () => {
+test('CONTENT_DIRECTORIES includes audit-rubrics so installer copies the Category O rubric to ~/.claude/audit-rubrics/', () => {
     assert.ok(
         CONTENT_DIRECTORIES.includes('audit-rubrics'),
-        'audit-rubrics must be in CONTENT_DIRECTORIES so bugteam can resolve $HOME/.claude/audit-rubrics/{category_rubrics,prompts}/',
+        'audit-rubrics must be in CONTENT_DIRECTORIES so the docstring rules can resolve $HOME/.claude/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md',
     );
 });
 

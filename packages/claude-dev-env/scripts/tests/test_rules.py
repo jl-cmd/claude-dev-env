@@ -25,10 +25,10 @@ def _comment_policy_surfaces(package_root: Path) -> tuple[Path, ...]:
         package_root / "system-prompts" / "software-engineer.xml",
         package_root / ".agents" / "agents-archived" / "clean-coder.md",
         package_root / ".agents" / "agents-archived" / "code-quality-agent.md",
-        package_root / "audit-rubrics" / "category_rubrics" / "category-j-code-rules-compliance.md",
-        package_root / "audit-rubrics" / "prompts" / "category-j-code-rules-compliance.md",
-        package_root / "audit-rubrics" / "category_rubrics" / "category-l-behavior-equivalence.md",
-        package_root / "audit-rubrics" / "prompts" / "category-l-behavior-equivalence.md",
+        package_root / "audit-rubrics-archived" / "category_rubrics" / "category-j-code-rules-compliance.md",
+        package_root / "audit-rubrics-archived" / "prompts" / "category-j-code-rules-compliance.md",
+        package_root / "audit-rubrics-archived" / "category_rubrics" / "category-l-behavior-equivalence.md",
+        package_root / "audit-rubrics-archived" / "prompts" / "category-l-behavior-equivalence.md",
         package_root / ".agents" / "skills" / "grok-spawn" / "reference" / "worker-briefs.md",
         package_root.parent.parent / ".github" / "copilot-instructions.md",
     )
@@ -96,17 +96,17 @@ def test_comment_guidance_reaches_installed_instruction_surfaces() -> None:
 def _category_l_policy_texts() -> tuple[str, str, str]:
     category_l_rubric = (
         _PACKAGE_ROOT
-        / "audit-rubrics"
+        / "audit-rubrics-archived"
         / "category_rubrics"
         / "category-l-behavior-equivalence.md"
     )
     category_l_prompt = (
         _PACKAGE_ROOT
-        / "audit-rubrics"
+        / "audit-rubrics-archived"
         / "prompts"
         / "category-l-behavior-equivalence.md"
     )
-    audit_categories = _PACKAGE_ROOT / "audit-rubrics" / "audit-categories.json"
+    audit_categories = _PACKAGE_ROOT / "audit-rubrics-archived" / "audit-categories.json"
     return tuple(
         each_path.read_text(encoding="utf-8").lower()
         for each_path in (category_l_rubric, category_l_prompt, audit_categories)
@@ -117,7 +117,7 @@ def _comment_policy_summary_texts() -> tuple[str, str, str]:
     clean_coder = _PACKAGE_ROOT / ".agents" / "agents-archived" / "clean-coder.md"
     category_j = (
         _PACKAGE_ROOT
-        / "audit-rubrics"
+        / "audit-rubrics-archived"
         / "category_rubrics"
         / "category-j-code-rules-compliance.md"
     )
@@ -145,7 +145,7 @@ def test_comment_policy_removes_directive_justification_guidance() -> None:
     ).read_text(encoding="utf-8").lower()
     category_e_prompt = (
         _PACKAGE_ROOT
-        / "audit-rubrics"
+        / "audit-rubrics-archived"
         / "prompts"
         / "category-e-dead-code.md"
     ).read_text(encoding="utf-8").lower()
