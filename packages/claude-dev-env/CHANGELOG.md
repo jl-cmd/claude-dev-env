@@ -1,5 +1,27 @@
 # Changelog
 
+## [8.15.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.14.0...claude-dev-env-v8.15.0) (2026-09-24)
+
+
+### Features
+
+* add opt-in task usage reporter ([9f4ec73](https://github.com/jl-cmd/claude-dev-env/commit/9f4ec738c59d6ca7ecbd96a781e8a373dbbb2bb4))
+* add opt-in task usage reporter ([2f86df3](https://github.com/jl-cmd/claude-dev-env/commit/2f86df3ce17481689aa0ff52c7f42947784faccf))
+* **scripts:** run local workers on the second Claude account ([de718c5](https://github.com/jl-cmd/claude-dev-env/commit/de718c589ba4d357fb3035cc249ff369ee916fe0))
+
+
+### Bug Fixes
+
+* **hooks:** stabilize prompt context order ([507e809](https://github.com/jl-cmd/claude-dev-env/commit/507e8098a96443abb25e9b34bd662ba82f06405d))
+* pass task usage CI gates ([65fdcd3](https://github.com/jl-cmd/claude-dev-env/commit/65fdcd3b301c70cf05ebbed7191f4289fa07eb59))
+* stabilize prompt hook context order ([1b3b5a6](https://github.com/jl-cmd/claude-dev-env/commit/1b3b5a6450834d1eb7783e875af7b884c66f847f))
+
+
+### Documentation
+
+* drop all-caps pressure words from four prompt files ([15fae34](https://github.com/jl-cmd/claude-dev-env/commit/15fae341b3b840f62b22cbc163b1f15ef5c49d59))
+* drop all-caps pressure words from four prompt files ([cd3181b](https://github.com/jl-cmd/claude-dev-env/commit/cd3181b8638f742e33dcd2a8821b3ad246007485))
+
 ## [8.14.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.13.0...claude-dev-env-v8.14.0) (2026-09-24)
 
 
