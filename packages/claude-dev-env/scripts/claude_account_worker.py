@@ -232,9 +232,7 @@ def _invoked_report(
         all_child_environment_variables=all_child_environment_variables,
         prompt_text=prompt_text,
         timeout_minutes=timeout_minutes,
-        process_factory=dependencies.process_factory,
-        process_terminator=dependencies.process_terminator,
-        monotonic_clock=dependencies.monotonic_clock,
+        controls=dependencies,
     )
     return make_report(
         selection.account,

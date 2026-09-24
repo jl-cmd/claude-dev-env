@@ -11,6 +11,9 @@ keeps its own sign-in and history.
 | `scripts/claude_account_profile.py` | Links each shared entry of `~/.claude` into the profile `~/.claude-profiles/ev`, moves stale copies into `.replaced/<time>/`, and writes the `claude-ev.cmd` launcher into `~/.local/bin` |
 | `scripts/claude_account_choice.py` | Reads both accounts' 5-hour and weekly meters and prints which account a job runs on |
 | `scripts/claude_account_worker.py` | Runs one headless Claude worker using the account chosen by the picker |
+| `scripts/claude_account_worker_process.py` | Launches the worker process, feeds it the brief, and kills it on timeout |
+| `scripts/claude_account_worker_report.py` | Builds and writes the JSON report a worker leaves behind |
+| `scripts/dev_env_scripts_constants/claude_account_worker_constants.py` | The worker's flag names, defaults, exit codes, and report keys |
 | `scripts/dev_env_scripts_constants/claude_account_constants.py` | The profile name, the entries that stay per account, and the picker thresholds |
 
 The launcher sets `CLAUDE_CONFIG_DIR` to the profile and passes every argument to

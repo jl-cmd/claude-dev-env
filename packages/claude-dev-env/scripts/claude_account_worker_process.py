@@ -103,12 +103,22 @@ def _drain_after_termination(
     return latest_stdout_text
 
 
+class ProcessControls(Protocol):
+    """The process factory, terminator, and clock a worker run uses."""
+
+    process_factory: Callable[..., WorkerProcess]
+    process_terminator: Callable[[WorkerProcess], None]
+    monotonic_clock: Callable[[], float]
+
+
 def _await_completion(
-    process: WorkerProcess,
+    process: WorkerProcess | None,
     prompt_text: str,
     timeout_minutes: int,
     process_terminator: Callable[[WorkerProcess], None],
 ) -> tuple[int, str]:
+    if process is None:
+        return LAUNCH_FAILURE_EXIT_CODE, ""
     try:
         captured_stdout, _ = process.communicate(
             input=prompt_text,
@@ -134,9 +144,7 @@ def invoke_worker(
     all_child_environment_variables: dict[str, str],
     prompt_text: str,
     timeout_minutes: int,
-    process_factory: Callable[..., WorkerProcess],
-    process_terminator: Callable[[WorkerProcess], None],
-    monotonic_clock: Callable[[], float],
+    controls: ProcessControls,
 ) -> tuple[int, float, str]:
     """Launch the worker process and return its exit code, duration, and stdout.
 
@@ -146,24 +154,16 @@ def invoke_worker(
         all_child_environment_variables: Environment passed to the child.
         prompt_text: The prompt piped to the child on stdin.
         timeout_minutes: Minutes to wait before the child is timed out.
-        process_factory: Creates the child process; an injection point for
-            tests.
-        process_terminator: Kills a still-running child; an injection point
-            for tests.
-        monotonic_clock: Reads the current monotonic time; an injection
-            point for tests.
+        controls: The process factory, terminator, and clock.
 
     Returns:
-        The child's exit code, the wall-clock duration in seconds, and the
-        decoded stdout text.
+        The exit code, the duration in seconds, and the decoded stdout.
     """
-    process_start = monotonic_clock()
+    process_start = controls.monotonic_clock()
     process = _launch_process(
-        process_factory, all_arguments, cwd, all_child_environment_variables
+        controls.process_factory, all_arguments, cwd, all_child_environment_variables
     )
-    if process is None:
-        return LAUNCH_FAILURE_EXIT_CODE, monotonic_clock() - process_start, ""
     exit_code, stdout_text = _await_completion(
-        process, prompt_text, timeout_minutes, process_terminator
+        process, prompt_text, timeout_minutes, controls.process_terminator
     )
-    return exit_code, monotonic_clock() - process_start, stdout_text
+    return exit_code, controls.monotonic_clock() - process_start, stdout_text
