@@ -1,5 +1,12 @@
 # Changelog
 
+## [8.15.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.15.0...claude-dev-env-v8.15.1) (2026-09-24)
+
+
+### Maintenance
+
+* apply the Claude Opus 5.5 prompt audit ([85ea478](https://github.com/jl-cmd/claude-dev-env/commit/85ea478ed9d2c872d5354eb84ebc50bd98c2188e))
+
 ## [8.15.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.14.0...claude-dev-env-v8.15.0) (2026-09-24)
 
 
