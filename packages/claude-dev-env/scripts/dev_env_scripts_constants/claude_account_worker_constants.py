@@ -1,0 +1,139 @@
+"""Named values for the second-account Claude worker."""
+
+from __future__ import annotations
+
+from dev_env_scripts_constants.claude_account_constants import (
+    CHOICE_MAIN,
+    CHOICE_SECOND,
+    CHOICE_WAIT,
+    CREDENTIALS_FILE_NAME,
+    JSON_ACCOUNT_KEY,
+    JSON_CONFIG_DIRECTORY_KEY,
+    JSON_REASON_KEY,
+    MAIN_CLAUDE_HOME_DIRECTORY_NAME,
+)
+from dev_env_scripts_constants.shared_tree_constants import CLAUDE_CONFIG_DIR_ENV_VAR
+
+CLAUDE_BINARY_NAME: str = "claude"
+
+DEFAULT_PERMISSION_MODE: str = "auto"
+
+DEFAULT_TIMEOUT_MINUTES: int = 60
+
+MINIMUM_TIMEOUT_MINUTES: int = 1
+
+WAIT_EXIT_CODE: int = 3
+
+TIMEOUT_EXIT_CODE: int = 124
+
+MISSING_BINARY_EXIT_CODE: int = 127
+
+LAUNCH_FAILURE_EXIT_CODE: int = 1
+
+WAIT_DURATION_SECONDS: float = 0.0
+
+STDOUT_TAIL_CHARACTER_LIMIT: int = 4000
+
+DRAIN_GRACE_TIMEOUT_SECONDS: int = 10
+
+DRAIN_ATTEMPT_LIMIT: int = 2
+
+DURATION_DECIMAL_PLACES: int = 3
+
+REPORT_INDENT: int = 2
+
+UTF8_ENCODING: str = "utf-8"
+
+UTF8_DECODE_ERRORS: str = "replace"
+
+CLI_DESCRIPTION: str = "Run one Claude worker using the account picker."
+
+PROMPT_FILE_FLAG: str = "--prompt-file"
+
+CWD_FLAG: str = "--cwd"
+
+REPORT_FILE_FLAG: str = "--report-file"
+
+MODEL_FLAG: str = "--model"
+
+PERMISSION_MODE_FLAG: str = "--permission-mode"
+
+TIMEOUT_MINUTES_FLAG: str = "--timeout-minutes"
+
+OUTPUT_FORMAT_FLAG: str = "--output-format"
+
+OUTPUT_FORMAT_JSON: str = "json"
+
+SINGLE_PROMPT_FLAG: str = "-p"
+
+SECONDS_PER_MINUTE: int = 60
+
+JSON_RESULT_KEY: str = "result"
+
+JSON_IS_ERROR_KEY: str = "is_error"
+
+REPORT_ACCOUNT_KEY: str = JSON_ACCOUNT_KEY
+
+REPORT_REASON_KEY: str = JSON_REASON_KEY
+
+REPORT_EXIT_CODE_KEY: str = "exit_code"
+
+REPORT_DURATION_SECONDS_KEY: str = "duration_seconds"
+
+REPORT_RESULT_KEY: str = JSON_RESULT_KEY
+
+REPORT_IS_ERROR_KEY: str = JSON_IS_ERROR_KEY
+
+SUMMARY_LINE_TEMPLATE: str = "account={account} exit_code={exit_code} report={report_file}"
+
+INVALID_TIMEOUT_MESSAGE: str = "--timeout-minutes must be at least 1"
+
+
+__all__ = [
+    "CHOICE_MAIN",
+    "CHOICE_SECOND",
+    "CHOICE_WAIT",
+    "CLAUDE_BINARY_NAME",
+    "CLAUDE_CONFIG_DIR_ENV_VAR",
+    "CLI_DESCRIPTION",
+    "CREDENTIALS_FILE_NAME",
+    "CWD_FLAG",
+    "DEFAULT_PERMISSION_MODE",
+    "DEFAULT_TIMEOUT_MINUTES",
+    "DRAIN_ATTEMPT_LIMIT",
+    "DRAIN_GRACE_TIMEOUT_SECONDS",
+    "DURATION_DECIMAL_PLACES",
+    "INVALID_TIMEOUT_MESSAGE",
+    "JSON_ACCOUNT_KEY",
+    "JSON_CONFIG_DIRECTORY_KEY",
+    "JSON_IS_ERROR_KEY",
+    "JSON_REASON_KEY",
+    "JSON_RESULT_KEY",
+    "LAUNCH_FAILURE_EXIT_CODE",
+    "MAIN_CLAUDE_HOME_DIRECTORY_NAME",
+    "MISSING_BINARY_EXIT_CODE",
+    "MINIMUM_TIMEOUT_MINUTES",
+    "MODEL_FLAG",
+    "OUTPUT_FORMAT_FLAG",
+    "OUTPUT_FORMAT_JSON",
+    "PERMISSION_MODE_FLAG",
+    "PROMPT_FILE_FLAG",
+    "REPORT_ACCOUNT_KEY",
+    "REPORT_DURATION_SECONDS_KEY",
+    "REPORT_EXIT_CODE_KEY",
+    "REPORT_FILE_FLAG",
+    "REPORT_INDENT",
+    "REPORT_IS_ERROR_KEY",
+    "REPORT_REASON_KEY",
+    "REPORT_RESULT_KEY",
+    "SECONDS_PER_MINUTE",
+    "SINGLE_PROMPT_FLAG",
+    "STDOUT_TAIL_CHARACTER_LIMIT",
+    "SUMMARY_LINE_TEMPLATE",
+    "TIMEOUT_EXIT_CODE",
+    "TIMEOUT_MINUTES_FLAG",
+    "UTF8_DECODE_ERRORS",
+    "UTF8_ENCODING",
+    "WAIT_DURATION_SECONDS",
+    "WAIT_EXIT_CODE",
+]

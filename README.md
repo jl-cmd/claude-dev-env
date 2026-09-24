@@ -219,6 +219,7 @@ that carry them.
 | `pull-request` | Validate and publish GitHub pull request actions |
 | `recovering-codex-startup` | Diagnose Windows Codex startup with fresh read-only process evidence |
 | `repairing-hook-boundaries` | Repair Claude and Codex hook failures at the first failing boundary |
+| `second-account-workers` | Run local Claude workers through the second-account picker |
 | `skill-builder` | Author a skill package to the house conventions |
 | `syncing-submodules` | Record a submodule's current commit in its parent repository |
 | `task-build` | Gather open session tasks and register them on the task list |
