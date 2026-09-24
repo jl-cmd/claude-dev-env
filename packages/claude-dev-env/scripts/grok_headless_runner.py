@@ -73,6 +73,7 @@ from dev_env_scripts_constants.grok_worker_constants import (
 )
 from shared_tree_paths import resolve_shared_process_tree_scripts_directory
 from grok_worker_preflight import poteto_mode_skill_path
+from subprocess_stream_text import decode_stream_text
 
 _shared_process_tree_scripts_directory = resolve_shared_process_tree_scripts_directory(
     __file__,
@@ -200,11 +201,7 @@ def _classify_completion(
 
 
 def _normalize_stream(stream_payload: str | bytes | None) -> str:
-    if stream_payload is None:
-        return ""
-    if isinstance(stream_payload, bytes):
-        return stream_payload.decode(UTF8_ENCODING, errors=UTF8_DECODE_ERRORS)
-    return stream_payload
+    return decode_stream_text(stream_payload, encoding=UTF8_ENCODING, errors=UTF8_DECODE_ERRORS)
 
 
 def _resolve_returncode(process: subprocess.Popen[str]) -> int:

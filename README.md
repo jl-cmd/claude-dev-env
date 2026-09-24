@@ -24,7 +24,6 @@ That's it. The installer will:
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
 5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
 6. Copy Codex exec-policy files into `~/.codex/rules` (`CODEX_HOME/rules` when that variable is set)
-7. Generate Cursor `.mdc` files into `~/.cursor/rules` from the installed Claude rules
 
 ### Selective Install
 
@@ -151,7 +150,11 @@ Starlark `*.rules` files Codex loads from `~/.codex/rules`. The package ships `c
 
 ### Cursor rule files
 
-The installer writes no Cursor rule files. Cursor Agent reads a repository's own `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, and `.agents/skills`, and it reads `~/.cursor/rules` only for a workspace inside the home directory. A reinstall moves the `~/.cursor/rules` files an older install generated into the run backup.
+The installer writes no Cursor rule files. Cursor Agent reads a repository's own `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, and `.agents/skills`, and it reads `~/.cursor/rules` only for a workspace inside the home directory. A full reinstall moves the `~/.cursor/rules` files an older install generated into the run backup.
+
+### Task usage report
+
+Use the [task usage report guide](docs/guides/task-usage-report.md) to record task outcomes and compare cost per passed task.
 
 ### Docs
 
@@ -216,6 +219,7 @@ that carry them.
 | `pull-request` | Validate and publish GitHub pull request actions |
 | `recovering-codex-startup` | Diagnose Windows Codex startup with fresh read-only process evidence |
 | `repairing-hook-boundaries` | Repair Claude and Codex hook failures at the first failing boundary |
+| `second-account-workers` | Run local Claude workers through the second-account picker |
 | `skill-builder` | Author a skill package to the house conventions |
 | `syncing-submodules` | Record a submodule's current commit in its parent repository |
 | `task-build` | Gather open session tasks and register them on the task list |
