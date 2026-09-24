@@ -27,7 +27,7 @@ Hook code archived under `hooks-archived/`, a sibling of `hooks/`. The installer
 
 ## Archived audit rubrics
 
-Rubrics and prompts from the audit lane that `bugteam` and `code-quality-agent` drove, archived under `audit-rubrics-archived/`, a sibling of `audit-rubrics/`. The installer copies `audit-rubrics/` alone, so nothing here ships. Category O stays in `audit-rubrics/` with its prompt and `source-material-section-types.md`, because `rules/plain-illustrative-docstrings.md`, `rules/docstring-prose-matches-implementation.md`, and `rules/doc-inventory-integrity.md` point at it.
+Rubrics and prompts from the audit lane that `bugteam` and `code-quality-agent` drove, archived under `audit-rubrics-archived/`, a sibling of `audit-rubrics/`. The installer copies `audit-rubrics/` alone, so nothing here ships. Category O stays in `audit-rubrics/` with its prompt and `source-material-section-types.md`, because `rules/plain-illustrative-docstrings.md`, `rules/docstring-prose-matches-implementation.md`, and `rules/doc-inventory-integrity.md` point at it. The archived `.agents/agents-archived/code-quality-agent.md` names each archived rubric by its `audit-rubrics-archived/` source path, and a restore points those paths back at `audit-rubrics/`.
 
 | File | Why it moved | Restore |
 |---|---|---|
