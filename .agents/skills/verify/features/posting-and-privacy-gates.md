@@ -1,6 +1,6 @@
 # Posting and privacy gates
 
-Every GitHub post passes a local linter before it leaves the machine. CI scans each pull request, issue, comment, review, and release for a private organization name. The committed tree fails when a file names one. A PNG shrinks with oxipng before any upload. The pull requests that built this path are #1427, #1428, #1465, #1467, #1468, #1470, and #1471.
+Every GitHub post passes a local linter before it leaves the machine. CI scans each pull request, issue, comment, review, and release for a private organization name. The committed tree fails when a file names one. A PNG shrinks with oxipng before any upload.
 
 ## Sub-features
 

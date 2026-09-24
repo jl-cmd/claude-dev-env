@@ -31,8 +31,3 @@
 ## Sample prompt
 
 The reusable Variant C template for Category I is in [`../prompts/category-i-concurrency.md`](../prompts/category-i-concurrency.md). Inline your artifact under `## Source material` and adapt the sub-bucket bullets to your project's concurrency model.
-
-For a literal worked example using PR #394, see [`category-a-api-contracts.md`](category-a-api-contracts.md). Category I walks for that diff:
-- I4: TOCTOU between `os.walk` enumerating a directory and `os.path.getctime` / `os.rmdir` on the same path — another process could delete or repopulate the dir in the window. The `try/except OSError` handles the race correctly (Category F notes the same blocks for silent-failure concerns; here they're protective).
-- I4 (PowerShell): `Test-Path $Target` followed by `Register-ScheduledTask` — directory could be deleted between the check and the registration. Low-impact since the schedule still registers.
-- I1, I2, I3, I5–I8: not applicable — script is single-threaded synchronous Python with no asyncio, no shared mutable state across processes.

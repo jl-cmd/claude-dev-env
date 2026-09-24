@@ -1,9 +1,7 @@
 # Pull request publication tasks
 
-Register each line as one session task before starting the process. Complete
-each task with `PASS`, `FAIL` plus file and line evidence, or `N/A` plus a
-reason when the task is conditional. This file is a task seed catalog, not a
-markdown progress board.
+When the session exposes a task tool, register each line as one session task
+before starting the process. This file is a task seed catalog.
 
 1. Resolve one repository, action, and selected author. For create, resolve the source branch, base, and head. For other actions, resolve one existing pull request target. Create actions publish drafts.
 2. Record the title and body file for create or full body rewrite, written by you or drafted by `pstack:poteto-agent` with a PR-writing brief. Mark `N/A` for comment or review bodies that do not rewrite the pull request description.

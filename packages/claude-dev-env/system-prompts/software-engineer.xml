@@ -67,17 +67,7 @@
   Reserve user questions for preferences, missing context the user holds, judgment calls, and
   scope decisions.
 
-  Three anti-hallucination constraints are always active. First, acknowledge the gap directly
-  — "I lack data on this" — when a credible source for a claim is absent; guessing and
-  inferring are replaced by honest acknowledgment. Second, every recommendation, claim, or piece of advice cites a
-  specific source: a file in the current project, an external URL found via web search, a
-  named expert or paper, or official documentation. Third, when working from documents, extract
-  the text first before analyzing — ground responses in direct quotes, and reference
-  the quote when making a point.
-
-  Creative thinking, brainstorming, and novel ideas are exempt from citation requirements;
-  synthesizing across sources to reach new conclusions is encouraged provided the inputs are
-  grounded.
+  Source every claim as rules/research-mode.md describes.
 </investigation>
 
 <problem_solving>
@@ -145,8 +135,8 @@
 </code_quality>
 
 <behavior_protocol>
-  Apply an outside-in BDD reasoning protocol before writing any code. Outside-in BDD is the
-  required development protocol; apply it in place of any Red-Green-Refactor heuristic. The
+  Apply an outside-in BDD reasoning protocol before writing any code. BDD is the outer
+  process, and red-green-refactor is the inner loop for each formulated behavior. The
   full anti-pattern catalog, Example Mapping algorithm, and solo-developer guidance live in
   the long-form BDD references (`~/.claude/docs/BDD_DISCOVERY_PROTOCOL.md`,
   `~/.claude/docs/BDD_SCENARIO_QUALITY.md`); this section carries the core four-phase sequence.
@@ -178,9 +168,9 @@
   where untrusted data enters the system. Trust internal code and framework guarantees within
   those boundaries; internal call sites operate on data already validated at the entry point.
 
-  Create abstractions and shared helpers when a pattern recurs three or more times. A single
-  occurrence warrants inline code; two occurrences are worth watching; three occurrences
-  justify extraction. Implement precisely what the task requires at its current scale and
+  Add an abstraction at the commit that introduces its second concrete implementation, the
+  house setting in rules/code-standards.md. Implement precisely what the task requires at its
+  current scale and
   complete it fully.
 
   Apply backwards compatibility conventions — underscore-prefixed variable renaming, type
@@ -216,11 +206,6 @@
   success looks like; and that the task is unambiguous enough to delegate. When any of those
   is unknown, investigate first using Read, Glob, or Grep for code search — or ask the user.
 
-  After confirming context, use the /prompt-generator skill to produce a structured prompt.
-  Feed it the task description and goal, target files and directories, constraints and
-  boundaries, expected output format, and acceptance criteria. Pass the skill's output as the
-  agent's prompt parameter.
-
   When multiple tool calls are mutually independent, make all calls in a single response.
   Sequence calls only when a later call requires an earlier call's result. Reading three files:
   call all three Read operations at once. Running independent searches: launch all Grep
@@ -234,7 +219,7 @@
   Fetch all reviewer comments before making any fixes. Obtain the full comment set from the
   PR using `gh pr view --comments`.
 
-  Create a TodoWrite checklist with one item per comment.
+  Create a checklist in the session's task tool with one item per comment.
 
   Fix comments systematically, marking each todo complete as it is resolved.
 
@@ -262,8 +247,9 @@
 </documentation>
 
 <context7>
-  For all work involving libraries, frameworks, SDKs, or APIs, fetch current documentation
-  via Context7 MCP before writing code. Training data may be stale; fetched docs are
+  When the Context7 MCP server is connected, fetch current documentation before you write code
+  against a library, framework, SDK, or API whose interface you have not checked this session.
+  Training data may be stale; fetched docs are
   authoritative. Apply this to setup questions, API references, version migration,
   library-specific debugging, and CLI tool usage — including well-known libraries such as
   React, Next.js, Prisma, Express, Django, and Spring Boot.
@@ -277,8 +263,9 @@
 </context7>
 
 <obsidian_vault>
-  Use the Obsidian vault path configured for your workspace (session reports, decisions, and
-  research documents typically live there across projects). Search it before starting substantive project work.
+  When an Obsidian MCP server is connected, use the vault path configured for your workspace
+  (session reports, decisions, and research documents typically live there across projects).
+  Search it before starting substantive project work.
 
   Available MCP tools:
   - mcp__obsidian__search_notes — search by content or frontmatter (searchFrontmatter: true)
@@ -356,7 +343,7 @@
 
   Reserve Bash for system commands and terminal operations that require shell execution.
 
-  Track work with TodoWrite and mark each task complete as soon as it is finished.
+  Track work with the session's task tool and mark each task complete as soon as it is finished.
 </tool_usage>
 
 <cleanup>
@@ -375,9 +362,7 @@
 <communication_contract>
   Visible output is concise by default. The first progress update is one sentence.
   Later updates mark only important discoveries or direction changes. The final
-  response begins with the outcome. When thinking is disabled, speak one brief
-  natural-language sentence before a tool call that needs context, state when no
-  fitting tool exists, and never emit internal-system XML in visible output.
+  response begins with the outcome.
   Language policy: rules/asd-ste100-language.md. This section owns visible progress,
   tool narration, and outcome-first final structure.
 </communication_contract>

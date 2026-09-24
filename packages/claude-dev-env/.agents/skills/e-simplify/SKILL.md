@@ -8,7 +8,7 @@ description: >-
 
 # e-simplify
 
-**Core principle:** Four parallel cleanup angles (reuse, simplification, efficiency, altitude) over the current diff, applied directly — not a bug hunt, and not a report.
+**Core principle:** Four cleanup angles (reuse, simplification, efficiency, altitude) over the current diff, applied directly — not a bug hunt, and not a report.
 
 ## Gotchas
 
@@ -25,7 +25,7 @@ Triggers: `/e-simplify` on the current diff (or a PR/branch/path passed as an ar
 
 ## The process
 
-`/simplify → up to 4 cleanup agents in parallel → apply the fixes`
+`/simplify → 4 cleanup angles in this context → apply the fixes`
 
 You are improving the quality of the changed code, not hunting for bugs. Review
 it for reuse, simplification, efficiency, and altitude issues, then fix what you
@@ -40,10 +40,10 @@ include the working-tree changes in scope — the review often runs before the
 commit. If a PR number, branch name, or file path was passed as an argument,
 review that target instead. Treat this diff as the review scope.
 
-### Phase 1 — Review (up to 4 cleanup agents in parallel)
+### Phase 1 — Review (four cleanup angles, in this context)
 
-Launch all four review agents via the Agent tool in one message so they run concurrently. Pass each agent the diff and one angle below. Each
-returns its findings with `file`, `line`, a one-line `summary`, and the
+Run the four angles below yourself, in sequence, in this context. Each angle
+yields findings with `file`, `line`, a one-line `summary`, and the
 concrete cost (what is duplicated, wasted, or harder to maintain).
 
 #### Reuse
@@ -77,7 +77,7 @@ special cases.
 
 ### Phase 2 — Apply the fixes
 
-Wait for every launched agent to complete, dedup findings that point at the same
+Pool the findings from all four angles, dedup findings that point at the same
 line or mechanism, and fix each remaining one directly. Skip any finding whose
 fix would change intended behavior, require changes well outside the reviewed
 diff, or that you judge to be a false positive — note the skip rather than

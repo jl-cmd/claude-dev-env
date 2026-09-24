@@ -4,7 +4,7 @@
 
 ## Component Patterns
 
-**NEVER:**
+**Anti-patterns:**
 
 - **Create wrapper components for single use** - Use the component directly
   - Example: `<ButtonWrapper><Button /></ButtonWrapper>` when Button is only used once
@@ -27,7 +27,7 @@
 
 ## State Management Patterns
 
-**NEVER:**
+**Anti-patterns:**
 
 - **Store derived state** - Calculate on render
   - Bad: `const [fullName, setFullName] = useState(first + ' ' + last)`
@@ -47,18 +47,18 @@
 
 - **Forget to memoize expensive calculations** - Use useMemo
   - Bad: `const sorted = items.sort((a, b) => ...)` on every render
-  - Good: `const sorted = useMemo(() => items.sort(...), [items])`
+  - Good: `const sorted = useMemo(() => [...items].sort(...), [items])`
 
 ## Hooks Patterns
 
-**NEVER:**
+**Anti-patterns:**
 
 - **Call hooks conditionally** - Hooks must be at top level
   - Bad: `if (condition) { const [x, setX] = useState() }`
   - Good: Always call hooks, use condition inside
 
 - **Create effects without cleanup** - Return cleanup function when needed
-  - Subscriptions, timers, event listeners MUST be cleaned up
+  - Clean up subscriptions, timers, and event listeners
   - Bad: `useEffect(() => { window.addEventListener(...) }, [])`
   - Good: `useEffect(() => { window.addEventListener(...); return () => window.removeEventListener(...) }, [])`
 
@@ -86,7 +86,7 @@ components/
     index.ts               # Public export
 ```
 
-**NEVER:**
+**Anti-patterns:**
 
 - **Mix business logic with UI** - Separate concerns
   - Custom hooks for business logic: `useTaskManager()`

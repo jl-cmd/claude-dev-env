@@ -2,10 +2,8 @@
 name: team-advisor
 description: >-
   Bind one advisor, the built-in advisor tool or a warm `pstack:poteto-agent`, and
-  consult it before substantive work, completion, commits, or when stuck.
-  Triggers:
-  'team-advisor', 'team advisor', 'second opinion', 'consult the advisor',
-  'get an advisor', 'check my approach with an advisor'.
+  consult it before substantive work, completion, commits, or when stuck. Use
+  when the user asks for an advisor or a second opinion on the approach.
 ---
 
 # Team Advisor

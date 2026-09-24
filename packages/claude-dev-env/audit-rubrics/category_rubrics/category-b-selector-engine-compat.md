@@ -32,5 +32,3 @@ Use 5–10 sub-buckets for any single audit. For an audit that doesn't touch SQL
 ## Sample prompt
 
 The reusable Variant C template for Category B is in [`../prompts/category-b-selector-engine-compat.md`](../prompts/category-b-selector-engine-compat.md). Inline your artifact under `## Source material` and adapt the sub-bucket bullets to your project's compat targets.
-
-For a literal worked example using PR #394 inlined verbatim (Python + PowerShell scheduled-task installer), see [`category-a-api-contracts.md`](category-a-api-contracts.md) — the diff there is the canonical sample artifact. To audit the same PR for Category B specifically, copy the diff section from [`../prompts/category-a-api-contracts.md`](../prompts/category-a-api-contracts.md) and paste it under `## Source material` in the Category B prompt; the relevant Category B sub-buckets for PR #394 are B4 (PowerShell cmdlet version compat — `Get-ScheduledTask`, `New-ScheduledTaskTrigger`, `New-ScheduledTaskAction` are Windows-only and require PS 5.1+) and B3 (the `(Get-Item '{path}')` pattern in the test helper).

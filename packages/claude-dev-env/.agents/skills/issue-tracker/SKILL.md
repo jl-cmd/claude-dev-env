@@ -1,11 +1,9 @@
 ---
 name: issue-tracker
 description: >-
-  File, update, and close GitHub work as one epic with native sub-issues.
-  Dedup open and closed issues first. Edit status only inside marker sections.
-  Refresh the epic checklist so it matches its children. Triggers: issue tracker,
-  file an issue, track this issue, open an epic, update the epic, close the issue,
-  refresh the epic checklist, attach a sub-issue.
+  File, update, and close GitHub work as one epic with native sub-issues. Use
+  when the user asks to file, track, update, or close a GitHub issue, or to open,
+  update, or refresh an epic and its sub-issues.
 argument-hint: "[issue action - file | update | close | refresh-epic | full handoff]"
 ---
 
@@ -15,7 +13,7 @@ argument-hint: "[issue action - file | update | close | refresh-epic | full hand
 
 **dedup -> do the work -> markers only -> numbers + URLs**
 
-Run every step the ask needs in one go (file, label, attach, refresh, and so on). `pstack:poteto-agent` is the primary handler for one action per turn when it loads this skill; this skill is the session path when the agent is unavailable or the ask spans several steps.
+Run every step the ask needs in one go (file, label, attach, refresh, and so on).
 
 Prefer the **same warm** `pstack:poteto-agent` for follow-ups on the same issue or a related issue on the same epic. Spawn a new agent only for an unrelated work-stream or when the warm agent is gone.
 

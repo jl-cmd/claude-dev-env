@@ -14,7 +14,7 @@ Install the package for Claude. Run the Codex compatibility command for Codex. O
 
 ## Driving it with Node.js
 
-Run `node packages/claude-dev-env/.agents/skills/run-claude-dev-env/driver.mjs`. Run `python -m pytest packages/claude-dev-env/scripts/tests/test_codex_compat_materializer.py -q` for Codex.
+Run `node .agents/skills/verify/scripts/verify-installer.mjs run` for the Claude projection. Run `python -m pytest packages/claude-dev-env/scripts/tests/test_codex_compat_materializer.py -q` for Codex.
 
 ## Gotchas
 

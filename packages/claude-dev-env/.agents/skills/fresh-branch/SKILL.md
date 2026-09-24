@@ -1,9 +1,8 @@
 ---
 name: fresh-branch
 description: >-
-  Fresh git branch from origin/main in an isolated worktree under a configured root (default: <repo>/.claude/worktrees/<agent>/; never checkout -b in the caller tree).
-  Triggers: fresh branch, new branch from main, /fresh-branch, start fresh, clean branch off main,
-  worktree branch, branch in temp.
+  Fresh git branch from origin/main in an isolated worktree under a configured root, leaving the caller's tree untouched.
+  Use when the user or a calling skill needs a new branch off main.
 ---
 
 # fresh-branch

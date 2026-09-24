@@ -1,9 +1,9 @@
 ---
 name: pull-request
 description: >-
-  Validate and publish GitHub pull request actions. Triggers: create PR, open
-  pull request, edit PR, update PR body, comment on PR, review PR, publish a
-  draft PR, scoped GitHub author.
+  Validate and publish GitHub pull request actions. Use when the user asks to
+  create, edit, comment on, or review a pull request, including under a
+  selected GitHub author.
 ---
 
 # Pull request
@@ -38,9 +38,9 @@ Use this skill for one pull request action:
 - Submit a pull request review.
 - Recover one selected legacy author record before the action.
 
-Send issue create, edit, and comment work to `pstack:poteto-agent` with the
-`issue-tracker` skill and one action. Send review and fix-loop work to
-`e-code-review`. Send commits to `source-command-commit`.
+Send issue create, edit, and comment work to the `issue-tracker` skill, one
+action at a time. Send review and fix-loop work to `e-code-review`. Make
+commits and pushes with Git directly.
 
 Require one repository and one action target. Stop before author lookup or
 network work when the repository, pull request, action, author, or required
@@ -49,7 +49,7 @@ local file is missing or ambiguous.
 Use these exact refusal responses when the request belongs to another skill:
 
 - Issue action: `Use issue-tracker for this GitHub issue action.`
-- Commit or push: `Use source-command-commit for this commit or push.`
+- Commit or push: `Use Git directly for this commit or push.`
 - Missing target: `Provide one repository and one pull request action target.`
 
 ## Constraints
@@ -76,17 +76,14 @@ current process environment.
 |---|---|---|---|
 | `pstack:poteto-agent` with `pull-request` instructions | Create or a full body rewrite, when you want the body drafted for you | A reviewed title and body file | Write the title and body yourself |
 | `privacy-hygiene` | Before any durable GitHub post | A clean body and repository privacy sweep | Stop before publication and report the missing gate |
-| `pstack:poteto-agent` with `issue-tracker` | Issue create, edit, or comment requests | Issue state and issue URLs | Load the skill in this session. |
+| `issue-tracker` | Issue create, edit, or comment requests | Issue state and issue URLs | Route the request there. |
 | `e-code-review` | Review or review/fix loop requests | Structured findings or a clean review result | Route the request there. |
-| `source-command-commit` | Commit or push requests | A verified commit or pushed branch | Route the request there. |
 
 ## Task seeding
 
-At the start of the work, register every item in
-`reference/publication-tasks.md` through `TaskCreate`, `TodoWrite`, or the host
-task equivalent when one is available. If no task tool is available, use the
-catalog and the running work ledger. Mark each task with `PASS`, `FAIL` plus
-file and line evidence, or `N/A` plus a reason for a conditional task.
+When the session exposes a task tool, register the items in
+`reference/publication-tasks.md` as session tasks. Otherwise work through the
+Process steps in order.
 
 ## Process
 

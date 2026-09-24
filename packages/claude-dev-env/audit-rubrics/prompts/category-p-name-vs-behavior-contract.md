@@ -73,17 +73,4 @@ Q3: Which identifier most clearly shows the body should be renamed (the name is 
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket P1-P7, produce Shape A or Shape B (with ≥3 probes). Each Shape A finding must cite (a) the identifier file:line, (b) one concrete input that shows the name-vs-body gap, and (c) the recommended fix direction (rename vs body-tighten). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 identifiers whose names overstate what the body does — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
-
----
-
-# Worked example: jl-cmd/claude-dev-env PR #508
-
-Audit jl-cmd/claude-dev-env PR #508 for **Category P only** (name / regex / word-list vs behavior-contract precision). Skip A-O.
-
-PR #508 ships the plain-language blocker hook. Two fresh identifiers in `plain_language_blocker_constants.py` show the canonical P shapes:
-
-- `FILE_PATH_PATTERN` (line 286) — a regex of shape `(\S+/\S+)` named for file paths but unanchored. Probes: `client/server`, `and/or`, `TCP/IP`, `lookup/replace` all match and are silently exempted from the plain-language scan even though none is a file path. **P3 finding.**
-- `HARD_DENY_REPLACEMENT_TERMS` (line 247) — a hard-deny replacement-by-term list named for ban-worthy heavy words but containing `command`, `address`, `function`, `subject`, `same`, `such`, `said`, `it is`, `there is`, `however`, `forward`. Each entry trips on ordinary technical English (`run the command`, `the address bar`, `validate the function`). **P5 finding.**
-
-Expected output: two P-class findings with cited file:line of the constant, cited example inputs (`client/server`, `run the command`), and recommended direction (anchor the regex to need repo-relative paths; curate the deny-list to drop dev-domain false positives).
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket P1-P7, produce Shape A or Shape B (with at least 3 probes). Each Shape A finding must cite (a) the identifier file:line, (b) one concrete input that shows the name-vs-body gap, and (c) the recommended fix direction (rename vs body-tighten). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Report every finding you reach, including uncertain ones and P2 ones, and give each finding a confidence level (high, medium, or low) beside its severity so a later pass can rank and filter them. Open Questions section for ambiguities. Read-only. No edits, no commits.

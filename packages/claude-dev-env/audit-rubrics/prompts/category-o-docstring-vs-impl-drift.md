@@ -2,7 +2,7 @@
 
 **Judgment standard (thick source):** `packages/claude-dev-env/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md`
 
-This file is the audit **template** only: source-material slots, forced-exhaustion protocol, adversarial probes, cross-bucket questions, output shape, and a worked example. For every sub-bucket's judgment standard, gate inventory, and free-form checklist, read the thick rubric above. Do not treat this prompt as a second full copy of the standard.
+This file is the audit **template** only: source-material slots, forced-exhaustion protocol, adversarial probes, cross-bucket questions, and output shape. For every sub-bucket's judgment standard, gate inventory, and free-form checklist, read the thick rubric above. Do not treat this prompt as a second full copy of the standard.
 
 ## Division of labor
 
@@ -81,18 +81,4 @@ Q3: Of the changed docstrings, which one most clearly shows a refactor was incom
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket O1-O9, produce Shape A or Shape B (with ≥3 probes). Each Shape A finding must cite (a) the docstring file:line, (b) the body file:line that contradicts it, and (c) one sentence describing the contradiction in concrete terms. Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 module-level docstring claims whose implementation left during a refactor — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
-
----
-
-# Worked example: jl-cmd/claude-dev-env PR #522
-
-Audit jl-cmd/claude-dev-env PR #522 for **Category O only** (docstring / fixture-prose vs implementation drift). Skip A-N, P. Sub-bucket forced-exhaustion mode: Category O is decomposed into 9 sub-buckets below.
-
-PR #522 split `pr_description_command_parser.py` into two modules — the original parser and a new `pr_description_pr_number.py` — but the originating module's docstring still claims the PR-number recovery responsibility. A sibling change to `pr_description_body_audit.py` introduced a module docstring whose verb (`detects vague language`) overstates the module's responsibility (it only exposes `_extract_vague_scan_text()`; detection runs elsewhere).
-
-Expected findings on PR #522:
-- **O1 finding:** `pr_description_body_audit.py:8` docstring uses verb `detects`, but the only exported symbol prepares input for a regex scan that fires in a different module. Body line(s) showing `_extract_vague_scan_text` returning normalized text without a detection call.
-- **O7 finding:** `pr_description_command_parser.py` module docstring still names PR-number recovery as a responsibility; the split placed that in `pr_description_pr_number.py`. The originating docstring needs an O7-shaped rewrite to drop the claim that left.
-- **O2 finding:** `test_pr_description_enforcer_readability.py` autouse fixture docstring claims readability is globally disabled `for these tests`; sibling tests in the same module explicitly re-enable readability through a different state path.
-- **O5 finding:** `code_rules_magic_values.py` docstring references a `# pragma: no-tdd-gate` sentinel and a hyphenated `test_code-rules-enforcer.py` filename; neither token exists in the module body or matches the repo's underscore-only test-file naming convention.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket O1-O9, produce Shape A or Shape B (with at least 3 probes). Each Shape A finding must cite (a) the docstring file:line, (b) the body file:line that contradicts it, and (c) one sentence describing the contradiction in concrete terms. Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Report every finding you reach, including uncertain ones and P2 ones, and give each finding a confidence level (high, medium, or low) beside its severity so a later pass can rank and filter them. Open Questions section for ambiguities. Read-only. No edits, no commits.

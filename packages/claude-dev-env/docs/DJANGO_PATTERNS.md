@@ -4,7 +4,7 @@
 
 ## Model Patterns
 
-**NEVER:**
+**Anti-patterns:**
 
 - **Create separate user models** - Extend Django's User with OneToOneField
   - Example: `UserProfile(user=OneToOneField(User, related_name='profile'))`
@@ -27,15 +27,15 @@
 
 ## Template Patterns
 
-**NEVER:**
+**Anti-patterns:**
 
 - **Put view-specific template code in base.html** - Only in the template that uses it
   - Example: `{% if layout %}` in base.html when only home view defines layout
   - If variable is always present in specific template, no conditional needed
 
-## Production Migrations (Post-Launch ONLY)
+## Production Migrations (Post-Launch Only)
 
-**CRITICAL:** After launch, model changes MUST be backwards-compatible.
+After launch, keep model changes backwards-compatible.
 
 **Why:** Manual migration takes 2+ minutes. New code runs against old schema during this window.
 
@@ -59,7 +59,7 @@
 
 ## API Contract Changes (Post-Launch)
 
-**CRITICAL:** After launch, API contract changes MUST be backwards-compatible.
+After launch, keep API contract changes backwards-compatible.
 
 **Why:** Users may have old client code cached. Old clients must work with new API.
 

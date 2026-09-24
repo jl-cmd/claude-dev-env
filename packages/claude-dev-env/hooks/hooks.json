@@ -69,11 +69,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/style_reminder_prompt.py",
-            "timeout": 10
-          },
-          {
-            "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session/skill_loaded_reminder.py",
             "timeout": 10
           }

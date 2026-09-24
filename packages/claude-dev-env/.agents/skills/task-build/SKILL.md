@@ -1,6 +1,6 @@
 ---
 name: task-build
-description: "Gather open session tasks and register them with the best available task or plan tool. Triggers: '/task-build', 'build my task list', 'capture these tasks', 'add open tasks to the task list', 'track these', task list, update plan."
+description: "Gather open session tasks and register them with the best available task or plan tool. Use when the user asks to capture, track, or list the session's open tasks."
 argument-hint: "[optional: a list of tasks to capture, or omit to scan the session]"
 ---
 

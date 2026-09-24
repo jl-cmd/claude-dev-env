@@ -33,8 +33,3 @@
 ## Sample prompt
 
 The reusable Variant C template for Category E is in [`../prompts/category-e-dead-code.md`](../prompts/category-e-dead-code.md). Inline your artifact under `## Source material` and adapt the sub-bucket bullets to your project.
-
-For a literal worked example using PR #394, see [`category-a-api-contracts.md`](category-a-api-contracts.md). Category E walks for that diff:
-- E1: every import (`argparse`, `os`, `sys`, `time`, `DEFAULT_AGE_SECONDS`, `DEFAULT_POLL_INTERVAL` in main script; `datetime`, `os`, `subprocess`, `sys`, `tempfile`, `time`, `Path`, `sweep` in test file) has at least one reference — verified clean.
-- E5: `for each_directory_path, _, _ in os.walk(...)` discards two of three tuple elements — intentional, not dead.
-- E2: `_log_walk_error` is referenced once (passed to `os.walk`); `_build_parser` and `sweep` and `main` all have call sites.

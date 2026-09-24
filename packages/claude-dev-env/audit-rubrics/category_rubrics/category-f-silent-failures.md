@@ -34,8 +34,3 @@
 ## Sample prompt
 
 The reusable Variant C template for Category F is in [`../prompts/category-f-silent-failures.md`](../prompts/category-f-silent-failures.md). Inline your artifact under `## Source material` and adapt the sub-bucket bullets to your project's error-handling conventions.
-
-For a literal worked example using PR #394, see [`category-a-api-contracts.md`](category-a-api-contracts.md). Category F walks for that diff:
-- F1: two `except OSError: pass` blocks at lines 26 and 32 in `sweep_empty_dirs.py` — first absorbs `getctime` failures (probably fine — file gone), second absorbs `rmdir` failures (silently skips non-empty dirs, no log).
-- F7: `Get-Command py -ErrorAction SilentlyContinue` plus `.Source` access — the `if ($_py)` guard catches the null. But `Get-Command python` (fallback) lacks `-ErrorAction` — opposite F7 hazard (loud where silent was intended).
-- F6: `Unregister-ScheduledTask -ErrorAction SilentlyContinue` — verify the script's intent on missing task.

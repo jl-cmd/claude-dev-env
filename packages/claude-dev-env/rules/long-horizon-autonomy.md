@@ -35,11 +35,7 @@ Authority the task already granted stays granted. A later preference about tone,
 
 ## Delegate and keep working
 
-Hand independent subtasks to subagents and keep working while they run; let them run in the background rather than block until each one returns. Reuse a long-lived subagent across related subtasks so its context carries forward and saves repeated reads. Step in when a subagent drifts off track or is missing context.
-
-## Verify your work at intervals
-
-On a long build, set a checkpoint cadence and hold to it. At each interval, check the work so far against the task's stated goals with a fresh-context verifier subagent. A separate verifier in a clean context catches what self-review misses.
+Delegate a large, independent track to a subagent, and keep working while it runs in the background. Do work you can finish in a few tool calls yourself: a few reads, a handful of edits, or a simple check. Reuse a long-lived subagent across related subtasks so its context carries forward and saves repeated reads. Step in when a subagent drifts off track or is missing context.
 
 ## Ground every progress claim
 

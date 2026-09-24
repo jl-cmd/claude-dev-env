@@ -25,11 +25,11 @@ Keep only items that **bit this run**:
 
 ## What to produce
 
-**Order (hard):**
+**Order:**
 
 1. Show findings in chat; categorize as P0-P3.
 2. Then `AskUserQuestion`.
-3. On confirm only, ask `pstack:poteto-agent` to load `issue-tracker` and file the issue.
+3. On confirm only, load `issue-tracker` and file the issue.
 
 ### Cold-reader frame
 
@@ -42,7 +42,7 @@ Assume zero context.
 
 ### 1. Chat findings (always first)
 
-#### Sentence law (HARD)
+#### Sentence law
 
 | Rule | Required |
 |---|---|
@@ -53,11 +53,7 @@ Assume zero context.
 | **One idea** | If you can split it, split it |
 | **Heavy detail** | Prefer an **ASCII infographic** over a stack of sentences |
 
-**Self-check before send:** paste the chat into a viewer that collapses soft breaks.
-
-If two periods appear on one visual line, **split or diagram**.
-
-#### Per gotcha (HARD shape)
+#### Per gotcha shape
 
 | Part | Form |
 |---|---|
@@ -126,23 +122,11 @@ Only after the chat block.
 
 Detail and ASCII stay in chat.
 
-**On confirm:** ask `pstack:poteto-agent` to load `issue-tracker` and file the issue.
+**On confirm:** load `issue-tracker` and file the issue.
 
 Cold-reader issue body.
 
 Clean run: skip.
-
-## Built-in skill gotcha
-
-**Two sentences on one rendered line.**
-
-Markdown soft-breaks join prose.
-
-Review the close-out before send.
-
-Split with a blank line or a list item.
-
-Or move the detail into an ASCII infographic.
 
 ## Rules
 

@@ -1,6 +1,6 @@
 ---
 name: everything-search
-description: Fast file search on Windows using Everything (voidtools) es.exe command-line tool. Use when searching for files by extension, name, date modified, size, or path. Triggers on "find files", "search for files", "locate files", or when user asks to use Everything.
+description: Fast file search on Windows using Everything (voidtools) es.exe command-line tool. Use when searching for files by extension, name, date modified, size, or path, or when the user asks to use Everything.
 ---
 
 # Everything Search
@@ -42,8 +42,8 @@ Path and operator searches run when the registry file is missing. Malformed regi
 **Path (WSL):** `/mnt/c/Program\ Files/Everything/es.exe`
 **Path (Windows):** `"C:/Program Files/Everything/es.exe"`
 
-**CRITICAL:**
-- Search terms are SPACE-SEPARATED, not quoted together
+**Syntax:**
+- Separate search terms with spaces. Quotes hold one exact filename or path; a quoted group of terms breaks parsing.
 - When searching a path, use backslashes inside quotes: `"Y:\\path\\to\\folder"`
 
 ```bash

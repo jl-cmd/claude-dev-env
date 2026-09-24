@@ -36,39 +36,10 @@ The default `.claude` target uses `CODEX_HOME`. A named profile or another
 target uses `<managed-root>/.codex`, so launch that profile with the same
 `CODEX_HOME` value.
 
-## Per-message context injection (manual wiring)
+## Luna spawn tier
 
-Codex reads the same `hookSpecificOutput.additionalContext` shape as Claude,
-on its own `UserPromptSubmit` event. `hooks/session/style_reminder_prompt.py`
-works for both, as is.
-
-The install already points `$CODEX_HOME/hooks` at the shared hooks folder.
-Once installed, the script sits at
-`$CODEX_HOME/hooks/session/style_reminder_prompt.py`.
-
-Add this by hand to `$CODEX_HOME/hooks.json` (merge it into an existing file):
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "command": "python3 $CODEX_HOME/hooks/session/style_reminder_prompt.py"
-      }
-    ]
-  }
-}
-```
-
-The package installer does not register this optional context hook. Add it by
-hand when the host should receive that context.
-
-## Luna fast-mode guard
-
-Commit `0f21faf8` retired `luna_fast_mode_gate.py` with the other blocking
-policy hooks. The package ships no replacement, so a Codex `hooks.json` needs
-no entry for it, and the spawn tier a Luna spawn asks for is the caller's to
-hold.
+No hook gates the tier a Luna spawn asks for, so a Codex `hooks.json` needs no
+entry for it, and the caller holds that tier.
 
 ## Roots and safety
 

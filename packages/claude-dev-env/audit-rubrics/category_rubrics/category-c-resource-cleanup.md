@@ -31,5 +31,3 @@
 ## Sample prompt
 
 The reusable Variant C template for Category C is in [`../prompts/category-c-resource-cleanup.md`](../prompts/category-c-resource-cleanup.md). Inline your artifact under `## Source material` and adapt the sub-bucket bullets to your project's resource lifecycle.
-
-For a literal worked example using PR #394 inlined verbatim, see [`category-a-api-contracts.md`](category-a-api-contracts.md). The Category C–relevant pieces of that diff are C2 (the `subprocess.run` in the test helper — naturally bounded), C3 (the `tempfile.TemporaryDirectory()` calls — all use `with`, verified clean), and C7 (the `while True: sleep` watch loop in `main()` — has no shutdown hook beyond `KeyboardInterrupt`).

@@ -20,7 +20,7 @@
 
 Use 5–10 sub-buckets. Each bucket must be **disjoint** from the others and **collectively exhaustive** of the dimension. Numbered with stable IDs (A1, A2, …) so findings can reference the bucket they belong to.
 
-The decomposition that worked best for PR #394 (a Python+PowerShell scheduled-task installer):
+A sample decomposition for a Python and PowerShell scheduled-task installer:
 
 | ID | Axis name | Concrete checks |
 |---|---|---|
@@ -54,7 +54,7 @@ When the audited artifact is documentation — a CLAUDE.md, a rule file, a READM
 
 ## Sample prompt
 
-The literal text used in the May 2026 audit experiment is in [`../prompts/category-a-api-contracts.md`](../prompts/category-a-api-contracts.md). It produced 8–10 findings (P0=1–2, P1=2–6, P2=2–5) across two runs. Inline the full diff verbatim — do not ask the agent to fetch it.
+The reusable Variant C template for Category A is in [`../prompts/category-a-api-contracts.md`](../prompts/category-a-api-contracts.md). Inline the full diff verbatim under `## Source material`.
 
 ---
 
@@ -63,7 +63,7 @@ The literal text used in the May 2026 audit experiment is in [`../prompts/catego
 - The opening "Sub-bucket forced-exhaustion mode" sentence
 - "REQUIRES at least one Shape A finding OR exactly one Shape B proof-of-absence with **at least 3 adversarial probes** specific to that sub-bucket"
 - "A sub-bucket returning neither is a protocol gap"
-- The verbatim adversarial-pass phrasing: `"assume your first pass missed at least 3 P1 [findings] across these [N] sub-buckets — find them"`
+- The coverage sentence: `"Report every finding you reach, including uncertain ones and P2 ones, and give each finding a confidence level (high, medium, or low) beside its severity so a later pass can rank and filter them."`
 - The preamble line format: `Total: N (P0=N, P1=N, P2=N)`
 - Source material inlined verbatim, not fetched
 
@@ -81,7 +81,6 @@ The literal text used in the May 2026 audit experiment is in [`../prompts/catego
 |---|---|---|---|
 | Sub-bucket count | 5 | 10 | More buckets = deeper coverage; returns appeared to flatten past ~8 |
 | Probes per Shape B | 3 | 5 | More probes = more proof; quality dropped past 5 |
-| Adversarial quota | "at least 1" | "at least 5" | A quota of 3 produced the best signal-to-noise; 5+ produced noise findings |
 | Cross-bucket questions | 2 | 5 | 3 was sufficient; 5 produced redundant answers |
 | Severity tiers | P0/P1/P2 | P0–P4 | Three tiers concentrate reasoning; more tiers fragment it |
 

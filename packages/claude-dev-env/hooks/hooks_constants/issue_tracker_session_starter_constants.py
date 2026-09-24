@@ -18,6 +18,5 @@ ISSUE_TRACKER_STARTER_TIMEOUT_MILLISECONDS: int = 50
 ISSUE_TRACKER_SESSION_START_DIRECTIVE: str = (
     "SessionStart issue-tracker opt-in is active for this registered repository. "
     "Load the issue-tracker skill when the session needs one GitHub issue action "
-    "(open epic, file sub-issue, update status, refresh checklist, close sub-issue). "
-    "Manual issue-tracker agent spawn remains available unchanged."
+    "(open epic, file sub-issue, update status, refresh checklist, close sub-issue)."
 )

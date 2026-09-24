@@ -31,8 +31,3 @@
 ## Sample prompt
 
 The reusable Variant C template for Category G is in [`../prompts/category-g-bounds-and-overflow.md`](../prompts/category-g-bounds-and-overflow.md). Inline your artifact under `## Source material` and adapt the sub-bucket bullets to your project's numeric domain.
-
-For a literal worked example using PR #394, see [`category-a-api-contracts.md`](category-a-api-contracts.md). Category G walks for that diff:
-- G6: `now = time.time()` then `now - created >= min_age_seconds` — float minus float, comparison against int. No DST/timezone concerns since `time.time()` is UTC-based monotonic-ish.
-- G8: `>=` boundary at exactly `min_age_seconds` — a directory exactly 120s old is deleted. Likely intended.
-- G4: `[int]$AgeSeconds = 120` in PowerShell — well within 32-bit int range, no overflow risk for realistic age values.

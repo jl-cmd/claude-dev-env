@@ -52,8 +52,9 @@ def main() -> None:
         operations = ", ".join(found_unsafe)
         advisory_message = (
             f"MIGRATION SAFETY: Contains {operations}. "
-            "Post-launch, model changes MUST be backwards-compatible. "
-            "Verify this won't break running instances during deployment."
+            "After launch, model changes stay backwards-compatible, because running "
+            "instances keep reading the old schema until the deployment finishes. "
+            "Check that this migration keeps those instances working."
         )
         advisory_payload = {
             "systemMessage": advisory_message,

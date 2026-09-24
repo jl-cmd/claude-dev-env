@@ -4,49 +4,35 @@
 
 ## Test Infrastructure Anti-Patterns
 
-**CRITICAL: Test helpers get over-engineered MORE than any other code.**
-
-**ALWAYS:**
-- Single file
-- Simple functions
-- Minimal abstractions
-- Pragmatic approach
-
-**NEVER:**
-- Multi-file packages
-- Cache classes
-- Abstractions "for future"
-- Rigid constraints
-
-**Pre-check (MANDATORY):**
-- [ ] ONE file?
-- [ ] Functions not classes?
-- [ ] Solving problem not building infrastructure?
-- [ ] Junior-dev-understandable?
+Test helpers drift toward over-engineering faster than production code. Keep
+each helper in one file, as plain functions with the fewest abstractions the
+current tests use. Add a cache class, a multi-file package, or an abstraction
+only when a current test needs it. A junior developer reads the helper on the
+first pass.
 
 ## Delete Useless Tests
 
 **Tests must add value.** Delete these types of tests:
 
-### NEVER test:
+### Tests to delete
 
 **Function existence** - "Testing that the function exists doesn't add value. If the function doesn't exist, the code will not run."
 - Bad: `test_public_api_exports_download_function()` only verified `callable(func)`
-- Action: DELETE
+- Action: delete
 
 **Constant values** - "It's silly to test that constant values have not changed."
 - Bad: `assert CACHE_DIR == "cache"`
-- Action: DELETE
+- Action: delete
 
 **Duplicate coverage** - "Isn't this test case the same as test_X?"
-- Action: DELETE redundant tests
+- Action: delete the redundant test
 
-## Test Dependencies MUST FAIL
+## Missing dependencies fail the test
 
 "The tests should fail if they can't run. Missing system dependencies should make the test fail."
 
-- **NEVER** use `@skip_if_missing_dependency` or similar skip decorators
-- Tests FAIL with clear error -> forces installation
+- Leave `@skip_if_missing_dependency` and other skip decorators out of test files. The code-rules lint flags each one.
+- A missing dependency fails the test with a clear error, which prompts the install.
 
 ## Core Testing Principles
 
@@ -58,7 +44,7 @@
 
 ## React Testing Patterns
 
-### ALWAYS:
+### Patterns
 
 **Test behavior, not implementation** - What user sees/does, not internal state
 - Bad: `expect(component.state.isOpen).toBe(true)`
@@ -77,7 +63,7 @@
 - Use `userEvent` over `fireEvent` (more realistic)
 - `await userEvent.click(button)` then assert result
 
-### NEVER:
+### Anti-patterns
 
 **Snapshot test everything** - Only for stable, visual components
 - Snapshots break on any change, creating noise

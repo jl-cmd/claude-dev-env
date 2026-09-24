@@ -1,7 +1,7 @@
 ---
 name: plugin-eval-standalone-skill
 description: >-
-  Run `claude plugin eval` against a standalone skill that is not a plugin, by wrapping the skill in a plugin folder, writing trigger and must-not-trigger cases, and reading the with-skill minus without-skill delta. Triggers: eval a skill, plugin eval, claude plugin eval, test my skill, skill eval, eval a standalone skill.
+  Run `claude plugin eval` against a standalone skill that is not a plugin, by wrapping the skill in a plugin folder, writing trigger and must-not-trigger cases, and reading the with-skill minus without-skill delta. Use when the user asks to eval or test a skill.
 ---
 
 # Plugin eval for a standalone skill
@@ -54,8 +54,8 @@ behavior. It needs Claude Code 2.1.269 or later. Source doc: https://code.claude
 
 ## Process
 
-Register one session task per numbered step through the host task tool. Use `TaskCreate`, else
-`TodoWrite`. Where the host has no task tool, say so and work the steps in order.
+When the host exposes a task tool, register one session task per numbered step.
+Otherwise work the steps in order.
 
 1. Run `claude --version` and confirm 2.1.269 or later.
 2. Create the wrapper folder outside every skills directory:

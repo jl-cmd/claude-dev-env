@@ -18,6 +18,5 @@ ORCHESTRATOR_STARTER_TIMEOUT_MILLISECONDS: int = 50
 ORCHESTRATOR_SESSION_START_DIRECTIVE: str = (
     "SessionStart orchestrator opt-in is active. Load the orchestrator skill "
     "and run in executor-advisor mode for this session's multi-step work. "
-    "Do not invent a second orchestrator path; follow the skill. Manual "
-    "/orchestrator remains available unchanged."
+    "Do not invent a second orchestrator path; follow the skill."
 )
