@@ -10,18 +10,18 @@ Call `resolve_session_identity` from `$HOME/.claude/_shared/advisor/scripts/tier
 | Identity text | Host profile | Bind path |
 |---|---|---|
 | a `codex` token | Codex | In-session Astra spawn |
-| a `claude` token | Claude | In-session Fable spawn of `session-advisor` |
+| a `claude` token | Claude | In-session Opus spawn of `session-advisor` |
 | any other identity | ThirdParty | Headless CLI chain |
 
 When both `codex` and `claude` tokens appear, Codex wins. Empty text is ThirdParty.
 
 ## Bind path
 
-**Claude.** Spawn `subagent_type: session-advisor` at Fable through the Agent tool. When Fable is out of usage, bind Astra through the Codex helper if `ADVISOR_ASTRA` is on. Fail closed when neither binds.
+**Claude.** Spawn `subagent_type: session-advisor` at Opus through the Agent tool. When Opus is out of usage, bind Astra through the Codex helper if `ADVISOR_ASTRA` is on. Fail closed when neither binds.
 
-**Codex.** Spawn a native in-session Astra subagent at `resolve_codex_model_id("Astra")` (`gpt-6-astra`). Walk `candidate_tiers = ["Astra"]`. When the spawn tool has a `flags` field, pass `flags: ["--advisor"]` and record `fallback.advisor_flag: "passed"`. When it has none, as in `codex exec`, spawn `gpt-6-astra` plainly and record `fallback.advisor_flag: "unavailable"`. Both count as a bind. Record `{tier: "Astra", result: "spawned"}` on success. The `ADVISOR_ASTRA` flag is not required. Fail closed when Astra does not bind, or when the spawn skips a flag the host offers. Do not walk Fable on a Codex host.
+**Codex.** Spawn a native in-session Astra subagent at `resolve_codex_model_id("Astra")` (`gpt-6-astra`). Walk `candidate_tiers = ["Astra"]`. When the spawn tool has a `flags` field, pass `flags: ["--advisor"]` and record `fallback.advisor_flag: "passed"`. When it has none, as in `codex exec`, spawn `gpt-6-astra` plainly and record `fallback.advisor_flag: "unavailable"`. Both count as a bind. Record `{tier: "Astra", result: "spawned"}` on success. The `ADVISOR_ASTRA` flag is not required. Fail closed when Astra does not bind, or when the spawn skips a flag the host offers. Do not walk Opus on a Codex host.
 
-**ThirdParty.** Bind Fable through the CLI Claude-chain. When Fable is out of usage, bind Astra through the Codex helper if `ADVISOR_ASTRA` is on. Fail closed when neither binds.
+**ThirdParty.** Bind Opus through the CLI Claude-chain. When Opus is out of usage, bind Astra through the Codex helper if `ADVISOR_ASTRA` is on. Fail closed when neither binds.
 
 ## Mechanical override
 

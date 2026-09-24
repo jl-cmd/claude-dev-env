@@ -26,7 +26,7 @@ Subagents inherit the session's advisor tool, so the executor calls it directly.
 ## Transport preamble for a third-party host
 
 > The orchestrating session owns a standing advisor for this run.
-> The advisor chain: Claude Fable, then Astra through the Codex CLI when Fable is out of usage and the Astra flag and its preflight open that rung. Fable uses its low default. Astra uses the policy default, Medium. When neither binds, there is no advisor.
+> The advisor chain: Claude Opus, then Astra through the Codex CLI when Opus is out of usage and the Astra flag and its preflight open that rung. Opus uses its xhigh default. Astra uses the policy default, Medium. When neither binds, there is no advisor.
 > The orchestrating session is your one path to it: send each consult as a report to the session that assigned you, and it relays the advisor's reply.
 
 ## Shared core for every host

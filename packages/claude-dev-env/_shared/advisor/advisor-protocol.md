@@ -18,10 +18,10 @@ The sections below hold the standing rules. Open a reference file at the moment 
 | Moment | Open |
 |---|---|
 | Naming the session identity | [`reference/identity.md`](reference/identity.md): Claude, Codex, or neither |
-| Binding on a Claude host | [`reference/warm-up.md`](reference/warm-up.md): spawn fields, Fable token, charter |
+| Binding on a Claude host | [`reference/warm-up.md`](reference/warm-up.md): spawn fields, Opus token, charter |
 | Binding on a Codex host | [`reference/identity.md`](reference/identity.md): in-session Astra spawn |
 | Binding from a third-party host | [`reference/third-party-bind.md`](reference/third-party-bind.md): CLI bind steps, fail-closed rule |
-| Fable is out of usage | [`reference/astra-rung.md`](reference/astra-rung.md): Astra fallback at shared effort |
+| Opus is out of usage | [`reference/astra-rung.md`](reference/astra-rung.md): Astra fallback at shared effort |
 | Composing a consult | [`reference/consult-format.md`](reference/consult-format.md): packet, new-evidence and report-back rules |
 | Assembling an executor spawn prompt | [`reference/advisor-block.md`](reference/advisor-block.md): the paste parts |
 | Advisor drifts, dies, or the task pivots | [`reference/lifecycle.md`](reference/lifecycle.md): re-spawn and re-bind steps |
@@ -47,25 +47,25 @@ Mechanical override for scripts:
 
 ### Shared effort, any host
 
-Fable and Astra both read `ADVISOR_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`). Fable keeps its low default. Astra uses the policy default, Medium.
+Opus and Astra both read `ADVISOR_EFFORT` (`low`, `medium`, `high`, `xhigh`, `max`). Opus keeps its xhigh default. Astra uses the policy default, Medium.
 Pass `--effort <level>` on the Astra helper to set effort for that Astra run.
-Pass `--effort <level>` on the Claude CLI bind for Fable. An unset or unrecognized Fable value uses `low`.
+Pass `--effort <level>` on the Claude CLI bind for Opus. An unset or unrecognized Opus value uses `xhigh`.
 
 ### Astra rung
 
-On Claude and ThirdParty: when Fable is out of usage, bind Astra through the Codex helper.
+On Claude and ThirdParty: when Opus is out of usage, bind Astra through the Codex helper.
 Open that attempt with `ADVISOR_ASTRA=1` (or `true` / `yes` / `on`) in the environment, or pass `--enable-astra` on the helper invocation.
-Flag off both ways: fail closed when Fable did not bind.
-Flag on: run the Codex preflight and bind per [`reference/astra-rung.md`](reference/astra-rung.md); a failed preflight fails closed when Fable did not bind.
+Flag off both ways: fail closed when Opus did not bind.
+Flag on: run the Codex preflight and bind per [`reference/astra-rung.md`](reference/astra-rung.md); a failed preflight fails closed when Opus did not bind.
 
 On Codex: Astra is the in-session default. The `ADVISOR_ASTRA` flag is not required. Fail closed when that spawn does not bind.
 
 ### Claude host
 
-When `advisor` is in the session's tool list, the built-in advisor tool is the advisor. The user turns it on with `/advisor`, the `advisorModel` setting, or `--advisor`. Spawn nothing and call `advisor()` at each consult point. The tool forwards the whole transcript, so a consult needs no packet. Its reply is free text, so the four signal words do not apply; weigh it per `docs/references/advisor-tool.md` **How to treat advice**. It is a server tool, so hooks and the spawn-walk log do not see it. A Fable or Opus 5 advisor returns an encrypted result that a log cannot read. When a readable record matters, use the warm agent below.
+When `advisor` is in the session's tool list, the built-in advisor tool is the advisor. The user turns it on with `/advisor`, the `advisorModel` setting, or `--advisor`. Spawn nothing and call `advisor()` at each consult point. The tool forwards the whole transcript, so a consult needs no packet. Its reply is free text, so the four signal words do not apply; weigh it per `docs/references/advisor-tool.md` **How to treat advice**. It is a server tool, so hooks and the spawn-walk log do not see it. An Opus advisor returns an encrypted result that a log cannot read. When a readable record matters, use the warm agent below.
 
-When `advisor` is not in the tool list, use the **Model floor** ladder below (Fable first, then Astra when Fable is out of usage).
-Warm-up spawns `subagent_type: session-advisor` via the Agent tool for Fable; consults go through `SendMessage` to that warm agent. Astra uses the Codex helper.
+When `advisor` is not in the tool list, use the **Model floor** ladder below (Opus first, then Astra when Opus is out of usage).
+Warm-up spawns `subagent_type: session-advisor` via the Agent tool for Opus; consults go through `SendMessage` to that warm agent. Astra uses the Codex helper.
 Assemble and paste each executor's Advisor block per the **Advisor block** section.
 
 ### Codex host
@@ -73,14 +73,14 @@ Assemble and paste each executor's Advisor block per the **Advisor block** secti
 Spawn a native in-session Astra subagent at `resolve_codex_model_id("Astra")`.
 Walk `candidate_tiers = ["Astra"]`. Record `{tier: "Astra", result: "spawned"}` on success.
 **Fail closed:** when Astra does not bind, set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop**.
-Do not walk Fable on a Codex host. Consults stay in-session with that Astra subagent.
+Do not walk Opus on a Codex host. Consults stay in-session with that Astra subagent.
 Assemble and paste each executor's Advisor block per the **Advisor block** section.
 
 ### Third-party host
 
-On a third-party (non-Claude, non-Codex) harness, the shared CLI Claude-chain is the one path to a Claude advisor: bind Fable through it, per [`reference/third-party-bind.md`](reference/third-party-bind.md).
+On a third-party (non-Claude, non-Codex) harness, the shared CLI Claude-chain is the one path to a Claude advisor: bind Opus through it, per [`reference/third-party-bind.md`](reference/third-party-bind.md).
 The bound Claude session is the advisor; this third-party session stays the executor.
-Walk `candidate_tiers = ["Fable"]`. When Fable is out of usage, the Astra rung binds after Fable (`candidate_tiers = ["Fable", "Astra"]`).
+Walk `candidate_tiers = ["Opus"]`. When Opus is out of usage, the Astra rung binds after Opus (`candidate_tiers = ["Opus", "Astra"]`).
 **Cursor Astra first shot:** when the walk reaches Astra (or the user asks for Astra), bind through `codex_astra_advisor.py --bind --enable-astra` on the first tool call (see the GOTCHA in [`reference/third-party-bind.md`](reference/third-party-bind.md)). Do not use the Agent tool, and do not hunt a probe path.
 **Fail closed:** when every candidate fails, set `selected_tier = null` and a `fallback_reason`, report that the advisor is unreachable, and **stop**. ENDORSE / CORRECTION / PLAN / STOP come only from a bound advisor.
 Executors report to the orchestrating session; that session consults the bound advisor and relays the four-signal reply.
@@ -88,26 +88,26 @@ Executors report to the orchestrating session; that session consults the bound a
 ## Model floor
 
 The built-in advisor tool sits outside this ladder. Claude Code and the API accept it only when the advisor is at least as capable as the main model, and that check is its floor.
-On Claude and ThirdParty the advisor ladder is `Fable` first, then Astra (flag-gated, Codex CLI) when Fable is out of usage.
+On Claude and ThirdParty the advisor ladder is `Opus` first, then Astra (flag-gated, Codex CLI) when Opus is out of usage.
 On Codex the walk is Astra only, in-session.
 Opus is not an advisor candidate. `Sonnet` and `Haiku` are executor tiers only.
 Consumer `own_tier` is recorded on the spawn-walk log; it does not add Opus to the advisor walk.
 Tier names are canonical Title Case; the validator accepts any letter case and normalizes to Title Case.
-Try binds top-down. Fable resolves to the short model alias in [`reference/cli-chain.md`](reference/cli-chain.md); Astra resolves through `resolve_codex_model_id("Astra")` to `gpt-6-astra`.
+Try binds top-down. Opus resolves to the short model alias in [`reference/cli-chain.md`](reference/cli-chain.md); Astra resolves through `resolve_codex_model_id("Astra")` to `gpt-6-astra`.
 The advisor is created at `selected_tier`, the first ladder tier that binds.
-When Fable fails on a Claude host, try Astra if the flag is on, else fail closed. The CLI chain is the Fable bind path on a third-party host and the Claude-host fallback for Fable; it does not bind Opus as advisor.
+When Opus fails on a Claude host, try Astra if the flag is on, else fail closed. The CLI chain is the Opus bind path on a third-party host and the Claude-host fallback for Opus.
 On a Codex host a failed Astra spawn fails closed per **Host profiles → Codex host**.
-On a third-party host the CLI chain is already the primary path, so a failed Fable (and Astra, when enabled) walk fails closed per **Host profiles → Third-party host**.
+On a third-party host the CLI chain is already the primary path, so a failed Opus (and Astra, when enabled) walk fails closed per **Host profiles → Third-party host**.
 
 Emit a structured spawn-walk log so the walk can be checked mechanically: [`reference/spawn-walk-log.md`](reference/spawn-walk-log.md).
 The validator checks ladder shape only; host policy sits on top.
 
-**Equal-tier pairings.** Bind Fable for an independent second pass on irreversible or security-sensitive work. The advisor is Fable or Astra.
+**Equal-tier pairings.** Bind Opus for an independent second pass on irreversible or security-sensitive work. The advisor is Opus or Astra.
 
 ## Warm-up (once per session)
 
 On a **Claude host** with `advisor` in the tool list, skip the warm-up; the built-in tool needs none.
-On a **Claude host** without it, spawn `session-advisor` at the Fable alias with the charter as its prompt. When Fable is out of usage and the Astra rung is open, bind Astra through the Codex helper instead.
+On a **Claude host** without it, spawn `session-advisor` at the Opus alias with the charter as its prompt. When Opus is out of usage and the Astra rung is open, bind Astra through the Codex helper instead.
 Full spawn fields and the charter template: [`reference/warm-up.md`](reference/warm-up.md).
 
 On a **Codex host**, spawn a native in-session Astra subagent with the same charter. Bind fields: [`reference/identity.md`](reference/identity.md) and [`reference/warm-up.md`](reference/warm-up.md).

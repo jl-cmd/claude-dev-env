@@ -7,17 +7,17 @@ This validator reads that log back and checks its invariants.
 
     ladder_walk = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "spawned"}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "spawned"}],
+        selected_tier="Opus",
     )
     validate_model_tier_run(ladder_walk)  # ok: returns None, raises nothing
 
     cli_bind = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "cli"}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "cli"}],
+        selected_tier="Opus",
     )
     validate_model_tier_run(cli_bind)  # ok: third-party-host CLI Claude-chain bind
 
@@ -330,10 +330,9 @@ def validate_model_tier_run(run: ModelTierRun) -> None:
         validate_model_tier_run(cli_bind)     # ok: CLI Claude-chain bind
         validate_model_tier_run(broken_log)   # flag: ModelTierRunError
 
-    Candidate tiers are Fable, plus Astra when ``is_astra_enabled`` is true, on
+    Candidate tiers are Opus, plus Astra when ``is_astra_enabled`` is true, on
     Claude and ThirdParty hosts. A Codex host walks Astra only. Consumer
-    ``own_tier`` is recorded and must be a known tier. It does not add Opus
-    to the advisor walk. Tries walk that list in order. Early stop only
+    ``own_tier`` is recorded and must be a known tier. Tries walk that list in order. Early stop only
     after ``spawned``, ``cli``, or Astra ``codex`` (and Astra ``spawned`` on a
     Codex host). A null selected_tier requires a full walk plus
     fallback_reason.
