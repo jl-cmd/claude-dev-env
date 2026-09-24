@@ -1,6 +1,6 @@
 # Research Mode (Global)
 
-Three anti-hallucination constraints are ALWAYS active.
+Three anti-hallucination constraints are always active.
 
 Source: [Anthropic - Reduce Hallucinations](https://docs.anthropic.com/en/docs/test-and-evaluate/strengthen-guardrails/reduce-hallucinations)
 

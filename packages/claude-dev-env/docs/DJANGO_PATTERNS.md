@@ -35,7 +35,7 @@
 
 ## Production Migrations (Post-Launch ONLY)
 
-**CRITICAL:** After launch, model changes MUST be backwards-compatible.
+After launch, keep model changes backwards-compatible.
 
 **Why:** Manual migration takes 2+ minutes. New code runs against old schema during this window.
 
@@ -59,7 +59,7 @@
 
 ## API Contract Changes (Post-Launch)
 
-**CRITICAL:** After launch, API contract changes MUST be backwards-compatible.
+After launch, keep API contract changes backwards-compatible.
 
 **Why:** Users may have old client code cached. Old clients must work with new API.
 
