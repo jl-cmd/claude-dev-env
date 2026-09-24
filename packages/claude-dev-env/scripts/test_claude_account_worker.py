@@ -128,6 +128,7 @@ def _run_worker(
         report_file=report_file,
         model=model,
         permission_mode=permission_mode,
+        timeout_minutes=60,
         decision_selector=lambda: selection,
         dependencies=dependencies,
     )
@@ -200,6 +201,9 @@ def test_should_write_wait_reason_and_start_no_process(tmp_path: Path) -> None:
         prompt_file=tmp_path / "missing-brief.md",
         cwd=tmp_path,
         report_file=report_file,
+        model=None,
+        permission_mode="auto",
+        timeout_minutes=60,
         decision_selector=lambda: _selection(
             CHOICE_WAIT,
             reason="second account resets at 2026-09-24T12:00:00Z",

@@ -297,17 +297,17 @@ def run_worker(
     prompt_file: Path,
     cwd: Path,
     report_file: Path,
-    model: str | None = None,
-    permission_mode: str = DEFAULT_PERMISSION_MODE,
-    timeout_minutes: int = DEFAULT_TIMEOUT_MINUTES,
-    decision_selector: Callable[[], AccountSelection] = select_account,
-    dependencies: WorkerDependencies = _default_dependencies(),
+    model: str | None,
+    permission_mode: str,
+    timeout_minutes: int,
+    decision_selector: Callable[[], AccountSelection],
+    dependencies: WorkerDependencies,
 ) -> int:
     """Pick an account and run one headless Claude worker on it.
 
     Args:
         prompt_file, report_file: The prompt and report file paths.
-        Remaining parameters are injection points for tests.
+        decision_selector, dependencies: The picker and process controls.
     Returns:
         The exit code: 3 on wait, 124 on timeout, 127 on a missing binary,
         or the child's own exit code.
@@ -338,6 +338,8 @@ def main() -> int:
         model=arguments.model,
         permission_mode=arguments.permission_mode,
         timeout_minutes=arguments.timeout_minutes,
+        decision_selector=select_account,
+        dependencies=_default_dependencies(),
     )
 
 
