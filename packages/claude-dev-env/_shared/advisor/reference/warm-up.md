@@ -5,10 +5,10 @@ Open this when binding the warm advisor on a Claude host or a Codex host, and fo
 
 ## Spawn fields for a Claude host
 
-The consuming skill's session tries Fable first. Spawn with:
+The consuming skill's session tries Opus first. Spawn with:
 
 - `subagent_type: session-advisor` (see [`agents/session-advisor.md`](../../../agents/session-advisor.md) for the full signal contract).
-- `model`: the short alias via `resolve_cli_model_id("Fable")` (alias table: [`cli-chain.md`](cli-chain.md)): `fable`. When Fable is out of usage and the Astra rung is open, continue with the Codex helper in [`astra-rung.md`](astra-rung.md) as the Astra fallback.
+- `model`: the short alias via `resolve_cli_model_id("Opus")` (alias table: [`cli-chain.md`](cli-chain.md)): `opus`. When Opus is out of usage and the Astra rung is open, continue with the Codex helper in [`astra-rung.md`](astra-rung.md) as the Astra fallback.
 - `name`: a name the session and every consumer will use to reach it (e.g. `team-advisor-agent`).
 - `run_in_background: true`.
 - `prompt`: the charter below.
@@ -34,7 +34,7 @@ Spawn a native in-session Astra subagent at `resolve_codex_model_id("Astra")` (`
 When the spawn tool has a `flags` field, pass `flags: ["--advisor"]` and record `fallback.advisor_flag: "passed"`.
 When the spawn tool has no `flags` field, as in `codex exec`, spawn `gpt-6-astra` plainly, record `fallback.advisor_flag: "unavailable"`, and treat the advisor as bound.
 Record `{tier: "Astra", result: "spawned"}` on success. Fail closed when that spawn does not bind, or when it skips a flag the host offers.
-The `ADVISOR_ASTRA` flag is not required. Do not walk Fable. Consults stay in-session with that Astra subagent.
+The `ADVISOR_ASTRA` flag is not required. Do not walk Opus. Consults stay in-session with that Astra subagent.
 Identity routing: [`identity.md`](identity.md).
 
 ## Third-party host

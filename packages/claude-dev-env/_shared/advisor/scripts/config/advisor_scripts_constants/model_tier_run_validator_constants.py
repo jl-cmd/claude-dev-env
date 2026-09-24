@@ -43,8 +43,8 @@ SESSION_IDENTITY_WORD_PATTERN: str = r"[a-z0-9]+"
 HOST_PROFILE_JSON_KEY: str = "host_profile"
 
 ALL_MODEL_TIERS: tuple[str, ...] = (
+    "Fable",
     ADVISOR_FALLBACK_TIER,
-    "Opus",
     "Sonnet",
     "Haiku",
 )
@@ -58,8 +58,8 @@ ALL_KNOWN_TIER_NAMES: tuple[str, ...] = (
 ADVISOR_SENDMESSAGE_REPLY_WAIT_SECONDS: int = 120
 
 ALL_CLI_MODEL_ID_BY_TIER: dict[str, str] = {
-    ADVISOR_FALLBACK_TIER: "fable",
-    "Opus": "opus",
+    "Fable": "fable",
+    ADVISOR_FALLBACK_TIER: "opus",
     "Sonnet": "sonnet",
     "Haiku": "haiku",
     THIRD_PARTY_MODEL_TIER: "third-party",

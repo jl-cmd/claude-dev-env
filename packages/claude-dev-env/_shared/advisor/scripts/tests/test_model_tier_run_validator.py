@@ -218,19 +218,19 @@ def test_non_object_evidence_reports_the_same_message_at_validate_and_load(
 def test_clean_single_spawn_at_top_of_slice_passes() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "spawned"}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "spawned"}],
+        selected_tier="Opus",
     )
     assert validate_model_tier_run(run) is None
 
 
-def test_astra_codex_bind_succeeds_after_fable_when_enabled() -> None:
+def test_astra_codex_bind_succeeds_after_opus_when_enabled() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
+        candidate_tiers=["Opus", ADVISOR_MODEL_TIER],
         attempts=[
-            {"tier": "Fable", "result": "unavailable"},
+            {"tier": "Opus", "result": "unavailable"},
             {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
         ],
         selected_tier=ADVISOR_MODEL_TIER,
@@ -239,12 +239,12 @@ def test_astra_codex_bind_succeeds_after_fable_when_enabled() -> None:
     assert validate_model_tier_run(run) is None
 
 
-def test_fable_success_with_astra_enabled_stops_before_astra() -> None:
+def test_opus_success_with_astra_enabled_stops_before_astra() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
-        attempts=[{"tier": "Fable", "result": "spawned"}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus", ADVISOR_MODEL_TIER],
+        attempts=[{"tier": "Opus", "result": "spawned"}],
+        selected_tier="Opus",
         is_astra_enabled=True,
     )
     assert validate_model_tier_run(run) is None
@@ -253,7 +253,7 @@ def test_fable_success_with_astra_enabled_stops_before_astra() -> None:
 def test_astra_first_walk_raises_when_astra_is_enabled() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=[ADVISOR_MODEL_TIER, "Fable"],
+        candidate_tiers=[ADVISOR_MODEL_TIER, "Opus"],
         attempts=[{"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN}],
         selected_tier=ADVISOR_MODEL_TIER,
         is_astra_enabled=True,
@@ -262,12 +262,12 @@ def test_astra_first_walk_raises_when_astra_is_enabled() -> None:
         validate_model_tier_run(run)
 
 
-def test_astra_rung_follows_fable_on_third_party_cli_floor_when_enabled() -> None:
+def test_astra_rung_follows_opus_on_third_party_cli_floor_when_enabled() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
+        candidate_tiers=["Opus", ADVISOR_MODEL_TIER],
         attempts=[
-            {"tier": "Fable", "result": "unavailable"},
+            {"tier": "Opus", "result": "unavailable"},
             {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
         ],
         selected_tier=ADVISOR_MODEL_TIER,
@@ -281,9 +281,9 @@ def test_astra_rung_follows_fable_on_third_party_cli_floor_when_enabled() -> Non
 def test_astra_codex_result_requires_astra_candidate() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": CODEX_BIND_SUCCESS_TOKEN}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": CODEX_BIND_SUCCESS_TOKEN}],
+        selected_tier="Opus",
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
@@ -292,9 +292,9 @@ def test_astra_codex_result_requires_astra_candidate() -> None:
 def test_astra_spawned_result_does_not_count_as_codex_success() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
+        candidate_tiers=["Opus", ADVISOR_MODEL_TIER],
         attempts=[
-            {"tier": "Fable", "result": "unavailable"},
+            {"tier": "Opus", "result": "unavailable"},
             {"tier": ADVISOR_MODEL_TIER, "result": "spawned"},
         ],
         selected_tier=ADVISOR_MODEL_TIER,
@@ -304,13 +304,13 @@ def test_astra_spawned_result_does_not_count_as_codex_success() -> None:
         validate_model_tier_run(run)
 
 
-def test_exhausted_fable_walk_fails_closed() -> None:
+def test_exhausted_opus_walk_fails_closed() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "unavailable"}],
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "unavailable"}],
         selected_tier=None,
-        fallback_reason="Fable did not bind; no advisor",
+        fallback_reason="Opus did not bind; no advisor",
     )
     assert validate_model_tier_run(run) is None
 
@@ -318,8 +318,8 @@ def test_exhausted_fable_walk_fails_closed() -> None:
 def test_fully_exhausted_walk_with_fallback_reason_passes() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "unavailable"}],
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "unavailable"}],
         selected_tier=None,
         fallback_reason="every candidate tier failed",
     )
@@ -329,9 +329,9 @@ def test_fully_exhausted_walk_with_fallback_reason_passes() -> None:
 def test_opus_candidate_on_advisor_walk_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
-        attempts=[{"tier": "Fable", "result": "spawned"}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus", "Opus"],
+        attempts=[{"tier": "Opus", "result": "spawned"}],
+        selected_tier="Opus",
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
@@ -340,7 +340,7 @@ def test_opus_candidate_on_advisor_walk_raises() -> None:
 def test_attempt_tier_outside_candidate_slice_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
+        candidate_tiers=["Opus"],
         attempts=[{"tier": "Haiku", "result": "spawned"}],
         selected_tier="Haiku",
     )
@@ -351,10 +351,10 @@ def test_attempt_tier_outside_candidate_slice_raises() -> None:
 def test_attempts_out_of_ladder_order_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
+        candidate_tiers=["Opus", ADVISOR_MODEL_TIER],
         attempts=[
             {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
-            {"tier": "Fable", "result": "unavailable"},
+            {"tier": "Opus", "result": "unavailable"},
         ],
         selected_tier=ADVISOR_MODEL_TIER,
         is_astra_enabled=True,
@@ -366,12 +366,12 @@ def test_attempts_out_of_ladder_order_raises() -> None:
 def test_selected_tier_not_first_spawned_attempt_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
+        candidate_tiers=["Opus", ADVISOR_MODEL_TIER],
         attempts=[
-            {"tier": "Fable", "result": "unavailable"},
+            {"tier": "Opus", "result": "unavailable"},
             {"tier": ADVISOR_MODEL_TIER, "result": CODEX_BIND_SUCCESS_TOKEN},
         ],
-        selected_tier="Fable",
+        selected_tier="Opus",
         is_astra_enabled=True,
     )
     with pytest.raises(
@@ -387,9 +387,9 @@ def test_selected_tier_not_first_spawned_attempt_raises() -> None:
 def test_exhausted_walk_with_non_null_selected_tier_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "unavailable"}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "unavailable"}],
+        selected_tier="Opus",
         fallback_reason="every candidate tier failed",
     )
     with pytest.raises(ModelTierRunError):
@@ -399,8 +399,8 @@ def test_exhausted_walk_with_non_null_selected_tier_raises() -> None:
 def test_exhausted_walk_missing_fallback_reason_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "unavailable"}],
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "unavailable"}],
         selected_tier=None,
     )
     with pytest.raises(ModelTierRunError):
@@ -421,7 +421,7 @@ def test_unknown_own_tier_raises() -> None:
 def test_empty_attempts_with_null_selected_tier_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
+        candidate_tiers=["Opus"],
         attempts=[],
         selected_tier=None,
         fallback_reason="skipped straight to CLI fallback",
@@ -433,10 +433,10 @@ def test_empty_attempts_with_null_selected_tier_raises() -> None:
 def test_incomplete_fallback_walk_before_astra_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
-        attempts=[{"tier": "Fable", "result": "unavailable"}],
+        candidate_tiers=["Opus", ADVISOR_MODEL_TIER],
+        attempts=[{"tier": "Opus", "result": "unavailable"}],
         selected_tier=None,
-        fallback_reason="stopped after Fable without trying Astra",
+        fallback_reason="stopped after Opus without trying Astra",
         is_astra_enabled=True,
     )
     with pytest.raises(ModelTierRunError):
@@ -446,9 +446,9 @@ def test_incomplete_fallback_walk_before_astra_raises() -> None:
 def test_lowercase_own_tier_and_candidates_pass() -> None:
     run = ModelTierRun(
         own_tier="opus",
-        candidate_tiers=["fable"],
-        attempts=[{"tier": "fable", "result": "spawned"}],
-        selected_tier="fable",
+        candidate_tiers=["opus"],
+        attempts=[{"tier": "opus", "result": "spawned"}],
+        selected_tier="opus",
     )
     assert validate_model_tier_run(run) is None
 
@@ -459,16 +459,16 @@ def test_cli_validates_json_log_file(tmp_path: Path) -> None:
         json.dumps(
             {
                 "own_tier": "Opus",
-                "candidate_tiers": ["Fable"],
-                "attempts": [{"tier": "Fable", "result": "spawned"}],
-                "selected_tier": "Fable",
+                "candidate_tiers": ["Opus"],
+                "attempts": [{"tier": "Opus", "result": "spawned"}],
+                "selected_tier": "Opus",
             }
         ),
         encoding="utf-8",
     )
     assert main([str(log_path)]) == 0
     loaded_run = load_model_tier_run_from_json_path(from_path=log_path)
-    assert loaded_run.selected_tier == "Fable"
+    assert loaded_run.selected_tier == "Opus"
     assert loaded_run.host_profile == "Claude"
 
 
@@ -478,9 +478,9 @@ def test_cli_rejects_non_string_host_profile(tmp_path: Path) -> None:
         json.dumps(
             {
                 "own_tier": "Opus",
-                "candidate_tiers": ["Fable"],
-                "attempts": [{"tier": "Fable", "result": "spawned"}],
-                "selected_tier": "Fable",
+                "candidate_tiers": ["Opus"],
+                "attempts": [{"tier": "Opus", "result": "spawned"}],
+                "selected_tier": "Opus",
                 "host_profile": 1,
             }
         ),
@@ -495,9 +495,9 @@ def test_cli_rejects_non_boolean_astra_enabled(tmp_path: Path) -> None:
         json.dumps(
             {
                 "own_tier": "Opus",
-                "candidate_tiers": ["Fable"],
-                "attempts": [{"tier": "Fable", "result": "spawned"}],
-                "selected_tier": "Fable",
+                "candidate_tiers": ["Opus"],
+                "attempts": [{"tier": "Opus", "result": "spawned"}],
+                "selected_tier": "Opus",
                 "astra_enabled": "false",
             }
         ),
@@ -512,8 +512,8 @@ def test_cli_rejects_incomplete_fallback_log(tmp_path: Path) -> None:
         json.dumps(
             {
                 "own_tier": "Opus",
-                "candidate_tiers": ["Fable", "Astra"],
-                "attempts": [{"tier": "Fable", "result": "unavailable"}],
+                "candidate_tiers": ["Opus", "Astra"],
+                "attempts": [{"tier": "Opus", "result": "unavailable"}],
                 "selected_tier": None,
                 "fallback_reason": "incomplete",
                 "astra_enabled": True,
@@ -531,9 +531,9 @@ def test_cli_loads_astra_enabled_fallback_walk(tmp_path: Path) -> None:
             {
                 "own_tier": "ThirdParty",
                 "host_profile": "ThirdParty",
-                "candidate_tiers": ["Fable", "Astra"],
+                "candidate_tiers": ["Opus", "Astra"],
                 "attempts": [
-                    {"tier": "Fable", "result": "unavailable"},
+                    {"tier": "Opus", "result": "unavailable"},
                     {"tier": "Astra", "result": "codex"},
                 ],
                 "selected_tier": "Astra",
@@ -552,12 +552,12 @@ def test_cli_missing_path_returns_usage_exit_code() -> None:
     assert main([]) == 2
 
 
-def test_cli_bind_at_fable_passes() -> None:
+def test_cli_bind_at_opus_passes() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "cli"}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "cli"}],
+        selected_tier="Opus",
     )
     assert validate_model_tier_run(run) is None
 
@@ -565,9 +565,9 @@ def test_cli_bind_at_fable_passes() -> None:
 def test_cli_bind_fallthrough_to_opus_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", "Opus"],
+        candidate_tiers=["Opus", "Opus"],
         attempts=[
-            {"tier": "Fable", "result": "unavailable"},
+            {"tier": "Opus", "result": "unavailable"},
             {"tier": "Opus", "result": "cli"},
         ],
         selected_tier="Opus",
@@ -576,12 +576,12 @@ def test_cli_bind_fallthrough_to_opus_raises() -> None:
         validate_model_tier_run(run)
 
 
-def test_third_party_own_tier_maps_to_fable_cli_bind_passes() -> None:
+def test_third_party_own_tier_maps_to_opus_cli_bind_passes() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "cli"}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "cli"}],
+        selected_tier="Opus",
     )
     assert validate_model_tier_run(run) is None
 
@@ -589,9 +589,9 @@ def test_third_party_own_tier_maps_to_fable_cli_bind_passes() -> None:
 def test_third_party_own_tier_lowercase_cli_bind_passes() -> None:
     run = ModelTierRun(
         own_tier="thirdparty",
-        candidate_tiers=["fable"],
-        attempts=[{"tier": "fable", "result": "cli"}],
-        selected_tier="fable",
+        candidate_tiers=["opus"],
+        attempts=[{"tier": "opus", "result": "cli"}],
+        selected_tier="opus",
     )
     assert validate_model_tier_run(run) is None
 
@@ -599,9 +599,9 @@ def test_third_party_own_tier_lowercase_cli_bind_passes() -> None:
 def test_self_token_is_not_bind_success_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "self"}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "self"}],
+        selected_tier="Opus",
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
@@ -610,9 +610,9 @@ def test_self_token_is_not_bind_success_raises() -> None:
 def test_third_party_self_token_is_not_bind_success_raises() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "self"}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "self"}],
+        selected_tier="Opus",
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
@@ -632,8 +632,8 @@ def test_third_party_host_legacy_single_tier_self_bind_raises() -> None:
 def test_third_party_cli_exhausted_fail_closed_passes() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "unavailable"}],
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "unavailable"}],
         selected_tier=None,
         fallback_reason=(
             "third-party host CLI Claude-chain exhausted; fail closed"
@@ -645,8 +645,8 @@ def test_third_party_cli_exhausted_fail_closed_passes() -> None:
 def test_third_party_cli_exhausted_without_fallback_reason_raises() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "unavailable"}],
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "unavailable"}],
         selected_tier=None,
     )
     with pytest.raises(ModelTierRunError):
@@ -656,9 +656,9 @@ def test_third_party_cli_exhausted_without_fallback_reason_raises() -> None:
 def test_third_party_cli_selected_tier_mismatch_raises() -> None:
     run = ModelTierRun(
         own_tier="ThirdParty",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "cli"}],
-        selected_tier="Opus",
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "cli"}],
+        selected_tier="Sonnet",
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
@@ -667,9 +667,9 @@ def test_third_party_cli_selected_tier_mismatch_raises() -> None:
 def test_claude_host_self_token_is_not_spawn_success_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable"],
-        attempts=[{"tier": "Fable", "result": "self"}],
-        selected_tier="Fable",
+        candidate_tiers=["Opus"],
+        attempts=[{"tier": "Opus", "result": "self"}],
+        selected_tier="Opus",
     )
     with pytest.raises(ModelTierRunError):
         validate_model_tier_run(run)
@@ -699,10 +699,10 @@ def test_codex_host_astra_codex_token_counts_as_success() -> None:
     assert validate_model_tier_run(run) is None
 
 
-def test_codex_host_fable_then_astra_walk_raises() -> None:
+def test_codex_host_opus_then_astra_walk_raises() -> None:
     run = ModelTierRun(
         own_tier="Opus",
-        candidate_tiers=["Fable", ADVISOR_MODEL_TIER],
+        candidate_tiers=["Opus", ADVISOR_MODEL_TIER],
         attempts=[{"tier": ADVISOR_MODEL_TIER, "result": "spawned"}],
         selected_tier=ADVISOR_MODEL_TIER,
         is_astra_enabled=True,

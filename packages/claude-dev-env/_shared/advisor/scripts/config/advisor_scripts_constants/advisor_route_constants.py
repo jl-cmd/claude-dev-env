@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 
 ADVISOR_MODEL_TIER: str = "Astra"
-ADVISOR_FALLBACK_TIER: str = "Fable"
-ADVISOR_FALLBACK_RESULT: str = "fable"
+ADVISOR_FALLBACK_TIER: str = "Opus"
+ADVISOR_FALLBACK_RESULT: str = "opus"
 ADVISOR_EFFORT_ENV_VAR: str = "ADVISOR_EFFORT"
 ADVISOR_ROUTING_TIMEOUT_SECONDS: int = 10
 

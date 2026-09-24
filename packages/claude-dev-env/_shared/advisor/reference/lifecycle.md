@@ -22,6 +22,6 @@ Every other consumer reaches it by message alone; spawn, respawn, and shutdown b
 
 The orchestrating session owns the CLI advisor bind for the whole run: first bind, re-bind on drift or lost `session_id`, and fail-closed report when the bound path cannot serve.
 
-**Re-bind on drift.** If a reply shows a stale picture, the task pivots, or `--resume` fails after a usage-limit failover (session stores are per binary/account), re-bind Fable through `claude_chain_runner.py` with the charter plus a compact recap of consults so far.
-Capture the new `session_id`, and log a fresh Fable walk with `result: "cli"` on success, then Astra when that rung is open. An Astra re-bind uses `codex_astra_advisor.py --bind --enable-astra` with the same charter and recap, and records `result: "codex"` on success.
+**Re-bind on drift.** If a reply shows a stale picture, the task pivots, or `--resume` fails after a usage-limit failover (session stores are per binary/account), re-bind Opus through `claude_chain_runner.py` with the charter plus a compact recap of consults so far.
+Capture the new `session_id`, and log a fresh Opus walk with `result: "cli"` on success, then Astra when that rung is open. An Astra re-bind uses `codex_astra_advisor.py --bind --enable-astra` with the same charter and recap, and records `result: "codex"` on success.
 Executors keep reporting to the orchestrating session; advisor binding stays with that session alone.
