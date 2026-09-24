@@ -1,5 +1,13 @@
 # Changelog
 
+## [8.14.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.13.0...claude-dev-env-v8.14.0) (2026-09-24)
+
+
+### Features
+
+* **advisor:** default the advisor to Opus at xhigh effort ([e25bfbf](https://github.com/jl-cmd/claude-dev-env/commit/e25bfbfee2dcc7a3190aa427e4a201528dfe580d))
+* **advisor:** default the advisor to Opus at xhigh effort ([ccb60fd](https://github.com/jl-cmd/claude-dev-env/commit/ccb60fd7d6b806b65fe124b2bb1e67b554a0109a))
+
 ## [8.13.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.12.0...claude-dev-env-v8.13.0) (2026-09-23)
 
 
