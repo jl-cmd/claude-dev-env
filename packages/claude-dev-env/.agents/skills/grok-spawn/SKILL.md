@@ -1,9 +1,8 @@
 ---
 name: grok-spawn
 description: >-
-  Spawn headless grok worker fleets via preflight and spawn_grok_batch.
-  Triggers: /grok-spawn, spawn grok workers, grok worker fleet, run this with
-  grok workers, headless grok batch.
+  Spawn headless grok worker fleets via preflight and spawn_grok_batch. Use
+  when the user asks to run work on a fleet or batch of headless grok workers.
 ---
 
 # Grok Spawn
@@ -45,8 +44,6 @@ Good fits:
 - Live `SendMessage` coordination between agents
 - Claude-only tools (Agent tool, warm advisor, Claude MCP surfaces the
   grok CLI does not load the same way)
-
-For a single interactive Grok Build handoff paste, use `/grokify` instead.
 
 **Refusal:** no concrete worker tasks — reply `What should the grok workers do?
 List each role in one line.` and stop.
@@ -220,8 +217,6 @@ Build workers stop at stage-ready edits and a written report. They do not run
 | `spawn_grok_batch.py` | Batch launch, stagger, report collect |
 | `grok_headless_runner.py` | One-worker runner (called by the batch launcher) |
 
-Sibling skill: `/grokify` for a single paste-ready interactive Grok Build handoff.
-
 ## File index
 
 | File | Purpose |
@@ -238,4 +233,4 @@ Sibling skill: `/grokify` for a single paste-ready interactive Grok Build handof
 
 ## Worker advisors
 
-Each grok worker binds a unique Opus-high dvisor_session_id through the lead-supplied dvisor.launcher in the batch spec (committed default is a placeholder). Reports require the same handle\'s ENDORSE (or bounded CORRECTION/PLAN then ENDORSE); STOP or malformed signals end as advisor_blocked.
+Each grok worker binds a unique Opus-high `advisor_session_id` through the lead-supplied `advisor.launcher` in the batch spec (the committed default is a placeholder). Reports require the same handle's ENDORSE (or bounded CORRECTION/PLAN then ENDORSE); STOP or malformed signals end as `advisor_blocked`.

@@ -18,7 +18,7 @@ When a script file's literal body needs `$(...)`, author it with the Write tool,
 
 ## Enforcement
 
-No PreToolUse hook denies a Bash command. Commit `0f21faf8e` retired the blocking policy hooks and left the Bash PreToolUse roster empty. `shell_substitution_blocker.py` was one of them. The substitution constraint above is guidance a reader follows, and a permission prompt on a wrapped command is the signal that one slipped through.
+No PreToolUse hook denies a Bash command. The substitution constraint above is guidance a reader follows, and a permission prompt on a wrapped command is the signal that one slipped through.
 
 One PreToolUse hook does run on a Bash command, and it only rewrites. `blocking/msys_rev_path_rewriter.py` (PreToolUse on Bash, hosted by `bash_pre_tool_use_dispatcher`) reads a git command before it runs and keeps Git Bash from converting a `<rev>:<path>` argument. That roster holds this one hook, and a test asserts its whole content, so a blocking hook added beside it fails the suite.
 

@@ -59,8 +59,3 @@ The reusable Variant C template for Category K is in [`../prompts/category-k-cod
 Categories A–J describe failure modes within a single change. Category K describes the failure mode that emerges *between* the change and what didn't change. A reviewer walking only A–J reads the diff and judges it on its own merits — they can miss K entirely because the diff is internally consistent. K forces the reviewer to read the unchanged code with the diff in hand and look for sites that *should* have been touched.
 
 The PR #397 case demonstrates the cost of not running K: a security-related instruction (close the "I don't know" escape hatch) was correctly updated in the primary path but left wide open in the fallback, defeating the purpose of the change. The diff looked clean. Only by reading lines 123–127 *with* the new line 137 in mind could the contradiction surface.
-
-For a literal worked example using PR #394, see [`category-a-api-contracts.md`](category-a-api-contracts.md). Category K walks for that diff:
-- K2: `[int]$AgeSeconds = 120` (PowerShell installer) duplicates `DEFAULT_AGE_SECONDS = 120` (`config/sweep_config.py`). Both files are new in the same PR, so there's no "stale parallel site" yet — but a future change to one without the other would land squarely in K2.
-- K8: same as K2, framed as cross-language contract.
-- K1, K3–K7, K9: not applicable to this PR (no renames, no schema changes, no feature flags). Verified clean.

@@ -1,11 +1,9 @@
 ---
 name: syncing-submodules
 description: >-
-  Records a submodule's current commit in its parent repository.
-  Triggers: submodule sync, /submodule-sync, sync parent submodule,
-  update parent pointer, record submodule commit, commit submodule pointer,
-  sync superproject, update superproject pointer, parent repo submodule update,
-  finish submodule commit. Does not handle clone, checkout, update main,
+  Records a submodule's current commit in its parent repository. Use after a
+  commit inside a submodule when the parent repository or superproject should
+  record the new pointer. Does not handle clone, checkout, update main,
   or ordinary commits.
 ---
 
@@ -22,7 +20,7 @@ A submodule commit changes the child repository first. Change the parent pointer
 - `git diff --cached --quiet` uses exit 1 for a changed pointer. Any higher exit is a failure.
 - The parent repository may already contain staged work. The path-only commit must leave it staged.
 - A repository without a superproject is a successful `not_submodule` result.
-- The old hook returned success after a failed parent commit. This command returns a nonzero exit.
+- A failed parent commit returns a nonzero exit.
 
 ## When this applies
 
@@ -32,13 +30,13 @@ Refusals use the first matching line:
 
 - Clone, initialize, or check out a submodule: `Use Git's submodule commands. This skill records an existing submodule commit in its parent.`
 - Fast-forward `main`: `Use Git directly. This skill changes one parent submodule pointer.`
-- Make an ordinary commit or push: `Use /source-command-commit. This skill commits only a parent submodule pointer.`
+- Make an ordinary commit or push: `Use Git directly. This skill commits only a parent submodule pointer.`
 
 ## Process
 
 ### Seed the run tasks
 
-Register every item in `reference/run-tasks.md` as a session task with the host task tool. Complete each task with an exit code, JSON field, or repository readback. If the host has no task tool, stop with `A task tool is required to track this repository-changing operation.`
+When the host exposes a task tool, register every item in `reference/run-tasks.md` as a session task and complete each one with an exit code, JSON field, or repository readback. Otherwise work the items in order.
 
 ### Run the command
 
@@ -57,9 +55,7 @@ The script writes one JSON object to standard output. Exit 0 permits `updated`, 
 - `updated`: report `parent_repository`, `submodule_path`, `commit`, and `parent_commit`.
 - `unchanged`: report that the parent already records `commit`.
 - `not_submodule`: report that no parent repository changed.
-- `pull_request_url`: invoke `/pr-title-description` with that URL after reporting the sync result.
-
-If `/pr-title-description` is not installed, report `pull_request_url` and finish the successful sync.
+- `pull_request_url`: report the open pull request URL after the sync result.
 
 ## Constraints
 
@@ -74,12 +70,6 @@ If `/pr-title-description` is not installed, report `pull_request_url` and finis
 - Updated pointer: `status` is `updated`, `submodule_path` is `modules/child`, and `parent_commit` names the new parent commit.
 - No superproject: `status` is `not_submodule`; every parent and commit field is null.
 - Failed stage: exit 1, `status` is `error`, and standard error starts with `syncing-submodules:`.
-
-## Sub-skills
-
-| Skill | When | Produces | Missing behavior |
-|---|---|---|---|
-| `/pr-title-description` | The result includes `pull_request_url` | A title and description based on the full pull request diff | Report the URL and keep the completed sync |
 
 ## File index
 

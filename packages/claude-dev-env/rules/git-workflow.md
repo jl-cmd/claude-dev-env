@@ -15,7 +15,7 @@ User-level rule: applies to **every** git repo that uses GitHub with `gh`. Small
 
 ## Pull request submission rules
 
-**ALWAYS create PRs as DRAFT:** Use `gh pr create --draft` for ALL PRs
+**Create every pull request as a draft.** Use `gh pr create --draft`.
 
 **A release bot's PR body is machine input. Leave it alone.** Release automation reads
 back the body of its own merged pull request to decide it owns that merge. Rewriting the
@@ -47,7 +47,7 @@ untouched.
 
 ## Git golden rules
 
-1. **DRAFT BEFORE PUSH**: When pushing ANYTHING to a PR, it MUST be in draft state first
+1. **Draft before push.** Put a pull request in draft state before you push to it.
    - Before push: `gh pr ready --undo`
    - After review approved: `gh pr ready`
 
@@ -101,7 +101,7 @@ before you ask anyone to read or merge it.
 
 ## Never commit working documents or images
 
-**NEVER commit these files to the repo:**
+**Keep these files out of the repository:**
 
 | Pattern | Reason |
 |---------|--------|
@@ -117,10 +117,10 @@ An image a PR needs as visual evidence is not an exception to that row. Upload i
 **When this applies:** GitHub PR review feedback on a branch you are fixing.
 
 1. Fetch every reviewer comment before making any fix.
-2. Create a TodoWrite checklist with one item per comment.
+2. Create a checklist in the session's task tool with one item per comment.
 3. Fix systematically, marking each todo complete.
 4. Reply to each comment inline.
 
-Repair only reported findings, then re-verify after every repair.
+Repair only the reported findings.
 
 Every `gh` post in this workflow uses `--body-file` per `gh-cli-conventions.md` and keeps volatile scratch paths out per `durable-post-artifacts.md`. Stage session edits per `re-stage-before-commit.md` before each commit.

@@ -31,5 +31,3 @@
 ## Sample prompt
 
 The reusable Variant C template for Category D is in [`../prompts/category-d-scoping-and-ordering.md`](../prompts/category-d-scoping-and-ordering.md). Inline your artifact under `## Source material` and adapt the sub-bucket bullets to your project's scoping conventions.
-
-For a literal worked example using PR #394, see [`category-a-api-contracts.md`](category-a-api-contracts.md). The Category D–relevant pieces of that diff: D1 (the `try: created = os.path.getctime(…) / except OSError: continue` block — `created` only bound inside `try`, but the `if now - created` is *inside* the try so no UnboundLocalError) and D2 (the `for each_directory_path, _, _ in os.walk(…)` — no closures inside, verified clean).

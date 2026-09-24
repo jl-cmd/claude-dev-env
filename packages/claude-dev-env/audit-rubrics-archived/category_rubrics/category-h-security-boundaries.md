@@ -33,8 +33,3 @@
 ## Sample prompt
 
 The reusable Variant C template for Category H is in [`../prompts/category-h-security-boundaries.md`](../prompts/category-h-security-boundaries.md). Inline your artifact under `## Source material` and adapt the sub-bucket bullets to your project's threat model.
-
-For a literal worked example using PR #394, see [`category-a-api-contracts.md`](category-a-api-contracts.md). Category H walks for that diff:
-- H2: the test helper builds `f"(Get-Item '{path}').CreationTimeUtc = [DateTime]'{date_str}'"` and passes to `subprocess.run(["powershell", "-Command", ...])`. The `path` is from `tempfile.TemporaryDirectory` (locally trusted) but the f-string into a single-quoted PowerShell literal is fragile; if an attacker controlled the path they could break out of the literal with a single quote. Severity P2 in this context (test code, locally bounded).
-- H3: `arguments.root` from CLI is passed to `os.walk` and `os.rmdir`. Path traversal isn't applicable since the script *is* the privileged process — it walks whatever is given. The trust assumption is "operator provides correct root."
-- H6: no secrets / credentials handled.

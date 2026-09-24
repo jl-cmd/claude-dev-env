@@ -17,7 +17,7 @@ Production and tests follow one rule. Changed directive, TODO, FIXME, HACK, XXX,
 
 ## CORE PRINCIPLES
 
-- **Self-documenting code** — naming over comments. Full 8-dimension rubric: `~/.claude/skills/readability-review/SKILL.md` (`/check` for parallel team review, `/readability-review` standalone).
+- **Self-documenting code.** Names carry the meaning in place of comments.
 - **Centralized configuration** — every constant lives in ONE place (`config/`).
 - **Reuse before create** — search first, import second, create last.
 - **Encapsulation enables cleaner naming** — `isMaxLevel(level)` > `level >= MAXIMUM_LEVEL`.
@@ -111,7 +111,7 @@ If you already have the data, don't fetch it again.
 
 ## 11. ENFORCEMENT SURFACES
 
-⚡ **Hooks** block pattern-matchable violations at Write/Edit time. 🤖 **Prompt context** carries judgment principles (SRP, Right-Sized Engineering, research-first action on ambiguous intent, BDD discovery, docstring-prose-matches-implementation). 👥 **Audit rubrics** (`/check`, `packages/claude-dev-env/audit-rubrics/` categories A–Q) cover cross-file architectural concerns. Rules with documented-but-pending hook coverage live in `~/.claude/rules/*.md`; each names its own promotion path. The docstring-prose standard (free-form enumerations match the body) lives in `packages/claude-dev-env/rules/docstring-prose-matches-implementation.md`, enforced via Category O6 audit. The diagram-first docstring standard (a summary line, then a `::` example or doctest, then a couple of short prose lines) lives in `packages/claude-dev-env/rules/plain-illustrative-docstrings.md`, enforced by the `check_docstring_runon_sentence` and `check_docstring_prose_wall_without_illustration` backstop hooks and Category O9 audit.
+**Lint** reports pattern-matchable violations. The staged policy lint runs `code_rules_enforcer.py` over each changed file, and CI runs it against the merge base. **Prompt context** carries judgment principles (SRP, Right-Sized Engineering, research-first action on ambiguous intent, BDD discovery, docstring-prose-matches-implementation). **Audit rubrics** (`packages/claude-dev-env/audit-rubrics/` categories A to Q) cover cross-file architectural concerns. Rules with documented-but-pending check coverage live in `~/.claude/rules/*.md`; each names its own promotion path. The docstring-prose standard (free-form enumerations match the body) lives in `packages/claude-dev-env/rules/docstring-prose-matches-implementation.md`, enforced via Category O6 audit. The diagram-first docstring standard (a summary line, then a `::` example or doctest, then a couple of short prose lines) lives in `packages/claude-dev-env/rules/plain-illustrative-docstrings.md`, enforced by the `check_docstring_runon_sentence` and `check_docstring_prose_wall_without_illustration` enforcer checks and Category O9 audit.
 
 ## 11.5 VALIDATION-PHASE PRECEDENCE
 

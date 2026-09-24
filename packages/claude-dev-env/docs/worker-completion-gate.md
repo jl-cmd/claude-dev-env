@@ -30,4 +30,3 @@ Mark `completed` only when every row passes.
 ## Relationship to other rules
 
 - `long-horizon-autonomy` covers acting on what you have and not ending a turn on a promise. This gate names the specific completion condition: workers finished and their results merged.
-- `skills/pr-converge/reference/state-schema.md` defines the run-state records a worker's result lands in before the task closes.

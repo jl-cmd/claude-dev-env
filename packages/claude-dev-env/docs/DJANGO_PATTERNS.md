@@ -4,7 +4,7 @@
 
 ## Model Patterns
 
-**NEVER:**
+**Anti-patterns:**
 
 - **Create separate user models** - Extend Django's User with OneToOneField
   - Example: `UserProfile(user=OneToOneField(User, related_name='profile'))`
@@ -27,13 +27,13 @@
 
 ## Template Patterns
 
-**NEVER:**
+**Anti-patterns:**
 
 - **Put view-specific template code in base.html** - Only in the template that uses it
   - Example: `{% if layout %}` in base.html when only home view defines layout
   - If variable is always present in specific template, no conditional needed
 
-## Production Migrations (Post-Launch ONLY)
+## Production Migrations (Post-Launch Only)
 
 After launch, keep model changes backwards-compatible.
 

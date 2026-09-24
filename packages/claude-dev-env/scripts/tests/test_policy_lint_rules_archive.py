@@ -134,3 +134,19 @@ def test_archived_hook_moves_leave_the_automatic_checks(tmp_path: Path) -> None:
     assert runtime_set.documents == ()
     assert runtime_set.deleted_paths == (live_hook_path,)
     assert runtime_set.renamed_paths == ()
+
+
+def test_archived_audit_rubric_moves_leave_the_automatic_checks(tmp_path: Path) -> None:
+    live_rubric_path = PurePosixPath("packages/tool/audit-rubrics/prompts/category-k.md")
+    archived_rubric_path = PurePosixPath("packages/tool/audit-rubrics-archived/prompts/category-k.md")
+    document_set = DocumentSet(
+        (Document.from_text(archived_rubric_path, "archived"),),
+        SelectionKind.BASE,
+        tmp_path,
+        (),
+        ((live_rubric_path, archived_rubric_path),),
+    )
+    runtime_set = _runtime_document_set(document_set)
+    assert runtime_set.documents == ()
+    assert runtime_set.deleted_paths == (live_rubric_path,)
+    assert runtime_set.renamed_paths == ()

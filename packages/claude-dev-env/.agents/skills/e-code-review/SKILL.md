@@ -3,9 +3,7 @@ name: e-code-review
 description: >-
   Code review at one of five effort levels that match the built-in
   /code-review recipes step for step: low, medium, high, xhigh, max.
-  Triggers: /e-code-review, /e-code-review low, /e-code-review medium,
-  /e-code-review high, /e-code-review xhigh, /e-code-review max, and any
-  level with --fix.
+  Triggers: /e-code-review with an optional level and an optional --fix.
 ---
 
 # e-code-review

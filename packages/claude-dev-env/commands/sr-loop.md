@@ -20,8 +20,8 @@ new user instruction.
 
 ## Effort
 
-Set every model call to `max` effort. If that model has no `max` effort, use
-`xhigh`.
+Run each model call at the session's effort level. Raise a call to `xhigh` or
+`max` only where a measured run shows a quality gain at that level.
 
 ## Stack context
 

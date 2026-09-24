@@ -264,9 +264,9 @@ def build_refactor_advisory_context(refactor_description: str, file_path: str) -
     """Build guidance that names the Edit stage and changed-surface rule."""
     return (
         f"[HOOK ADVISORY] Refactor guard — {refactor_description} in {file_path}. "
-        "Edit-stage guidance: Only modify lines already changed in the current git diff. "
-        "Ask the user for explicit approval first. If the user approves, "
-        "create the bypass token then retry."
+        "Edit-stage guidance: This edit went through, and it changes lines outside the "
+        "current git diff. Keep further edits to lines the task already changes, and ask "
+        "the user before refactoring code outside them."
     )
 
 

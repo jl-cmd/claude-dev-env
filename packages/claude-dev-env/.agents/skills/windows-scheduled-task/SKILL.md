@@ -1,7 +1,7 @@
 ---
 name: windows-scheduled-task
 description: >-
-  Register a repeating headless Windows scheduled task from PowerShell, with endless repetition, an S4U or Interactive principal, absolute action paths, and a documented teardown. Triggers: register a scheduled task, repeating task, headless task, S4U, Task Scheduler, RepetitionDuration, task will not register, scheduled task access denied, Unregister-ScheduledTask.
+  Register a repeating headless Windows scheduled task from PowerShell, with endless repetition, an S4U or Interactive principal, absolute action paths, and a documented teardown. Use when creating, repairing, or removing a repeating Task Scheduler task, including a task that fails to register.
 ---
 
 # Windows scheduled task

@@ -118,7 +118,7 @@ ALL_TRACKED_SECRET_EXACT_EXEMPTIONS: frozenset[tuple[str, str, str]] = frozenset
             "f9e409c5c16ecfdd5883da4f3ad045b4af5677740c9e703ad2d47ba231718350",
         ),
         (
-            "packages/claude-dev-env/audit-rubrics/prompts/category-n-test-name-scenario-verifier.md",
+            "packages/claude-dev-env/audit-rubrics-archived/prompts/category-n-test-name-scenario-verifier.md",
             "home-path",
             "6b98ff7f0398f06452f19c4a93f3d69186401dab40aaa7077b394ef59b3e730e",
         ),

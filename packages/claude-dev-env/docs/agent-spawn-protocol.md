@@ -13,9 +13,9 @@ Before writing any agent prompt, confirm you can answer all of these:
 
 When any answer is "I don't know", investigate first (read files, search code) or ask the user. Do not spawn with incomplete context.
 
-## Step 2: Craft the prompt with /prompt-generator
+## Step 2: Write the prompt
 
-Run the `/prompt-generator` skill to produce a structured prompt. Feed it:
+Write the brief yourself. Include:
 
 - The task description and goal
 - Target files and directories found in Step 1
@@ -23,7 +23,7 @@ Run the `/prompt-generator` skill to produce a structured prompt. Feed it:
 - Expected output format
 - Acceptance criteria
 
-The skill asks one to three clarifying questions when information is missing — this is the built-in context verification. Use the skill's output as the agent's `prompt` parameter.
+Use the brief as the agent's `prompt` parameter.
 
 ## Step 3: Spawn the agent
 
@@ -31,7 +31,7 @@ Pass the structured prompt from Step 2 to the Agent or Task tool.
 
 ## Why
 
-An agent that receives a vague prompt wastes tokens exploring in circles, produces code that misses constraints, and needs a second pass. A small investment in prompt quality through `/prompt-generator` saves a long agent failure. This holds for Explore agents, which waste context on unfocused searches, and for execution agents, which write wrong code.
+An agent that receives a vague prompt wastes tokens exploring in circles, produces code that misses constraints, and needs a second pass. A small investment in prompt quality saves a long agent failure. This holds for Explore agents, which waste context on unfocused searches, and for execution agents, which write wrong code.
 
 ## Relationship to other rules
 

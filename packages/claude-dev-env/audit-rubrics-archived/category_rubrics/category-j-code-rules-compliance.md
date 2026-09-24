@@ -50,10 +50,3 @@ A `test_*.py` name or a `.mjs` extension takes the line out of the write-time ga
 ## Sample prompt
 
 The reusable Variant C template for Category J is in [`../prompts/category-j-code-rules-compliance.md`](../prompts/category-j-code-rules-compliance.md). Inline your artifact under `## Source material` and walk every sub-bucket — many J findings are caught by the write-time hook, but the audit catches the residue.
-
-For a literal worked example using PR #394, see [`category-a-api-contracts.md`](category-a-api-contracts.md). Category J walks for that diff:
-- J1: literal `120` in `[int]$AgeSeconds = 120` — already centralized in `config/sweep_config.py:DEFAULT_AGE_SECONDS`. PowerShell side duplicates the value (cross-language drift, see Category K for the conflict-with-existing-code framing).
-- J2: f-strings like `f"deleted: {each_directory_path}"` and `f"watching {arguments.root} every {arguments.interval}s"` — the surrounding literal text is descriptive output, not structural; not flagged.
-- J3: `_SCRIPTS_DIR` in test file is exempt (test files).
-- J7: every parameter and return is annotated; no `Any`, no `# type: ignore`.
-- J8: only module-level docstrings; no inline comments added.

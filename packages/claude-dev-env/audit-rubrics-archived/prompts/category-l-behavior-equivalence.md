@@ -33,11 +33,11 @@ ID prefix: `find`.
 
 **L2. Whitespace / separator variants**
 - For every input the BEFORE implementation accepted, does the AFTER implementation also accept the variant with: no space where the BEFORE allowed space, leading whitespace, trailing whitespace, multiple internal spaces, tab vs single space, CRLF vs LF?
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
+- Adversarial probes: (a) remove the separator space from a KNOWN_GOOD_INPUTS entry and confirm the AFTER state classifies it the way the BEFORE state did; (b) add trailing whitespace and a CRLF ending and confirm both states normalize them the same way; (c) put a tab where the BEFORE state allowed a space and confirm the AFTER tokenizer or regex treats it the same way.
 
 **L3. Adjacent-form regressions**
 - Does the AFTER implementation use a looser pattern than the BEFORE (e.g., `startswith("## Problem")` where the BEFORE used `re.match(r"^## Problem\b")`)? A loose pattern accepts inputs the original rejected.
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
+- Does the AFTER implementation use a tighter pattern than the BEFORE (e.g., `re.match(r"^## Problem\b")` where the BEFORE used `startswith("## Problem")`)? A tight pattern rejects inputs the original accepted.
 - Adversarial probes: (a) construct inputs that satisfy the AFTER pattern but NOT the BEFORE — these are inputs the rewrite silently accepted; (b) construct inputs that satisfy the BEFORE pattern but NOT the AFTER — these are inputs the rewrite silently rejected; (c) walk the BEFORE pattern's anchors (`^`, `\b`, `\s`) and the AFTER pattern's anchors — does every BEFORE anchor have a semantic equivalent in the AFTER pattern?
 
 **L4. Empty / boundary inputs**
@@ -70,62 +70,4 @@ Q3: Which input class is most likely to drift between the AFTER state and the ne
 
 ## Output
 
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket L1-L8, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 input classes where the BEFORE and AFTER implementations disagree — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
-
----
-
-# Worked example: jl-cmd/claude-dev-env PR #479
-
-Audit jl-cmd/claude-dev-env PR #479 for **Category L only** (behavior-equivalence for refactors). Skip A–K, M, N. Sub-bucket forced-exhaustion mode: Category L is decomposed into 8 sub-buckets below.
-
-PR: refactor(hooks): tokenize-based comment recognition
-Base SHA: (the commit before the tokenize-based rewrite landed)
-Head SHA at audit time: (the commit that landed the rewrite)
-ID prefix: `find`.
-
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-
-## Sub-buckets (each requires Shape A finding OR Shape B with ≥3 adversarial probes)
-
-**L1. KNOWN_GOOD_INPUTS table presence**
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-
-**L2. Whitespace / separator variants**
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-- The CRLF / tab variants pass through the AFTER tokenizer identically.
-
-**L3. Adjacent-form regressions**
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-
-**L4. Empty / boundary inputs**
-- Empty input: BEFORE's `startswith` returns False on empty string. AFTER's `tokenize.COMMENT` token list is empty for an empty source; the iteration body never runs; the function returns False. Equivalent.
-- Single character marker text remains a regular comment candidate under the changed-code rule. Equivalent.
-
-**L5. Invariant preservation**
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-
-**L6. Implementation-tag parity**
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-
-**L7. Changed-comment handling**
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-
-**L8. Sibling-implementation comparison**
-PR: refactor(hooks): tokenize-based comment recognition
-
-## Cross-bucket questions to answer at the end
-
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-
-- Marker-shaped comments are findings when changed; verify whitespace variants against the changed-code rule.
-
-## Output
-
-Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket L1-L8, produce Shape A or Shape B (with ≥3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Adversarial second pass: "assume your first pass missed at least 3 input classes where BEFORE and AFTER implementations disagree — find them." Open Questions section for ambiguities. Read-only. No edits, no commits.
+Lead: `Total: N (P0=N, P1=N, P2=N)`. For each sub-bucket L1-L8, produce Shape A or Shape B (with at least 3 probes). Cross-bucket Q1-Q3 answers after the per-sub-bucket walk. Report every finding you reach, including uncertain ones and P2 ones, and give each finding a confidence level (high, medium, or low) beside its severity so a later pass can rank and filter them. Open Questions section for ambiguities. Read-only. No edits, no commits.

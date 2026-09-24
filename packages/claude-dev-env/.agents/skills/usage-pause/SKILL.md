@@ -1,6 +1,6 @@
 ---
 name: usage-pause
-description: 5-hour usage window, agent context warm, weekly limit is near its cap. Triggers: '/usage-pause', 'pause until the usage window resets', 'wait out the usage limit', 'usage limit pause', 'usage limit', 'pause usage', 'usage pause'.
+description: Pause work until the 5-hour usage window resets, keeping agent contexts warm through staged wakeups. Stops with a warning when the weekly limit is near its cap. Use when the user asks to pause for or wait out a usage limit.
 argument-hint: "[reset time like 10:20pm | duration like 74m]"
 ---
 

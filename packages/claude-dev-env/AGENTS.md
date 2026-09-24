@@ -1,6 +1,6 @@
 Status
 
-Changed / proof / blocked. No narration.
+Changed / proof / blocked.
 
 Diffs
 

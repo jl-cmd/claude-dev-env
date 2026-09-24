@@ -518,76 +518,6 @@ EXPECTED_SOURCE_LINK_PAIRS = {
             "packages/claude-dev-env/rules/workers-done-before-complete.md",
         ),
     }),
-    "code-quality-agent.md": frozenset({
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-a-api-contracts.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-a-api-contracts.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-b-selector-engine-compat.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-b-selector-engine-compat.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-c-resource-cleanup.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-c-resource-cleanup.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-d-scoping-and-ordering.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-d-scoping-and-ordering.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-e-dead-code.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-e-dead-code.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-f-silent-failures.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-f-silent-failures.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-g-bounds-and-overflow.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-g-bounds-and-overflow.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-h-security-boundaries.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-h-security-boundaries.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-i-concurrency.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-i-concurrency.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-j-code-rules-compliance.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-j-code-rules-compliance.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-k-codebase-conflicts.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-k-codebase-conflicts.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-l-behavior-equivalence.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-l-behavior-equivalence.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-m-producer-consumer-cardinality.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-m-producer-consumer-cardinality.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-n-test-name-scenario-verifier.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-n-test-name-scenario-verifier.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-o-docstring-vs-impl-drift.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-p-name-vs-behavior-contract.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-p-name-vs-behavior-contract.md",
-        ),
-        (
-            "<managed-root>/audit-rubrics/category_rubrics/category-q-cross-surface-claims.md",
-            "packages/claude-dev-env/audit-rubrics/category_rubrics/category-q-cross-surface-claims.md",
-        ),
-    }),
     "pr-description-writer.md": frozenset({
         (
             "<agents-home>/agents/reference/pr-description-illustrative-voice.md",
@@ -627,7 +557,6 @@ def test_named_agents_document_installed_paths_and_source_fallbacks() -> None:
     agents_directory = Path(__file__).parent.parent / "agents-archived"
     for each_agent_file_name in (
         "clean-coder.md",
-        "code-quality-agent.md",
         "pr-description-writer.md",
     ):
         agent_text = (agents_directory / each_agent_file_name).read_text(
@@ -690,7 +619,6 @@ def test_named_agents_resolve_active_managed_root_and_agents_home() -> None:
     agents_directory = Path(__file__).parent.parent / "agents-archived"
     for each_agent_file_name in (
         "clean-coder.md",
-        "code-quality-agent.md",
         "pr-description-writer.md",
     ):
         agent_text = (agents_directory / each_agent_file_name).read_text(

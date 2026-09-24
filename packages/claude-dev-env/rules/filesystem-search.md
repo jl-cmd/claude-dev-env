@@ -47,5 +47,5 @@ Issue one shell search at a time when the walk is large. Parallel full-tree sear
 
 ## Search controls
 
-- No hook denies a walk from an unscoped root. `unscoped_search_blocker` went with the blocking policy hooks in `0f21faf8e`, which left the Bash PreToolUse roster empty. The scope invariant above is guidance a reader follows.
+- No hook denies a walk from an unscoped root. The scope invariant above is guidance a reader follows.
 - For Everything searches that use a project name, run `python "${CLAUDE_SKILL_DIR}/scripts/everything_search.py" <project-name> <search arguments>`. An exact project name becomes its path from `~/.claude/project-paths.json`. The command then starts `es.exe` without a shell. `scripts/setup_project_paths.py` writes the registry.

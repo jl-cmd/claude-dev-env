@@ -9,7 +9,6 @@ Note: This deliberately chooses exploration depth over the "commit and execute q
 - Read the relevant files. Understand what exists before proposing what to change.
 - Map the existing patterns: naming conventions, file organization, architectural decisions.
 - Identify constraints that could invalidate an approach before investing effort in it.
-- For unfamiliar codebases or high-stakes changes, invest more time exploring than feels necessary.
 
 ## Exploration scales with risk
 

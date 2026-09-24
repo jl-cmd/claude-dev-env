@@ -19,7 +19,7 @@ This file is the **single thick source** for Category O judgment (sub-buckets O1
 |---|---|
 | `packages/claude-dev-env/rules/docstring-prose-matches-implementation.md` | Always-on write-time policy: the policy sentence, a compact checklist a writer applies at Write/Edit, and a pointer here. |
 | **This rubric** | On-demand thick home. The code-quality agent loads it per category. Holds every judgment standard, gate inventory, and worked example. |
-| `packages/claude-dev-env/audit-rubrics/prompts/category-o-docstring-vs-impl-drift.md` | Variant C audit template: source-material slots, forced-exhaustion protocol, adversarial probes, cross-bucket questions, output shape, and a PR worked example. Points here for the judgment standard. |
+| `packages/claude-dev-env/audit-rubrics/prompts/category-o-docstring-vs-impl-drift.md` | Variant C audit template: source-material slots, forced-exhaustion protocol, adversarial probes, cross-bucket questions, and output shape. Points here for the judgment standard. |
 
 Plainness for a general developer (diagram-first shape) also lives under O9; the write-time companion rule for that slice is `packages/claude-dev-env/rules/plain-illustrative-docstrings.md`.
 

@@ -1,11 +1,9 @@
 ---
 name: orchestrator-refresh
 description: >-
-  Re-assert orchestrator discipline on a one-shot delayed wake: ledger
-  reconcile, executor consult routing to this session, warm executor
-  reuse, single-pending re-arm via status_gate. Terminates when the
-  gate says stop. Triggers: '/orchestrator-refresh', orchestrator-refresh,
-  refresh the orchestrator loop, re-arm orchestrator.
+  Refresh a running orchestrator loop when its one-shot delayed wake fires,
+  or when the user asks to refresh or re-arm the orchestrator. Terminates
+  when the status gate says stop.
 ---
 
 # Orchestrator Refresh
@@ -65,13 +63,15 @@ reports and adds nothing further.
 
 ## Discipline steps
 
-1. **Reconcile the task ledger first.** Call `TaskList` after the gate.
+1. **Reconcile the task ledger first.** Read the ledger after the gate.
+   Use `TaskList` when the host exposes task tools, and the file-backed
+   `scripts/grok_run_ledger.py` ledger the orchestrator skill names otherwise.
    The ledger is stale when any of these holds: a running or finished
    executor has no `in_progress` task naming it as owner; a finished
    executor's task is still open (or was closed without its result
    merged); the next phase you will dispatch has no pending task; a
    `blockedBy` link contradicts the run order. Fix every mismatch
-   with TaskCreate / TaskUpdate in this same firing — never defer.
+   in that same ledger during this firing.
 2. **You are the orchestrator.** Orchestrate and hold the user
    conversation; spawn executor subagents for every code edit and build
    or test run.

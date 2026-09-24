@@ -39,11 +39,6 @@ capability-specific artifact. Raw tool output, machine payloads, code, and
 native repository artifacts retain their required formats. Present their human
 explanation inside the HTML presentation envelope when the response is user-facing.
 
-### First-match refusal condition
-
-Evaluate this condition before task seeding. When no task tool is available,
-reply exactly: `ELI5 requires a session task tool. The artifact flow is paused.`
-
 ## Skill classification
 
 **Dominant type:** Business Process & Team Automation.
@@ -83,11 +78,9 @@ keep ownership of their native artifact rules while ELI5 supplies the global
 
 ## Task seeding
 
-At skill start, register every item in `reference/task-seeds.md` as a session
-task through `TaskCreate`, `TodoWrite`, or the host task equivalent. Work from
-that task list. Mark each item complete with `PASS`, `FAIL` plus file evidence,
-or `N/A` plus the reason. When no task tool is available, use the exact refusal
-under [When this applies](#when-this-applies) before authoring the artifact.
+When the session exposes a task tool, register the items in
+`reference/task-seeds.md` as session tasks. Otherwise work through the
+Process steps in order.
 
 ## Process
 
@@ -99,10 +92,7 @@ under [When this applies](#when-this-applies) before authoring the artifact.
    `~/.claude/rules/asd-ste100-language.md` to every sentence. Frame the topic
    for a beginner, use a large useful visual, keep the text minimal, and update
    the same artifact in place.
-3. **Judgment — share the updated artifact with the user.** Review technical meaning,
-   terminology, safety, confidentiality, accessibility, browser readiness, and
-   visual legibility. When a check reports a defect, repair the artifact, repeat
-   the review, and share after all checks pass.
+3. **Judgment — share the updated artifact with the user.**
 
 ### Examples
 

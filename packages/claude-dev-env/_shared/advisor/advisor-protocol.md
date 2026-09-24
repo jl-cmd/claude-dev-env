@@ -65,7 +65,7 @@ On Codex: Astra is the in-session default. The `ADVISOR_ASTRA` flag is not requi
 When `advisor` is in the session's tool list, the built-in advisor tool is the advisor. The user turns it on with `/advisor`, the `advisorModel` setting, or `--advisor`. Spawn nothing and call `advisor()` at each consult point. The tool forwards the whole transcript, so a consult needs no packet. Its reply is free text, so the four signal words do not apply; weigh it per `docs/references/advisor-tool.md` **How to treat advice**. It is a server tool, so hooks and the spawn-walk log do not see it. An Opus advisor returns an encrypted result that a log cannot read. When a readable record matters, use the warm agent below.
 
 When `advisor` is not in the tool list, use the **Model floor** ladder below (Opus first, then Astra when Opus is out of usage).
-Warm-up spawns `subagent_type: session-advisor` via the Agent tool for Opus; consults go through `SendMessage` to that warm agent. Astra uses the Codex helper.
+Warm-up spawns `subagent_type: pstack:poteto-agent` at Opus via the Agent tool, with the advisor response contract in the charter; consults go through `SendMessage` to that warm agent. Astra uses the Codex helper.
 Assemble and paste each executor's Advisor block per the **Advisor block** section.
 
 ### Codex host
@@ -90,8 +90,8 @@ Executors report to the orchestrating session; that session consults the bound a
 The built-in advisor tool sits outside this ladder. Claude Code and the API accept it only when the advisor is at least as capable as the main model, and that check is its floor.
 On Claude and ThirdParty the advisor ladder is `Opus` first, then Astra (flag-gated, Codex CLI) when Opus is out of usage.
 On Codex the walk is Astra only, in-session.
-Opus is not an advisor candidate. `Sonnet` and `Haiku` are executor tiers only.
-Consumer `own_tier` is recorded on the spawn-walk log; it does not add Opus to the advisor walk.
+`Sonnet` and `Haiku` are executor tiers only.
+Consumer `own_tier` is recorded on the spawn-walk log; it does not change the advisor walk.
 Tier names are canonical Title Case; the validator accepts any letter case and normalizes to Title Case.
 Try binds top-down. Opus resolves to the short model alias in [`reference/cli-chain.md`](reference/cli-chain.md); Astra resolves through `resolve_codex_model_id("Astra")` to `gpt-6-astra`.
 The advisor is created at `selected_tier`, the first ladder tier that binds.
@@ -107,7 +107,7 @@ The validator checks ladder shape only; host policy sits on top.
 ## Warm-up (once per session)
 
 On a **Claude host** with `advisor` in the tool list, skip the warm-up; the built-in tool needs none.
-On a **Claude host** without it, spawn `session-advisor` at the Opus alias with the charter as its prompt. When Opus is out of usage and the Astra rung is open, bind Astra through the Codex helper instead.
+On a **Claude host** without it, spawn `pstack:poteto-agent` at the Opus alias with the charter as its prompt. When Opus is out of usage and the Astra rung is open, bind Astra through the Codex helper instead.
 Full spawn fields and the charter template: [`reference/warm-up.md`](reference/warm-up.md).
 
 On a **Codex host**, spawn a native in-session Astra subagent with the same charter. Bind fields: [`reference/identity.md`](reference/identity.md) and [`reference/warm-up.md`](reference/warm-up.md).
