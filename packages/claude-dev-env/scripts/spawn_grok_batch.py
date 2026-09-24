@@ -290,6 +290,7 @@ def bind_unique_worker_advisor(
     *,
     advisor_spec: AdvisorSpec,
     role_name: str,
+    assignment_text: str,
     all_used_session_ids: set[str],
 ) -> tuple[str, str]:
     """Bind one unique advisor session for a worker; refuse duplicates and sentinels.
@@ -303,6 +304,7 @@ def bind_unique_worker_advisor(
     Args:
         advisor_spec: Lead-supplied launcher/model/effort.
         role_name: Worker role used in the bind prompt.
+        assignment_text: Assembled worker prompt the advisor reviews before dispatch.
         all_used_session_ids: Sessions already issued in this batch.
 
     Returns:
@@ -317,7 +319,9 @@ def bind_unique_worker_advisor(
         )
     if advisor_spec.launcher == PENDING_BIND_SENTINEL:
         raise ValueError(f"advisor.launcher is {PENDING_BIND_SENTINEL}")
-    prompt_text = ADVISOR_BIND_PROMPT_TEMPLATE.format(role_name=role_name)
+    prompt_text = ADVISOR_BIND_PROMPT_TEMPLATE.format(
+        role_name=role_name, assignment_text=assignment_text
+    )
     session_id, advisor_body_text, returncode = batch_invoke_advisor(
         launcher=advisor_spec.launcher,
         model=advisor_spec.model,
@@ -898,6 +902,7 @@ def _bind_worker_advisor_session(
     *,
     advisor_spec: AdvisorSpec,
     role_name: str,
+    assignment_text: str,
     all_used_session_ids: set[str],
     session_id_lock: object | None,
 ) -> tuple[str, str]:
@@ -906,11 +911,13 @@ def _bind_worker_advisor_session(
             return bind_unique_worker_advisor(
                 advisor_spec=advisor_spec,
                 role_name=role_name,
+                assignment_text=assignment_text,
                 all_used_session_ids=all_used_session_ids,
             )
     return bind_unique_worker_advisor(
         advisor_spec=advisor_spec,
         role_name=role_name,
+        assignment_text=assignment_text,
         all_used_session_ids=all_used_session_ids,
     )
 
@@ -990,6 +997,10 @@ def _maybe_bind_advisor_for_worker(
     advisor_session_id, pre_signal = _bind_worker_advisor_session(
         advisor_spec=advisor_spec,
         role_name=worker_spec.role_name,
+        assignment_text=assemble_worker_prompt(
+            all_prompt_part_paths=worker_spec.all_prompt_part_paths,
+            tool_profile=worker_spec.tool_profile,
+        ),
         all_used_session_ids=used_ids,
         session_id_lock=session_id_lock,
     )

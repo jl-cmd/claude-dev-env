@@ -616,9 +616,15 @@ ADVISOR_CLI_RESUME_FLAG: str = "--resume"
 ADVISOR_BIND_PROMPT_TEMPLATE: str = (
     "You are the unique worker advisor for role {role_name}. "
     "Answer only. Open with exactly one of: ENDORSE | CORRECTION | PLAN | STOP. "
-    "Pre-dispatch: ENDORSE this worker assignment if safe, else CORRECTION."
+    "Pre-dispatch consult: the full worker assignment follows. "
+    "Hunt for missing requirements, wrong assumptions, unsafe actions, and unclear "
+    "completion criteria. ENDORSE when the worker can start as written; "
+    "otherwise open with CORRECTION, PLAN, or STOP and name the fix.\n"
+    "(Advisor: please keep your guidance under 80 words, I need a focused "
+    "starting point.)\n\n"
+    "Worker assignment:\n{assignment_text}"
 )
-"""Prompt body used for the pre-dispatch advisor bind."""
+"""Prompt body for the pre-dispatch advisor consult; carries the assembled worker prompt."""
 
 ADVISOR_VERDICT_PROMPT_TEMPLATE: str = (
     "You are the unique worker advisor for role {role_name}, session {session_id}. "

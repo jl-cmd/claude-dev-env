@@ -1514,6 +1514,7 @@ def test_bind_unique_worker_advisor_rejects_placeholder(
         batch.bind_unique_worker_advisor(
             advisor_spec=batch.AdvisorSpec(launcher=batch.DEFAULT_ADVISOR_LAUNCHER_PLACEHOLDER),
             role_name="lens",
+            assignment_text="assignment",
             all_used_session_ids=set(),
         )
 
@@ -1528,10 +1529,31 @@ def test_bind_unique_worker_advisor_returns_session(
     session_id, signal = batch.bind_unique_worker_advisor(
         advisor_spec=batch.AdvisorSpec(launcher="fixture-advisor-launcher"),
         role_name="lens",
+        assignment_text="assignment",
         all_used_session_ids=set(),
     )
     assert session_id == "sess-unique-1"
     assert signal == "ENDORSE"
+
+
+def test_bind_unique_worker_advisor_prompt_carries_assignment_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_captured_prompts: list[object] = []
+
+    def fake(**kwargs: object) -> tuple[str | None, str, int]:
+        all_captured_prompts.append(kwargs["prompt_text"])
+        return "sess-assignment-1", "ENDORSE\nok", 0
+
+    monkeypatch.setattr(batch, "batch_invoke_advisor", fake)
+    batch.bind_unique_worker_advisor(
+        advisor_spec=batch.AdvisorSpec(launcher="fixture-advisor-launcher"),
+        role_name="lens",
+        assignment_text="Audit module alpha for unused imports.",
+        all_used_session_ids=set(),
+    )
+    assert len(all_captured_prompts) == 1
+    assert "Audit module alpha for unused imports." in str(all_captured_prompts[0])
 
 
 def test_obtain_advisor_completion_verdict_endorses(
