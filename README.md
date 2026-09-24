@@ -24,7 +24,6 @@ That's it. The installer will:
 4. Merge hook groups into `~/.claude/settings.json` (preserves your existing hooks)
 5. Write a manifest to `~/.claude/.claude-dev-env-manifest.json` for clean uninstall
 6. Copy Codex exec-policy files into `~/.codex/rules` (`CODEX_HOME/rules` when that variable is set)
-7. Generate Cursor `.mdc` files into `~/.cursor/rules` from the installed Claude rules
 
 ### Selective Install
 
@@ -151,7 +150,11 @@ Starlark `*.rules` files Codex loads from `~/.codex/rules`. The package ships `c
 
 ### Cursor rule files
 
-The installer writes no Cursor rule files. Cursor Agent reads a repository's own `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, and `.agents/skills`, and it reads `~/.cursor/rules` only for a workspace inside the home directory. A reinstall moves the `~/.cursor/rules` files an older install generated into the run backup.
+The installer writes no Cursor rule files. Cursor Agent reads a repository's own `AGENTS.md`, `CLAUDE.md`, `.cursor/rules`, and `.agents/skills`, and it reads `~/.cursor/rules` only for a workspace inside the home directory. A full reinstall moves the `~/.cursor/rules` files an older install generated into the run backup.
+
+### Task usage report
+
+Use the [task usage report guide](docs/guides/task-usage-report.md) to record task outcomes and compare cost per passed task.
 
 ### Docs
 
