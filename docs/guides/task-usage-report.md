@@ -7,6 +7,7 @@ The reporter records token use, available cost, and your pass or fail result for
 ## Before you start
 
 - Use Python 3.11 or newer. Run `python --version` to check.
+- Keep `task_usage_events.py` beside `task_usage_report.py`. The command imports this helper when it starts.
 - Keep the source output for one attempt in a private file. It may contain prompts, answers, and identifiers.
 - Keep each input capture to one task attempt. The script rejects Claude telemetry from multiple sessions and Codex output with more than one thread start.
 - Decide how you will judge the task before reading its answer. The reporter cannot judge the answer for you.
