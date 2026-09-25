@@ -1,15 +1,32 @@
 ---
 name: second-account-workers
 description: >-
-  Run local headless Claude workers through the second-account picker.
-  Triggers: spawn a worker on the second account, offload a worker,
-  claude-ev worker, save main account usage.
+  Run local headless Claude workers through the account picker.
+  Triggers: spawn a worker on the second account or another extra account, offload a worker,
+  use a named Claude profile, save main account usage.
 ---
 
-# Second Account Workers
+# Extra account workers
 
 Use this skill when a task needs a local Claude worker and the session should
 save main account usage.
+
+## Configure extra profiles
+
+Run `claude_account_profile.py --profile-name NAME` for each extra profile.
+The script creates `<profiles root>/NAME` and the `claude-NAME.cmd` launcher.
+Running it again with the same name leaves the profile and launcher in place.
+
+To set worker order, put `extra-profiles.json` in the main Claude home. Write a
+JSON list of profile names, with the first choice first. Names use letters,
+digits, hyphens, and underscores. The worker uses the existing second profile
+when the file is absent. When the file exists, its list sets the full order.
+Keep `main` and `wait` out of the list because they name picker decisions.
+The picker tries each profile after checking the main account's expiring usage.
+For direct picker calls, `--second-config-dir` sets the first extra profile and
+each `--extra-config-dir` adds another in the order given.
+Picker JSON prints `config_dir` for the choice and meters under `main`, `second`,
+`extra_2`, and later labels.
 
 ## Choose a worker
 
@@ -34,10 +51,11 @@ Read the JSON report and worker log after the process ends. The JSON fields are
 The runner writes one summary line with the selected account, exit code, and
 report path.
 
-When the command exits 3 and the report has `"account": "wait"`, both accounts
-are out of room. Report the picker's reason and reset time. Do not fall back to
-the Agent tool. Claude can also return exit 3 after a worker starts. When the
-report account is `main` or `second`, report the child's exit code and result.
+When the command exits 3 and the report has `"account": "wait"`, no account is
+eligible. Report the picker's reason and reset time. Do not fall back to the
+Agent tool. Claude can also return exit 3 after a worker starts. When the
+report account is `main`, `second`, or `extra_2` and later, report the child's
+exit code and result.
 
 Workers never commit, push, or call `gh`. The calling session reviews each
 worktree diff and owns every Git step.
