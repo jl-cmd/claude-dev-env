@@ -20,6 +20,7 @@ description: >-
 - Status
 - Removal and teardown
 - Self-modification warning
+- Handing the elevated step to the operator
 - Verification
 - Files
 
@@ -36,6 +37,8 @@ prove the task by the artifact it changes.
 - Task Scheduler inherits none of the shell PATH. A bare executable name in the action fails at run time.
 - A helper under an installer-managed path deletes itself during an installer run.
 - `LastTaskResult: 0` from a run that took the idle branch says nothing about the branch that acts.
+- A `#Requires -RunAsAdministrator` line pasted at a prompt checks nothing. It applies only to a script file.
+- An elevated window opens in `C:\WINDOWS\system32`. A prompt in the user's home folder is usually unelevated.
 
 ## When this applies
 
@@ -133,6 +136,27 @@ A task that installs updates of the agent rules, hooks, and skills rewrites the 
 instructions on a timer. A major upgrade can land mid-session while the agent holds the older text.
 Give the operator the teardown command, name the interval, and keep the interval wide enough for a
 session to finish between runs.
+
+## Handing the elevated step to the operator
+
+The operator runs the elevated part by hand, so hand it over as one block they paste into an
+Administrator window. Put the block in the message itself. A file to download adds a step and a
+path the browser can rename.
+
+Wrap the block in `& { ... }` and open it with an elevation check, so an unelevated paste stops
+with a clear line and changes nothing:
+
+```powershell
+& {
+$ErrorActionPreference = 'Stop'
+$IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $IsAdmin) { Write-Host 'NOT ELEVATED. Open PowerShell with Run as administrator and paste again.' -ForegroundColor Red; return }
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Force
+}
+```
+
+The script block scopes `$ErrorActionPreference` and lets `return` end the paste. End the block
+with a status print the operator copies back, so the next step reads the result.
 
 ## Verification
 
