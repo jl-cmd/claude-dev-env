@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import os
 import shutil
 import subprocess
@@ -14,7 +15,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from claude_account_choice import choose_account, decision_payload, read_account_meters
+from claude_account_choice import (
+    choose_account_from_extras,
+    config_directory_for_decision,
+    decision_payload,
+    read_account_meters,
+    read_extra_accounts,
+)
 from claude_account_profile import default_profile_home
 from claude_account_worker_process import WorkerProcess, invoke_worker
 from claude_account_worker_report import (
@@ -26,7 +33,6 @@ from claude_account_worker_report import (
 )
 from dev_env_scripts_constants.claude_account_worker_constants import (
     CHOICE_MAIN,
-    CHOICE_SECOND,
     CHOICE_WAIT,
     CLAUDE_BINARY_NAME,
     CLAUDE_CONFIG_DIR_ENV_VAR,
@@ -35,6 +41,7 @@ from dev_env_scripts_constants.claude_account_worker_constants import (
     CWD_FLAG,
     DEFAULT_PERMISSION_MODE,
     DEFAULT_TIMEOUT_MINUTES,
+    EXTRA_PROFILES_FILE_NAME,
     INVALID_TIMEOUT_MESSAGE,
     JSON_ACCOUNT_KEY,
     JSON_CONFIG_DIRECTORY_KEY,
@@ -104,6 +111,23 @@ def _selection_from_payload(all_selection_payload: Mapping[str, str | None]) -> 
     )
 
 
+def extra_config_directories(main_config_dir: Path) -> tuple[Path, ...]:
+    """Read the ordered local profile list or use the legacy default."""
+    profiles_file = main_config_dir / EXTRA_PROFILES_FILE_NAME
+    if not profiles_file.exists():
+        return (default_profile_home(),)
+    profile_names = json.loads(profiles_file.read_text(encoding=UTF8_ENCODING))
+    if (
+        not isinstance(profile_names, list)
+        or not profile_names
+        or any(not isinstance(name, str) for name in profile_names)
+    ):
+        raise ValueError("extra profile list must be a nonempty JSON list of names")
+    if len({name.casefold() for name in profile_names}) != len(profile_names):
+        raise ValueError("extra profile names must be distinct")
+    return tuple(default_profile_home(name) for name in profile_names)
+
+
 def select_account() -> AccountSelection:
     """Pick the account this worker runs on and its Claude home directory.
 
@@ -111,20 +135,19 @@ def select_account() -> AccountSelection:
         The chosen account, its Claude config directory, and the reason.
 
     Raises:
-        ValueError: When the account picker returns an incomplete decision.
+        ValueError: When the profile list or account decision is invalid.
     """
     main_config_dir = Path.home() / MAIN_CLAUDE_HOME_DIRECTORY_NAME
-    second_config_dir = default_profile_home()
-    config_directory_by_account = {
-        CHOICE_MAIN: main_config_dir,
-        CHOICE_SECOND: second_config_dir,
-    }
+    extra_accounts = read_extra_accounts(extra_config_directories(main_config_dir))
     main_meters = read_account_meters(main_config_dir / CREDENTIALS_FILE_NAME)
-    second_meters = read_account_meters(second_config_dir / CREDENTIALS_FILE_NAME)
-    decision = choose_account(
-        main_meters=main_meters, second_meters=second_meters, now=datetime.now().astimezone()
+    decision = choose_account_from_extras(
+        main_meters=main_meters,
+        extra_accounts=extra_accounts,
+        now=datetime.now().astimezone(),
     )
-    selected_config_dir = config_directory_by_account.get(decision.account)
+    selected_config_dir = config_directory_for_decision(
+        decision, main_config_dir=main_config_dir, extra_accounts=extra_accounts
+    )
     payload = decision_payload(decision, config_directory=selected_config_dir)
     return _selection_from_payload(payload)
 
@@ -163,14 +186,14 @@ def _child_environment(
     selection: AccountSelection,
     all_environment_variables: Mapping[str, str],
 ) -> dict[str, str]:
-    if selection.account not in (CHOICE_MAIN, CHOICE_SECOND):
-        raise ValueError(f"unsupported account selection: {selection.account}")
     all_child_environment_variables = dict(all_environment_variables)
     if selection.account == CHOICE_MAIN:
         all_child_environment_variables.pop(CLAUDE_CONFIG_DIR_ENV_VAR, None)
         return all_child_environment_variables
+    if selection.account == CHOICE_WAIT:
+        raise ValueError("wait selection cannot launch a worker")
     if selection.config_dir is None:
-        raise ValueError("second account selection needs a config directory")
+        raise ValueError("extra account selection needs a config directory")
     all_child_environment_variables[CLAUDE_CONFIG_DIR_ENV_VAR] = str(selection.config_dir)
     return all_child_environment_variables
 

@@ -22,10 +22,28 @@ PROFILES_ROOT_ENVIRONMENT_VARIABLE: str = "LLM_SETTINGS_PROFILES_ROOT"
 SECOND_ACCOUNT_PROFILE_NAME: str = "ev"
 """Profile directory name the second account signs in under."""
 
+EXTRA_PROFILES_FILE_NAME: str = "extra-profiles.json"
+"""Local main-home file listing extra profile names in selection order."""
+
+PROFILE_NAME_PATTERN: str = r"[A-Za-z0-9][A-Za-z0-9_-]*"
+"""Allowed profile names for directories and command launchers."""
+
+ALL_WINDOWS_RESERVED_PROFILE_NAMES: frozenset[str] = frozenset(
+    {"con", "prn", "aux", "nul"}
+    | {f"com{number}" for number in range(1, 10)}
+    | {f"lpt{number}" for number in range(1, 10)}
+)
+"""Windows device names that cannot be used as profile directories."""
+
 ALL_LAUNCHER_DIRECTORY_RELATIVE_PARTS: tuple[str, ...] = (".local", "bin")
 """Path parts under the user home of the directory on PATH that holds the launcher."""
 
-LAUNCHER_FILE_NAME: str = "claude-ev.cmd"
+LAUNCHER_FILE_NAME_TEMPLATE: str = "claude-{profile_name}.cmd"
+"""File name pattern for a named profile launcher."""
+
+LAUNCHER_FILE_NAME: str = LAUNCHER_FILE_NAME_TEMPLATE.format(
+    profile_name=SECOND_ACCOUNT_PROFILE_NAME
+)
 """File name of the launcher that runs Claude under the second account."""
 
 LAUNCHER_TEXT_TEMPLATE: str = (
@@ -67,6 +85,7 @@ ALL_ACCOUNT_LOCAL_NAMES: frozenset[str] = frozenset(
         "cache",
         "paste-cache",
         "stats-cache.json",
+        EXTRA_PROFILES_FILE_NAME,
     }
 )
 """Top-level Claude home entries that belong to one account and are never linked."""
@@ -134,6 +153,22 @@ REASON_SECOND_UNREAD: str = (
     "second account meter unreadable; its own run refreshes the sign-in"
 )
 """Reason when the second account's meter cannot be read and it takes the job anyway."""
+
+REASON_EXTRA_HAS_ROOM_TEMPLATE: str = (
+    "{account} has {weekly_remaining_percent:.0f}% of its week"
+    " and {session_remaining_percent:.0f}% of its 5-hour window left"
+)
+"""Reason when a later extra profile takes the job."""
+
+REASON_EXTRA_UNREAD_TEMPLATE: str = (
+    "{account} meter unreadable; its own run refreshes the sign-in"
+)
+"""Reason when a later extra profile's meter cannot be read."""
+
+REASON_ALL_EXTRAS_WAIT_TEMPLATE: str = (
+    "all extra accounts are full; next known reset {next_reset}"
+)
+"""Reason when every configured extra profile is blocked."""
 
 REASON_WAIT_TEMPLATE: str = (
     "second account is at {weekly_used_percent:.0f}% of its week"
