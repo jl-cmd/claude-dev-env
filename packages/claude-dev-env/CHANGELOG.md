@@ -1,5 +1,18 @@
 # Changelog
 
+## [8.16.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.15.1...claude-dev-env-v8.16.0) (2026-09-25)
+
+
+### Features
+
+* **scripts:** run any number of extra Claude account profiles ([0a5c1e0](https://github.com/jl-cmd/claude-dev-env/commit/0a5c1e0cf6456433b35f1d8becee76c1ef47043b))
+* **scripts:** run any number of extra Claude account profiles ([7f674e7](https://github.com/jl-cmd/claude-dev-env/commit/7f674e71e3cf7d84fc19e8eea145fa13a2900b87))
+
+
+### Bug Fixes
+
+* **scripts:** meet the docstring, naming and length rules in the account scripts ([1d87a18](https://github.com/jl-cmd/claude-dev-env/commit/1d87a1894b6d8cc4af537ca8b0073bbc347c1880))
+
 ## [8.15.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.15.0...claude-dev-env-v8.15.1) (2026-09-24)
 
 
