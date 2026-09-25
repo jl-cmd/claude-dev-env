@@ -19,6 +19,10 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { SETTINGS_FILE_NAME } from './install-constants.mjs';
+import {
+    emptyManagedPermissions,
+    managedPermissionsFromPackageSettings,
+} from './merge_managed_permissions.mjs';
 
 export const PREFLIGHT_ERROR_CODES = Object.freeze({
     SOURCE_CONFLICTS: 'source_conflicts',
@@ -353,7 +357,7 @@ export function buildUninstallPlan(input) {
             removableFiles: Object.freeze([]),
             skippedFiles: Object.freeze([]),
             allManifestFiles: Object.freeze([]),
-            managedPermissionDenyEntries: Object.freeze([]),
+            managedPermissions: Object.freeze(emptyManagedPermissions()),
             isNoOp: true,
         });
     }
@@ -374,12 +378,9 @@ export function buildUninstallPlan(input) {
     const allManifestFiles = Array.isArray(rawFiles)
         ? rawFiles.filter((eachPath) => typeof eachPath === 'string' && eachPath.trim() !== '')
         : [];
-    const rawManagedDeny = isManifestObject
-        ? manifest[MANIFEST_MANAGED_PERMISSIONS_KEY]?.deny
-        : null;
-    const managedPermissionDenyEntries = Array.isArray(rawManagedDeny)
-        ? rawManagedDeny.filter((eachEntry) => typeof eachEntry === 'string' && eachEntry.trim() !== '')
-        : [];
+    const managedPermissions = managedPermissionsFromPackageSettings({
+        permissions: isManifestObject ? manifest[MANIFEST_MANAGED_PERMISSIONS_KEY] : null,
+    });
 
     /** @type {string[]} */
     const removableFiles = [];
@@ -401,7 +402,7 @@ export function buildUninstallPlan(input) {
         removableFiles: Object.freeze(removableFiles),
         skippedFiles: Object.freeze(skippedFiles),
         allManifestFiles: Object.freeze(allManifestFiles),
-        managedPermissionDenyEntries: Object.freeze(managedPermissionDenyEntries),
+        managedPermissions: Object.freeze(managedPermissions),
         isNoOp: false,
     });
 }
