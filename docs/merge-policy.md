@@ -59,15 +59,6 @@ python packages/claude-dev-env/scripts/merge_gate_checks.py \
   --refresh
 ```
 
-## Gates this repository has adopted and not yet built
-
-This gate holds the merge once it ships, and it joins the table above in the
-pull request that builds it. A gate that cannot go red on a
-scratch branch stays off the list until it can.
-
-- A verification swarm that reproduces the Before and the After from the pull
-  request body and posts one verdict for the head commit.
-
 ## Who merges
 
 The agent that drives the pull request merges it, once the gates above pass.
