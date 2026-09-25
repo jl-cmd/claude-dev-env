@@ -35,6 +35,8 @@ The driving account is the one that opened the pull request. Where the agent com
 
 A private repository that installs this package runs the same command from its own workflow, against the revision of this package that its workflow pins.
 
+A repository that merges through a merge queue also runs the check on `merge_group` and lists `Review closure` as a required check. The queue ref `gh-readonly-queue/<base>/pr-<number>-<sha>` names the pull request number the command takes. A finding posted while an entry waits in the queue then fails the queue build. Without that trigger, the entry merges on the verdict it carried when it joined the queue.
+
 ## Sibling rules
 
 | Rule | Role |
