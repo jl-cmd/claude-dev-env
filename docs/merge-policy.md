@@ -65,8 +65,9 @@ This gate holds the merge once it ships, and it joins the table above in the
 pull request that builds it. A gate that cannot go red on a
 scratch branch stays off the list until it can.
 
-- A verification swarm that reproduces the Before and the After from the pull
-  request body and posts one verdict for the head commit.
+- A request check. One agent compares the pull request diff with the text of the
+  originating request, which the coder does not write, and posts one verdict for
+  the head commit. The pull request body is never the standard.
 
 ## Who merges
 
