@@ -1,5 +1,12 @@
 # Changelog
 
+## [8.16.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.16.0...claude-dev-env-v8.16.1) (2026-09-25)
+
+
+### Documentation
+
+* **windows-scheduled-task:** hand the elevated step to the operator as one paste block ([0cb4768](https://github.com/jl-cmd/claude-dev-env/commit/0cb4768efd3cefa22feec940c43344fe4b045926))
+
 ## [8.16.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.15.1...claude-dev-env-v8.16.0) (2026-09-25)
 
 
