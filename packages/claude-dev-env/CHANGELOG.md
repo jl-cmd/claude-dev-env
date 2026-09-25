@@ -1,5 +1,25 @@
 # Changelog
 
+## [8.17.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.16.1...claude-dev-env-v8.17.0) (2026-09-25)
+
+
+### Features
+
+* install package allow rules and allow GitHub docs fetches ([716eade](https://github.com/jl-cmd/claude-dev-env/commit/716eadee64723bbcd6aafc04b5ecb9286c7aebe2))
+* install package allow rules and allow GitHub docs fetches ([2dd32da](https://github.com/jl-cmd/claude-dev-env/commit/2dd32da3fa350b113d4993534e384c14958290a8))
+
+
+### Bug Fixes
+
+* **hooks:** say that a removal request is done once the thing is gone ([7d93810](https://github.com/jl-cmd/claude-dev-env/commit/7d93810a839918320023bca96c388197f7780043))
+* rename the managed rule count to match the docstring wording ([7dde558](https://github.com/jl-cmd/claude-dev-env/commit/7dde558fe622c4505e606e458182379719b4a4fc))
+
+
+### Documentation
+
+* **rules:** run Review closure inside a merge queue ([c66683a](https://github.com/jl-cmd/claude-dev-env/commit/c66683aaf2b0741dd4ffce568e03b9d05a9aaf80))
+* **rules:** run Review closure inside a merge queue ([895588c](https://github.com/jl-cmd/claude-dev-env/commit/895588c155a3c7e4d1a4e2f9efb1c35db12c9638))
+
 ## [8.16.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.16.0...claude-dev-env-v8.16.1) (2026-09-25)
 
 
