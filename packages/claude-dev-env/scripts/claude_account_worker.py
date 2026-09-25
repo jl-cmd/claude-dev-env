@@ -112,7 +112,17 @@ def _selection_from_payload(all_selection_payload: Mapping[str, str | None]) -> 
 
 
 def extra_config_directories(main_config_dir: Path) -> tuple[Path, ...]:
-    """Read the ordered local profile list or use the legacy default."""
+    """Read the ordered local profile list or use the legacy default.
+
+    Args:
+        main_config_dir: The main Claude home that may hold the list file.
+
+    Returns:
+        The extra profile homes in the order they are tried.
+
+    Raises:
+        ValueError: When the list is empty, holds a non-name, or repeats a name.
+    """
     profiles_file = main_config_dir / EXTRA_PROFILES_FILE_NAME
     if not profiles_file.exists():
         return (default_profile_home(),)
@@ -142,11 +152,11 @@ def select_account() -> AccountSelection:
     main_meters = read_account_meters(main_config_dir / CREDENTIALS_FILE_NAME)
     decision = choose_account_from_extras(
         main_meters=main_meters,
-        extra_accounts=extra_accounts,
+        all_extra_accounts=extra_accounts,
         now=datetime.now().astimezone(),
     )
     selected_config_dir = config_directory_for_decision(
-        decision, main_config_dir=main_config_dir, extra_accounts=extra_accounts
+        decision, main_config_dir=main_config_dir, all_extra_accounts=extra_accounts
     )
     payload = decision_payload(decision, config_directory=selected_config_dir)
     return _selection_from_payload(payload)

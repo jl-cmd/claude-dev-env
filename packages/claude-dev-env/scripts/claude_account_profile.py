@@ -59,7 +59,17 @@ class ProfileSyncReport:
 
 
 def validate_profile_name(profile_name: str) -> str:
-    """Accept a profile name safe for a directory and command launcher."""
+    """Accept a profile name safe for a directory and command launcher.
+
+    Args:
+        profile_name: The name to check.
+
+    Returns:
+        The same name.
+
+    Raises:
+        ValueError: When the name has other characters or is reserved.
+    """
     reserved_names = ALL_WINDOWS_RESERVED_PROFILE_NAMES | {CHOICE_MAIN, CHOICE_WAIT}
     if (
         re.fullmatch(PROFILE_NAME_PATTERN, profile_name) is None
@@ -71,6 +81,9 @@ def validate_profile_name(profile_name: str) -> str:
 
 def default_profile_home(profile_name: str = SECOND_ACCOUNT_PROFILE_NAME) -> Path:
     """Locate a named extra account's profile directory.
+
+    Args:
+        profile_name: The profile's name under the profiles root.
 
     Returns:
         The profile under the profiles root the environment names, else under
@@ -374,6 +387,11 @@ def main(all_command_arguments: list[str]) -> int:
         validate_profile_name(arguments.profile_name)
     except ValueError as error:
         parser.error(str(error))
+    print(json.dumps(_sync_named_profile(arguments)))
+    return 0
+
+
+def _sync_named_profile(arguments: argparse.Namespace) -> dict[str, object]:
     profile_home = arguments.profile_home or default_profile_home(arguments.profile_name)
     now = datetime.now(timezone.utc)
     report = sync_profile(
@@ -385,17 +403,12 @@ def main(all_command_arguments: list[str]) -> int:
         now=now,
         profile_name=arguments.profile_name,
     )
-    print(
-        json.dumps(
-            {
-                JSON_LINKED_KEY: list(report.all_linked),
-                JSON_MOVED_ASIDE_KEY: list(report.all_moved_aside),
-                JSON_UNLINKED_KEY: list(report.all_unlinked),
-                JSON_LAUNCHER_KEY: str(launcher_path),
-            }
-        )
-    )
-    return 0
+    return {
+        JSON_LINKED_KEY: list(report.all_linked),
+        JSON_MOVED_ASIDE_KEY: list(report.all_moved_aside),
+        JSON_UNLINKED_KEY: list(report.all_unlinked),
+        JSON_LAUNCHER_KEY: str(launcher_path),
+    }
 
 
 if __name__ == "__main__":

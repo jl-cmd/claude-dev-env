@@ -156,23 +156,38 @@ def _extra_account_decision(extra_account: ExtraAccount) -> AccountDecision | No
 def choose_account_from_extras(
     *,
     main_meters: AccountUsageMeters | None,
-    extra_accounts: Sequence[ExtraAccount],
+    all_extra_accounts: Sequence[ExtraAccount],
     now: datetime,
 ) -> AccountDecision:
-    """Choose main or the first extra profile with room in list order."""
+    """Choose main or the first extra profile with room in list order.
+
+    Args:
+        main_meters: The main account's meters, or None when unread.
+        all_extra_accounts: The extra accounts in the order they are tried.
+        now: The time the reset windows are measured from.
+
+    Returns:
+        The chosen account and the reason, or a wait naming the soonest reset.
+    """
     main_reason = _main_spendable_reason(main_meters, now)
     if main_reason is not None:
         return AccountDecision(account=CHOICE_MAIN, reason=main_reason)
-    for extra_account in extra_accounts:
-        decision = _extra_account_decision(extra_account)
+    for each_extra_account in all_extra_accounts:
+        decision = _extra_account_decision(each_extra_account)
         if decision is not None:
             return decision
-    if len(extra_accounts) == 1 and extra_accounts[0].meters is not None:
-        return _wait_decision(extra_accounts[0].meters)
+    return _all_extras_wait_decision(all_extra_accounts)
+
+
+def _all_extras_wait_decision(
+    all_extra_accounts: Sequence[ExtraAccount],
+) -> AccountDecision:
+    if len(all_extra_accounts) == 1 and all_extra_accounts[0].meters is not None:
+        return _wait_decision(all_extra_accounts[0].meters)
     all_resets = (
-        _blocking_reset(extra_account.meters)
-        for extra_account in extra_accounts
-        if extra_account.meters is not None
+        _blocking_reset(each_extra_account.meters)
+        for each_extra_account in all_extra_accounts
+        if each_extra_account.meters is not None
     )
     next_reset = min((reset for reset in all_resets if reset is not None), default=None)
     return AccountDecision(
@@ -210,7 +225,7 @@ def choose_account(
     """
     return choose_account_from_extras(
         main_meters=main_meters,
-        extra_accounts=(ExtraAccount(name=CHOICE_SECOND, meters=second_meters),),
+        all_extra_accounts=(ExtraAccount(name=CHOICE_SECOND, meters=second_meters),),
         now=now,
     )
 
@@ -230,20 +245,33 @@ def read_account_meters(credentials_path: Path) -> AccountUsageMeters | None:
         return None
 
 
-def read_extra_accounts(config_directories: Sequence[Path]) -> tuple[ExtraAccount, ...]:
-    """Read ordered extra profiles and reject duplicate directories."""
+def read_extra_accounts(
+    all_config_directories: Sequence[Path],
+) -> tuple[ExtraAccount, ...]:
+    """Read ordered extra profiles and reject duplicate directories.
+
+    Args:
+        all_config_directories: The extra profile homes in the order they are tried.
+
+    Returns:
+        One extra account per directory, with its meters.
+
+    Raises:
+        ValueError: When two entries name the same directory.
+    """
     all_resolved_directories = [
-        str(directory.resolve()).casefold() for directory in config_directories
+        str(each_directory.resolve()).casefold()
+        for each_directory in all_config_directories
     ]
-    if len(set(all_resolved_directories)) != len(config_directories):
+    if len(set(all_resolved_directories)) != len(all_config_directories):
         raise ValueError("extra account config directories must be distinct")
     return tuple(
         ExtraAccount(
-            name=CHOICE_SECOND if index == 1 else f"extra_{index}",
-            meters=read_account_meters(directory / CREDENTIALS_FILE_NAME),
-            config_dir=directory,
+            name=CHOICE_SECOND if each_index == 1 else f"extra_{each_index}",
+            meters=read_account_meters(each_directory / CREDENTIALS_FILE_NAME),
+            config_dir=each_directory,
         )
-        for index, directory in enumerate(config_directories, start=1)
+        for each_index, each_directory in enumerate(all_config_directories, start=1)
     )
 
 
@@ -251,16 +279,25 @@ def config_directory_for_decision(
     decision: AccountDecision,
     *,
     main_config_dir: Path,
-    extra_accounts: Sequence[ExtraAccount],
+    all_extra_accounts: Sequence[ExtraAccount],
 ) -> Path | None:
-    """Find the selected account's config directory."""
+    """Find the selected account's config directory.
+
+    Args:
+        decision: The chosen account and reason.
+        main_config_dir: The main account's Claude home.
+        all_extra_accounts: The extra accounts the decision chose from.
+
+    Returns:
+        The chosen account's Claude home, or None on wait.
+    """
     if decision.account == CHOICE_MAIN:
         return main_config_dir
     return next(
         (
-            extra_account.config_dir
-            for extra_account in extra_accounts
-            if extra_account.name == decision.account
+            each_extra_account.config_dir
+            for each_extra_account in all_extra_accounts
+            if each_extra_account.name == decision.account
         ),
         None,
     )
@@ -359,13 +396,13 @@ def main(all_command_arguments: list[str]) -> int:
     main_meters = read_account_meters(arguments.main_config_dir / CREDENTIALS_FILE_NAME)
     decision = choose_account_from_extras(
         main_meters=main_meters,
-        extra_accounts=extra_accounts,
+        all_extra_accounts=extra_accounts,
         now=datetime.now().astimezone(),
     )
     config_directory = config_directory_for_decision(
         decision,
         main_config_dir=arguments.main_config_dir,
-        extra_accounts=extra_accounts,
+        all_extra_accounts=extra_accounts,
     )
     report = {
         **decision_payload(decision, config_directory=config_directory),
