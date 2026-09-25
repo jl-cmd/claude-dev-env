@@ -32,13 +32,13 @@ def sync(main_home: Path, profile_home: Path) -> profile.ProfileSyncReport:
 
 
 class TestDefaultProfileHome:
-    def should_use_the_profiles_root_the_environment_names(
+    def test_should_use_the_profiles_root_the_environment_names(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("LLM_SETTINGS_PROFILES_ROOT", str(tmp_path))
         assert profile.default_profile_home() == tmp_path / "ev"
 
-    def should_fall_back_to_the_profiles_root_in_the_user_home(
+    def test_should_fall_back_to_the_profiles_root_in_the_user_home(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.delenv("LLM_SETTINGS_PROFILES_ROOT", raising=False)
@@ -47,23 +47,24 @@ class TestDefaultProfileHome:
 
 
 class TestIsAccountLocal:
-    def should_keep_sign_in_state_and_history_local(self) -> None:
+    def test_should_keep_sign_in_state_and_history_local(self) -> None:
         for each_name in (
             ".credentials.json",
             ".credentials.json.bak-session-dashboard",
             ".claude.json",
             ".claude.json.backup",
+            "extra-profiles.json",
             "projects",
         ):
             assert profile.is_account_local(each_name)
 
-    def should_share_skills_rules_and_settings(self) -> None:
+    def test_should_share_skills_rules_and_settings(self) -> None:
         for each_name in ("skills", "rules", "CLAUDE.md", "settings.json", "plugins"):
             assert not profile.is_account_local(each_name)
 
 
 class TestSyncProfile:
-    def should_link_every_shared_entry_to_the_main_home(self, tmp_path: Path) -> None:
+    def test_should_link_every_shared_entry_to_the_main_home(self, tmp_path: Path) -> None:
         main_home = build_main_home(tmp_path)
         profile_home = tmp_path / "ev"
         sync(main_home, profile_home)
@@ -76,7 +77,7 @@ class TestSyncProfile:
             profile_home / "settings.json", main_home / "settings.json"
         )
 
-    def should_link_only_what_the_callers_rule_shares(self, tmp_path: Path) -> None:
+    def test_should_link_only_what_the_callers_rule_shares(self, tmp_path: Path) -> None:
         main_home = build_main_home(tmp_path)
         profile_home = tmp_path / "codex-1"
         report = profile.sync_profile(
@@ -88,7 +89,7 @@ class TestSyncProfile:
         assert report.all_linked == ("rules",)
         assert not (profile_home / "skills").exists()
 
-    def should_keep_the_accounts_own_sign_in_state_and_history_apart(
+    def test_should_keep_the_accounts_own_sign_in_state_and_history_apart(
         self, tmp_path: Path
     ) -> None:
         main_home = build_main_home(tmp_path)
@@ -105,7 +106,7 @@ class TestSyncProfile:
         assert not (profile_home / ".claude.json.backup").exists()
         assert not (profile_home / "projects").exists()
 
-    def should_move_a_stale_copy_aside_and_keep_its_content(
+    def test_should_move_a_stale_copy_aside_and_keep_its_content(
         self, tmp_path: Path
     ) -> None:
         main_home = build_main_home(tmp_path)
@@ -120,7 +121,7 @@ class TestSyncProfile:
         assert profile.links_to(profile_home / "CLAUDE.md", main_home / "CLAUDE.md")
         assert report.all_moved_aside == ("CLAUDE.md",)
 
-    def should_remove_a_same_content_copy_without_moving_it_aside(
+    def test_should_remove_a_same_content_copy_without_moving_it_aside(
         self, tmp_path: Path
     ) -> None:
         main_home = build_main_home(tmp_path)
@@ -132,7 +133,7 @@ class TestSyncProfile:
         assert not (profile_home / ".replaced").exists()
         assert profile.links_to(profile_home / "CLAUDE.md", main_home / "CLAUDE.md")
 
-    def should_move_aside_a_link_that_points_somewhere_else(
+    def test_should_move_aside_a_link_that_points_somewhere_else(
         self, tmp_path: Path
     ) -> None:
         main_home = build_main_home(tmp_path)
@@ -147,7 +148,7 @@ class TestSyncProfile:
         assert profile.links_to(profile_home / "rules", main_home / "rules")
         assert report.all_moved_aside == ("rules",)
 
-    def should_change_nothing_on_a_second_run(self, tmp_path: Path) -> None:
+    def test_should_change_nothing_on_a_second_run(self, tmp_path: Path) -> None:
         main_home = build_main_home(tmp_path)
         profile_home = tmp_path / "ev"
         sync(main_home, profile_home)
@@ -156,7 +157,7 @@ class TestSyncProfile:
         assert second_report.all_moved_aside == ()
         assert second_report.all_unlinked == ()
 
-    def should_unlink_an_entry_the_main_home_no_longer_has(
+    def test_should_unlink_an_entry_the_main_home_no_longer_has(
         self, tmp_path: Path
     ) -> None:
         main_home = build_main_home(tmp_path)
@@ -168,7 +169,7 @@ class TestSyncProfile:
         assert report.all_unlinked == ("rules",)
 
 
-    def should_remove_a_main_link_left_under_an_account_local_name(
+    def test_should_remove_a_main_link_left_under_an_account_local_name(
         self, tmp_path: Path
     ) -> None:
         main_home = build_main_home(tmp_path)
@@ -185,7 +186,7 @@ class TestSyncProfile:
 
 
 class TestWriteLauncher:
-    def should_point_claude_at_the_profile_and_pass_every_argument(
+    def test_should_point_claude_at_the_profile_and_pass_every_argument(
         self, tmp_path: Path
     ) -> None:
         profile_home = tmp_path / "ev"
@@ -196,7 +197,7 @@ class TestWriteLauncher:
         assert f'set "CLAUDE_CONFIG_DIR={profile_home}"' in launcher_text
         assert "claude %*" in launcher_text
 
-    def should_move_an_older_launcher_aside(self, tmp_path: Path) -> None:
+    def test_should_move_an_older_launcher_aside(self, tmp_path: Path) -> None:
         launcher_directory = tmp_path / "bin"
         launcher_directory.mkdir()
         (launcher_directory / "claude-ev.cmd").write_text(
@@ -212,7 +213,7 @@ class TestWriteLauncher:
 
 
 class TestMain:
-    def should_print_what_the_sync_changed(
+    def test_should_print_what_the_sync_changed(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         main_home = build_main_home(tmp_path)
@@ -230,3 +231,49 @@ class TestMain:
         assert exit_code == 0
         assert "CLAUDE.md" in printed["linked"]
         assert printed["launcher"] == str(tmp_path / "bin" / "claude-ev.cmd")
+
+
+def test_should_create_named_profile_and_launcher_without_changes_on_repeat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    main_home = build_main_home(tmp_path)
+    (main_home / "extra-profiles.json").write_text("[]", encoding="utf-8")
+    profiles_root = tmp_path / "profiles"
+    launcher_directory = tmp_path / "bin"
+    monkeypatch.setenv("LLM_SETTINGS_PROFILES_ROOT", str(profiles_root))
+    arguments = [
+        "--main-home",
+        str(main_home),
+        "--profile-name",
+        "profile-3",
+        "--launcher-directory",
+        str(launcher_directory),
+    ]
+
+    assert profile.main(arguments) == 0
+    first_report = json.loads(capsys.readouterr().out)
+    profile_home = profiles_root / "profile-3"
+    launcher_path = launcher_directory / "claude-profile-3.cmd"
+    assert profile.links_to(profile_home / "CLAUDE.md", main_home / "CLAUDE.md")
+    assert not (profile_home / "extra-profiles.json").exists()
+    assert first_report["launcher"] == str(launcher_path)
+    assert f'set "CLAUDE_CONFIG_DIR={profile_home}"' in launcher_path.read_text(
+        encoding="utf-8"
+    )
+
+    assert profile.main(arguments) == 0
+    second_report = json.loads(capsys.readouterr().out)
+    assert second_report["linked"] == []
+    assert second_report["moved_aside"] == []
+    assert second_report["unlinked"] == []
+    assert list(launcher_directory.glob("*.replaced-*")) == []
+
+
+@pytest.mark.parametrize(
+    "profile_name", ["../outside", "bad name", "CON", "main", "wait"]
+)
+def test_should_reject_unsafe_profile_names(profile_name: str) -> None:
+    with pytest.raises(ValueError):
+        profile.default_profile_home(profile_name)

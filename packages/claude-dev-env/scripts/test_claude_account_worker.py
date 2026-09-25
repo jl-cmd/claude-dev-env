@@ -3,12 +3,15 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import claude_account_choice
 import claude_account_worker
+from claude_chain_usage import AccountUsageMeters
 from claude_account_worker import (
     AccountSelection,
     WorkerDependencies,
@@ -25,6 +28,8 @@ from dev_env_scripts_constants.claude_account_worker_constants import (
     TIMEOUT_EXIT_CODE,
     WAIT_EXIT_CODE,
 )
+
+NOW = datetime(2026, 9, 22, 21, 0, tzinfo=timezone.utc)
 
 
 class FakeProcess:
@@ -317,6 +322,119 @@ def test_should_pick_second_account_when_neither_meter_is_readable(
 
     assert selection.account == CHOICE_SECOND
     assert selection.config_dir == second_home
+
+
+def test_should_read_profile_list_and_pick_later_extra(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    main_home = tmp_path / ".claude"
+    main_home.mkdir()
+    (main_home / "extra-profiles.json").write_text(
+        json.dumps(["profile_a", "profile_b"]), encoding="utf-8"
+    )
+    profiles_root = tmp_path / "profiles"
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("LLM_SETTINGS_PROFILES_ROOT", str(profiles_root))
+    readings = {
+        profiles_root / "profile_a": AccountUsageMeters(
+            session_utilization=90.0,
+            session_resets_at=NOW + timedelta(hours=2),
+            weekly_utilization=95.0,
+            weekly_resets_at=NOW + timedelta(days=2),
+        ),
+        profiles_root / "profile_b": AccountUsageMeters(
+            session_utilization=10.0,
+            session_resets_at=NOW + timedelta(hours=2),
+            weekly_utilization=20.0,
+            weekly_resets_at=NOW + timedelta(days=2),
+        ),
+    }
+
+    def read_meters(path: Path) -> AccountUsageMeters | None:
+        return readings.get(path.parent)
+
+    monkeypatch.setattr(claude_account_choice, "read_account_meters", read_meters)
+    monkeypatch.setattr(claude_account_worker, "read_account_meters", read_meters)
+
+    selection = select_account()
+
+    assert selection.account == "extra_2"
+    assert selection.config_dir == profiles_root / "profile_b"
+
+
+def test_should_exit_three_when_every_listed_profile_is_full(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    main_home = tmp_path / ".claude"
+    main_home.mkdir()
+    (main_home / "extra-profiles.json").write_text(
+        json.dumps(["profile_a", "profile_b"]), encoding="utf-8"
+    )
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("LLM_SETTINGS_PROFILES_ROOT", str(tmp_path / "profiles"))
+    blocked = AccountUsageMeters(
+        session_utilization=90.0,
+        session_resets_at=NOW + timedelta(hours=2),
+        weekly_utilization=95.0,
+        weekly_resets_at=NOW + timedelta(days=2),
+    )
+
+    def read_meters(path: Path) -> AccountUsageMeters | None:
+        return None if path.parent == main_home else blocked
+
+    monkeypatch.setattr(claude_account_choice, "read_account_meters", read_meters)
+    monkeypatch.setattr(claude_account_worker, "read_account_meters", read_meters)
+    report_file = tmp_path / "report.json"
+
+    exit_code = run_worker(
+        prompt_file=tmp_path / "unused.md",
+        cwd=tmp_path,
+        report_file=report_file,
+        model=None,
+        permission_mode="auto",
+        timeout_minutes=60,
+        decision_selector=select_account,
+        dependencies=WorkerDependencies(
+            process_factory=lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("wait must not start a process")
+            ),
+            all_parent_environment_variables={},
+            binary_resolver=lambda _: None,
+            process_terminator=lambda _: None,
+            monotonic_clock=lambda: 1.0,
+        ),
+    )
+    report = json.loads(report_file.read_text(encoding="utf-8"))
+
+    assert exit_code == WAIT_EXIT_CODE
+    assert report["account"] == CHOICE_WAIT
+    assert (NOW + timedelta(days=2)).isoformat() in report["reason"]
+
+
+def test_should_set_later_extra_profile_environment(tmp_path: Path) -> None:
+    profile_dir = tmp_path / "profile_b"
+    exit_code, report, captured = _run_worker(
+        tmp_path,
+        selection=_selection("extra_2", config_dir=profile_dir),
+        process=FakeProcess(),
+    )
+
+    assert exit_code == 0
+    assert report["account"] == "extra_2"
+    assert captured["env"][CLAUDE_CONFIG_DIR_ENV_VAR] == str(profile_dir)
+
+
+@pytest.mark.parametrize(
+    "contents",
+    ['{', '{}', '[]', '["profile_a", "PROFILE_A"]', '["../outside"]', '["main"]'],
+)
+def test_should_reject_invalid_profile_lists(tmp_path: Path, contents: str) -> None:
+    main_home = tmp_path / ".claude"
+    main_home.mkdir()
+    (main_home / "extra-profiles.json").write_text(contents, encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        claude_account_worker.extra_config_directories(main_home)
 
 
 def test_should_require_prompt_file_and_report_file_flags() -> None:

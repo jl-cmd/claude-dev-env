@@ -1,26 +1,10 @@
 #!/usr/bin/env python3
-"""Keep the second account's Claude profile linked to the main Claude home.
+"""Keep a named extra Claude profile linked to the main Claude home.
 
-The second account runs Claude with its own sign-in and history, and with
-everything else the main home holds: skills, rules, plugins, settings, docs::
-
-    main home                 profile home (second account)
-    skills/          <-----   skills/            link
-    CLAUDE.md        <-----   CLAUDE.md          link
-    .credentials.json         .credentials.json  its own sign-in
-    projects/                 projects/          its own history
-
-Each run converges the profile on that picture. A stale copy moves into
-``.replaced/<time>/`` with its content kept, a link whose main entry is gone
-is removed, a main link under an account-local name such as a credentials
-backup is removed, and a second run changes nothing. The run also writes the
-``claude-ev.cmd`` launcher that starts Claude on this profile.
-
-::
-
-    python claude_account_profile.py
-    {"linked": ["CLAUDE.md"], "moved_aside": [], "unlinked": [],
-     "launcher": "C:/Users/me/.local/bin/claude-ev.cmd"}
+Each profile keeps its own sign-in and history while sharing the main home's
+skills, rules, plugins, settings, and docs. Stale shared copies move into
+``.replaced/<time>/``. A second run with the same name changes nothing. The
+launcher is named ``claude-<profile-name>.cmd``.
 """
 
 from __future__ import annotations
@@ -29,6 +13,7 @@ import argparse
 import filecmp
 import json
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Callable
@@ -39,18 +24,22 @@ from pathlib import Path
 from dev_env_scripts_constants.claude_account_constants import (
     ALL_ACCOUNT_LOCAL_NAME_PREFIXES,
     ALL_ACCOUNT_LOCAL_NAMES,
+    ALL_WINDOWS_RESERVED_PROFILE_NAMES,
     ALL_WINDOWS_JUNCTION_COMMAND_PREFIX,
+    CHOICE_MAIN,
+    CHOICE_WAIT,
     JSON_LAUNCHER_KEY,
     JSON_LINKED_KEY,
     JSON_MOVED_ASIDE_KEY,
     JSON_UNLINKED_KEY,
     ALL_LAUNCHER_DIRECTORY_RELATIVE_PARTS,
-    LAUNCHER_FILE_NAME,
+    LAUNCHER_FILE_NAME_TEMPLATE,
     LAUNCHER_REPLACED_SUFFIX,
     LAUNCHER_TEXT_TEMPLATE,
     MAIN_CLAUDE_HOME_DIRECTORY_NAME,
     PROFILES_ROOT_DIRECTORY_NAME,
     PROFILES_ROOT_ENVIRONMENT_VARIABLE,
+    PROFILE_NAME_PATTERN,
     REPLACED_DIRECTORY_NAME,
     REPLACED_STAMP_FORMAT,
     SECOND_ACCOUNT_PROFILE_NAME,
@@ -69,8 +58,19 @@ class ProfileSyncReport:
     all_unlinked: tuple[str, ...]
 
 
-def default_profile_home() -> Path:
-    """Locate the second account's profile directory.
+def validate_profile_name(profile_name: str) -> str:
+    """Accept a profile name safe for a directory and command launcher."""
+    reserved_names = ALL_WINDOWS_RESERVED_PROFILE_NAMES | {CHOICE_MAIN, CHOICE_WAIT}
+    if (
+        re.fullmatch(PROFILE_NAME_PATTERN, profile_name) is None
+        or profile_name.casefold() in reserved_names
+    ):
+        raise ValueError("profile name must use letters, digits, hyphens, or underscores")
+    return profile_name
+
+
+def default_profile_home(profile_name: str = SECOND_ACCOUNT_PROFILE_NAME) -> Path:
+    """Locate a named extra account's profile directory.
 
     Returns:
         The profile under the profiles root the environment names, else under
@@ -82,7 +82,7 @@ def default_profile_home() -> Path:
         if profiles_root
         else Path.home() / PROFILES_ROOT_DIRECTORY_NAME
     )
-    return root / SECOND_ACCOUNT_PROFILE_NAME
+    return root / validate_profile_name(profile_name)
 
 
 def is_account_local(entry_name: str) -> bool:
@@ -296,36 +296,47 @@ def sync_profile(
     )
 
 
-def _moved_launcher_name(now: datetime) -> str:
-    return f"{LAUNCHER_FILE_NAME}{LAUNCHER_REPLACED_SUFFIX}{_stamp(now)}"
+def _moved_launcher_name(launcher_file_name: str, now: datetime) -> str:
+    return f"{launcher_file_name}{LAUNCHER_REPLACED_SUFFIX}{_stamp(now)}"
 
 
 def write_launcher(
-    *, launcher_directory: Path, profile_home: Path, now: datetime
+    *,
+    launcher_directory: Path,
+    profile_home: Path,
+    now: datetime,
+    profile_name: str = SECOND_ACCOUNT_PROFILE_NAME,
 ) -> Path:
-    """Write the launcher that runs Claude under the second account's profile.
+    """Write the launcher that runs Claude under a named profile.
 
     ::
 
-        claude-ev -p "fix the test"
+        claude-NAME -p "fix the test"
         -> CLAUDE_CONFIG_DIR=<profile home>, then claude -p "fix the test"
-        an older claude-ev.cmd -> claude-ev.cmd.replaced-<time>
+        an older claude-NAME.cmd -> claude-NAME.cmd.replaced-<time>
 
     Args:
         launcher_directory: The directory on PATH that holds the launcher.
-        profile_home: The second account's Claude home.
+        profile_home: The named account's Claude home.
         now: The run time that names a moved older launcher.
+        profile_name: The name used in the launcher file name.
 
     Returns:
         The launcher path.
     """
-    launcher_path = launcher_directory / LAUNCHER_FILE_NAME
+    launcher_file_name = LAUNCHER_FILE_NAME_TEMPLATE.format(
+        profile_name=validate_profile_name(profile_name)
+    )
+    launcher_path = launcher_directory / launcher_file_name
     launcher_text = LAUNCHER_TEXT_TEMPLATE.format(profile_home=profile_home)
     launcher_bytes = launcher_text.encode(TEXT_ENCODING)
     if launcher_path.is_file() and launcher_path.read_bytes() == launcher_bytes:
         return launcher_path
     if launcher_path.is_file():
-        os.replace(launcher_path, launcher_path.with_name(_moved_launcher_name(now)))
+        os.replace(
+            launcher_path,
+            launcher_path.with_name(_moved_launcher_name(launcher_file_name, now)),
+        )
     launcher_directory.mkdir(parents=True, exist_ok=True)
     launcher_path.write_bytes(launcher_bytes)
     return launcher_path
@@ -338,7 +349,8 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--main-home", type=Path, default=Path.home() / MAIN_CLAUDE_HOME_DIRECTORY_NAME
     )
-    parser.add_argument("--profile-home", type=Path, default=default_profile_home())
+    parser.add_argument("--profile-name", default=SECOND_ACCOUNT_PROFILE_NAME)
+    parser.add_argument("--profile-home", type=Path)
     parser.add_argument(
         "--launcher-directory",
         type=Path,
@@ -356,15 +368,22 @@ def main(all_command_arguments: list[str]) -> int:
     Returns:
         Zero once the profile and launcher match the main home.
     """
-    arguments = _build_argument_parser().parse_args(all_command_arguments)
+    parser = _build_argument_parser()
+    arguments = parser.parse_args(all_command_arguments)
+    try:
+        validate_profile_name(arguments.profile_name)
+    except ValueError as error:
+        parser.error(str(error))
+    profile_home = arguments.profile_home or default_profile_home(arguments.profile_name)
     now = datetime.now(timezone.utc)
     report = sync_profile(
-        main_home=arguments.main_home, profile_home=arguments.profile_home, now=now
+        main_home=arguments.main_home, profile_home=profile_home, now=now
     )
     launcher_path = write_launcher(
         launcher_directory=arguments.launcher_directory,
-        profile_home=arguments.profile_home,
+        profile_home=profile_home,
         now=now,
+        profile_name=arguments.profile_name,
     )
     print(
         json.dumps(
