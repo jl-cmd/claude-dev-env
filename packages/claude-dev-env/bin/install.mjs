@@ -2855,12 +2855,12 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     if (permissionMerge.removedCount > 0) {
         console.log(`  Permissions: ${permissionMerge.removedCount} retired managed rule(s) removed`);
     }
-    const packageOwnedRuleCount = countManagedPermissions(permissionMerge.managedPermissions);
-    if (packageOwnedRuleCount > 0) {
+    const managedRuleCount = countManagedPermissions(permissionMerge.managedPermissions);
+    if (managedRuleCount > 0) {
         console.log(
             `  Permissions: ${permissionMerge.addedCount} managed rule(s) added, `
             + `${permissionMerge.alreadyPresentCount} already present `
-            + `(${packageOwnedRuleCount} package-owned)`,
+            + `(${managedRuleCount} package-owned)`,
         );
     }
 
