@@ -43,6 +43,8 @@ class TestWorkingStylePrompt:
         prompt_text = emitted["hookSpecificOutput"]["additionalContext"]
         assert "Document each task in a location that remains easy to find later." in prompt_text
         assert "Deliver the requested work at its intended scope." in prompt_text
+        assert "A request to remove something is complete once it is gone." in prompt_text
+        assert "pass a replacement idea to the requester as a question." in prompt_text
         assert "Use ELI5 for beginner framing, large visuals, minimal text" in prompt_text
         assert "one stable self-contained HTML artifact" in prompt_text
         assert "update-in-place continuity, and sharing" in prompt_text
