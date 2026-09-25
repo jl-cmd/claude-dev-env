@@ -10,24 +10,27 @@ report only, says who performs the merge, and states the rollback path.
 |---|---|---|---|
 | 1 | The pull request opens as a draft with a Before and an After in its body | yes | the agent that opens it |
 | 2 | The full Python and JavaScript suites run on the draft | yes | GitHub Actions |
-| 3 | The required status check reports green on the head commit | yes | GitHub Actions |
-| 4 | The head is up to date with `main`, because the branch rule is strict | yes | GitHub Actions |
-| 5 | Every review thread on the head is answered or resolved by the driving agent | yes | the driving agent |
-| 6 | The `Review closure` check reports green on the head commit | yes | GitHub Actions |
-| 7 | The merge check reads the live pull request and reports `MERGE` | yes | the driving agent |
-| 8 | Advisory findings the follow-up ledger holds | no | the policy lint |
-| 9 | Review-bot findings the reviewing bot marks optional | no | the review bots |
+| 3 | The install playtest installs the package into a scratch home and reads the envelopes a session-start hook and a blocking hook return | yes | GitHub Actions |
+| 4 | The required status check reports green on the head commit | yes | GitHub Actions |
+| 5 | The head is up to date with `main`, because the branch rule is strict | yes | GitHub Actions |
+| 6 | Every review thread on the head is answered or resolved by the driving agent | yes | the driving agent |
+| 7 | The `Review closure` check reports green on the head commit | yes | GitHub Actions |
+| 8 | The merge check reads the live pull request and reports `MERGE` | yes | the driving agent |
+| 9 | Advisory findings the follow-up ledger holds | no | the policy lint |
+| 10 | Review-bot findings the reviewing bot marks optional | no | the review bots |
 
-Gate 6 goes red while a blocking review finding on the head has no reply and no
+Gate 7 goes red while a blocking review finding on the head has no reply and no
 resolving push, so a finding holds the merge until the driving agent answers it.
 The check runs from the revision `.github/workflows/review-closure.yml` pins.
 
-Gate 7 reads the pull request's live state: out of draft, merge state clean,
+Gate 8 reads the pull request's live state: out of draft, merge state clean,
 and no open review thread. It prints `HOLD` with the repair when one of those
 fails, and every repair belongs to the driving agent.
 
-Gates 8 and 9 report and record. A finding there opens its own pull request and
+Gates 9 and 10 report and record. A finding there opens its own pull request and
 never holds this one.
+
+The [install playtest guide](install-playtest.md) describes its stages and the red-run proof.
 
 ## The required status checks
 
@@ -58,13 +61,10 @@ python packages/claude-dev-env/scripts/merge_gate_checks.py \
 
 ## Gates this repository has adopted and not yet built
 
-These two gates hold the merge once they ship, and each one joins the table
-above in the pull request that builds it. A gate that cannot go red on a
+This gate holds the merge once it ships, and it joins the table above in the
+pull request that builds it. A gate that cannot go red on a
 scratch branch stays off the list until it can.
 
-- An install playtest that installs the package into a scratch home, starts a
-  session-start hook and one blocking hook against a fixture payload, and reads
-  the output envelope.
 - A verification swarm that reproduces the Before and the After from the pull
   request body and posts one verdict for the head commit.
 
