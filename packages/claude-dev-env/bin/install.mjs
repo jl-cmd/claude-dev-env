@@ -17,9 +17,13 @@ import {
 } from './expand_home_directory_tokens.mjs';
 import { EVER_SHIPPED_SKILL_NAMES } from './ever-shipped-skills.mjs';
 import {
-    managedDenyEntriesFromPackageSettings,
+    MANAGED_PERMISSION_LIST_NAMES,
+    countManagedPermissions,
+    emptyManagedPermissions,
+    managedPermissionsFromPackageSettings,
     mergeManagedPermissionsIntoSettings,
     pruneManagedPermissionsFromSettings,
+    retiredManagedPermissions,
 } from './merge_managed_permissions.mjs';
 import {
     SKIPPED_SOURCE_ENTRY_NAMES,
@@ -2085,84 +2089,87 @@ function writeManifest(installedFiles, skillNames, managedPermissions = null) {
         files: installedFiles,
         skills: skillNames,
     });
-    if (managedPermissions && Array.isArray(managedPermissions.deny) && managedPermissions.deny.length > 0) {
-        manifest[MANIFEST_MANAGED_PERMISSIONS_KEY] = {
-            deny: [...managedPermissions.deny],
-        };
+    if (managedPermissions && countManagedPermissions(managedPermissions) > 0) {
+        const manifestPermissions = {};
+        for (const eachListName of MANAGED_PERMISSION_LIST_NAMES) {
+            if (managedPermissions[eachListName].length > 0) {
+                manifestPermissions[eachListName] = [...managedPermissions[eachListName]];
+            }
+        }
+        manifest[MANIFEST_MANAGED_PERMISSIONS_KEY] = manifestPermissions;
     }
     writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2) + '\n');
 }
 
 /**
- * Load package-owned deny entries from the package settings.json source.
+ * Load package-owned allow and deny rules from the package settings.json source.
  *
- * @returns {string[]}
+ * @returns {import('./merge_managed_permissions.mjs').ManagedPermissions}
  */
-function loadPackageManagedDenyEntries() {
+function loadPackageManagedPermissions() {
     const packageSettingsPath = join(PACKAGE_ROOT, SETTINGS_FILE_NAME);
     if (!existsSync(packageSettingsPath)) {
-        return [];
+        return emptyManagedPermissions();
     }
     try {
         const packageSettings = JSON.parse(readFileSync(packageSettingsPath, 'utf8'));
-        return managedDenyEntriesFromPackageSettings(packageSettings);
+        return managedPermissionsFromPackageSettings(packageSettings);
     } catch (parseError) {
         console.warn(
             `  Warning: could not read package ${SETTINGS_FILE_NAME} for managed permissions (${parseError.message})`,
         );
-        return [];
+        return emptyManagedPermissions();
     }
 }
 
 /**
- * Load deny entries an earlier manifest records as package-managed.
+ * Load the allow and deny rules an earlier manifest records as package-managed.
  *
- * @returns {string[]}
+ * @returns {import('./merge_managed_permissions.mjs').ManagedPermissions}
  */
-function loadPriorManagedDenyEntries() {
-    if (!existsSync(MANIFEST_FILE)) return [];
+function loadPriorManagedPermissions() {
+    if (!existsSync(MANIFEST_FILE)) return emptyManagedPermissions();
     try {
         const priorManifest = JSON.parse(readFileSync(MANIFEST_FILE, 'utf8'));
-        return managedDenyEntriesFromPackageSettings({
+        return managedPermissionsFromPackageSettings({
             permissions: priorManifest?.[MANIFEST_MANAGED_PERMISSIONS_KEY],
         });
     } catch {
-        return [];
+        return emptyManagedPermissions();
     }
 }
 
 /**
  * Reconcile package-managed permission defaults with ~/.claude/settings.json.
  *
- * @returns {{addedCount: number, alreadyPresentCount: number, removedCount: number, managedDenyEntries: string[]}}
+ * @returns {{addedCount: number, alreadyPresentCount: number, removedCount: number, managedPermissions: import('./merge_managed_permissions.mjs').ManagedPermissions}}
  */
 function mergeManagedPermissions() {
-    const allCurrentManagedDenyEntries = loadPackageManagedDenyEntries();
-    const allPriorManagedDenyEntries = loadPriorManagedDenyEntries();
-    const allCurrentManagedDenyEntrySet = new Set(allCurrentManagedDenyEntries);
-    const allRetiredManagedDenyEntries = allPriorManagedDenyEntries.filter(
-        eachEntry => !allCurrentManagedDenyEntrySet.has(eachEntry),
+    const currentManagedPermissions = loadPackageManagedPermissions();
+    const retiredPermissions = retiredManagedPermissions(
+        loadPriorManagedPermissions(),
+        currentManagedPermissions,
     );
-    const hasCurrentManagedDenyEntries = allCurrentManagedDenyEntries.length > 0;
-    const hasRetiredManagedDenyEntries = allRetiredManagedDenyEntries.length > 0;
-    if (!hasCurrentManagedDenyEntries && !hasRetiredManagedDenyEntries) {
+    const hasCurrentManagedPermissions = countManagedPermissions(currentManagedPermissions) > 0;
+    const hasRetiredManagedPermissions = countManagedPermissions(retiredPermissions) > 0;
+    if (!hasCurrentManagedPermissions && !hasRetiredManagedPermissions) {
         return {
             addedCount: 0,
             alreadyPresentCount: 0,
             removedCount: 0,
-            managedDenyEntries: [],
+            managedPermissions: emptyManagedPermissions(),
         };
     }
     const settingsPath = join(CLAUDE_HOME, SETTINGS_FILE_NAME);
     const settingsExisted = existsSync(settingsPath);
     const settings = loadClaudeSettingsObject(settingsPath);
-    const pruneOutcome = pruneManagedPermissionsFromSettings(settings, allRetiredManagedDenyEntries);
-    const mergeOutcome = hasCurrentManagedDenyEntries
-        ? mergeManagedPermissionsIntoSettings(settings, allCurrentManagedDenyEntries)
-        : { addedCount: 0, alreadyPresentCount: 0, managedDenyEntries: [] };
+    const pruneOutcome = pruneManagedPermissionsFromSettings(settings, retiredPermissions);
+    const mergeOutcome = hasCurrentManagedPermissions
+        ? mergeManagedPermissionsIntoSettings(settings, currentManagedPermissions)
+        : { addedCount: 0, alreadyPresentCount: 0, managedPermissions: emptyManagedPermissions() };
     const shouldWriteSettings = pruneOutcome.removedCount > 0
         || mergeOutcome.addedCount > 0
-        || (!settingsExisted && hasCurrentManagedDenyEntries);
+        || (!settingsExisted && hasCurrentManagedPermissions);
     if (shouldWriteSettings) {
         writeFileSync(settingsPath, JSON.stringify(settings, null, 4) + '\n');
     }
@@ -2846,13 +2853,14 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     const permissionMerge = mergeManagedPermissions();
     summary.managedPermissions = permissionMerge;
     if (permissionMerge.removedCount > 0) {
-        console.log(`  Permissions: ${permissionMerge.removedCount} retired managed deny(s) removed`);
+        console.log(`  Permissions: ${permissionMerge.removedCount} retired managed rule(s) removed`);
     }
-    if (permissionMerge.managedDenyEntries.length > 0) {
+    const packageOwnedRuleCount = countManagedPermissions(permissionMerge.managedPermissions);
+    if (packageOwnedRuleCount > 0) {
         console.log(
-            `  Permissions: ${permissionMerge.addedCount} managed deny(s) added, `
+            `  Permissions: ${permissionMerge.addedCount} managed rule(s) added, `
             + `${permissionMerge.alreadyPresentCount} already present `
-            + `(${permissionMerge.managedDenyEntries.length} package-owned)`,
+            + `(${packageOwnedRuleCount} package-owned)`,
         );
     }
 
@@ -2918,14 +2926,7 @@ function executeInstallPlanMutations(plan, transactionHelpers) {
     const manifestFiles = didPruneFinish
         ? manifestFilesWithFailedPrunes(allManagedInstalledFiles, failedPrunePaths)
         : unionOnComparisonKey(priorManifestFiles || [], allManagedInstalledFiles);
-    const managedPermissionDenyEntries = summary.managedPermissions.managedDenyEntries;
-    writeManifest(
-        manifestFiles,
-        manifestSkillNames,
-        managedPermissionDenyEntries.length > 0
-            ? { deny: managedPermissionDenyEntries }
-            : null,
-    );
+    writeManifest(manifestFiles, manifestSkillNames, summary.managedPermissions.managedPermissions);
     syncWrittenPaths([...allInstalledFiles, MANIFEST_FILE, plan.settingsPath, ...publishedPointerPaths]);
     throwIfFault(FAULT_PHASES.AFTER_MANIFEST_WRITE);
     console.log(`\nInstalled ${PACKAGE_NAME}:`);
@@ -3122,15 +3123,15 @@ function executeUninstallPlan(plan, helpers = {}) {
                 console.log(`  Session continuity: ${removedContinuityCount} hook registration(s) removed from settings.json`);
             }
         }
-        const managedDenyFromPlan = plan.managedPermissionDenyEntries.length > 0
-            ? plan.managedPermissionDenyEntries
-            : loadPackageManagedDenyEntries();
-        if (managedDenyFromPlan.length > 0) {
-            const pruneOutcome = pruneManagedPermissionsFromSettings(settings, managedDenyFromPlan);
+        const managedPermissionsFromPlan = countManagedPermissions(plan.managedPermissions) > 0
+            ? plan.managedPermissions
+            : loadPackageManagedPermissions();
+        if (countManagedPermissions(managedPermissionsFromPlan) > 0) {
+            const pruneOutcome = pruneManagedPermissionsFromSettings(settings, managedPermissionsFromPlan);
             if (pruneOutcome.removedCount > 0) {
                 didSettingsChange = true;
                 console.log(
-                    `  Permission entries removed from settings.json: ${pruneOutcome.removedCount} managed deny(s)`,
+                    `  Permission entries removed from settings.json: ${pruneOutcome.removedCount} managed rule(s)`,
                 );
             }
         }

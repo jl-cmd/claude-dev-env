@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 import {
-    managedDenyEntriesFromPackageSettings,
+    managedPermissionsFromPackageSettings,
     mergeManagedPermissionsIntoSettings,
     pruneManagedPermissionsFromSettings,
 } from './merge_managed_permissions.mjs';
@@ -27,7 +27,10 @@ const PACKAGE_SETTINGS_PATH = join(PACKAGE_ROOT, 'settings.json');
 const INSTALL_ENTRY = join(PACKAGE_ROOT, 'bin', 'install.mjs');
 
 const EXPECTED_DENY_ENTRIES = [];
+const EXPECTED_ALLOW_ENTRIES = ['WebFetch(domain:docs.github.com)'];
 const SAMPLE_MANAGED_DENY_ENTRIES = ['Edit($HOME/.claude/managed-test/**)'];
+const SAMPLE_MANAGED_PERMISSIONS = { allow: [], deny: SAMPLE_MANAGED_DENY_ENTRIES };
+const SAMPLE_MANAGED_ALLOW_PERMISSIONS = { allow: ['WebFetch(domain:example.com)'], deny: [] };
 const LEGACY_MANAGED_DENY_ENTRIES = [
     'Edit($HOME/.claude/verification/**)',
     'Write($HOME/.claude/code-review-stamps/**)',
@@ -36,9 +39,9 @@ const LEGACY_MANAGED_DENY_ENTRIES = [
 ];
 const USER_OWNED_DENY_ENTRY = 'Bash(rm -rf /)';
 
-function packageDenyEntries() {
+function packageManagedPermissions() {
     const packageSettings = JSON.parse(readFileSync(PACKAGE_SETTINGS_PATH, 'utf8'));
-    return managedDenyEntriesFromPackageSettings(packageSettings);
+    return managedPermissionsFromPackageSettings(packageSettings);
 }
 
 function runInstallerInSandbox(sandboxHome, installerArguments = []) {
@@ -57,14 +60,16 @@ function runInstallerInSandbox(sandboxHome, installerArguments = []) {
     });
 }
 
-test('package settings.json publishes no managed deny entries', () => {
-    const denyEntries = packageDenyEntries();
-    assert.deepEqual(denyEntries, EXPECTED_DENY_ENTRIES);
+test('package settings.json publishes the GitHub docs fetch allow and no managed deny entries', () => {
+    assert.deepEqual(packageManagedPermissions(), {
+        allow: EXPECTED_ALLOW_ENTRIES,
+        deny: EXPECTED_DENY_ENTRIES,
+    });
 });
 
 test('an array-valued permissions field is replaced so managed denies survive a round trip', () => {
     const targetSettings = { permissions: [] };
-    const result = mergeManagedPermissionsIntoSettings(targetSettings, SAMPLE_MANAGED_DENY_ENTRIES);
+    const result = mergeManagedPermissionsIntoSettings(targetSettings, SAMPLE_MANAGED_PERMISSIONS);
     assert.equal(result.addedCount, SAMPLE_MANAGED_DENY_ENTRIES.length);
     assert.equal(Array.isArray(targetSettings.permissions), false);
     const roundTripped = JSON.parse(JSON.stringify(targetSettings));
@@ -98,7 +103,7 @@ test('mergeManagedPermissionsIntoSettings adds each managed deny exactly once', 
             deny: ['Bash(rm -rf /)'],
         },
     };
-    const first = mergeManagedPermissionsIntoSettings(target, SAMPLE_MANAGED_DENY_ENTRIES);
+    const first = mergeManagedPermissionsIntoSettings(target, SAMPLE_MANAGED_PERMISSIONS);
     assert.equal(first.addedCount, SAMPLE_MANAGED_DENY_ENTRIES.length);
     assert.equal(first.alreadyPresentCount, 0);
     const managedDenyCount = target.permissions.deny.filter((each) => (
@@ -108,7 +113,7 @@ test('mergeManagedPermissionsIntoSettings adds each managed deny exactly once', 
     assert.ok(target.permissions.deny.includes('Bash(rm -rf /)'));
     assert.deepEqual(target.permissions.allow, ['Bash(git status)']);
 
-    const second = mergeManagedPermissionsIntoSettings(target, SAMPLE_MANAGED_DENY_ENTRIES);
+    const second = mergeManagedPermissionsIntoSettings(target, SAMPLE_MANAGED_PERMISSIONS);
     assert.equal(second.addedCount, 0);
     assert.equal(second.alreadyPresentCount, SAMPLE_MANAGED_DENY_ENTRIES.length);
     assert.equal(
@@ -128,11 +133,25 @@ test('pruneManagedPermissionsFromSettings removes only package-owned deny entrie
             ],
         },
     };
-    const outcome = pruneManagedPermissionsFromSettings(target, SAMPLE_MANAGED_DENY_ENTRIES);
+    const outcome = pruneManagedPermissionsFromSettings(target, SAMPLE_MANAGED_PERMISSIONS);
     assert.equal(outcome.removedCount, SAMPLE_MANAGED_DENY_ENTRIES.length);
     assert.deepEqual(target.permissions.deny, ['Bash(rm -rf /)']);
     assert.deepEqual(target.permissions.allow, ['Bash(git status)']);
     assert.deepEqual(target.permissions.ask, ['Edit(./**)']);
+});
+
+test('mergeManagedPermissionsIntoSettings adds a managed allow once and prune removes only it', () => {
+    const target = { permissions: { allow: ['Bash(git status)'] } };
+    const first = mergeManagedPermissionsIntoSettings(target, SAMPLE_MANAGED_ALLOW_PERMISSIONS);
+    assert.equal(first.addedCount, 1);
+    const second = mergeManagedPermissionsIntoSettings(target, SAMPLE_MANAGED_ALLOW_PERMISSIONS);
+    assert.equal(second.addedCount, 0);
+    assert.deepEqual(target.permissions.allow, ['Bash(git status)', 'WebFetch(domain:example.com)']);
+    assert.equal(Object.hasOwn(target.permissions, 'deny'), false);
+
+    const outcome = pruneManagedPermissionsFromSettings(target, SAMPLE_MANAGED_ALLOW_PERMISSIONS);
+    assert.equal(outcome.removedCount, 1);
+    assert.deepEqual(target.permissions.allow, ['Bash(git status)']);
 });
 
 test('sandbox install keeps default managed denies empty on repeat', () => {
@@ -146,16 +165,19 @@ test('sandbox install keeps default managed denies empty on repeat', () => {
         const firstSettings = JSON.parse(readFileSync(settingsPath, 'utf8'));
         const firstDeny = firstSettings.permissions?.deny ?? [];
         assert.deepEqual(firstDeny, EXPECTED_DENY_ENTRIES);
+        assert.deepEqual(firstSettings.permissions?.allow, EXPECTED_ALLOW_ENTRIES);
 
         const manifestPath = join(sandboxHome, '.claude', '.claude-dev-env-manifest.json');
         const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
         assert.deepEqual(manifest.managedPermissions?.deny ?? [], EXPECTED_DENY_ENTRIES);
+        assert.deepEqual(manifest.managedPermissions?.allow, EXPECTED_ALLOW_ENTRIES);
 
         const secondInstall = runInstallerInSandbox(sandboxHome, []);
         assert.equal(secondInstall.status, 0, secondInstall.stderr || secondInstall.stdout);
         const secondSettings = JSON.parse(readFileSync(settingsPath, 'utf8'));
         const secondDeny = secondSettings.permissions?.deny ?? [];
         assert.deepEqual(secondDeny, EXPECTED_DENY_ENTRIES);
+        assert.deepEqual(secondSettings.permissions?.allow, EXPECTED_ALLOW_ENTRIES);
     } finally {
         rmSync(sandboxHome, { recursive: true, force: true });
     }
@@ -186,11 +208,11 @@ test('a normal upgrade retires manifest-owned denies and preserves user entries'
 
         const upgradedSettings = JSON.parse(readFileSync(settingsPath, 'utf8'));
         assert.deepEqual(upgradedSettings.permissions?.deny, [USER_OWNED_DENY_ENTRY]);
-        assert.deepEqual(upgradedSettings.permissions?.allow, ['Bash(git status)']);
+        assert.deepEqual(upgradedSettings.permissions?.allow, ['Bash(git status)', ...EXPECTED_ALLOW_ENTRIES]);
         assert.deepEqual(upgradedSettings.permissions?.ask, ['Edit(./**)']);
 
         const upgradedManifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-        assert.equal(Object.hasOwn(upgradedManifest, 'managedPermissions'), false);
+        assert.deepEqual(upgradedManifest.managedPermissions, { allow: EXPECTED_ALLOW_ENTRIES });
     } finally {
         rmSync(sandboxHome, { recursive: true, force: true });
     }
@@ -218,6 +240,9 @@ test('sandbox uninstall removes only package-owned permission entries and keeps 
         const denyAfter = after.permissions?.deny ?? [];
         for (const eachEntry of EXPECTED_DENY_ENTRIES) {
             assert.ok(!denyAfter.includes(eachEntry), `managed deny still present: ${eachEntry}`);
+        }
+        for (const eachEntry of EXPECTED_ALLOW_ENTRIES) {
+            assert.ok(!(after.permissions?.allow ?? []).includes(eachEntry), `managed allow still present: ${eachEntry}`);
         }
         assert.ok(denyAfter.includes('Bash(rm -rf /)'), 'user deny preserved');
         assert.ok((after.permissions?.allow ?? []).includes('Bash(git status)'), 'user allow preserved');
