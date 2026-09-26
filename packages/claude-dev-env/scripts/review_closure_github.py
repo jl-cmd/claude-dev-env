@@ -1,12 +1,13 @@
 """Read from GitHub what the review closure verdict rests on.
 
-Three reads answer one pull request: the pull request itself, its review
-threads, and the check runs on its head commit.
+Four reads answer one pull request: the pull request itself, its review
+threads, its top-level comments, and the check runs on its head commit.
 
 ::
 
     read_pull_request("jl-cmd/claude-dev-env", 1442, token)
     read_review_threads("jl-cmd/claude-dev-env", 1442, token)
+    read_top_level_comments("jl-cmd/claude-dev-env", 1442, token)
     read_approvals_conclusion("jl-cmd/claude-dev-env", "ab845eb", token)
 
 Two routes carry the review threads. A Claude Code session reaches GitHub
@@ -30,10 +31,11 @@ from dev_env_scripts_constants.review_closure_constants import (
     CHECK_RUN_PAGE_SIZE,
     CHECK_RUNS_ENDPOINT_TEMPLATE,
     CHECK_RUNS_KEY,
+    COMMENT_PAGE_SIZE,
     GET_METHOD,
     GITHUB_API_ROOT,
     GITHUB_GRAPHQL_ENDPOINT,
-    MAX_REVIEW_COMMENT_PAGES,
+    MAX_COMMENT_PAGES,
     NAME_VARIABLE,
     NO_SIGN_IN_MESSAGE,
     NUMBER_VARIABLE,
@@ -44,12 +46,13 @@ from dev_env_scripts_constants.review_closure_constants import (
     QUERY_KEY,
     REQUEST_FAILED_TEMPLATE,
     REQUEST_TIMEOUT_SECONDS,
-    REVIEW_COMMENT_PAGE_SIZE,
     REVIEW_COMMENTS_ENDPOINT_TEMPLATE,
     REVIEW_THREAD_PAGE_SIZE,
     REVIEW_THREAD_QUERY,
     REVIEW_THREADS_ENDPOINT_TEMPLATE,
     SLUG_SEPARATOR,
+    TOP_LEVEL_COMMENTS_ENDPOINT_TEMPLATE,
+    UNREADABLE_TOP_LEVEL_COMMENT_TEMPLATE,
     VARIABLES_KEY,
 )
 from pr_verification.config.constants import (
@@ -67,9 +70,11 @@ from pr_verification.config.constants import (
 from pr_verification.github_parsing import GitHubError
 from review_closure_model import (
     ReviewThread,
+    TopLevelComment,
     approvals_conclusion,
     comment_records_by_id,
     parse_thread,
+    parse_top_level_comment,
 )
 
 
@@ -191,23 +196,72 @@ def read_review_comments_by_id(
     Raises:
         GitHubError: A page answered with something other than a list.
     """
+    return comment_records_by_id(
+        _all_listed_records(REVIEW_COMMENTS_ENDPOINT_TEMPLATE, slug, number, token)
+    )
+
+
+def read_top_level_comments(
+    slug: str, number: int, token: str
+) -> tuple[TopLevelComment, ...]:
+    """Read every top-level comment on a pull request.
+
+    Args:
+        slug: The repository as ``owner/name``.
+        number: The pull request number.
+        token: The GitHub token the request authenticates with.
+
+    Returns:
+        Each comment posted on the pull request itself, outside any review
+        thread.
+
+    Raises:
+        GitHubError: A page answered with something other than a list, or a
+            comment carried a timestamp that does not parse.
+    """
+    all_records = _all_listed_records(
+        TOP_LEVEL_COMMENTS_ENDPOINT_TEMPLATE, slug, number, token
+    )
+    return tuple(
+        _parsed_top_level_comment(each_record)
+        for each_record in all_records
+        if isinstance(each_record, Mapping)
+    )
+
+
+def _parsed_top_level_comment(
+    all_comment_fields: Mapping[str, object],
+) -> TopLevelComment:
+    try:
+        return parse_top_level_comment(all_comment_fields)
+    except ValueError as failure:
+        raise GitHubError(
+            UNREADABLE_TOP_LEVEL_COMMENT_TEMPLATE.format(record=all_comment_fields)
+        ) from failure
+
+
+def _all_listed_records(
+    endpoint_template: str, slug: str, number: int, token: str
+) -> list[object]:
     all_records: list[object] = []
-    for each_page in range(1, MAX_REVIEW_COMMENT_PAGES + 1):
-        page = _review_comment_page(slug, number, token, each_page)
+    for each_page in range(1, MAX_COMMENT_PAGES + 1):
+        page = _listing_page(endpoint_template, slug, number, token, each_page)
         all_records.extend(page)
-        if len(page) < REVIEW_COMMENT_PAGE_SIZE:
+        if len(page) < COMMENT_PAGE_SIZE:
             break
-    return comment_records_by_id(all_records)
+    return all_records
 
 
-def _review_comment_page(slug: str, number: int, token: str, page: int) -> list[object]:
+def _listing_page(
+    endpoint_template: str, slug: str, number: int, token: str, page: int
+) -> list[object]:
     document = request_json(
         GET_METHOD,
-        REVIEW_COMMENTS_ENDPOINT_TEMPLATE.format(
+        endpoint_template.format(
             api_root=GITHUB_API_ROOT,
             slug=slug,
             number=number,
-            page_size=REVIEW_COMMENT_PAGE_SIZE,
+            page_size=COMMENT_PAGE_SIZE,
             page=page,
         ),
         token,

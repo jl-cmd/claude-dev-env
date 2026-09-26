@@ -7,8 +7,9 @@
     CLOSED jl-cmd/claude-dev-env#1442 ab845eb :: every review finding on this
     commit is answered
 
-A finding waits until the agent driving the pull request replies to it or
-pushes the fix. Exit status is 0 for CLOSED, 1 for OPEN, and 2 when the pull
+A finding is a review thread, a top-level comment on the pull request, or a
+blocking Claude Approvals row. It waits until the agent driving the pull
+request replies to it or pushes the fix. Exit status is 0 for CLOSED, 1 for OPEN, and 2 when the pull
 request state could not be read.
 """
 
@@ -35,6 +36,7 @@ from review_closure_github import (
     read_approvals_conclusion,
     read_pull_request,
     read_review_threads,
+    read_top_level_comments,
 )
 from review_closure_model import (
     OpenFinding,
@@ -93,6 +95,7 @@ def closure_report(
     all_pull_request_fields = read_pull_request(slug, number, token)
     all_findings = all_open_findings(
         read_review_threads(slug, number, token),
+        read_top_level_comments(slug, number, token),
         driver_logins(all_pull_request_fields, all_extra_logins),
         read_approvals_conclusion(slug, head_sha(all_pull_request_fields), token),
     )

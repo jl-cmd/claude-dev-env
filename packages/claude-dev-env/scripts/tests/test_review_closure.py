@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -51,10 +52,14 @@ def stub_reads(
     monkeypatch: pytest.MonkeyPatch,
     all_threads: tuple[model.ReviewThread, ...],
     conclusion: str | None = "success",
+    all_top_level_comments: tuple[model.TopLevelComment, ...] = (),
 ) -> None:
     monkeypatch.setattr(command, "github_token", lambda: "a-token")
     monkeypatch.setattr(command, "read_pull_request", lambda *_: PULL_REQUEST)
     monkeypatch.setattr(command, "read_review_threads", lambda *_: all_threads)
+    monkeypatch.setattr(
+        command, "read_top_level_comments", lambda *_: all_top_level_comments
+    )
     monkeypatch.setattr(command, "read_approvals_conclusion", lambda *_: conclusion)
 
 
@@ -124,3 +129,23 @@ def should_exit_two_when_the_state_could_not_be_read(
 
     assert status == 2
     assert "refused" in capsys.readouterr().err
+
+
+def should_print_the_url_of_a_waiting_top_level_comment(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    summary_url = "https://github.com/jl-cmd/claude-dev-env/pull/7#issuecomment-1"
+    posted = datetime.fromisoformat("2026-09-26T12:00:00+00:00")
+    bot_summary = model.TopLevelComment(
+        identifier=1,
+        author_login="qodo-merge-pro[bot]",
+        created_at=posted,
+        updated_at=posted,
+        url=summary_url,
+    )
+    stub_reads(monkeypatch, (answered_thread(),), all_top_level_comments=(bot_summary,))
+
+    status = command.main([SLUG, "7"])
+
+    assert status == 1
+    assert summary_url in capsys.readouterr().out
