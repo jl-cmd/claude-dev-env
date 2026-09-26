@@ -71,6 +71,8 @@ keep ownership of their native artifact rules while ELI5 supplies the global
 - Preserve an explicit user-supplied output path and an existing artifact path.
 - Keep one artifact path across all updates in the active task or conversation.
 - Keep every page self-contained and browser-ready.
+- Give every source change a card in a digest. The reader reads less and still
+  knows every change, so a dropped change is a defect.
 - Preserve native wrapper, payload, evidence, and file-format contracts owned by
   the named capability skill.
 - Use human review for accuracy, terminology, safety, confidentiality, meaning,
@@ -92,7 +94,19 @@ Process steps in order.
    `~/.claude/rules/asd-ste100-language.md` to every sentence. Frame the topic
    for a beginner, use a large useful visual, keep the text minimal, and update
    the same artifact in place.
-3. **Judgment — share the updated artifact with the user.**
+3. **Deterministic — run the digest check on a summary of many changes.** A
+   summary of a set of changes, such as the pull requests merged in a day, is a
+   digest. Give each change one card marked `data-digest-card="<id>"` that holds
+   its picture and its one-line change. Pass every source id to the check:
+
+   ```bash
+   python "$HOME/.claude/scripts/digest_check.py" <page.html> --expect <id> <id>
+   ```
+
+   The check reports each source id with no card, each card over 25 words, each
+   card without a picture, and more than 40 words outside the cards. Fix every
+   finding and run it again until it prints `CLEAN`.
+4. **Judgment — share the updated artifact with the user.**
 
 ### Examples
 

@@ -23,10 +23,12 @@ def _write(repository_root: Path, relative_path: str, text: str) -> None:
     target.write_text(text, "utf-8")
 
 
-def _added(relative_path: str, prior_text: str | None = None) -> Document:
+def _added(
+    relative_path: str, prior_text: str | None = None, text: str = "print('hi')\n"
+) -> Document:
     return Document(
         PurePosixPath(relative_path),
-        "print('hi')\n",
+        text,
         prior_text,
         None,
         ContentOrigin.REVISION_DIFF,
@@ -138,3 +140,30 @@ def test_should_report_new_ci_and_tools_helpers_only_tests_name(
     all_messages = _messages(tmp_path, (_added(ci_helper), _added(tools_helper)))
 
     assert len(all_messages) == 2
+
+
+def test_should_pass_a_new_module_that_a_called_new_script_imports(
+    tmp_path: Path,
+) -> None:
+    constants_path = f"{_PACKAGE}/scripts/constants/lonely_watcher_constants.py"
+    script_text = "from constants.lonely_watcher_constants import LIMIT\n"
+    _write(tmp_path, _NEW_SCRIPT, script_text)
+    _write(tmp_path, constants_path, "LIMIT = 3\n")
+    _write(tmp_path, ".github/workflows/ci.yml", f"run: python {_NEW_SCRIPT}\n")
+
+    all_documents = (_added(_NEW_SCRIPT, text=script_text), _added(constants_path))
+
+    assert _messages(tmp_path, all_documents) == ()
+
+
+def test_should_report_a_new_module_only_an_uncalled_new_script_imports(
+    tmp_path: Path,
+) -> None:
+    constants_path = f"{_PACKAGE}/scripts/constants/lonely_watcher_constants.py"
+    script_text = "from constants.lonely_watcher_constants import LIMIT\n"
+    _write(tmp_path, _NEW_SCRIPT, script_text)
+    _write(tmp_path, constants_path, "LIMIT = 3\n")
+
+    all_documents = (_added(_NEW_SCRIPT, text=script_text), _added(constants_path))
+
+    assert len(_messages(tmp_path, all_documents)) == 2
