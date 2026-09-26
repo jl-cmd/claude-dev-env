@@ -238,3 +238,54 @@ def should_report_a_check_run_answer_of_the_wrong_shape(
 
     with pytest.raises(GitHubError):
         reader.read_approvals_conclusion("jl-cmd/claude-dev-env", "ab845eb", TOKEN)
+
+
+def top_level_record(identifier: int) -> dict[str, object]:
+    return {
+        "id": identifier,
+        "user": {"login": "qodo-merge-pro[bot]"},
+        "created_at": "2026-09-26T12:00:00Z",
+        "updated_at": "2026-09-26T12:00:00Z",
+        "html_url": (
+            f"https://github.com/jl-cmd/claude-dev-env/pull/7#issuecomment-{identifier}"
+        ),
+    }
+
+
+def should_read_the_second_page_of_top_level_comments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    all_requested_urls = answer_with(
+        monkeypatch,
+        {
+            "issues/7/comments?per_page=100&page=1": (
+                200,
+                [top_level_record(each) for each in range(100)],
+            ),
+            "issues/7/comments?per_page=100&page=2": (200, [top_level_record(100)]),
+        },
+    )
+
+    all_comments = reader.read_top_level_comments("jl-cmd/claude-dev-env", 7, TOKEN)
+
+    assert len(all_comments) == 101
+    assert all_comments[-1].identifier == 100
+    assert len(all_requested_urls) == 2
+
+
+def should_report_a_top_level_comment_page_of_the_wrong_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answer_with(monkeypatch, {"issues/7/comments": (200, {"message": "not a list"})})
+
+    with pytest.raises(GitHubError):
+        reader.read_top_level_comments("jl-cmd/claude-dev-env", 7, TOKEN)
+
+
+def should_report_a_top_level_comment_without_timestamps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    answer_with(monkeypatch, {"issues/7/comments": (200, [{"id": 1}])})
+
+    with pytest.raises(GitHubError):
+        reader.read_top_level_comments("jl-cmd/claude-dev-env", 7, TOKEN)
