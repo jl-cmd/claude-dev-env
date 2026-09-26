@@ -1,5 +1,17 @@
 # Changelog
 
+## [8.19.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.19.0...claude-dev-env-v8.19.1) (2026-09-26)
+
+
+### Maintenance
+
+* fix advisory findings from merged pull requests [#1525](https://github.com/jl-cmd/claude-dev-env/issues/1525) ([033ac9c](https://github.com/jl-cmd/claude-dev-env/commit/033ac9c7a3376a6c0b84707abee003f60a6cea66))
+
+
+### Tests
+
+* check the step-notes flag path without probing the home directory ([3ebe07d](https://github.com/jl-cmd/claude-dev-env/commit/3ebe07d9e5a69b746a1dac3eca4927f2af97d03a))
+
 ## [8.19.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.18.0...claude-dev-env-v8.19.0) (2026-09-26)
 
 
