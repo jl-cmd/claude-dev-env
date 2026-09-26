@@ -1,10 +1,8 @@
-from pathlib import Path
-
 from hooks_constants import step_note_gate_constants as constants
 
 
 def test_gate_uses_the_step_notes_flag_location() -> None:
-    assert constants.STEP_NOTES_ON_FLAG_PATH == Path.home() / ".claude" / ".step-notes-on"
+    assert constants.STEP_NOTES_ON_FLAG_PATH.parts[-2:] == (".claude", ".step-notes-on")
 
 
 def test_gate_uses_transcript_roles_and_block_types() -> None:

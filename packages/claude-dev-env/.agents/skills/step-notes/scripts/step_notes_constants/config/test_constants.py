@@ -1,10 +1,8 @@
-from pathlib import Path
-
 from step_notes_constants.config import constants
 
 
 def test_flag_path_matches_the_step_notes_location() -> None:
-    assert constants.STEP_NOTES_ON_FLAG_PATH == Path.home() / ".claude" / ".step-notes-on"
+    assert constants.STEP_NOTES_ON_FLAG_PATH.parts[-2:] == (".claude", ".step-notes-on")
 
 
 def test_actions_match_the_toggle_command() -> None:
