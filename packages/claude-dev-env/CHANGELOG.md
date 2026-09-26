@@ -1,5 +1,25 @@
 # Changelog
 
+## [8.19.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.18.0...claude-dev-env-v8.19.0) (2026-09-26)
+
+
+### Features
+
+* add an opt-in status-line gate and the /step-notes toggle ([bf563f1](https://github.com/jl-cmd/claude-dev-env/commit/bf563f1635f42a358f96d3b23f868e26c32f6408))
+* **review-closure:** count top-level pull request comments as findings ([a26124e](https://github.com/jl-cmd/claude-dev-env/commit/a26124e977177b86115b8fd3dfdc7b1c7aec69c1))
+* **review-closure:** count top-level pull request comments as findings ([1c832f1](https://github.com/jl-cmd/claude-dev-env/commit/1c832f1766f5e51a4b5e74d30fe56b010e2014bd))
+
+
+### Bug Fixes
+
+* clear the code-rules findings on the step-notes files ([711fc67](https://github.com/jl-cmd/claude-dev-env/commit/711fc67a170af8d13cfa5f1dfeb168737ce46eea))
+* **policy-lint:** exempt the step-note gate from the boundary check ([3bb6229](https://github.com/jl-cmd/claude-dev-env/commit/3bb622918c175f8b910d54abe63bf78fd46fcb70))
+
+
+### Refactoring
+
+* **review-closure:** split the top-level comment rule into helpers ([c68a335](https://github.com/jl-cmd/claude-dev-env/commit/c68a335486311aeb7c80db033f0f98f27accdb00))
+
 ## [8.18.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.17.1...claude-dev-env-v8.18.0) (2026-09-26)
 
 
