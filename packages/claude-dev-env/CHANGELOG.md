@@ -1,5 +1,13 @@
 # Changelog
 
+## [8.18.0](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.17.1...claude-dev-env-v8.18.0) (2026-09-26)
+
+
+### Features
+
+* **eli5:** check that a digest covers every change in few words ([36f5e80](https://github.com/jl-cmd/claude-dev-env/commit/36f5e806d85c18fd051c1b35577d6b7020d358cf))
+* **eli5:** check that a digest covers every change in few words ([37e22dd](https://github.com/jl-cmd/claude-dev-env/commit/37e22dd6302f89bfd323fc1cf4446e458168004e))
+
 ## [8.17.1](https://github.com/jl-cmd/claude-dev-env/compare/claude-dev-env-v8.17.0...claude-dev-env-v8.17.1) (2026-09-26)
 
 
