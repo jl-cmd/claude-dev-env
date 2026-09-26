@@ -381,6 +381,39 @@ def should_never_report_a_driver_top_level_comment() -> None:
     assert model.top_level_findings(all_comments, DRIVING_AGENT) == ()
 
 
+def should_find_the_latest_driver_top_level_comment_time() -> None:
+    all_comments = (
+        top_level_comment("claude[bot]", 1),
+        top_level_comment(REVIEW_BOT, 2),
+        top_level_comment("claude[bot]", 3, edited_minute=9),
+    )
+
+    assert model.latest_driver_comment_time(all_comments, DRIVING_AGENT) == at_minute(3)
+
+
+def should_find_no_driver_time_when_the_driver_posted_nothing() -> None:
+    all_comments = (top_level_comment(REVIEW_BOT, 1),)
+
+    assert model.latest_driver_comment_time(all_comments, DRIVING_AGENT) is None
+
+
+def should_close_a_bot_comment_last_edited_at_the_driver_time() -> None:
+    comment = top_level_comment(REVIEW_BOT, 1, edited_minute=4)
+
+    assert model.top_level_finding(comment, DRIVING_AGENT, at_minute(4)) is None
+
+
+def should_open_a_bot_comment_edited_after_the_driver_time() -> None:
+    comment = top_level_comment(REVIEW_BOT, 1, edited_minute=5)
+
+    assert model.top_level_finding(
+        comment, DRIVING_AGENT, at_minute(4)
+    ) == model.OpenFinding(
+        subject=BOT_SUMMARY_URL,
+        reason=TOP_LEVEL_OPEN_REASON_TEMPLATE.format(author=REVIEW_BOT),
+    )
+
+
 def should_count_waiting_top_level_comments_among_the_findings() -> None:
     all_findings = model.all_open_findings(
         (), (top_level_comment(REVIEW_BOT, 1),), DRIVING_AGENT, None

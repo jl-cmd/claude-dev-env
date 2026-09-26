@@ -170,6 +170,56 @@ def thread_finding(
     return OpenFinding(subject=thread.subject, reason=UNANSWERED_OPEN_REASON)
 
 
+def latest_driver_comment_time(
+    all_comments: Iterable[TopLevelComment],
+    all_driver_logins: frozenset[str],
+) -> datetime | None:
+    """Find when the driving agent last posted a top-level comment.
+
+    Args:
+        all_comments: The top-level comments on the pull request.
+        all_driver_logins: The logins that count as the driving agent.
+
+    Returns:
+        The creation time of the driving agent's latest top-level comment, or
+        None when it posted none.
+    """
+    return max(
+        (
+            each_comment.created_at
+            for each_comment in all_comments
+            if each_comment.author_login in all_driver_logins
+        ),
+        default=None,
+    )
+
+
+def top_level_finding(
+    comment: TopLevelComment,
+    all_driver_logins: frozenset[str],
+    latest_driver_time: datetime | None,
+) -> OpenFinding | None:
+    """Decide whether one top-level comment still waits on the driving agent.
+
+    Args:
+        comment: The top-level comment to judge.
+        all_driver_logins: The logins whose comments count as the answer.
+        latest_driver_time: When the driving agent last posted a top-level
+            comment, or None when it posted none.
+
+    Returns:
+        The finding this comment leaves open, or None when it is answered.
+    """
+    if comment.author_login in all_driver_logins:
+        return None
+    if latest_driver_time is not None and comment.updated_at <= latest_driver_time:
+        return None
+    return OpenFinding(
+        subject=comment.url,
+        reason=TOP_LEVEL_OPEN_REASON_TEMPLATE.format(author=comment.author_login),
+    )
+
+
 def top_level_findings(
     all_comments: Iterable[TopLevelComment],
     all_driver_logins: frozenset[str],
@@ -189,22 +239,16 @@ def top_level_findings(
         edited after the driving agent's latest top-level comment.
     """
     all_listed_comments = tuple(all_comments)
-    all_driver_times = [
-        each_comment.created_at
-        for each_comment in all_listed_comments
-        if each_comment.author_login in all_driver_logins
-    ]
-    latest_driver_time = max(all_driver_times, default=None)
+    latest_driver_time = latest_driver_comment_time(
+        all_listed_comments, all_driver_logins
+    )
     return tuple(
-        OpenFinding(
-            subject=each_comment.url,
-            reason=TOP_LEVEL_OPEN_REASON_TEMPLATE.format(
-                author=each_comment.author_login
-            ),
+        each_finding
+        for each_finding in (
+            top_level_finding(each_comment, all_driver_logins, latest_driver_time)
+            for each_comment in all_listed_comments
         )
-        for each_comment in all_listed_comments
-        if each_comment.author_login not in all_driver_logins
-        and (latest_driver_time is None or each_comment.updated_at > latest_driver_time)
+        if each_finding is not None
     )
 
 
