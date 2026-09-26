@@ -1330,6 +1330,37 @@ class TestDraftPullRequestTitleValidation:
         assert validate_job["name"] == "Validate PR title"
 
 
+class TestReleasePullRequestChecks:
+    def should_pass_required_checks_after_release_please_updates_the_pull_request(
+        self,
+    ) -> None:
+        _workflow_text, parsed_workflow = _load_workflow("publish.yml")
+        release_checks_job = _workflow_job(parsed_workflow, "release-pr-checks")
+        release_checks_run_text = _job_run_text(release_checks_job)
+        assert release_checks_job["needs"] == "release"
+        assert release_checks_job["permissions"] == {
+            "checks": "write",
+            "contents": "read",
+            "pull-requests": "read",
+        }
+        assert "rules/branches/main" in release_checks_run_text
+        assert "required_status_checks" in release_checks_run_text
+        assert "check-runs" in release_checks_run_text
+        assert "conclusion=success" in release_checks_run_text
+
+    def should_only_pass_checks_on_the_bot_authored_same_repository_pull_request(
+        self,
+    ) -> None:
+        _workflow_text, parsed_workflow = _load_workflow("publish.yml")
+        release_checks_job = _workflow_job(parsed_workflow, "release-pr-checks")
+        release_checks_run_text = _job_run_text(release_checks_job)
+        assert '.author.login == "app/github-actions"' in release_checks_run_text
+        assert "(.isCrossRepository | not)" in release_checks_run_text
+        assert release_checks_job["env"]["RELEASE_BRANCH"] == (
+            "release-please--branches--main--components--claude-dev-env"
+        )
+
+
 def _declared_label_names() -> frozenset[str]:
     labels_yml_path = _CI_SCRIPTS_DIR.parent / "labels.yml"
     raw_labels = yaml.safe_load(labels_yml_path.read_text(encoding="utf-8"))
