@@ -63,6 +63,7 @@ ALL_ACTION_BOUNDARY_SEGMENTS = frozenset(
 ALL_ACTION_BOUNDARY_PREFIXES = ("deny_", "block_", "ask_")
 ALL_ACTION_BOUNDARY_EXEMPT_REGISTRATION_PATHS = (
     "blocking/bash_pre_tool_use_dispatcher.py",
+    "blocking/step_note_gate.py",
 )
 ALL_TEST_DIRECTORY_NAMES = frozenset({"tests"})
 ALL_TEST_FILE_PREFIXES = ("test_",)

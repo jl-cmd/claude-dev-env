@@ -102,6 +102,7 @@ export const EVER_SHIPPED_SKILL_NAMES = new Set([
     'source-command-logifix',
     'source-command-sr-loop',
     'split-pr',
+    'step-notes',
     'structure-prompt',
     'syncing-submodules',
     'task-build',

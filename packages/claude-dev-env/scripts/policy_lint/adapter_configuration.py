@@ -127,11 +127,15 @@ def _names_exempt_registration_path(registered_string: str) -> bool:
     ::
 
         hooks/blocking/bash_pre_tool_use_dispatcher.py   -> exempt
+        hooks/blocking/step_note_gate.py                 -> exempt
         hooks/blocking/some_new_blocker.py               -> flagged
 
     The Bash PreToolUse dispatcher sits under ``blocking/`` for layout reasons
     while its roster hosts one allow-and-rewrite hook. Its path segment reads as
     a policy boundary that the chain never carries.
+
+    The step-note gate allows every call until the user runs ``/step-notes on``.
+    It asks for a readable status line and decides no code or safety policy.
 
     Args:
         registered_string: One command, path, script, or entrypoint string.
