@@ -2,7 +2,8 @@
 
 A review bot posts a finding, the agent driving the pull request answers it or
 pushes the fix, and the thread closes. Until then the finding waits. These
-functions read the threads and the approvals conclusion, and name what waits.
+functions read the review threads, the top-level comments on the pull request,
+and the approvals conclusion, and name what waits.
 
 ::
 
@@ -10,6 +11,9 @@ functions read the threads and the approvals conclusion, and name what waits.
     thread: a bot comment, then an agent reply  -> closed
     thread: a bot comment, code since replaced  -> closed
     thread: a red circle, resolved in silence   -> open
+    top-level: a bot comment, no agent comment  -> open
+    top-level: a bot comment, then an agent one -> closed
+    top-level: the bot edits after that reply   -> open
 
 A red circle marks a finding a review states as blocking, so resolution alone
 leaves it open. The reply says what changed, or why the finding stands.
@@ -19,6 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from dev_env_scripts_constants.review_closure_constants import (
     ALL_BLOCKING_CONCLUSIONS,
@@ -37,7 +42,9 @@ from dev_env_scripts_constants.review_closure_constants import (
     COMMENT_IDENTIFIER_KEY,
     COMMENT_IDS_KEY,
     COMMENT_NODES_KEY,
+    CREATED_AT_KEY,
     HEAD_KEY,
+    HTML_URL_KEY,
     NUMBER_KEY,
     OPEN_DETAIL_TEMPLATE,
     OPEN_VERDICT_LABEL,
@@ -46,8 +53,10 @@ from dev_env_scripts_constants.review_closure_constants import (
     SHA_KEY,
     SHORT_SHA_LENGTH,
     THREAD_PATH_KEY,
+    TOP_LEVEL_OPEN_REASON_TEMPLATE,
     UNANSWERED_OPEN_REASON,
     UNNAMED_THREAD_SUBJECT,
+    UPDATED_AT_KEY,
     USER_KEY,
     VERDICT_LINE_TEMPLATE,
 )
@@ -69,6 +78,17 @@ class ReviewThread:
     is_resolved: bool
     is_outdated: bool
     all_comments: tuple[ReviewComment, ...]
+
+
+@dataclass(frozen=True)
+class TopLevelComment:
+    """One comment on the pull request itself, outside any review thread."""
+
+    identifier: object
+    author_login: str
+    created_at: datetime
+    updated_at: datetime
+    url: str
 
 
 @dataclass(frozen=True)
@@ -150,8 +170,47 @@ def thread_finding(
     return OpenFinding(subject=thread.subject, reason=UNANSWERED_OPEN_REASON)
 
 
+def top_level_findings(
+    all_comments: Iterable[TopLevelComment],
+    all_driver_logins: frozenset[str],
+) -> tuple[OpenFinding, ...]:
+    """Decide which top-level comments still wait on the driving agent.
+
+    The driving agent answers a top-level comment by posting a top-level
+    comment of its own. Its latest one answers every comment last touched
+    before it, and a comment edited after it waits again.
+
+    Args:
+        all_comments: The top-level comments on the pull request.
+        all_driver_logins: The logins whose comments count as the answer.
+
+    Returns:
+        One finding per comment from another account that was posted or
+        edited after the driving agent's latest top-level comment.
+    """
+    all_listed_comments = tuple(all_comments)
+    all_driver_times = [
+        each_comment.created_at
+        for each_comment in all_listed_comments
+        if each_comment.author_login in all_driver_logins
+    ]
+    latest_driver_time = max(all_driver_times, default=None)
+    return tuple(
+        OpenFinding(
+            subject=each_comment.url,
+            reason=TOP_LEVEL_OPEN_REASON_TEMPLATE.format(
+                author=each_comment.author_login
+            ),
+        )
+        for each_comment in all_listed_comments
+        if each_comment.author_login not in all_driver_logins
+        and (latest_driver_time is None or each_comment.updated_at > latest_driver_time)
+    )
+
+
 def all_open_findings(
     all_threads: Iterable[ReviewThread],
+    all_top_level_comments: Iterable[TopLevelComment],
     all_driver_logins: frozenset[str],
     approvals_conclusion_text: str | None,
 ) -> tuple[OpenFinding, ...]:
@@ -159,13 +218,15 @@ def all_open_findings(
 
     Args:
         all_threads: The review threads on the pull request.
+        all_top_level_comments: The comments on the pull request itself.
         all_driver_logins: The logins whose comments count as the answer.
         approvals_conclusion_text: What the Claude Approvals check run on the
             head concluded, or None where that check does not run.
 
     Returns:
-        One finding per open review thread, then the approvals finding when
-        that check reports a blocking row on this commit.
+        One finding per open review thread, then one per waiting top-level
+        comment, then the approvals finding when that check reports a
+        blocking row on this commit.
     """
     all_findings = [
         each_finding
@@ -175,6 +236,7 @@ def all_open_findings(
         )
         if each_finding is not None
     ]
+    all_findings.extend(top_level_findings(all_top_level_comments, all_driver_logins))
     if approvals_conclusion_text in ALL_BLOCKING_CONCLUSIONS:
         all_findings.append(
             OpenFinding(subject=APPROVALS_CHECK_NAME, reason=APPROVALS_OPEN_REASON)
@@ -299,6 +361,29 @@ def comment_records_by_id(
         for each_record in all_comment_records
         if isinstance(each_record, Mapping) and COMMENT_IDENTIFIER_KEY in each_record
     }
+
+
+def parse_top_level_comment(
+    all_comment_fields: Mapping[str, object],
+) -> TopLevelComment:
+    """Read one top-level comment from the REST answer.
+
+    Args:
+        all_comment_fields: The comment as the issue comments route reports it.
+
+    Returns:
+        The comment in the shape the closure decision reads.
+
+    Raises:
+        ValueError: A timestamp is missing or does not parse.
+    """
+    return TopLevelComment(
+        identifier=all_comment_fields.get(COMMENT_IDENTIFIER_KEY),
+        author_login=_comment_author_login(all_comment_fields),
+        created_at=datetime.fromisoformat(str(all_comment_fields.get(CREATED_AT_KEY))),
+        updated_at=datetime.fromisoformat(str(all_comment_fields.get(UPDATED_AT_KEY))),
+        url=str(all_comment_fields.get(HTML_URL_KEY) or ""),
+    )
 
 
 def approvals_conclusion(all_check_runs: Iterable[object]) -> str | None:

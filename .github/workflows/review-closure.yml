@@ -1,8 +1,3 @@
-# Trigger scope: the pull_request trigger catches a push, and the review
-# triggers catch a finding posted after that push, so the verdict follows the
-# conversation rather than the last commit alone. Each run reports on the pull
-# request's head commit.
-
 name: Review closure
 
 on:
@@ -20,21 +15,25 @@ on:
     types:
       - created
       - edited
+  issue_comment:
+    types:
+      - created
+      - edited
 
 permissions:
   contents: read
   pull-requests: read
   checks: read
 
-concurrency:
-  group: review-closure-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   review-closure:
     name: Review closure
+    if: github.event_name != 'issue_comment'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: review-closure-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v5
 
@@ -50,3 +49,48 @@ jobs:
           python packages/claude-dev-env/scripts/review_closure.py \
             "${{ github.repository }}" \
             "${{ github.event.pull_request.number }}"
+
+  review-closure-comment:
+    name: Review closure on a comment event
+    if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: read
+    concurrency:
+      group: review-closure-comment-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Post the review findings verdict on the pull request head
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONPATH: packages/claude-dev-env/scripts
+          REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          head_sha="$(gh api "repos/$REPOSITORY/pulls/$PULL_REQUEST_NUMBER" --jq .head.sha)" || exit 2
+          closure_output="$(python packages/claude-dev-env/scripts/review_closure.py "$REPOSITORY" "$PULL_REQUEST_NUMBER" 2>&1)"
+          closure_status=$?
+          printf '%s\n' "$closure_output"
+          case "$closure_status" in
+            0) conclusion=success ;;
+            1) conclusion=failure ;;
+            *) exit "$closure_status" ;;
+          esac
+          gh api --method POST "repos/$REPOSITORY/check-runs" \
+            -f name="Review closure" \
+            -f head_sha="$head_sha" \
+            -f status=completed \
+            -f conclusion="$conclusion" \
+            -f "output[title]=Review closure" \
+            -f "output[summary]=$closure_output"

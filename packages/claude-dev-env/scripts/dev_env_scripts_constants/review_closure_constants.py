@@ -234,8 +234,33 @@ REVIEW_COMMENTS_ENDPOINT_TEMPLATE: str = (
 )
 """REST route carrying one page of a pull request's review comments."""
 
-REVIEW_COMMENT_PAGE_SIZE: int = 100
-"""How many review comments one page carries."""
+COMMENT_PAGE_SIZE: int = 100
+"""How many review or top-level comments one page carries."""
 
-MAX_REVIEW_COMMENT_PAGES: int = 20
-"""How many comment pages one run reads before it stops."""
+MAX_COMMENT_PAGES: int = 20
+"""How many comment pages one listing reads before it stops."""
+
+TOP_LEVEL_COMMENTS_ENDPOINT_TEMPLATE: str = (
+    "{api_root}/repos/{slug}/issues/{number}/comments?per_page={page_size}&page={page}"
+)
+"""REST route carrying one page of a pull request's top-level comments."""
+
+HTML_URL_KEY: str = "html_url"
+"""Field carrying the page address of a top-level comment."""
+
+CREATED_AT_KEY: str = "created_at"
+"""Field carrying when a top-level comment was posted."""
+
+UPDATED_AT_KEY: str = "updated_at"
+"""Field carrying when a top-level comment was last edited."""
+
+TOP_LEVEL_OPEN_REASON_TEMPLATE: str = (
+    "a top-level comment from {author} with no later top-level comment from "
+    "the driving agent"
+)
+"""Why a top-level comment stays open until the agent posts after it."""
+
+UNREADABLE_TOP_LEVEL_COMMENT_TEMPLATE: str = (
+    "a top-level comment carries an unreadable timestamp: {record}"
+)
+"""What to report when a top-level comment's timestamps do not parse."""

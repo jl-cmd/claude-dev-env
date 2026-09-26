@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 SCRIPTS_DIRECTORY = Path(__file__).resolve().parents[1]
@@ -13,6 +14,7 @@ from dev_env_scripts_constants.review_closure_constants import (
     APPROVALS_OPEN_REASON,
     RED_CIRCLE_MARKER,
     RED_CIRCLE_OPEN_REASON,
+    TOP_LEVEL_OPEN_REASON_TEMPLATE,
     UNANSWERED_OPEN_REASON,
     UNNAMED_THREAD_SUBJECT,
 )
@@ -134,7 +136,7 @@ def should_report_a_reply_from_the_driving_agent() -> None:
 
 
 def should_report_a_blocking_approvals_row_as_open() -> None:
-    all_findings = model.all_open_findings((), DRIVING_AGENT, "failure")
+    all_findings = model.all_open_findings((), (), DRIVING_AGENT, "failure")
 
     assert all_findings == (
         model.OpenFinding(subject=APPROVALS_CHECK_NAME, reason=APPROVALS_OPEN_REASON),
@@ -144,11 +146,11 @@ def should_report_a_blocking_approvals_row_as_open() -> None:
 def should_pass_when_approvals_succeeds_and_no_thread_waits() -> None:
     answered = thread(all_comments=(bot_comment(), agent_comment()))
 
-    assert model.all_open_findings((answered,), DRIVING_AGENT, "success") == ()
+    assert model.all_open_findings((answered,), (), DRIVING_AGENT, "success") == ()
 
 
 def should_pass_where_the_approvals_check_does_not_run() -> None:
-    assert model.all_open_findings((), DRIVING_AGENT, None) == ()
+    assert model.all_open_findings((), (), DRIVING_AGENT, None) == ()
 
 
 def should_report_every_open_thread_and_the_approvals_row() -> None:
@@ -156,7 +158,7 @@ def should_report_every_open_thread_and_the_approvals_row() -> None:
     second = thread(all_comments=(bot_comment(),), subject="scripts/second.py")
 
     all_findings = model.all_open_findings(
-        (first, second), DRIVING_AGENT, "action_required"
+        (first, second), (), DRIVING_AGENT, "action_required"
     )
 
     assert [each.subject for each in all_findings] == [
@@ -297,3 +299,105 @@ def should_key_the_review_comments_by_identifier() -> None:
     )
 
     assert all_comment_records == {11: {"id": 11, "body": "A finding."}}
+
+
+BOT_SUMMARY_URL = "https://github.com/jl-cmd/claude-dev-env/pull/7#issuecomment-1"
+
+
+def at_minute(minute: int) -> datetime:
+    return datetime.fromisoformat(f"2026-09-26T12:{minute:02d}:00+00:00")
+
+
+def top_level_comment(
+    author_login: str,
+    posted_minute: int,
+    edited_minute: int | None = None,
+    url: str = BOT_SUMMARY_URL,
+) -> model.TopLevelComment:
+    return model.TopLevelComment(
+        identifier=posted_minute,
+        author_login=author_login,
+        created_at=at_minute(posted_minute),
+        updated_at=at_minute(posted_minute if edited_minute is None else edited_minute),
+        url=url,
+    )
+
+
+def should_report_a_bot_top_level_comment_with_no_driver_comment() -> None:
+    all_findings = model.top_level_findings(
+        (top_level_comment(REVIEW_BOT, 1),), DRIVING_AGENT
+    )
+
+    assert all_findings == (
+        model.OpenFinding(
+            subject=BOT_SUMMARY_URL,
+            reason=TOP_LEVEL_OPEN_REASON_TEMPLATE.format(author=REVIEW_BOT),
+        ),
+    )
+
+
+def should_close_a_bot_top_level_comment_the_driver_posted_after() -> None:
+    all_comments = (
+        top_level_comment(REVIEW_BOT, 1),
+        top_level_comment("claude[bot]", 2),
+    )
+
+    assert model.top_level_findings(all_comments, DRIVING_AGENT) == ()
+
+
+def should_close_every_earlier_comment_with_one_driver_comment() -> None:
+    all_comments = (
+        top_level_comment(REVIEW_BOT, 1),
+        top_level_comment("graphite-app[bot]", 2),
+        top_level_comment("claude[bot]", 3),
+    )
+
+    assert model.top_level_findings(all_comments, DRIVING_AGENT) == ()
+
+
+def should_reopen_a_bot_comment_edited_after_the_driver_reply() -> None:
+    all_comments = (
+        top_level_comment(REVIEW_BOT, 1, edited_minute=5),
+        top_level_comment("claude[bot]", 2),
+    )
+
+    all_findings = model.top_level_findings(all_comments, DRIVING_AGENT)
+
+    assert [each.subject for each in all_findings] == [BOT_SUMMARY_URL]
+
+
+def should_leave_a_bot_comment_posted_after_the_driver_open() -> None:
+    all_comments = (
+        top_level_comment("claude[bot]", 1),
+        top_level_comment(REVIEW_BOT, 2),
+    )
+
+    assert len(model.top_level_findings(all_comments, DRIVING_AGENT)) == 1
+
+
+def should_never_report_a_driver_top_level_comment() -> None:
+    all_comments = (top_level_comment("claude[bot]", 1, edited_minute=9),)
+
+    assert model.top_level_findings(all_comments, DRIVING_AGENT) == ()
+
+
+def should_count_waiting_top_level_comments_among_the_findings() -> None:
+    all_findings = model.all_open_findings(
+        (), (top_level_comment(REVIEW_BOT, 1),), DRIVING_AGENT, None
+    )
+
+    assert [each.subject for each in all_findings] == [BOT_SUMMARY_URL]
+
+
+def should_read_a_top_level_comment_record() -> None:
+    comment = model.parse_top_level_comment(
+        {
+            "id": 1,
+            "user": {"login": REVIEW_BOT},
+            "created_at": "2026-09-26T12:01:00Z",
+            "updated_at": "2026-09-26T12:05:00Z",
+            "html_url": BOT_SUMMARY_URL,
+        }
+    )
+
+    assert comment == top_level_comment(REVIEW_BOT, 1, edited_minute=5)
