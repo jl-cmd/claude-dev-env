@@ -83,6 +83,49 @@ def _has_caller(document: Document, all_caller_texts: tuple[str, ...]) -> bool:
     return any(name_pattern.search(each_text) for each_text in all_caller_texts)
 
 
+def _reached_paths(
+    all_new_documents: tuple[Document, ...],
+    all_caller_texts: tuple[str, ...],
+    all_called: set[PurePosixPath],
+) -> set[PurePosixPath]:
+    return {
+        each_document.path
+        for each_document in all_new_documents
+        if each_document.path not in all_called
+        and _has_caller(each_document, all_caller_texts)
+    }
+
+
+def _called_paths(
+    all_new_documents: tuple[Document, ...], all_caller_texts: tuple[str, ...]
+) -> frozenset[PurePosixPath]:
+    """Return each new file a caller reaches, directly or through a called new file.
+
+    ::
+
+        workflow step -> new_check.py -> new_check_constants.py   both called
+        nothing       -> lonely.py    -> helper.py               both uncalled
+
+    Args:
+        all_new_documents: Every new code file in the change.
+        all_caller_texts: Text of every existing file that may name one.
+
+    Returns:
+        Paths of the new files some caller chain reaches.
+    """
+    all_called: set[PurePosixPath] = set()
+    all_reached = _reached_paths(all_new_documents, all_caller_texts, all_called)
+    while all_reached:
+        all_called |= all_reached
+        all_reached_texts = tuple(
+            each_document.text
+            for each_document in all_new_documents
+            if each_document.path in all_reached
+        )
+        all_reached = _reached_paths(all_new_documents, all_reached_texts, all_called)
+    return frozenset(all_called)
+
+
 def _uncalled_diagnostic(document: Document) -> Diagnostic:
     return Diagnostic(
         constants.UNCALLED_NEW_FILE_RULE_ID,
@@ -102,7 +145,7 @@ def uncalled_new_file_diagnostics(
 
     Returns:
         One diagnostic for each added script, hook or skill script whose name
-        appears only in tests and inventory files.
+        appears only in tests, inventory files, and other uncalled new files.
     """
     if document_set.selection not in {SelectionKind.STAGED, SelectionKind.BASE}:
         return ()
@@ -117,8 +160,9 @@ def uncalled_new_file_diagnostics(
         document_set.repository_root,
         frozenset(each_document.path for each_document in all_new_documents),
     )
+    all_called = _called_paths(all_new_documents, all_caller_texts)
     return tuple(
         _uncalled_diagnostic(each_document)
         for each_document in all_new_documents
-        if not _has_caller(each_document, all_caller_texts)
+        if each_document.path not in all_called
     )

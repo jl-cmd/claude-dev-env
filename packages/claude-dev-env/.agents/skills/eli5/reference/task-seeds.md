@@ -7,4 +7,6 @@ the start of the ELI5 process.
 2. Create the artifact when no active path exists and keep it self-contained.
 3. Apply the ASD-STE100 rule to page and response sentences.
 4. Add the concise beginner explanation and useful large visual in place.
-5. Share the updated artifact with the user.
+5. Run `digest_check.py` on a digest with every source id until it prints
+   `CLEAN`.
+6. Share the updated artifact with the user.
