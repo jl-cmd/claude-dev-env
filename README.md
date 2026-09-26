@@ -221,6 +221,7 @@ that carry them.
 | `repairing-hook-boundaries` | Repair Claude and Codex hook failures at the first failing boundary |
 | `second-account-workers` | Run local Claude workers through the second-account picker |
 | `skill-builder` | Author a skill package to the house conventions |
+| `step-notes` | Turn the step-note gate on or off |
 | `syncing-submodules` | Record a submodule's current commit in its parent repository |
 | `task-build` | Gather open session tasks and register them on the task list |
 | `team-advisor` | Standing reviewer for a session and the subagents it spawns |
@@ -250,6 +251,7 @@ Automated enforcement that runs on Claude Code events. The installer detects you
 | Bash | `test-preflight-check` | Validates server health and database before test runs |
 | Task\|Agent | `parallel-task-blocker` | Limits concurrent Task/Agent delegations |
 | AskUserQuestion | `attention-needed-notify` | Desktop notification when Claude needs your input |
+| * | `step_note_gate` | Off by default; after `/step-notes on`, asks for a short status line before each tool call |
 
 #### Other Events
 
