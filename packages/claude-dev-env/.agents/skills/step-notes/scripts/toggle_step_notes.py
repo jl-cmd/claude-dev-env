@@ -17,7 +17,7 @@ scripts_directory = str(Path(__file__).resolve().parent)
 if scripts_directory not in sys.path:
     sys.path.insert(0, scripts_directory)
 
-from step_notes_constants.toggle_step_notes_constants import (
+from step_notes_constants.config.constants import (
     ALL_ACTIONS,
     FLIP_ACTION,
     OFF_ACTION,
@@ -29,7 +29,15 @@ from step_notes_constants.toggle_step_notes_constants import (
 
 
 def apply_action(action: str) -> bool:
-    """Apply one action to the flag file and return whether step notes are on."""
+    """Apply one action to the flag file and return whether step notes are on.
+
+    Args:
+        action: One of ALL_ACTIONS. `on` creates the flag file, `off` removes it,
+            `flip` does whichever changes the state, and `status` changes nothing.
+
+    Returns:
+        True when the flag file exists after the action, False otherwise.
+    """
     is_on = STEP_NOTES_ON_FLAG_PATH.exists()
     if action == FLIP_ACTION:
         action = OFF_ACTION if is_on else ON_ACTION
@@ -43,10 +51,15 @@ def apply_action(action: str) -> bool:
     return is_on
 
 
-def main(all_arguments: list[str] | None = None) -> int:
+def main() -> int:
+    """Parse the action from the command line, apply it, and print the new state.
+
+    Returns:
+        0 after printing ON_REPORT or OFF_REPORT.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", nargs="?", default=FLIP_ACTION, choices=ALL_ACTIONS)
-    parsed_arguments = parser.parse_args(all_arguments)
+    parsed_arguments = parser.parse_args()
     print(ON_REPORT if apply_action(parsed_arguments.action) else OFF_REPORT)
     return 0
 

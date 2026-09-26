@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import enum
 import json
+import os
 import sys
 import time
 from collections.abc import Iterator
@@ -58,7 +59,7 @@ def read_transcript_tail(transcript_path: Path) -> list[dict]:
     """Parse the complete JSON lines in the last TAIL_WINDOW_BYTES of the transcript."""
     try:
         with transcript_path.open("rb") as transcript_file:
-            file_size = transcript_file.seek(0, 2)
+            file_size = transcript_file.seek(0, os.SEEK_END)
             window_start = max(0, file_size - TAIL_WINDOW_BYTES)
             transcript_file.seek(window_start)
             window_bytes = transcript_file.read()
@@ -78,19 +79,24 @@ def read_transcript_tail(transcript_path: Path) -> list[dict]:
     return all_entries
 
 
+def entry_content_blocks(entry: dict) -> list[dict]:
+    """Return the content blocks of one transcript entry, wrapping plain text as a text block."""
+    content = (entry.get("message") or {}).get("content")
+    if isinstance(content, str):
+        return [{"type": TEXT_BLOCK_TYPE, "text": content}]
+    if isinstance(content, list):
+        return [each_block for each_block in content if isinstance(each_block, dict)]
+    return []
+
+
 def transcript_blocks(all_entries: list[dict]) -> Iterator[tuple[str, dict]]:
     """Yield (role, content block) pairs for user and assistant entries, in order."""
     for each_entry in all_entries:
         role = each_entry.get("type")
         if role not in (USER_ROLE, ASSISTANT_ROLE):
             continue
-        content = (each_entry.get("message") or {}).get("content")
-        if isinstance(content, str):
-            yield role, {"type": TEXT_BLOCK_TYPE, "text": content}
-        elif isinstance(content, list):
-            for each_block in content:
-                if isinstance(each_block, dict):
-                    yield role, each_block
+        for each_block in entry_content_blocks(each_entry):
+            yield role, each_block
 
 
 def is_step_note(block: dict) -> bool:
@@ -117,10 +123,10 @@ def check_step_note(all_entries: list[dict], tool_use_id: str) -> NoteCheck:
     )
     if call_position is None:
         return NoteCheck.CALL_NOT_WRITTEN
-    for role, block in reversed(all_blocks[:call_position]):
-        if role == USER_ROLE:
+    for each_preceding_role, each_preceding_block in reversed(all_blocks[:call_position]):
+        if each_preceding_role == USER_ROLE:
             return NoteCheck.MISSING
-        if is_step_note(block):
+        if is_step_note(each_preceding_block):
             return NoteCheck.NOTED
     return NoteCheck.WINDOW_TOO_SHORT
 

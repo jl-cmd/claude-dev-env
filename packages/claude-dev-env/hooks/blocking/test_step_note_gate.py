@@ -1,6 +1,7 @@
 import io
 import json
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -41,7 +42,13 @@ def write_transcript(path, all_entries):
     path.write_text("".join(json.dumps(each) + "\n" for each in all_entries), encoding="utf-8")
 
 
-def run_gate(monkeypatch, capsys, transcript_path, tool_use_id, **extra_input):
+def run_gate(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    transcript_path: Path,
+    tool_use_id: str,
+    **extra_input: str,
+) -> tuple[int, str]:
     hook_input = {
         "hook_event_name": "PreToolUse",
         "tool_name": "Bash",
@@ -55,14 +62,16 @@ def run_gate(monkeypatch, capsys, transcript_path, tool_use_id, **extra_input):
 
 
 @pytest.fixture(autouse=True)
-def isolated_gate(monkeypatch, tmp_path):
+def isolated_gate(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(step_note_gate, "POLL_LIMIT_SECONDS", 0.3)
     on_flag_path = tmp_path / ".step-notes-on"
     on_flag_path.write_text("", encoding="utf-8")
     monkeypatch.setattr(step_note_gate, "STEP_NOTES_ON_FLAG_PATH", on_flag_path)
 
 
-def test_should_allow_a_call_that_follows_a_note_in_its_message(tmp_path, monkeypatch, capsys):
+def test_should_allow_a_call_that_follows_a_note_in_its_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     transcript = tmp_path / "session.jsonl"
     write_transcript(
         transcript,
@@ -74,7 +83,9 @@ def test_should_allow_a_call_that_follows_a_note_in_its_message(tmp_path, monkey
     assert (exit_code, stderr_text) == (0, "")
 
 
-def test_should_block_a_call_with_no_note_after_the_previous_result(tmp_path, monkeypatch, capsys):
+def test_should_block_a_call_with_no_note_after_the_previous_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     transcript = tmp_path / "session.jsonl"
     write_transcript(
         transcript,
@@ -93,7 +104,9 @@ def test_should_block_a_call_with_no_note_after_the_previous_result(tmp_path, mo
     assert stderr_text == step_note_gate.BLOCK_MESSAGE
 
 
-def test_should_allow_a_bare_call_while_the_on_flag_is_absent(tmp_path, monkeypatch, capsys):
+def test_should_allow_a_bare_call_while_the_on_flag_is_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     transcript = tmp_path / "session.jsonl"
     write_transcript(transcript, [PROMPT_ENTRY, call_entry("m1", "call_1")])
     step_note_gate.STEP_NOTES_ON_FLAG_PATH.unlink()
@@ -104,8 +117,8 @@ def test_should_allow_a_bare_call_while_the_on_flag_is_absent(tmp_path, monkeypa
 
 
 def test_should_block_the_first_call_after_a_prompt_when_no_note_precedes_it(
-    tmp_path, monkeypatch, capsys
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     transcript = tmp_path / "session.jsonl"
     write_transcript(transcript, [PROMPT_ENTRY, call_entry("m1", "call_1")])
 
@@ -114,7 +127,9 @@ def test_should_block_the_first_call_after_a_prompt_when_no_note_precedes_it(
     assert exit_code == 2
 
 
-def test_should_block_when_the_only_text_is_blank(tmp_path, monkeypatch, capsys):
+def test_should_block_when_the_only_text_is_blank(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     transcript = tmp_path / "session.jsonl"
     write_transcript(
         transcript, [PROMPT_ENTRY, note_entry("m1", "  \n "), call_entry("m1", "call_1")]
@@ -125,7 +140,9 @@ def test_should_block_when_the_only_text_is_blank(tmp_path, monkeypatch, capsys)
     assert exit_code == 2
 
 
-def test_should_allow_every_parallel_call_under_one_note(tmp_path, monkeypatch, capsys):
+def test_should_allow_every_parallel_call_under_one_note(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     transcript = tmp_path / "session.jsonl"
     write_transcript(
         transcript,
@@ -143,7 +160,9 @@ def test_should_allow_every_parallel_call_under_one_note(tmp_path, monkeypatch, 
     assert (first_exit_code, second_exit_code) == (0, 0)
 
 
-def test_should_see_a_note_the_harness_writes_after_the_hook_starts(tmp_path, monkeypatch, capsys):
+def test_should_see_a_note_the_harness_writes_after_the_hook_starts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     transcript = tmp_path / "session.jsonl"
     write_transcript(transcript, [PROMPT_ENTRY])
     late_lines = "".join(
@@ -164,8 +183,8 @@ def test_should_see_a_note_the_harness_writes_after_the_hook_starts(tmp_path, mo
 
 
 def test_should_block_a_bare_call_the_harness_writes_after_the_hook_starts(
-    tmp_path, monkeypatch, capsys
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     transcript = tmp_path / "session.jsonl"
     write_transcript(transcript, [PROMPT_ENTRY])
 
@@ -181,7 +200,9 @@ def test_should_block_a_bare_call_the_harness_writes_after_the_hook_starts(
     assert exit_code == 2
 
 
-def test_should_allow_a_call_that_never_reaches_the_transcript(tmp_path, monkeypatch, capsys):
+def test_should_allow_a_call_that_never_reaches_the_transcript(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     transcript = tmp_path / "session.jsonl"
     write_transcript(transcript, [PROMPT_ENTRY])
 
@@ -190,7 +211,9 @@ def test_should_allow_a_call_that_never_reaches_the_transcript(tmp_path, monkeyp
     assert exit_code == 0
 
 
-def test_should_allow_a_subagent_call_even_without_a_note(tmp_path, monkeypatch, capsys):
+def test_should_allow_a_subagent_call_even_without_a_note(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     transcript = tmp_path / "session.jsonl"
     write_transcript(transcript, [PROMPT_ENTRY, call_entry("m1", "call_1")])
 
@@ -201,7 +224,9 @@ def test_should_allow_a_subagent_call_even_without_a_note(tmp_path, monkeypatch,
     assert exit_code == 0
 
 
-def test_should_allow_a_call_whose_message_outgrows_the_tail_window(tmp_path, monkeypatch, capsys):
+def test_should_allow_a_call_whose_message_outgrows_the_tail_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     transcript = tmp_path / "session.jsonl"
     write_transcript(
         transcript,

@@ -1,4 +1,4 @@
-"""Constants for the step-notes toggle CLI."""
+"""Flag path, action names, and report lines for the toggle script."""
 
 from pathlib import Path
 
