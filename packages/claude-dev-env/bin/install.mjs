@@ -1319,7 +1319,9 @@ function managedPackageSourceRoots() {
  * @param {Set<string>} managedHookRelativePaths Managed script paths under hooks/.
  * @returns {boolean} True when the command references a managed script.
  */
-export function commandReferencesManagedHook(commandString, managedHookRelativePaths) {
+export function commandReferencesManagedHook(
+    commandString, managedHookRelativePaths, sharedSettingsRealPath = null,
+) {
     if (typeof commandString !== 'string') return false;
     const normalizedCommand = commandString.replace(/\\/g, '/');
     if (commandIsInlineManagedValidatorRunner(normalizedCommand)) {
@@ -1329,6 +1331,51 @@ export function commandReferencesManagedHook(commandString, managedHookRelativeP
         if (commandTailEndsAtManagedHook(normalizedCommand, relativePath)) {
             return true;
         }
+        if (
+            sharedSettingsRealPath
+            && commandRunsHookOfRootSharingSettings(normalizedCommand, relativePath, sharedSettingsRealPath)
+        ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Report whether a command runs `<root>/hooks/<relative>` for a root whose
+ * settings.json resolves to the given settings file.
+ *
+ * Two install roots can share one settings.json through a symlink. Each install
+ * writes its own hooks directory into that one file, so the merge treats the
+ * hooks of every root that shares the file as managed and keeps one entry per
+ * script.
+ *
+ * @param {string} normalizedCommand Forward-slash-normalized hook command.
+ * @param {string} relativePath The managed script path under hooks/.
+ * @param {string} sharedSettingsRealPath The resolved path of the settings file being merged.
+ * @returns {boolean} True when the command runs that script under a sharing root.
+ */
+function commandRunsHookOfRootSharingSettings(normalizedCommand, relativePath, sharedSettingsRealPath) {
+    const commandArgumentBoundary = /[\s'";]/;
+    const hookPathTail = `/${MANAGED_HOOKS_DIRECTORY_NAME}/${relativePath}`;
+    const sharedSettingsKey = comparisonKeyForPath(sharedSettingsRealPath);
+    let tailStart = normalizedCommand.indexOf(hookPathTail);
+    while (tailStart !== -1) {
+        const characterAfterPath = normalizedCommand[tailStart + hookPathTail.length];
+        if (characterAfterPath === undefined || commandArgumentBoundary.test(characterAfterPath)) {
+            let rootStart = tailStart;
+            while (rootStart > 0 && !commandArgumentBoundary.test(normalizedCommand[rootStart - 1])) {
+                rootStart--;
+            }
+            const rootPath = normalizedCommand.slice(rootStart, tailStart);
+            const rootSettingsRealPath = rootPath
+                ? realPathOrNull(join(rootPath, SETTINGS_FILE_NAME))
+                : null;
+            if (rootSettingsRealPath && comparisonKeyForPath(rootSettingsRealPath) === sharedSettingsKey) {
+                return true;
+            }
+        }
+        tailStart = normalizedCommand.indexOf(hookPathTail, tailStart + 1);
     }
     return false;
 }
@@ -1399,14 +1446,17 @@ export function commandIsInlineManagedValidatorRunner(normalizedCommand) {
  * @param {object} settings The parsed settings.json object (mutated in place).
  * @param {string} eventType The lifecycle event whose groups are pruned.
  * @param {Set<string>} managedHookRelativePaths Managed script paths under hooks/.
+ * @param {string|null} sharedSettingsRealPath Resolved path of the settings file, or null.
  * @returns {void}
  */
-function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePaths) {
+function pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePaths, sharedSettingsRealPath) {
     const existingGroups = settings.hooks[eventType];
     if (!Array.isArray(existingGroups)) return;
     settings.hooks[eventType] = retainedMatcherGroups(
         existingGroups,
-        commandString => commandReferencesManagedHook(commandString, managedHookRelativePaths),
+        commandString => commandReferencesManagedHook(
+            commandString, managedHookRelativePaths, sharedSettingsRealPath,
+        ),
     ).keptGroups;
 }
 
@@ -1457,9 +1507,14 @@ function startEventFromHookGroupList(settings, eventType) {
  * @param {string} pluginRootDir Directory ${CLAUDE_PLUGIN_ROOT} resolves to
  *   (the installer's `~/.claude` root; home is its parent directory).
  * @param {string} pythonCommand Interpreter command that replaces python3.
+ * @param {string|null} [sharedSettingsRealPath] Resolved path of the settings
+ *   file being merged. Hooks of every root whose settings.json resolves to it
+ *   count as managed, so roots sharing one file keep one entry per script.
  * @returns {number} Count of matcher groups merged.
  */
-export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pythonCommand) {
+export function mergeHooksIntoSettings(
+    settings, hooksConfig, pluginRootDir, pythonCommand, sharedSettingsRealPath = null,
+) {
     const managedHookRelativePaths = managedHookScriptRelativePaths(hooksConfig);
     const pluginRootForward = pluginRootDir.replace(/\\/g, '/');
     const encodedPluginHooksPath = Buffer.from(`${pluginRootForward}/hooks`, 'utf8').toString('base64');
@@ -1467,7 +1522,7 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
     let groupCount = 0;
     for (const [eventType, matcherGroups] of Object.entries(hooksConfig.hooks)) {
         startEventFromHookGroupList(settings, eventType);
-        pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePaths);
+        pruneManagedHooksFromEvent(settings, eventType, managedHookRelativePaths, sharedSettingsRealPath);
         for (const sourceGroup of matcherGroups) {
             const rewrittenHooks = sourceGroup.hooks.map(hook => {
                 let command = hook.command;
@@ -1492,7 +1547,9 @@ export function mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pyt
             if (existingIndex >= 0) {
                 const existing = settings.hooks[eventType][existingIndex];
                 const userHooks = (groupHookEntries(existing) || []).filter(
-                    hook => !commandReferencesManagedHook(hook?.command, managedHookRelativePaths)
+                    hook => !commandReferencesManagedHook(
+                        hook?.command, managedHookRelativePaths, sharedSettingsRealPath,
+                    )
                 );
                 settings.hooks[eventType][existingIndex] = {
                     ...existing,
@@ -2079,7 +2136,9 @@ function mergeHooksAtPath(
         pruneManagedHooksFromSettings(settings, new Set());
     }
     const hooksConfig = selectHooksConfig(sourceHooksConfig);
-    const groupCount = mergeHooksIntoSettings(settings, hooksConfig, pluginRootDir, pythonCommand);
+    const groupCount = mergeHooksIntoSettings(
+        settings, hooksConfig, pluginRootDir, pythonCommand, realPathOrNull(settingsPath),
+    );
     writeFileSync(settingsPath, JSON.stringify(settings, null, indentation) + '\n');
     return groupCount;
 }
