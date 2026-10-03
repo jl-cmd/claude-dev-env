@@ -27,7 +27,10 @@ publish_plan_max_positional_arguments = 3
 publish_plan_failure_injector_position = 2
 frontmatter_unsupported_fields = ("tools", "model", "color", "disable-model-invocation")
 instruction_alias_filenames = frozenset({"AGENTS.md", "CLAUDE.md"})
-codex_instruction_rule_relative_paths = ("rules/failure-blast-radius.md", "rules/correction-lens.md")
+codex_instruction_rule_relative_paths = (
+    "docs/rule-guides/failure-blast-radius.md",
+    "docs/rule-guides/correction-lens-excerpt.md",
+)
 codex_instruction_source_separator = ", "
 codex_instruction_target_path = "AGENTS.md"
 codex_instruction_section_heading = "## Excerpt for repository-instruction sessions"

@@ -1,0 +1,28 @@
+# BDD (discovery-driven development)
+
+Full text behind [`rules/bdd.md`](../../rules/bdd.md), which loads in sessions as the short form.
+
+**Canonical detail:** `~/.claude/system-prompts/software-engineer.xml` → `<behavior_protocol>`.
+
+**Optional long-form references (load when needed):**
+
+- `@~/.claude/docs/BDD_SCENARIO_QUALITY.md` — seven scenario quality patterns (§7.6-style)
+- `@~/.claude/docs/BDD_DISCOVERY_PROTOCOL.md` — Example Mapping algorithm for chat
+- `@~/.claude/docs/BDD_TEST_LAYOUT.md` — describe/when/should layout and soap-opera personas
+
+## What you do for every non-trivial feature
+
+1. **Deliberate Discovery** — Reduce uncertainty before code; surface what you do not know (Smart & Molak §5.4).
+2. **Illustrate** — Explore goals, constraints, and concrete examples in chat; "given … when … then …" style outcomes.
+3. **Formulate** — Express behavior as narrow **"should …"** specifications the user can approve.
+4. **Automate** — Build each formulated behavior with tests. Red-green-refactor is the default loop, and the TDD skill (`pstack:tdd`) carries it: CODE_RULES §8, as stated in [`code-standards.md`](../../rules/code-standards.md). A prototype may run ahead of its tests and adds them before the pull request goes ready.
+
+Conversation is the essential practice: if discovery is skipped, structured formats do not rescue the workflow (Minimal BDD).
+
+## Solo developer
+
+You are often the stakeholder. Use **Example Mapping** in chat ("the one where …", probes, parking lot). See the optional long-form references above for the full algorithm and anti-pattern list.
+
+## Naming
+
+Developer-facing specs and tests use **should** sentences so intent stays visible (Dan North, "Introducing BDD", 2006).
