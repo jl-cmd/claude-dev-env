@@ -137,7 +137,7 @@ Behavioral rules loaded into every session.
 | `pstack-models` | Portable role requirements for pstack delegation |
 | `prompt-workflow-context-controls` | Prompt workflows stay low-context |
 | `re-stage-before-commit` | Stage this session's edits right before the commit |
-| `research-mode` | Cite sources, say "I don't know", use direct quotes |
+| `research-mode` | Settle each fact with every tool that can reach it, cite sources, use direct quotes |
 | `review-closure-is-a-check` | A review finding on the head is answered before the pull request merges |
 | `shell-invocation` | Use pwsh, and keep shell substitution out of Bash commands |
 | `testing` | Complete mocks, reference TEST_QUALITY.md |
