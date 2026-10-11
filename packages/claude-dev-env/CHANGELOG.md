@@ -1,5 +1,12 @@
 # Changelog
 
+## [8.75.5](https://github.com/jl-cmd-projects/claude-dev-env/compare/claude-dev-env-v8.75.4...claude-dev-env-v8.75.5) (2026-10-11)
+
+
+### Bug Fixes
+
+* **account-profile:** keep a link whose target refuses access ([#1986](https://github.com/jl-cmd-projects/claude-dev-env/issues/1986)) ([50191c1](https://github.com/jl-cmd-projects/claude-dev-env/commit/50191c16b8bd6f9aa4fd8f20a7d4e4bc2b330a79))
+
 ## [8.75.4](https://github.com/jl-cmd-projects/claude-dev-env/compare/claude-dev-env-v8.75.3...claude-dev-env-v8.75.4) (2026-10-10)
 
 
