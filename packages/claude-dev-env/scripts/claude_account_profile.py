@@ -216,10 +216,20 @@ def _is_inside(candidate_text: str, directory: Path) -> bool:
     return _comparable_path(candidate_text).startswith(comparable_directory + os.sep)
 
 
+def _link_target_is_present(link_path: Path) -> bool:
+    try:
+        link_path.stat()
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
 def _unlink_orphaned_links(main_home: Path, profile_home: Path) -> tuple[str, ...]:
     all_unlinked: list[str] = []
     for each_entry in sorted(profile_home.iterdir()):
-        if not _is_link(each_entry) or each_entry.exists():
+        if not _is_link(each_entry) or _link_target_is_present(each_entry):
             continue
         if not _is_inside(_link_target_text(each_entry), main_home):
             continue

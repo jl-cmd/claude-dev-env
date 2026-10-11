@@ -184,6 +184,29 @@ class TestSyncProfile:
         assert not os.path.lexists(profile_home / "rules")
         assert report.all_unlinked == ("rules",)
 
+    def test_should_keep_a_link_whose_target_refuses_access(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        main_home = build_main_home(tmp_path)
+        (main_home / ".pytest_cache").mkdir()
+        profile_home = tmp_path / "ev"
+        profile_home.mkdir()
+        locked_link = profile_home / ".pytest_cache"
+        locked_link.symlink_to(main_home / ".pytest_cache", target_is_directory=True)
+        unlocked_stat = Path.stat
+
+        def stat_refusing_the_locked_link(
+            self: Path, *, follow_symlinks: bool = True
+        ) -> os.stat_result:
+            if self == locked_link and follow_symlinks:
+                raise PermissionError(5, "Access is denied", str(self))
+            return unlocked_stat(self, follow_symlinks=follow_symlinks)
+
+        monkeypatch.setattr(Path, "stat", stat_refusing_the_locked_link)
+        report = sync(main_home, profile_home)
+        assert profile.links_to(locked_link, main_home / ".pytest_cache")
+        assert ".pytest_cache" not in report.all_unlinked
+
 
     def test_should_remove_a_main_link_left_under_an_account_local_name(
         self, tmp_path: Path
